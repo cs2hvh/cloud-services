@@ -11,12 +11,11 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { randomBytes, createHash } from "crypto";
 import { z } from "zod";
-import { authenticateUser } from "@/lib/auth/server-auth";
+import { actingUserId, controlPlaneAuth } from "@/lib/inference/control-plane-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
-import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
 import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
+import { generateApiKey } from "@/lib/inference/api-key-crypto";
 
 const createSchema = z.object({
   name: z.string().min(1).max(100),
@@ -33,11 +32,12 @@ const createSchema = z.object({
 // ───────────────────────────────────────────────────────────────
 // GET
 // ───────────────────────────────────────────────────────────────
-export async function GET() {
-  const auth = await authenticateUser();
-  if (!auth.authenticated) return auth.response;
+export async function GET(request: NextRequest) {
+  const authResult = await controlPlaneAuth(request, { session: "cookie", org: "bootstrap", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
-  const rl = await limitByUser(auth.user!.id, {
+  const rl = await limitByUser(auth.subject, {
     prefix: "rl:inf-keys-list",
     limit: 30,
     windowMs: 60_000,
@@ -46,15 +46,7 @@ export async function GET() {
     return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
   }
 
-  let org;
-  try {
-    org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
-  } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Org resolution failed" },
-      { status: 500 }
-    );
-  }
+  const org = { org_id: auth.orgId, role: auth.orgRole, org_name: auth.orgName, org_slug: auth.orgSlug };
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -70,6 +62,14 @@ export async function GET() {
     )
     .eq("org_id", org.org_id)
     .is("revoked_at", null)
+    // Agent-scoped keys (doc 15) are deliberately excluded from this general,
+    // unscoped-keys page. Tried surfacing them here once — reverted: this
+    // page's create/edit form has no concept of tier/origins, so a row here
+    // that can only be revoked (not managed) is a half-integration, and the
+    // stats strip above would silently mix two different security postures
+    // into one number. They live and are managed exclusively on the owning
+    // agent's own Access Keys tab (app/dashboard/services/agents/_agent-keys-tab.tsx).
+    .is("agent_id", null)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -102,10 +102,11 @@ export async function GET() {
 // POST
 // ───────────────────────────────────────────────────────────────
 export async function POST(request: NextRequest) {
-  const auth = await authenticateUser();
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "cookie", org: "bootstrap", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
-  const rl = await limitByUser(auth.user!.id, {
+  const rl = await limitByUser(auth.subject, {
     prefix: "rl:inf-keys-create",
     limit: 10,
     windowMs: 60_000,
@@ -123,22 +124,9 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  let org;
-  try {
-    org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
-  } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Org resolution failed" },
-      { status: 500 }
-    );
-  }
+  const org = { org_id: auth.orgId, role: auth.orgRole, org_name: auth.orgName, org_slug: auth.orgSlug };
 
-  // Generate the key — format: ahu_live_<32 url-safe random chars>
-  const random = randomBytes(24).toString("base64url").slice(0, 32);
-  const fullKey = `ahu_live_${random}`;
-  const keyPrefix = fullKey.slice(0, 13);     // "ahu_live_xxxx"
-  const keyLastFour = fullKey.slice(-4);
-  const keyHash = createHash("sha256").update(fullKey).digest("hex");
+  const { fullKey, keyPrefix, keyLastFour, keyHash } = generateApiKey();
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -151,7 +139,7 @@ export async function POST(request: NextRequest) {
     .from("api_keys")
     .insert({
       org_id: org.org_id,
-      created_by_user_id: auth.user!.id,
+      created_by_user_id: (await actingUserId(auth))!,
       name: parsed.data.name,
       key_prefix: keyPrefix,
       key_last_four: keyLastFour,
@@ -180,7 +168,7 @@ export async function POST(request: NextRequest) {
   const ctx = auditContextFrom(request);
   void recordAudit({
     orgId: org.org_id,
-    actorUserId: auth.user!.id,
+    actorUserId: auth.userId,
     action: "key.created",
     targetType: "api_key",
     targetId: data.id,

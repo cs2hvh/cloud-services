@@ -23,10 +23,9 @@ import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { authenticateUser } from "@/lib/auth/server-auth";
+import { actingUserId, controlPlaneAuth } from "@/lib/inference/control-plane-auth";
 import { BillingCredits } from "@/lib/billing/credits";
 import { limitByUser } from "@/lib/cooldown/userbased";
-import { getActiveOrgForUser } from "@/lib/inference/orgs";
 import {
   provisionServingPod,
   getServingPodStatus,
@@ -104,16 +103,16 @@ function serializePod(ft: FtRow) {
 // ─── GET ───────────────────────────────────────────────────────────
 
 export async function GET(
-  _req: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await authenticateUser();
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "cookie", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
   const { id } = await params;
   if (!isUuid(id)) return NextResponse.json({ error: "Invalid job id" }, { status: 400 });
 
-  const org = await getActiveOrgForUser(auth.user!.id);
-  if (!org) return NextResponse.json({ error: "No inference org" }, { status: 404 });
+  const org = { org_id: auth.orgId, role: auth.orgRole };
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -176,23 +175,23 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await authenticateUser();
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "cookie", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
   const { id } = await params;
   if (!isUuid(id)) return NextResponse.json({ error: "Invalid job id" }, { status: 400 });
 
   // Light rate-limit. Provisioning is expensive — guard against accidental
   // double-clicks from the dashboard or rogue script.
-  const rl = await limitByUser(auth.user!.id, {
+  const rl = await limitByUser(auth.subject, {
     prefix: "rl:inf-ft-serving-provision",
     limit: 6,
     windowMs: 60_000,
   });
   if (!rl.allowed) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
 
-  const org = await getActiveOrgForUser(auth.user!.id);
-  if (!org) return NextResponse.json({ error: "No inference org" }, { status: 404 });
-  if (org.role === "viewer") {
+  const org = { org_id: auth.orgId, role: auth.orgRole };
+  if (auth.via === "session" && org.role === "viewer") {
     return NextResponse.json({ error: "Viewers cannot start serving instances" }, { status: 403 });
   }
 
@@ -251,7 +250,7 @@ export async function POST(
       .select("billing_user_id, owner_user_id")
       .eq("id", org.org_id)
       .maybeSingle();
-    const payerUserId = orgRow?.billing_user_id || orgRow?.owner_user_id || auth.user!.id;
+    const payerUserId = orgRow?.billing_user_id || orgRow?.owner_user_id || auth.userId;
     const funded = await BillingCredits.hasSufficientBalance(payerUserId, MIN_SERVING_BALANCE_USD);
     if (!funded) {
       return NextResponse.json(
@@ -335,7 +334,7 @@ export async function POST(
       level: "info",
       message: "serving_pod.provisioned",
       orgId: org.org_id,
-      userId: auth.user!.id,
+      userId: (await actingUserId(auth))!,
       ftId: id,
       gpuSku: parsed.data.gpu_sku,
       hourlyCents: provisioned.hourlyCostCents,
@@ -349,24 +348,24 @@ export async function POST(
 // ─── DELETE (stop) ─────────────────────────────────────────────────
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await authenticateUser();
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "cookie", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
   const { id } = await params;
   if (!isUuid(id)) return NextResponse.json({ error: "Invalid job id" }, { status: 400 });
 
-  const rl = await limitByUser(auth.user!.id, {
+  const rl = await limitByUser(auth.subject, {
     prefix: "rl:inf-ft-serving-stop",
     limit: 10,
     windowMs: 60_000,
   });
   if (!rl.allowed) return NextResponse.json({ error: "Too many requests" }, { status: 429 });
 
-  const org = await getActiveOrgForUser(auth.user!.id);
-  if (!org) return NextResponse.json({ error: "No inference org" }, { status: 404 });
-  if (org.role === "viewer") {
+  const org = { org_id: auth.orgId, role: auth.orgRole };
+  if (auth.via === "session" && org.role === "viewer") {
     return NextResponse.json({ error: "Viewers cannot stop serving instances" }, { status: 403 });
   }
 
@@ -399,7 +398,7 @@ export async function DELETE(
       level: "info",
       message: "serving_pod.stopped",
       orgId: org.org_id,
-      userId: auth.user!.id,
+      userId: (await actingUserId(auth))!,
       ftId: id,
       chargedUsd: settled.chargedUsd,
     })

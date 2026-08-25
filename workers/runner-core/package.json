@@ -1,0 +1,33 @@
+{
+  "name": "@ahura/runner-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared async job-runner framework for the AhuraCloud k8s runners (Postgres claimer → BullMQ → health server → graceful shutdown). Instantiated per job-type by ft-runner, deploy-runner, and future runners — not forked.",
+  "engines": {
+    "node": ">=20.10"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p .",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.55.0",
+    "bullmq": "^5.34.0",
+    "ioredis": "^5.4.0",
+    "pino": "^9.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.16.0",
+    "typescript": "^5.6.0"
+  }
+}

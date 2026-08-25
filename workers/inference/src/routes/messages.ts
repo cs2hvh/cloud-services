@@ -709,7 +709,7 @@ function baseUsageEvent(
 ): UsageEvent {
   return {
     orgId: auth.orgId,
-    apiKeyId: auth.keyId,
+    apiKeyId: auth.usageApiKeyId,
     userId: null,
     modelId,
     modality: "chat",

@@ -7,8 +7,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { authenticateUser } from "@/lib/auth/server-auth";
-import { getActiveOrgForUser } from "@/lib/inference/orgs";
+import { controlPlaneAuth } from "@/lib/inference/control-plane-auth";
 import { serializeBatch, type BatchRow, type BatchStatus } from "@/lib/inference/batches";
 
 function isBatchId(s: string): boolean {
@@ -18,17 +17,17 @@ function isBatchId(s: string): boolean {
 const TERMINAL: BatchStatus[] = ["failed", "completed", "expired", "cancelled"];
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await authenticateUser();
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "cookie", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
   const { id } = await params;
   if (!isBatchId(id)) return NextResponse.json({ error: "Invalid batch id" }, { status: 400 });
 
-  const org = await getActiveOrgForUser(auth.user!.id);
-  if (!org) return NextResponse.json({ error: "No inference org" }, { status: 404 });
+  const org = { org_id: auth.orgId, role: auth.orgRole };
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -49,18 +48,18 @@ export async function GET(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await authenticateUser();
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "cookie", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
   const { id } = await params;
   if (!isBatchId(id)) return NextResponse.json({ error: "Invalid batch id" }, { status: 400 });
 
-  const org = await getActiveOrgForUser(auth.user!.id);
-  if (!org) return NextResponse.json({ error: "No inference org" }, { status: 404 });
-  if (org.role !== "owner" && org.role !== "admin") {
+  const org = { org_id: auth.orgId, role: auth.orgRole };
+  if (auth.via === "session" && org.role !== "owner" && org.role !== "admin") {
     return NextResponse.json({ error: "Only owners/admins can delete batches" }, { status: 403 });
   }
 

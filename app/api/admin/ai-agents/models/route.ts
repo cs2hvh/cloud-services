@@ -35,12 +35,18 @@ async function checkAdminAuth() {
 
 // Validation schema for creating/updating models
 const modelSchema = z.object({
+  // Price is deliberately NOT accepted here. It lives in inference.models.pricing,
+  // which is what the whole platform bills at, and is resolved at read time
+  // (withPlatformPricing). Accepting it here would put a second, editable copy
+  // of the price next to the real one — which is how this table ended up
+  // holding our upstream cost and billing customers at it.
+  //
+  // To offer a model: add it to inference.models with its price, then register
+  // it here as part of the catalogue. A model with no price there is withheld.
   model_id: z.string().min(1, "Model ID is required"),
   display_name: z.string().min(1, "Display name is required"),
   provider: z.string().min(1, "Provider is required"),
   description: z.string().optional(),
-  input_cost_per_million: z.number().min(0, "Input cost must be non-negative"),
-  output_cost_per_million: z.number().min(0, "Output cost must be non-negative"),
   context_window: z.number().min(1000).default(128000),
   supports_vision: z.boolean().default(false),
   supports_function_calling: z.boolean().default(false),
@@ -106,8 +112,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if model_id already exists
-    const existing = await PlatformModels.get_by_model_id(validation.data.model_id);
+    // Existence, not price: get_by_model_id withholds unpriced models, so it
+    // would report an existing row as absent and we would insert a duplicate.
+    const existing = await PlatformModels.exists_in_catalogue(validation.data.model_id);
     if (existing) {
       return NextResponse.json(
         { error: `Model "${validation.data.model_id}" already exists` },

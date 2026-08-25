@@ -12,26 +12,25 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { authenticateUser } from "@/lib/auth/server-auth";
+import { actingUserId, controlPlaneAuth } from "@/lib/inference/control-plane-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
-import { getActiveOrgForUser } from "@/lib/inference/orgs";
 import { emitInferenceEvent } from "@/lib/inference/notifications";
 
 export async function POST(request: NextRequest) {
   void request;
-  const auth = await authenticateUser();
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "cookie", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
-  const rl = await limitByUser(auth.user!.id, {
+  const rl = await limitByUser(auth.subject, {
     prefix: "rl:inf-notif-test",
     limit: 5,
     windowMs: 60_000,
   });
   if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
 
-  const org = await getActiveOrgForUser(auth.user!.id);
-  if (!org) return NextResponse.json({ error: "No inference org" }, { status: 404 });
-  if (org.role !== "owner" && org.role !== "admin") {
+  const org = { org_id: auth.orgId, role: auth.orgRole };
+  if (auth.via === "session" && org.role !== "owner" && org.role !== "admin") {
     return NextResponse.json({ error: "Owner/admin only" }, { status: 403 });
   }
 
@@ -82,7 +81,7 @@ export async function POST(request: NextRequest) {
     ],
     dashboardPath: "/dashboard/services/inference/notifications",
     actionLabel: "Open notifications",
-    userId: auth.user!.id, // in-app goes to the user who clicked Test
+    userId: (await actingUserId(auth))!, // in-app goes to the user who clicked Test
     bypassSubscriptionFilter: true,
   });
 

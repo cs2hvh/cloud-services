@@ -12,10 +12,31 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Env, UsageEvent } from "../types.ts";
 
-interface ModelPricing {
+export interface ModelPricing {
   input_cents_per_mtok?: number;
   output_cents_per_mtok?: number;
   cached_cents_per_mtok?: number;
+  // Per-unit multimodal modalities.
+  cents_per_image?: number;
+  cents_per_1k_chars?: number;
+  cents_per_audio_minute?: number;
+  cents_per_media_second?: number;
+  cents_per_page?: number;
+  cents_per_1k_rerank?: number;
+  cents_per_1k_moderation?: number;
+  // Agent (agentcore) hosted-tool unit rates. Priced by pseudo-catalog rows
+  // (agent/web-search, agent/code-interpreter, agent/function-call,
+  // agent/file-search, and agent/memory — ONE row carrying both
+  // cents_per_memory_write and cents_per_memory_search) so agent tool steps
+  // flow through this same pipeline — no parallel queue (doc 09 §2.B).
+  cents_per_web_search?: number;
+  cents_per_cpu_second?: number;
+  cents_per_function_call?: number;
+  cents_per_file_search?: number;
+  cents_per_memory_write?: number;
+  cents_per_memory_search?: number;
+  // Agent MCP client tool call (agent/mcp, doc 14 M2). PENDING_FINANCE.
+  cents_per_mcp_call?: number;
 }
 
 interface ModelOffPeak {
@@ -23,9 +44,14 @@ interface ModelOffPeak {
   discount_pct?: number;
 }
 
-interface PricingInfo {
+export interface PricingInfo {
   pricing: ModelPricing;
   off_peak: ModelOffPeak | null;
+  // What OR actually charges us (scripts/sync-or-model-pricing.ts), separate
+  // from `pricing` (what we charge the customer, curated, includes markup).
+  // null until synced for a given model, or for pseudo-catalog agent/* rows
+  // that were never meant to carry one — see computeCost's fallback below.
+  upstreamPricing: ModelPricing | null;
 }
 
 export async function handleUsageBatch(
@@ -44,7 +70,7 @@ export async function handleUsageBatch(
   const { data: modelRows, error: modelErr } = await supabase
     .schema("inference")
     .from("models")
-    .select("model_id, pricing, off_peak")
+    .select("model_id, pricing, off_peak, upstream_pricing")
     .in("model_id", modelIds);
 
   if (modelErr) {
@@ -65,14 +91,18 @@ export async function handleUsageBatch(
     pricingMap.set(m.model_id as string, {
       pricing: (m.pricing ?? {}) as ModelPricing,
       off_peak: (m.off_peak ?? null) as ModelOffPeak | null,
+      upstreamPricing: (m.upstream_pricing ?? null) as ModelPricing | null,
     });
   }
 
-  // 2. Build inference.usage rows with computed cost
+  // 2. Build inference.usage rows with computed cost. normalizeNumUnits
+  // (below) rounds a fractional numUnits up before it touches either the
+  // cost computation or the row, so cost_cents and the stored num_units
+  // stay mutually consistent.
   const rows = batch.messages.map((msg) => {
-    const event = msg.body;
+    const event = normalizeNumUnits(msg.body);
     const info = pricingMap.get(event.modelId);
-    const { costCents, isOffPeak } = computeCost(event, info);
+    const { costCents, isOffPeak, upstreamCostCents } = computeCost(event, info);
 
     return {
       org_id: event.orgId,
@@ -88,9 +118,14 @@ export async function handleUsageBatch(
       num_units: event.numUnits,
       unit_label: event.unitLabel,
       cost_cents: costCents,
-      // For Phase 1 the pass-through cost == billed cost (0% markup).
-      // Phase 2 introduces markup logic; upstream_cost stays as the raw rate.
-      upstream_cost_cents: costCents,
+      // Real margin once upstream_pricing is synced for this model
+      // (scripts/sync-or-model-pricing.ts); falls back to costCents — the
+      // old Phase-1 pass-through — for any model that isn't synced yet, or
+      // was never meant to carry one (agent/* pseudo-catalog rows). That
+      // fallback is deliberate: reporting upstream_cost_cents=0 for an
+      // unmeasured model would show 100% margin, a worse lie than 0% for a
+      // number nobody has verified either way.
+      upstream_cost_cents: upstreamCostCents,
       is_off_peak: isOffPeak,
       latency_ms: event.latencyMs,
       ttft_ms: event.ttftMs,
@@ -169,37 +204,83 @@ export async function handleUsageBatch(
 /**
  * Compute the billable cost for one usage event in cents.
  *
+ * Token-based modalities (chat, completion, embedding):
  *   billable_input = max(0, input_tokens - cached_tokens)
  *   raw_cents = billable_input * input_rate / 1M
  *             + cached_tokens  * cached_rate / 1M
  *             + output_tokens  * output_rate / 1M
  *   final     = ceil(raw_cents * (1 - off_peak_discount/100))
  *
+ * Per-unit modalities:
+ *   image:        ceil(images * cents_per_image)
+ *   tts_char:     ceil(chars / 1000 * cents_per_1k_chars)
+ *   stt_second:   ceil(seconds / 60 * cents_per_audio_minute)
+ *   video/music:  ceil(seconds * cents_per_media_second)
+ *   ocr_page:     ceil(pages * cents_per_page)
+ *   rerank_unit:  ceil(docs / 1000 * cents_per_1k_rerank)
+ *   moderation:   ceil(items / 1000 * cents_per_1k_moderation)
+ *   No off-peak discount applies (flat rate).
+ *
+ * Also returns upstreamCostCents (found broken live, 2026-07-15 Phase-0
+ * audit — used to unconditionally equal costCents, so margin reporting read
+ * exactly $0 forever): the same formula run against `upstream_pricing`
+ * instead of `pricing`, NEVER off-peak-discounted (that discount is ours to
+ * give, not a change in what the upstream provider bills us). Falls back to
+ * costCents when a model has no synced upstream_pricing yet — a deliberate
+ * "unmeasured, not free" default; the alternative (0) would read as 100%
+ * margin, a worse lie for a number nobody has actually verified.
+ *
  * Rounded UP so micro-amounts don't round to zero and undercount.
  */
-function computeCost(
-  event: UsageEvent,
-  info: PricingInfo | undefined
-): { costCents: number; isOffPeak: boolean } {
-  // Don't charge for non-success requests or unknown models
-  if (!info || event.status !== "success") {
-    return { costCents: 0, isOffPeak: false };
-  }
-
-  const p = info.pricing;
+/** Raw (pre-discount) token cost in cents against a given rate card —
+ *  shared by the customer-facing computation (off-peak-discounted below)
+ *  and the upstream one (never discounted; the off-peak promotion is ours,
+ *  it doesn't change what the upstream provider actually charges us). */
+function rawTokenCostCents(pricing: ModelPricing, event: UsageEvent): number {
   const input = event.inputTokens ?? 0;
   const output = event.outputTokens ?? 0;
   const cached = event.cachedTokens ?? 0;
   const billableInput = Math.max(0, input - cached);
 
-  const inputRate = p.input_cents_per_mtok ?? 0;
-  const outputRate = p.output_cents_per_mtok ?? 0;
-  const cachedRate = p.cached_cents_per_mtok ?? inputRate;
+  const inputRate = pricing.input_cents_per_mtok ?? 0;
+  const outputRate = pricing.output_cents_per_mtok ?? 0;
+  const cachedRate = pricing.cached_cents_per_mtok ?? inputRate;
 
-  const rawCents =
+  return (
     (billableInput * inputRate) / 1_000_000 +
     (cached * cachedRate) / 1_000_000 +
-    (output * outputRate) / 1_000_000;
+    (output * outputRate) / 1_000_000
+  );
+}
+
+/** True if a pricing object actually carries at least one real rate — used
+ *  to tell "upstream_pricing not synced yet" apart from "synced, all-zero"
+ *  (which would be a genuine data bug worth NOT silently swallowing into
+ *  the same 0-means-unmeasured fallback). */
+function hasAnyRate(pricing: ModelPricing | null): pricing is ModelPricing {
+  if (!pricing) return false;
+  return Object.values(pricing).some((v) => typeof v === "number" && v > 0);
+}
+
+export function computeCost(
+  event: UsageEvent,
+  info: PricingInfo | undefined
+): { costCents: number; isOffPeak: boolean; upstreamCostCents: number } {
+  // Don't charge for non-success requests or unknown models
+  if (!info || event.status !== "success") {
+    return { costCents: 0, isOffPeak: false, upstreamCostCents: 0 };
+  }
+
+  // Per-unit modalities bypass the token-based path entirely.
+  if (isPerUnitLabel(event.unitLabel)) {
+    const costCents = computeUnitCost(event, info.pricing);
+    const upstreamCostCents = hasAnyRate(info.upstreamPricing)
+      ? computeUnitCost(event, info.upstreamPricing)
+      : costCents; // not synced / not applicable to this row — see PricingInfo doc comment
+    return { costCents, isOffPeak: false, upstreamCostCents };
+  }
+
+  const rawCents = rawTokenCostCents(info.pricing, event);
 
   let discountPct = 0;
   let isOffPeak = false;
@@ -231,7 +312,95 @@ function computeCost(
   }
 
   const finalCents = Math.ceil(rawCents * (1 - discountPct / 100));
-  return { costCents: finalCents, isOffPeak };
+
+  // Never discounted — off-peak is a promotion on what WE charge, not a
+  // change in what the upstream provider bills us for the same tokens.
+  const upstreamCostCents = hasAnyRate(info.upstreamPricing)
+    ? Math.ceil(rawTokenCostCents(info.upstreamPricing, event))
+    : finalCents; // not synced yet — see PricingInfo doc comment
+
+  return { costCents: finalCents, isOffPeak, upstreamCostCents };
+}
+
+/**
+ * inference.usage.num_units is INTEGER — but cpu_second (code interpreter) is
+ * naturally fractional (a fast script might run 0.0002s). Found live,
+ * 2026-07-06: the raw fractional value failed the row INSERT with "invalid
+ * input syntax for type integer", and the queue DROPPED the message after 4
+ * retries — a real, silent loss, not a delay. Ceil (not round) so a
+ * sub-1-unit execution still bills/records as 1 — same "never round a
+ * micro-amount down to zero" rule computeCost already applies to cost_cents,
+ * applied here to the unit count too. Exported for unit testing.
+ */
+export function normalizeNumUnits(event: UsageEvent): UsageEvent {
+  if (event.numUnits == null || Number.isInteger(event.numUnits)) return event;
+  return { ...event, numUnits: Math.ceil(event.numUnits) };
+}
+
+/**
+ * Per-unit cost for multimodal + agentcore tool services. Flat rate — no
+ * off-peak discount. Exported for unit testing the metering contract.
+ */
+export function computeUnitCost(event: UsageEvent, pricing: ModelPricing): number {
+  const units = event.numUnits ?? 0;
+  if (units <= 0) return 0;
+  switch (event.unitLabel) {
+    case "image":
+      return Math.ceil(units * (pricing.cents_per_image ?? 0));
+    case "tts_char":
+      return Math.ceil((units / 1000) * (pricing.cents_per_1k_chars ?? 0));
+    case "stt_second":
+      return Math.ceil((units / 60) * (pricing.cents_per_audio_minute ?? 0));
+    case "video_second":
+    case "music_second":
+      return Math.ceil(units * (pricing.cents_per_media_second ?? 0));
+    case "ocr_page":
+      return Math.ceil(units * (pricing.cents_per_page ?? 0));
+    case "rerank_unit":
+      return Math.ceil((units / 1000) * (pricing.cents_per_1k_rerank ?? 0));
+    case "moderation":
+      return Math.ceil((units / 1000) * (pricing.cents_per_1k_moderation ?? 0));
+    // Agentcore hosted-tool units. web_search: per search; cpu_second: per
+    // microVM CPU-second (code interpreter); function_call: per webhook call;
+    // file_search: per RAG query; memory_write/memory_search: per agent-memory
+    // write/recall (memory_search also covers the runner's automatic recall).
+    case "web_search":
+      return Math.ceil(units * (pricing.cents_per_web_search ?? 0));
+    case "cpu_second":
+      return Math.ceil(units * (pricing.cents_per_cpu_second ?? 0));
+    case "function_call":
+      return Math.ceil(units * (pricing.cents_per_function_call ?? 0));
+    case "file_search":
+      return Math.ceil(units * (pricing.cents_per_file_search ?? 0));
+    case "memory_write":
+      return Math.ceil(units * (pricing.cents_per_memory_write ?? 0));
+    case "memory_search":
+      return Math.ceil(units * (pricing.cents_per_memory_search ?? 0));
+    case "mcp_call":
+      return Math.ceil(units * (pricing.cents_per_mcp_call ?? 0));
+    default:
+      return 0;
+  }
+}
+
+function isPerUnitLabel(label: string | null): boolean {
+  return (
+    label === "image" ||
+    label === "tts_char" ||
+    label === "stt_second" ||
+    label === "video_second" ||
+    label === "music_second" ||
+    label === "ocr_page" ||
+    label === "rerank_unit" ||
+    label === "moderation" ||
+    label === "web_search" ||
+    label === "cpu_second" ||
+    label === "function_call" ||
+    label === "file_search" ||
+    label === "memory_write" ||
+    label === "memory_search" ||
+    label === "mcp_call"
+  );
 }
 
 // ────────────────────────────────────────────────────────────────────

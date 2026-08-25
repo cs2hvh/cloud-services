@@ -13,7 +13,7 @@
  * current row value, so a duplicate replay is a no-op.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Job } from "bullmq";
+import type { RunnerJob } from "@ahura/runner-core";
 import type { RunnerEnv } from "./env.js";
 import { resolveHuggingFaceId } from "./ft-base-models.js";
 import type { HeartbeatStore } from "./heartbeat.js";
@@ -47,7 +47,7 @@ export interface JobPayload {
 
 export async function runJob(
   deps: LifecycleDeps,
-  bullJob: Job<JobPayload>
+  bullJob: RunnerJob<JobPayload>
 ): Promise<void> {
   const { env, supabase, runpod, logger } = deps;
   const { jobId } = bullJob.data;

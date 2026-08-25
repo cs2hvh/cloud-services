@@ -24,6 +24,9 @@ test-results*.json
 test-output.json
 vitest-report.json
 
+# Script test run artifacts (generated JSON/binary outputs — not source)
+scripts/test-results/
+
 # next.js
 /.next/
 /out/
@@ -82,3 +85,7 @@ workers/*/test/load-result.json
 
 # Playwright writes this on an e2e auth failure — a debug artifact, not source.
 auth-failure-screenshot.png
+workers/*/.dev.vars
+
+# Local Claude Code permissions — machine-specific paths, never shared.
+.claude/settings.local.json

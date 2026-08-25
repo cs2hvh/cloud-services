@@ -11,6 +11,7 @@ export type ServiceType =
   | 'firewall'
   | 'spectrum'
   | 'ai_agent'
+  | 'agentcore_agent'
   | 'knowledge_base'
   | 'domain'
   | 'billing'

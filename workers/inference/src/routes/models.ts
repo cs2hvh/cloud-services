@@ -12,6 +12,17 @@
 import type { Handler } from "hono";
 import { createClient } from "@supabase/supabase-js";
 import type { Env, HonoVariables } from "../types.ts";
+import { virtualRouterModels } from "../lib/router.ts";
+
+/**
+ * Vendor from the catalog id ("openai/gpt-4o-mini" → "openai"). Ids are always
+ * "vendor/name"; anything without a slash is one of ours, so it falls back to
+ * "ahura" rather than inventing a vendor.
+ */
+function vendorOf(modelId: string): string {
+  const slash = modelId.indexOf("/");
+  return slash > 0 ? modelId.slice(0, slash) : "ahura";
+}
 
 interface ModelRow {
   model_id: string;
@@ -71,24 +82,51 @@ export const listModels: Handler<{
     );
   }
 
+  // The virtual router ids first — they are the recommended entry point, and
+  // they are not rows in inference.models so the query above cannot return them.
+  const virtual = virtualRouterModels().map((v) => ({
+    id: v.id,
+    object: "model" as const,
+    created: 0,
+    owned_by: "ahura",
+    display_name: v.display_name,
+    description: v.description,
+    modality: "chat",
+    // Capabilities and price depend on the model the router resolves to per
+    // request, so quoting either here would be wrong. X-Ahura-Model on the
+    // response tells the caller what actually ran.
+    capabilities: {},
+    pricing: null,
+    off_peak: null,
+    featured: true,
+  }));
+
   return c.json({
     object: "list",
-    data: (data ?? []).map((m) => ({
-      id: m.model_id,
-      object: "model",
-      created: 0,
-      owned_by: m.org_id
-        ? "ahura-private"
-        : m.serving_type === "proxy"
-          ? "openrouter"
-          : "ahura",
-      display_name: m.display_name,
-      description: m.description,
-      modality: m.modality,
-      capabilities: m.capabilities,
-      pricing: m.pricing,
-      off_peak: m.off_peak,
-      featured: m.is_featured,
-    })),
+    data: [
+      ...virtual,
+      ...(data ?? []).map((m) => ({
+        id: m.model_id,
+        object: "model",
+        created: 0,
+        // The model VENDOR ("openai", "anthropic", ...), taken from the id
+        // prefix — matching both OpenAI's own /v1/models convention and the
+        // shape documented in docs/inference/api-reference.md.
+        //
+        // This previously returned the UPSTREAM ROUTER's name for every proxied
+        // model (77 of 80 entries), which is a brand leak: the platform rule is
+        // that upstream provider names never appear in user-visible UI, API
+        // responses or errors, and this route is not covered by brand-scrub.ts
+        // (that wraps completion payloads, not the catalog).
+        owned_by: m.org_id ? "ahura-private" : vendorOf(m.model_id),
+        display_name: m.display_name,
+        description: m.description,
+        modality: m.modality,
+        capabilities: m.capabilities,
+        pricing: m.pricing,
+        off_peak: m.off_peak,
+        featured: m.is_featured,
+      })),
+    ],
   });
 };

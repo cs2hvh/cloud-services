@@ -14,6 +14,7 @@
 import type { MiddlewareHandler } from "hono";
 import { createClient } from "@supabase/supabase-js";
 import type { AuthContext, Env, HonoVariables } from "../types.ts";
+import { isValidUuid, lookupOrgBilling, onBehalfOfKeyId, OBO_API_KEY_ID } from "../lib/on-behalf-of.ts";
 
 const KEY_CACHE_TTL_SECONDS = 300; // 5 min
 
@@ -21,7 +22,15 @@ export const authMiddleware: MiddlewareHandler<{
   Bindings: Env;
   Variables: HonoVariables;
 }> = async (c, next) => {
-  const token = extractToken(c.req.header("Authorization"), c.req.header("x-api-key"));
+  // Query-param fallback exists ONLY so a public-tier key can authenticate a
+  // browser `new EventSource(url)` call to the run-stream route — the native
+  // EventSource API can't set custom headers at all. Whether it's actually
+  // ALLOWED to come from a query param depends on the resolved key's tier,
+  // checked below (a private key must never be passed this way — URLs leak
+  // into server/proxy access logs and browser history).
+  const queryToken = new URL(c.req.url).searchParams.get("key");
+  const headerToken = extractToken(c.req.header("Authorization"), c.req.header("x-api-key"));
+  const token = headerToken ?? queryToken;
   if (!token) {
     return unauth(c, "Missing API key");
   }
@@ -45,6 +54,15 @@ export const authMiddleware: MiddlewareHandler<{
           expirationTtl: KEY_CACHE_TTL_SECONDS,
         })
       );
+      // Found live (2026-07-08): inference.api_keys.last_used_at has existed
+      // since the original schema migration and is shown in both key-list
+      // UIs, but nothing anywhere ever wrote to it — every key showed "never
+      // used" regardless of real traffic. Only touched on a cache MISS (not
+      // every request), which naturally rate-limits the write to roughly
+      // once per KEY_CACHE_TTL_SECONDS per key rather than once per request.
+      c.executionCtx.waitUntil(
+        touchLastUsedAt(c.env, resolved.keyId)
+      );
     }
   }
 
@@ -53,6 +71,23 @@ export const authMiddleware: MiddlewareHandler<{
   }
   if (resolved.expiresAt && new Date(resolved.expiresAt) <= new Date()) {
     return unauth(c, "API key expired");
+  }
+  // A ?key= query param is only ever legitimate for a public-tier key (the
+  // EventSource use case). A private key presented this way is rejected
+  // outright rather than silently accepted — never make the URL-embedded-
+  // secret anti-pattern possible for the tier that isn't designed for it.
+  if (!headerToken && queryToken && resolved.keyTier !== "public") {
+    return unauth(c, "Private keys must use the Authorization header, not a URL query param");
+  }
+
+  // Internal on-behalf-of path: a key flagged is_internal_service (agent-runner's
+  // platform key, see 20260706000001) asserts a target CUSTOMER org via
+  // X-Ahura-On-Behalf-Of-Org, so agent model/tool cost attributes to that org
+  // instead of to whichever org owns this static key. Required (not optional)
+  // once a key is flagged — this key has no legitimate first-party traffic of
+  // its own, so a missing header is treated as misconfiguration, not fallback.
+  if (resolved.isInternalService) {
+    return resolveOnBehalfOf(c, next);
   }
 
   // 3. IP allowlist
@@ -72,7 +107,11 @@ export const authMiddleware: MiddlewareHandler<{
 
   const auth: AuthContext = {
     keyId: resolved.keyId,
+    usageApiKeyId: resolved.keyId,
     orgId: resolved.orgId,
+    agentId: resolved.agentId,
+    keyTier: resolved.keyTier,
+    allowedOrigins: resolved.allowedOrigins,
     allowedModels: resolved.allowedModels,
     allowedIpCidrs: resolved.allowedIpCidrs,
     zdrEnabled: resolved.zdrEnabled,
@@ -91,12 +130,78 @@ export const authMiddleware: MiddlewareHandler<{
 };
 
 // ───────────────────────────────────────────────────────────────
+// On-behalf-of resolution (platform-key callers only)
+// ───────────────────────────────────────────────────────────────
+
+async function resolveOnBehalfOf(
+  c: Parameters<MiddlewareHandler<{ Bindings: Env; Variables: HonoVariables }>>[0],
+  next: () => Promise<void>
+) {
+  const orgId = c.req.header("X-Ahura-On-Behalf-Of-Org");
+  if (!orgId || !isValidUuid(orgId)) {
+    return unauth(c, "Missing or invalid X-Ahura-On-Behalf-Of-Org");
+  }
+
+  // Same KV hot-path/Postgres-fallback shape as the normal key lookup above —
+  // found by code review (2026-07-06): every agent model turn and tool-usage
+  // report goes through this path, so an uncached RPC per call was real added
+  // DB load/latency across the whole agent fleet, unlike the customer-key
+  // path which already had this cache.
+  const cacheKey = `org-billing:${orgId}`;
+  let billing = await c.env.API_KEYS.get<Awaited<ReturnType<typeof lookupOrgBilling>>>(cacheKey, "json");
+  if (!billing) {
+    billing = await lookupOrgBilling(c.env, orgId);
+    if (billing) {
+      c.executionCtx.waitUntil(
+        c.env.API_KEYS.put(cacheKey, JSON.stringify(billing), { expirationTtl: KEY_CACHE_TTL_SECONDS })
+      );
+    }
+  }
+  if (!billing) {
+    // Fail closed — an unknown org must never silently fall through to an
+    // unattributed or platform-owned cost bucket.
+    return unauth(c, "Unknown on-behalf-of org");
+  }
+
+  const auth: AuthContext = {
+    keyId: onBehalfOfKeyId(billing.orgId),
+    usageApiKeyId: OBO_API_KEY_ID,
+    orgId: billing.orgId,
+    // The internal runner's on-behalf-of identity must keep running any
+    // agent for any customer org — never agent-scoped.
+    agentId: null,
+    keyTier: "private",
+    allowedOrigins: null,
+    allowedModels: null,
+    allowedIpCidrs: null,
+    zdrEnabled: billing.zdrEnabled,
+    // No real per-key caps exist for a synthetic on-behalf-of identity —
+    // only the org-level ceiling applies (still enforced by spend.ts).
+    monthlyBudgetCents: null,
+    hardCapCents: null,
+    orgMonthlyBudgetCents: billing.orgMonthlyBudgetCents,
+    orgHardCapCents: billing.orgHardCapCents,
+    // Conservative default: skip semantic cache for agent-attributed calls
+    // rather than inherit a per-key opt-in that doesn't exist here.
+    semanticCacheEnabled: false,
+    orgSemanticCacheThreshold: billing.orgSemanticCacheThreshold,
+    rateLimitRpm: null,
+    billing: "platform",
+  };
+  c.set("auth", auth);
+  await next();
+}
+
+// ───────────────────────────────────────────────────────────────
 // Helpers
 // ───────────────────────────────────────────────────────────────
 
 interface CachedKey {
   keyId: string;
   orgId: string;
+  agentId: string | null;
+  keyTier: "private" | "public";
+  allowedOrigins: string[] | null;
   allowedModels: string[] | null;
   allowedIpCidrs: string[] | null;
   zdrEnabled: boolean;
@@ -107,6 +212,7 @@ interface CachedKey {
   semanticCacheEnabled: boolean;
   orgSemanticCacheThreshold: number | null;
   rateLimitRpm: number | null;
+  isInternalService: boolean;
   expiresAt: string | null;
 }
 
@@ -123,6 +229,23 @@ async function sha256Hex(input: string): Promise<string> {
     .join("");
 }
 
+/** Fire-and-forget — a failure here must never affect the request it's
+ *  piggybacking on (this is telemetry, not auth). */
+async function touchLastUsedAt(env: Env, keyId: string): Promise<void> {
+  try {
+    const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false },
+    });
+    await supabase
+      .schema("inference")
+      .from("api_keys")
+      .update({ last_used_at: new Date().toISOString() })
+      .eq("id", keyId);
+  } catch {
+    // Best-effort — see doc comment above.
+  }
+}
+
 async function lookupInPostgres(env: Env, hash: string): Promise<CachedKey | null> {
   const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
@@ -135,6 +258,9 @@ async function lookupInPostgres(env: Env, hash: string): Promise<CachedKey | nul
     .single<{
       key_id: string;
       org_id: string;
+      agent_id: string | null;
+      key_tier: "private" | "public";
+      allowed_origins: string[] | null;
       allowed_models: string[] | null;
       allowed_ip_cidrs: string[] | null;
       zdr_enabled: boolean;
@@ -145,6 +271,7 @@ async function lookupInPostgres(env: Env, hash: string): Promise<CachedKey | nul
       semantic_cache_enabled: boolean;
       org_semantic_cache_threshold: number | string | null;
       rate_limit_rpm: number | null;
+      is_internal_service: boolean;
       expires_at: string | null;
     }>();
 
@@ -163,6 +290,9 @@ async function lookupInPostgres(env: Env, hash: string): Promise<CachedKey | nul
   return {
     keyId: data.key_id,
     orgId: data.org_id,
+    agentId: data.agent_id,
+    keyTier: data.key_tier ?? "private",
+    allowedOrigins: data.allowed_origins,
     allowedModels: data.allowed_models,
     allowedIpCidrs: data.allowed_ip_cidrs,
     zdrEnabled: data.zdr_enabled,
@@ -175,6 +305,7 @@ async function lookupInPostgres(env: Env, hash: string): Promise<CachedKey | nul
       ? orgSemanticCacheThreshold
       : null,
     rateLimitRpm: data.rate_limit_rpm ?? null,
+    isInternalService: data.is_internal_service ?? false,
     expiresAt: data.expires_at,
   };
 }

@@ -14,8 +14,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { authenticateUser } from "@/lib/auth/server-auth";
-import { getActiveOrgForUser } from "@/lib/inference/orgs";
+import { controlPlaneAuth } from "@/lib/inference/control-plane-auth";
 import { downloadText, presignDownload } from "@/lib/inference/batch-storage";
 import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
 
@@ -27,14 +26,14 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await authenticateUser();
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "cookie", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
   const { id } = await params;
   if (!isFileId(id)) return NextResponse.json({ error: "Invalid file id" }, { status: 400 });
 
-  const org = await getActiveOrgForUser(auth.user!.id);
-  if (!org) return NextResponse.json({ error: "No inference org" }, { status: 404 });
+  const org = { org_id: auth.orgId, role: auth.orgRole };
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

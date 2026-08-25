@@ -2,7 +2,7 @@
 
 // import { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
-import { Server, Network, Users, Database, Bot, Activity, Globe, Cpu, Cloud } from 'lucide-react';
+import { Server, Network, Users, Database, Bot, Activity, Globe, Cpu, Cloud, DollarSign, Building2, Boxes } from 'lucide-react';
 
 export default function AdminDashboard({ checkAdmin }: { checkAdmin: boolean }) {
 //   const [isAdmin, setIsAdmin] = useState(false);
@@ -128,6 +128,118 @@ export default function AdminDashboard({ checkAdmin }: { checkAdmin: boolean }) 
                 <div>
                   <h3 className="text-xl font-semibold text-white">AI Agents</h3>
                   <p className="text-white/60 text-sm mt-1">Manage platform models & pricing</p>
+                </div>
+              </div>
+            </a>
+          </Card>
+
+          <Card className="bg-black/50 border-white/10 hover:border-white/20 transition-colors">
+            <a href="/dashboard/admin/inference-overview" className="block p-6">
+              <div className="flex items-center gap-4 mb-3">
+                <div className="p-3 bg-purple-500/10 rounded-lg">
+                  <Activity className="h-6 w-6 text-purple-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-white">AI Overview</h3>
+                  <p className="text-white/60 text-sm mt-1">What is used & what needs attention</p>
+                </div>
+              </div>
+            </a>
+          </Card>
+
+          <Card className="bg-black/50 border-white/10 hover:border-white/20 transition-colors">
+            <a href="/dashboard/admin/inference-jobs" className="block p-6">
+              <div className="flex items-center gap-4 mb-3">
+                <div className="p-3 bg-amber-500/10 rounded-lg">
+                  <Boxes className="h-6 w-6 text-amber-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-white">AI Jobs</h3>
+                  <p className="text-white/60 text-sm mt-1">Per-job view, with retry & cancel</p>
+                </div>
+              </div>
+            </a>
+          </Card>
+
+          <Card className="bg-black/50 border-white/10 hover:border-white/20 transition-colors">
+            <a href="/dashboard/admin/inference-orgs" className="block p-6">
+              <div className="flex items-center gap-4 mb-3">
+                <div className="p-3 bg-blue-500/10 rounded-lg">
+                  <Building2 className="h-6 w-6 text-blue-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-white">Inference Orgs</h3>
+                  <p className="text-white/60 text-sm mt-1">Customers, keys & spend limits</p>
+                </div>
+              </div>
+            </a>
+          </Card>
+
+          <Card className="bg-black/50 border-white/10 hover:border-white/20 transition-colors">
+            <a href="/dashboard/admin/inference-agents" className="block p-6">
+              <div className="flex items-center gap-4 mb-3">
+                <div className="p-3 bg-purple-500/10 rounded-lg">
+                  <Bot className="h-6 w-6 text-purple-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-white">Inference Agents</h3>
+                  <p className="text-white/60 text-sm mt-1">Runs, tools, sandboxes & MCP health</p>
+                </div>
+              </div>
+            </a>
+          </Card>
+
+          <Card className="bg-black/50 border-white/10 hover:border-white/20 transition-colors">
+            <a href="/dashboard/admin/inference-pricing" className="block p-6">
+              <div className="flex items-center gap-4 mb-3">
+                <div className="p-3 bg-emerald-500/10 rounded-lg">
+                  <DollarSign className="h-6 w-6 text-emerald-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-white">AI Model Pricing</h3>
+                  <p className="text-white/60 text-sm mt-1">Price vs upstream cost & margin</p>
+                </div>
+              </div>
+            </a>
+          </Card>
+
+          <Card className="bg-black/50 border-white/10 hover:border-white/20 transition-colors">
+            <a href="/dashboard/admin/inference-workers" className="block p-6">
+              <div className="flex items-center gap-4 mb-3">
+                <div className="p-3 bg-cyan-500/10 rounded-lg">
+                  <Boxes className="h-6 w-6 text-cyan-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-white">Worker Fleet</h3>
+                  <p className="text-white/60 text-sm mt-1">Runner health, queues & stuck jobs</p>
+                </div>
+              </div>
+            </a>
+          </Card>
+
+          <Card className="bg-black/50 border-white/10 hover:border-white/20 transition-colors">
+            <a href="/dashboard/admin/inference-rag" className="block p-6">
+              <div className="flex items-center gap-4 mb-3">
+                <div className="p-3 bg-indigo-500/10 rounded-lg">
+                  <Database className="h-6 w-6 text-indigo-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-white">Vector Storage</h3>
+                  <p className="text-white/60 text-sm mt-1">Collections, connectors & quota</p>
+                </div>
+              </div>
+            </a>
+          </Card>
+
+          <Card className="bg-black/50 border-white/10 hover:border-white/20 transition-colors">
+            <a href="/dashboard/admin/inference-traces" className="block p-6">
+              <div className="flex items-center gap-4 mb-3">
+                <div className="p-3 bg-amber-500/10 rounded-lg">
+                  <Activity className="h-6 w-6 text-amber-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-white">Observability</h3>
+                  <p className="text-white/60 text-sm mt-1">Latency, failures & guardrail outcomes</p>
                 </div>
               </div>
             </a>

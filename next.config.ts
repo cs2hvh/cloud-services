@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import withBundleAnalyzerInit from "@next/bundle-analyzer";
+import path from "node:path";
 
 // Bundle analyzer — only active when ANALYZE=true so normal builds are unaffected.
 // Usage: `ANALYZE=true npm run build` → opens treemaps under .next/analyze/.
@@ -40,6 +41,8 @@ const cspDirectives = [
   "script-src-attr 'none'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https://samatva.blr1.cdn.digitaloceanspaces.com https://flagsapi.com https://cdn.jsdelivr.net https://flagcdn.com https://ahurasense.cs2hvh.com https://payment.zx.xyz",
+  // blob: required for <audio> and <video> elements playing ObjectURL blobs
+  "media-src 'self' blob:",
   "font-src 'self'",
   `connect-src 'self' ${supabaseUrl} ${supabaseWs} ${inferenceApiOrigin} ${consoleWsOrigin}`,
   "frame-src 'none'",
@@ -53,8 +56,9 @@ const contentSecurityPolicy = cspDirectives.join("; ");
 const nextConfig: NextConfig = {
   // Produces a self-contained build under .next/standalone for Docker
   output: 'standalone',
+  outputFileTracingRoot: path.resolve(process.cwd()),
   // Keep native Node.js modules out of the webpack bundle
-  serverExternalPackages: ["ssh2", "ioredis", "bullmq"],
+  serverExternalPackages: ["ssh2", "ioredis", "bullmq", "pdfjs-dist", "mammoth", "undici", "@modelcontextprotocol/sdk"],
 
   // Rewrite barrel imports (`import { X } from 'lucide-react'`) to deep
   // imports so the bundler never parses the whole library. Big dev-compile

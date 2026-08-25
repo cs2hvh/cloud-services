@@ -9,6 +9,7 @@ on:
     branches: [ai, master, dev]
     paths:
       - "workers/ft-runner/**"
+      - "workers/runner-core/**"
       - ".github/workflows/ft-runner-image.yml"
   workflow_dispatch:
 
@@ -50,7 +51,7 @@ jobs:
       - name: Build + push
         uses: docker/build-push-action@v6
         with:
-          context: ./workers/ft-runner
+          context: ./workers
           file: ./workers/ft-runner/Dockerfile
           push: true
           platforms: linux/amd64

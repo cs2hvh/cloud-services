@@ -17,13 +17,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { authenticateUser } from "@/lib/auth/server-auth";
+import { actingUserId, controlPlaneAuth } from "@/lib/inference/control-plane-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import {
   bytesToPostgresBytea,
   encryptAesGcm,
 } from "@/lib/inference/crypto";
-import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
 import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
 
 const createSchema = z.object({
@@ -35,11 +34,12 @@ const createSchema = z.object({
 // ───────────────────────────────────────────────────────────────
 // GET — list BYOK keys (masked)
 // ───────────────────────────────────────────────────────────────
-export async function GET() {
-  const auth = await authenticateUser();
-  if (!auth.authenticated) return auth.response;
+export async function GET(request: NextRequest) {
+  const authResult = await controlPlaneAuth(request, { session: "cookie", org: "bootstrap", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
-  const rl = await limitByUser(auth.user!.id, {
+  const rl = await limitByUser(auth.subject, {
     prefix: "rl:inf-byok-list",
     limit: 30,
     windowMs: 60_000,
@@ -48,15 +48,7 @@ export async function GET() {
     return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
   }
 
-  let org;
-  try {
-    org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
-  } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Org resolution failed" },
-      { status: 500 }
-    );
-  }
+  const org = { org_id: auth.orgId, role: auth.orgRole, org_name: auth.orgName, org_slug: auth.orgSlug };
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -98,10 +90,11 @@ export async function GET() {
 // POST — verify, encrypt, store
 // ───────────────────────────────────────────────────────────────
 export async function POST(request: NextRequest) {
-  const auth = await authenticateUser();
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "cookie", org: "bootstrap", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
-  const rl = await limitByUser(auth.user!.id, {
+  const rl = await limitByUser(auth.subject, {
     prefix: "rl:inf-byok-create",
     limit: 10,
     windowMs: 60_000,
@@ -128,15 +121,7 @@ export async function POST(request: NextRequest) {
   }
   const { name, provider, api_key } = parsed.data;
 
-  let org;
-  try {
-    org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
-  } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Org resolution failed" },
-      { status: 500 }
-    );
-  }
+  const org = { org_id: auth.orgId, role: auth.orgRole, org_name: auth.orgName, org_slug: auth.orgSlug };
 
   // Verify the key against the upstream before storing. Phase 1 only verifies
   // OpenRouter keys (the canonical BYOK provider); other providers skip
@@ -188,7 +173,7 @@ export async function POST(request: NextRequest) {
     .from("byok_keys")
     .insert({
       org_id: org.org_id,
-      added_by_user_id: auth.user!.id,
+      added_by_user_id: (await actingUserId(auth))!,
       name,
       provider,
       ciphertext: ciphertextHex,
@@ -219,7 +204,7 @@ export async function POST(request: NextRequest) {
   const ctx = auditContextFrom(request);
   void recordAudit({
     orgId: org.org_id,
-    actorUserId: auth.user!.id,
+    actorUserId: auth.userId,
     action: "byok.added",
     targetType: "byok_key",
     targetId: data.id,

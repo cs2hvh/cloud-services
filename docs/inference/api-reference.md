@@ -343,6 +343,139 @@ Cascade-deletes all rows in the collection. Returns 204.
 
 ---
 
+## Connectors (keep a collection in sync automatically)
+
+A **connector** is a saved link from a collection to where your documents
+actually live. Instead of upserting rows yourself, you register the source once
+and we keep the collection current: new documents are added, changed ones
+re-embedded, and deleted ones removed. Syncs run out of band — the API returns
+immediately and you poll `GET /v1/connectors/{id}` or receive a webhook.
+
+Only what genuinely changed is re-embedded (content hash + ETag), so re-syncing
+an unchanged source costs nothing.
+
+**Source types:** `s3` (any S3-compatible store — AWS S3, Cloudflare R2, MinIO)
+and `web_crawl` (same-origin crawl from a seed URL).
+
+Credentials and signing secrets are encrypted at rest and **never returned** —
+reads report `has_credential` / `has_webhook_secret` booleans instead.
+
+### `POST /v1/vector/collections/{id}/connectors`
+
+**Body:**
+```ts
+{
+  kind: "s3" | "web_crawl",
+  display_name: string,                    // unique per collection
+  config:                                  // shape depends on kind
+    | { bucket: string, region?: string, endpoint?: string,   // endpoint = R2/MinIO
+        prefix?: string, max_documents?: number }
+    | { seed_url: string, max_pages?: number,                 // default 50, max 1000
+        max_depth?: number, max_documents?: number },         // default 2, max 5
+  credential?: { access_key_id: string, secret_access_key: string },  // required for kind "s3"
+  sync_schedule?: "manual" | "hourly" | "daily",              // default "manual"
+  webhook_url?: string,                    // POSTed when a sync settles
+  webhook_secret?: string                  // 16+ chars; signs that POST
+}
+```
+
+**Response 201:**
+```json
+{
+  "id": "uuid", "object": "connector", "collection_id": "uuid",
+  "kind": "web_crawl", "display_name": "product-docs",
+  "config": { "seed_url": "https://docs.example.com", "max_pages": 50, "max_depth": 2 },
+  "has_credential": false, "webhook_url": null, "has_webhook_secret": false,
+  "sync_schedule": "daily", "status": "idle", "last_error": null,
+  "last_synced_at": null, "next_sync_at": null,
+  "last_sync": { "docs_total": 0, "docs_added": 0, "docs_updated": 0, "docs_removed": 0, "docs_failed": 0 },
+  "created_at": "...", "updated_at": "..."
+}
+```
+
+### `GET /v1/vector/collections/{id}/connectors`
+
+List the collection's connectors. Returns `{ object: "list", data: [...] }`.
+
+### `GET /v1/connectors/{id}`
+
+Current status plus the counters from the last completed sync. `status` is one
+of `idle`, `queued`, `syncing`, `error`, `disabled`; when it's `error`,
+`last_error` explains why. This is the endpoint to poll after triggering a sync.
+
+### `PATCH /v1/connectors/{id}`
+
+Edit `display_name`, `config`, `sync_schedule`, `credential`, `webhook_url`, or
+`webhook_secret`. `kind` is immutable — delete and recreate to change source type.
+
+`config` **replaces** the stored object (it is not merged), and is validated
+against the connector's kind, so send the whole thing. Omitting `credential` or
+`webhook_secret` keeps the stored value; passing `webhook_secret: null` clears
+it and the webhook goes back to unsigned.
+
+### `DELETE /v1/connectors/{id}?purge=true`
+
+Removes the connector. By default the rows it already ingested **stay** in the
+collection; `?purge=true` deletes them too. Returns **409** if a sync is
+currently running — wait for it to finish, then delete.
+
+### `POST /v1/connectors/{id}/sync`
+
+Queue a sync now. Returns **202** with the connector's current state. Idempotent:
+if one is already queued or running, the existing one is returned rather than a
+second being started.
+
+### `GET /v1/connectors/{id}/documents?limit=&offset=`
+
+Per-document sync ledger — what was indexed, what failed and why.
+
+```json
+{ "object": "list", "data": [
+  { "id": "uuid", "source_uri": "https://docs.example.com/pricing",
+    "status": "indexed", "chunk_count": 12, "error": null, "updated_at": "..." },
+  { "id": "uuid", "source_uri": "https://docs.example.com/legacy",
+    "status": "failed", "chunk_count": 0,
+    "error": "Fetch failed (500) for https://docs.example.com/legacy", "updated_at": "..." }
+]}
+```
+
+`status`: `indexed` · `failed` · `removed` (gone from the source, rows deleted)
+· `pending`.
+
+### Sync webhooks
+
+If the connector has a `webhook_url`, each settled sync POSTs one event — so you
+never have to poll:
+
+```json
+{
+  "event": "connector.sync.completed",
+  "connector_id": "uuid", "collection_id": "uuid", "sync_run_id": "uuid",
+  "docs_total": 44, "docs_added": 40, "docs_updated": 3,
+  "docs_removed": 1, "docs_failed": 0,
+  "occurred_at": "2026-07-22T09:14:02.101Z"
+}
+```
+
+`connector.sync.failed` carries the same shape plus `"error"`, with the counters
+reflecting how far the run got before it failed.
+
+With a `webhook_secret` set, the POST is signed exactly like the agent function
+webhooks — `X-Ahura-Signature: sha256=<hex>` over `"{timestamp}.{body}"`,
+alongside `X-Ahura-Timestamp`:
+
+```js
+const expected = "sha256=" + crypto.createHmac("sha256", secret)
+  .update(`${req.headers["x-ahura-timestamp"]}.${rawBody}`).digest("hex");
+// compare with crypto.timingSafeEqual, and reject timestamps older than ~5 min
+```
+
+Use `sync_run_id` to deduplicate. If a secret is configured but we cannot sign
+(server key unavailable), the event is **not sent** rather than sent unsigned —
+poll `GET /v1/connectors/{id}` if an expected event never arrives.
+
+---
+
 ## Files (used by Batches)
 
 ### `POST /v1/files`
