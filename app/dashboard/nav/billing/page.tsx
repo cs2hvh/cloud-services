@@ -75,7 +75,7 @@ export default async function BillingPage({
         />
       </div>
 
-      <div className="relative z-10 px-6 py-8 sm:px-10 sm:py-10">
+      <div className="relative z-10 mx-auto w-full max-w-6xl px-6 py-8 sm:px-10 sm:py-10">
         <Suspense
           fallback={
             <div className="flex items-center justify-center py-20">

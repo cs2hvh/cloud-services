@@ -1002,7 +1002,7 @@ export default function AppDetailPage() {
           const provider: string = validProviders.includes(data.provider) ? (data.provider as string) : 'github';
           setEnvVarError(`Your ${provider} account is not connected or the token has expired. Redirecting to Account Settings to reconnect…`);
           redirectTimerRef.current = setTimeout(() => {
-            router.push(`/dashboard/nav/account?reconnect=${provider}&returnTo=/dashboard/services/apps/${app.id}`);
+            router.push(`/dashboard/settings?tab=account&reconnect=${provider}&returnTo=/dashboard/services/apps/${app.id}`);
           }, 1500);
           return;
         }

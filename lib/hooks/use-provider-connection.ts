@@ -26,7 +26,7 @@ interface ProviderConnectionResponse {
  * 
  * Usage:
  * const { connectProvider, isLoading, error } = useProviderConnection({ 
- *   returnTo: '/dashboard/nav/account' 
+ *   returnTo: '/dashboard/settings?tab=account'
  * });
  */
 export function useProviderConnection(options?: UseProviderConnectionOptions) {

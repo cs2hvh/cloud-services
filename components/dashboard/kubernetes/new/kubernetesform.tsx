@@ -647,11 +647,11 @@ const NewClusterForm = ({
                 className="h-3.5 w-3.5 accent-[#0095FF]"
               />
               I accept the{" "}
-              <Link href="/legal/terms" className="underline" style={{ color: ACCENT }}>
+              <Link href="/terms" className="underline" style={{ color: ACCENT }}>
                 terms of service
               </Link>{" "}
               and{" "}
-              <Link href="/legal/privacy" className="underline" style={{ color: ACCENT }}>
+              <Link href="/privacy" className="underline" style={{ color: ACCENT }}>
                 privacy policy
               </Link>
               .

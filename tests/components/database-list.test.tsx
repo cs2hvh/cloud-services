@@ -547,7 +547,7 @@ describe('DatabasePage Component', () => {
 
       render(<DatabasePage engines={[]} />);
 
-      expect(mockRouter.push).toHaveBeenCalledWith('/login');
+      expect(mockRouter.push).toHaveBeenCalledWith('/signin');
       expect(toast.error).toHaveBeenCalledWith(
         'You must be logged in to access the dashboard.'
       );
