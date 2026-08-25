@@ -45,9 +45,9 @@ vi.mock("@/lib/supabase/queries/ai_agents", () => ({
     validate: vi.fn(),
     record_usage: vi.fn(),
   },
+  modelPriceUsdPerMillion: vi.fn(),
   PlatformModels: {
     get_by_model_id: vi.fn(),
-    calculate_cost: vi.fn(),
   },
 }));
 
@@ -109,6 +109,7 @@ describe("AI billing routes", () => {
       AgentMessages,
       AgentUsage,
       PlatformModels,
+      modelPriceUsdPerMillion,
       AgentApiKeys,
     } = await import("@/lib/supabase/queries/ai_agents");
     vi.mocked(AIAgents.get).mockResolvedValue({
@@ -127,12 +128,14 @@ describe("AI billing routes", () => {
     vi.mocked(AgentMessages.get_recent).mockResolvedValue([]);
     vi.mocked(AgentMessages.create).mockResolvedValue(undefined);
     vi.mocked(AgentUsage.record).mockResolvedValue(undefined);
+    // Real arithmetic now, not a stubbed total: at $1000 per million tokens,
+    // the 10 prompt + 20 completion tokens below cost $0.01 + $0.02 = $0.03.
+    vi.mocked(modelPriceUsdPerMillion).mockResolvedValue({ input: 1000, output: 1000 });
     vi.mocked(PlatformModels.get_by_model_id).mockResolvedValue({
       model_id: "openrouter/test-model",
       input_cost_per_1k: 0.001,
       output_cost_per_1k: 0.002,
     } as never);
-    vi.mocked(PlatformModels.calculate_cost).mockReturnValue(0.03);
     vi.mocked(AgentApiKeys.validate).mockResolvedValue({
       valid: true,
       key: { id: "key-1" },

@@ -1,0 +1,467 @@
+/**
+ * Agent run lifecycle (T1.3d/e).
+ *
+ * Flow:
+ *   1. Atomic claim: queued → running (only one replica wins — mirrors eval-runner)
+ *   2. Resolve config: stored agent (agentcore.agents) OR inline request fields
+ *   3. Fetch model pricing (for per-step cost → mid-run ceiling guard + trace)
+ *   4. runAgentLoop (pure core): model turns via the gateway; dispatchTool THROWS
+ *      in S1 (model-only — hosted tools land in S2). Each step persists a
+ *      run_steps row + bumps heartbeat.
+ *   5. Finalize: completed (final answer) / failed (guard trip or error) /
+ *      cancelled (respected if the control plane flipped status mid-run).
+ *
+ * BILLING (on-behalf-of, 2026-07-06): model turns + reportable tool steps
+ * (web_search/code/function) now carry X-Ahura-On-Behalf-Of-Org and post to
+ * the real USAGE_EVENTS pipeline via the gateway, so cost attributes to this
+ * run's org — not the platform key's own org (the prior misattribution bug).
+ * Rates on the agent/* catalog rows are still PENDING_FINANCE placeholders
+ * (20260701000003), so this is correct metering at whatever rate finance
+ * eventually sets — no code change needed when that rate lands.
+ */
+import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  runAgentLoop,
+  toMessages,
+  type AgentToolDecl,
+  type LoopMessage,
+  type LoopStep,
+  type McpToolDecl,
+  type ResponsesInput,
+  type RunCtx,
+} from "@ahura/agent-core";
+import type { RunnerEnv } from "./env.js";
+import type { Logger } from "./logger.js";
+import type { AgentJob } from "./scan.js";
+import { makeCallModel } from "./gateway.js";
+import { buildDispatcher } from "./tools/dispatch.js";
+import { attachMcpTools } from "./tools/mcp-attach.js";
+import { sandboxPoolFor } from "./tools/spec.js";
+import { PersistedSandboxPool } from "./tools/sandbox/persisted-pool.js";
+import { searchMemories, hasAnyMemories } from "./tools/memory.js";
+import { preview } from "./tools/detail.js";
+import { reportToolUsage } from "./tool-usage-report.js";
+import {
+  fetchModelPricing, fetchToolRates, priceStep, insertRunStep, isRunCancelled,
+  finalizeRunCompleted, finalizeRunFailed,
+} from "./run-shared.js";
+
+export interface RunContext {
+  env: RunnerEnv;
+  supabase: SupabaseClient;
+  logger: Logger;
+  podId: string;
+}
+
+/** Raised to abort the loop when the control plane cancels a run mid-flight. */
+class RunCancelledError extends Error {
+  constructor() {
+    super("run cancelled");
+    this.name = "RunCancelledError";
+  }
+}
+
+interface ClaimedRun {
+  id: string;
+  org_id: string;
+  agent_id: string | null;
+  billing_user_id: string;
+  input: Record<string, unknown>;
+  max_cost_cents: number;
+  previous_response_id: string | null;
+}
+
+/** Max prior runs to replay when following a previous_response_id chain. */
+const MAX_CHAIN_TURNS = 20;
+
+interface RuntimeConfig {
+  model: string;
+  systemPrompt: string | null;
+  tools: AgentToolDecl[];
+  maxSteps: number;
+  guardrail: string | null;
+}
+
+const DEFAULT_MAX_STEPS = 12;
+
+export async function runAgentJob(ctx: RunContext, job: AgentJob): Promise<void> {
+  const { supabase, logger, podId } = ctx;
+  const log = logger.child({ runId: job.runId });
+
+  // ── 1. Atomic claim (only a queued run matches → no double-claim) ────────────
+  const { data: run } = await supabase
+    .schema("agentcore")
+    .from("runs")
+    .update({ status: "running", claimed_by: podId, heartbeat_at: new Date().toISOString() })
+    .eq("id", job.runId)
+    .eq("status", "queued")
+    .select("id, org_id, agent_id, billing_user_id, input, max_cost_cents, previous_response_id")
+    .maybeSingle<ClaimedRun>();
+
+  if (!run) {
+    log.info("run already claimed/cancelled — skipping");
+    return;
+  }
+  log.info("claimed agent run");
+
+  // token totals for the final usage envelope
+  let inputTokensTotal = 0;
+  let outputTokensTotal = 0;
+
+  try {
+    // ── 2. Resolve config (stored agent or inline request) ─────────────────────
+    const cfg = await resolveConfig(ctx, run);
+
+    // ── 3. Model + tool pricing for the per-step ceiling guard ─────────────────
+    const pricing = await fetchModelPricing(ctx.supabase, cfg.model);
+    const toolRates = await fetchToolRates(ctx.supabase);
+
+    const messages = await buildMessages(ctx, run, cfg);
+    const zdr = await fetchOrgZdr(ctx, run.org_id); // ZDR orgs must not persist OR auto-recall memory
+
+    // ── 3b. Automatic memory recall (BEFORE the model runs) ────────────────────
+    // Recall must not depend on the model choosing to call the memory tool —
+    // small models routinely skip an implicit "check memory first" step (found
+    // live: gpt-4o-mini answered "I don't know your name" with a matching stored
+    // memory sitting right there). So if this agent has memory attached, embed
+    // the user's current input and inject the top hits into the transcript up
+    // front — this is the same pattern OpenAI's ChatGPT memory and MemGPT/Letta's
+    // "core memory" use (proactive injection, not a model-invoked tool call).
+    //
+    // MIN_AUTO_RECALL_SIMILARITY gates what gets injected: unlike the explicit
+    // `search` action (where the model sees raw results and can judge relevance
+    // itself), this path is blind/automatic, so an unrelated query must NOT drag
+    // in a stray "closest" memory just because top-K always returns something.
+    // Threshold picked from live cosine-similarity data on text-embedding-3-small:
+    // a genuine match scored ~0.38; unrelated pairs cluster much lower — 0.15 is a
+    // conservative cut that admits real matches while filtering obvious noise.
+    // Persisted as a real, billed trace step (index 0) only when something clears
+    // the bar, so it's visible and priced through the same pipeline as a manual search.
+    const MIN_AUTO_RECALL_SIMILARITY = 0.15;
+    let autoRecallCostCents = 0;
+    let loopStartIndex = 0;
+    if (run.agent_id && !zdr && cfg.tools.some((t) => t.type === "memory")) {
+      const queryText = extractLatestUserText(run.input as { input?: ResponsesInput });
+      if (queryText && (await hasAnyMemories(ctx.supabase, run.agent_id))) {
+        try {
+          const { results: candidates, tokens } = await searchMemories(ctx.env, ctx.supabase, run.agent_id, queryText, 3, run.org_id);
+          const results = candidates.filter((r) => r.similarity >= MIN_AUTO_RECALL_SIMILARITY);
+          if (results.length > 0) {
+            const recalled = results.map((r, i) => `${i + 1}. ${r.content}`).join("\n");
+            messages.push({
+              role: "system",
+              content: `Relevant memories about this user, recalled from earlier conversations:\n${recalled}`,
+            });
+            const autoStep: LoopStep = {
+              stepIndex: 0,
+              stepType: "memory",
+              toolName: "memory",
+              metering: { units: 1, unitLabel: "memory_search" },
+              status: "success",
+              detail: {
+                action: "auto_recall",
+                query: preview(queryText, 200),
+                snippets: results.map((r) => preview(r.content, 200)),
+                count: results.length,
+                candidates: candidates.length, // how many were fetched before the relevance filter
+                embed_tokens: tokens,
+              },
+            };
+            autoStep.costCents = priceStep(autoStep, pricing, toolRates);
+            await persistStep(ctx, run, autoStep);
+            autoRecallCostCents = autoStep.costCents;
+            loopStartIndex = 1;
+          }
+        } catch (e) {
+          // Best-effort: a recall failure must not fail the whole run — the
+          // agent just proceeds without injected context, same as before this
+          // feature existed.
+          log.warn({ err: e instanceof Error ? e.message : String(e) }, "auto-recall failed, continuing without it");
+        }
+      }
+    }
+
+    // Build the tool dispatcher from the agent's declared tools (S2). It yields
+    // the schemas advertised to the model + the name→adapter router. The sandbox
+    // pool (if enabled) is ONE per run so code steps share state; wrapped in
+    // PersistedSandboxPool so the session gets a real agentcore.sandbox_sessions
+    // row (closing the S3 gap: the reaper/settle logic had nothing to find
+    // before this). Disposed in the finally below, which also settles the row.
+    const sandboxPool = ctx.env.sandboxEnabled
+      ? new PersistedSandboxPool(sandboxPoolFor(ctx.env), ctx.supabase, toolRates.cpu_second ?? 0)
+      : undefined;
+    const baseDispatcher = buildDispatcher(cfg.tools, ctx.env, ctx.supabase, sandboxPool);
+    // MCP (M1, doc 14): a purely additive layer over the base dispatcher — see
+    // mcp-attach.ts's decorator. buildDispatcher above is untouched by this.
+    const mcpDecls = cfg.tools.filter((t): t is McpToolDecl => t.type === "mcp");
+    const dispatcher = await attachMcpTools(
+      baseDispatcher,
+      mcpDecls,
+      { timeoutMs: ctx.env.toolTimeoutMs, allowPrivate: ctx.env.allowPrivateWebhooks },
+      { supabase: ctx.supabase, orgId: run.org_id, dek: ctx.env.mcpTokenDek }
+    );
+    try {
+    const runCtx: RunCtx = {
+      runId: run.id,
+      orgId: run.org_id,
+      billingUserId: run.billing_user_id,
+      agentId: run.agent_id ?? undefined, // scopes agent memory (S5); absent for inline runs
+      zdr, // ZDR orgs must not persist memory
+    };
+
+    // ── 4. Run the pure loop ───────────────────────────────────────────────────
+    const result = await runAgentLoop({
+      messages,
+      agent: {
+        model: cfg.model,
+        tools: cfg.tools,
+        maxSteps: cfg.maxSteps,
+        maxCostCents: run.max_cost_cents,
+      },
+      costCentsSoFar: autoRecallCostCents,
+      startStepIndex: loopStartIndex,
+      // Cancellation gate → model turn (with tool schemas) → remap each tool_call
+      // to its real step_type (web_search/function/…) so the trace is accurate.
+      callModel: async (msgs) => {
+        await assertNotCancelled(ctx, run.id);
+        const turn = await makeCallModel(ctx.env, cfg.model, run.org_id, dispatcher.modelTools, cfg.guardrail)(msgs);
+        for (const c of turn.toolCalls) c.type = dispatcher.resolveType(c.name);
+        return turn;
+      },
+      // Route each tool call to its adapter (web_search / inline function; more in S2.1/S3/S4).
+      dispatchTool: (call) => dispatcher.dispatch(call, runCtx),
+      priceStep: (step) => priceStep(step, pricing, toolRates),
+      onStep: async (step) => {
+        if (step.stepType === "model") {
+          inputTokensTotal += step.inputTokens ?? 0;
+          outputTokensTotal += step.outputTokens ?? 0;
+        }
+        await persistStep(ctx, run, step);
+      },
+    });
+
+    // ── 5. Finalize ────────────────────────────────────────────────────────────
+    if (result.stopReason === "final_answer") {
+      await finalizeRunCompleted(ctx.supabase, run.id, result.finalText, {
+        inputTokensTotal,
+        outputTokensTotal,
+        steps: result.stepsUsed,
+        costCents: result.costCents,
+      });
+      log.info({ steps: result.stepsUsed, costCents: result.costCents }, "agent run completed");
+    } else {
+      // max_steps_exceeded | max_cost_exceeded
+      await finalizeRunFailed(ctx.supabase, run.id, result.stopReason, result.costCents, result.stepsUsed);
+      log.warn({ reason: result.stopReason }, "agent run stopped by guard");
+    }
+    } finally {
+      // Tear down the sandbox session (if any) at run end — the only place it's
+      // stopped, so state persists across all code steps within the run.
+      await dispatcher.dispose();
+    }
+  } catch (err) {
+    if (err instanceof RunCancelledError) {
+      log.info("run cancelled mid-flight — leaving cancelled status");
+      return;
+    }
+    const msg = err instanceof Error ? err.message : String(err);
+    log.error({ err: msg }, "agent run failed");
+    await finalizeRunFailed(ctx.supabase, run.id, msg, null, null);
+  }
+}
+
+// ── config resolution ───────────────────────────────────────────────────────
+
+async function resolveConfig(ctx: RunContext, run: ClaimedRun): Promise<RuntimeConfig> {
+  if (run.agent_id) {
+    const { data: agent, error } = await ctx.supabase
+      .schema("agentcore")
+      .from("agents")
+      .select("model, system_prompt, tools, max_steps, guardrail")
+      .eq("id", run.agent_id)
+      .maybeSingle<{
+        model: string;
+        system_prompt: string | null;
+        tools: AgentToolDecl[];
+        max_steps: number;
+        guardrail: string | null;
+      }>();
+    if (error || !agent) {
+      throw new Error(`Agent ${run.agent_id} not found: ${error?.message ?? "no row"}`);
+    }
+    return {
+      model: agent.model,
+      systemPrompt: agent.system_prompt,
+      tools: agent.tools ?? [],
+      maxSteps: agent.max_steps ?? DEFAULT_MAX_STEPS,
+      guardrail: agent.guardrail ?? null,
+    };
+  }
+
+  // Inline request config.
+  const input = run.input as {
+    model?: string;
+    system_prompt?: string;
+    tools?: AgentToolDecl[];
+    max_steps?: number;
+    guardrail?: string;
+  };
+  if (!input.model) {
+    throw new Error("Run has neither agent_id nor an inline model");
+  }
+  return {
+    model: input.model,
+    systemPrompt: input.system_prompt ?? null,
+    tools: input.tools ?? [],
+    maxSteps: input.max_steps ?? DEFAULT_MAX_STEPS,
+    guardrail: input.guardrail ?? null,
+  };
+}
+
+/**
+ * Build the loop's opening transcript: system prompt → replayed prior turns
+ * (if this run chains off a previous_response_id) → the current input.
+ *
+ * Chaining walks the previous_response_id links (oldest→newest, capped), pulling
+ * each prior run's user input + final assistant text. The walk is org-scoped so a
+ * forged previous_response_id can't pull another org's conversation.
+ */
+async function buildMessages(
+  ctx: RunContext,
+  run: ClaimedRun,
+  cfg: RuntimeConfig
+): Promise<LoopMessage[]> {
+  const messages: LoopMessage[] = [];
+  if (cfg.systemPrompt && cfg.systemPrompt.trim().length > 0) {
+    messages.push({ role: "system", content: cfg.systemPrompt });
+  }
+  messages.push(...(await loadPriorTurns(ctx, run.org_id, run.previous_response_id)));
+  const request = run.input as { input?: ResponsesInput };
+  messages.push(...toMessages(request.input ?? ""));
+  return messages;
+}
+
+async function loadPriorTurns(
+  ctx: RunContext,
+  orgId: string,
+  previousResponseId: string | null
+): Promise<LoopMessage[]> {
+  if (!previousResponseId) return [];
+
+  // Walk the chain newest→oldest, then reverse to replay oldest→newest.
+  const chain: Array<{ input: unknown; output: unknown }> = [];
+  const visited = new Set<string>(); // cycle guard: a forged/looping chain can't spin
+  let cursor: string | null = previousResponseId;
+  let hops = 0;
+  while (cursor && hops < MAX_CHAIN_TURNS) {
+    if (visited.has(cursor)) break;
+    visited.add(cursor);
+    const { data } = await ctx.supabase
+      .schema("agentcore")
+      .from("runs")
+      .select("input, output, previous_response_id")
+      .eq("id", cursor)
+      .eq("org_id", orgId)
+      .maybeSingle();
+    const row = data as PriorRunRow | null;
+    if (!row) break;
+    chain.push({ input: row.input, output: row.output });
+    cursor = row.previous_response_id;
+    hops++;
+  }
+  chain.reverse();
+
+  const turns: LoopMessage[] = [];
+  for (const link of chain) {
+    const priorInput = (link.input as { input?: ResponsesInput })?.input ?? "";
+    turns.push(...toMessages(priorInput));
+    const assistantText = extractFinalText(link.output);
+    if (assistantText) turns.push({ role: "assistant", content: assistantText });
+  }
+  return turns;
+}
+
+interface PriorRunRow {
+  input: { input?: ResponsesInput };
+  output: unknown;
+  previous_response_id: string | null;
+}
+
+/** Pull the final assistant text out of a stored ResponsesOutput envelope. */
+function extractFinalText(output: unknown): string | null {
+  const o = output as
+    | { output?: Array<{ content?: Array<{ text?: string }> }> }
+    | null
+    | undefined;
+  const text = o?.output?.[0]?.content?.[0]?.text;
+  return typeof text === "string" && text.length > 0 ? text : null;
+}
+
+/** Pull a plain-text query out of the run's raw input for the auto-recall embed.
+ *  A bare string is used as-is; an OpenAI-style message array uses the LAST
+ *  `user` message (mirrors what the model itself is actually responding to). */
+function extractLatestUserText(input: { input?: ResponsesInput } | null | undefined): string {
+  const raw = input?.input;
+  if (typeof raw === "string") return raw;
+  if (Array.isArray(raw)) {
+    for (let i = raw.length - 1; i >= 0; i--) {
+      const item = raw[i] as { role?: unknown; content?: unknown };
+      if (item?.role === "user") {
+        return typeof item.content === "string" ? item.content : JSON.stringify(item.content ?? "");
+      }
+    }
+  }
+  return "";
+}
+
+/** Org zero-data-retention flag — gates tools that would PERSIST customer data
+ *  (agent memory writes). Defaults to false (retention allowed) if unreadable. */
+async function fetchOrgZdr(ctx: RunContext, orgId: string): Promise<boolean> {
+  const { data } = await ctx.supabase
+    .schema("inference")
+    .from("orgs")
+    .select("zdr_default")
+    .eq("id", orgId)
+    .maybeSingle<{ zdr_default: boolean }>();
+  return data?.zdr_default ?? false;
+}
+
+// ── persistence ───────────────────────────────────────────────────────────────
+
+async function persistStep(ctx: RunContext, run: ClaimedRun, step: LoopStep): Promise<void> {
+  // Tool steps carry a small brand-scrubbed detail preview (set by the adapter,
+  // already upstream-scrubbed, §11); model steps have none (output → runs.output).
+  // Throws on failure (see run-shared.ts) — caught by runAgentJob → finalizeFailed.
+  await insertRunStep(ctx.supabase, run.id, run.org_id, step);
+
+  // Heartbeat + progress so the reaper doesn't treat a live run as stale.
+  await ctx.supabase
+    .schema("agentcore")
+    .from("runs")
+    .update({ heartbeat_at: new Date().toISOString(), step_count: step.stepIndex + 1 })
+    .eq("id", run.id);
+
+  // Bridge to the real usage pipeline (on-behalf-of billing, 2026-07-06) — the
+  // run_steps row above is the trace/ceiling record; this is what makes the
+  // cost real (routes to USAGE_EVENTS via the gateway). No-ops for step types
+  // with no agent/* catalog row yet (file_search, memory_*).
+  //
+  // Deliberately NOT awaited (found by code review, 2026-07-06):
+  // reportToolUsage's own try/catch already swallows every failure it can
+  // have (network error, non-2xx response) and never throws, so awaiting it
+  // here only added a full network round-trip of latency to every tool step
+  // with zero correctness benefit — this is a long-running Node process, not
+  // a Workers isolate, so the fire-and-forget call safely runs to completion
+  // in the background regardless.
+  if (step.stepType !== "model") {
+    void reportToolUsage(ctx.env, run.org_id, `${run.id}:${step.stepIndex}`, {
+      unitLabel: step.metering?.unitLabel,
+      units: step.metering?.units,
+      status: step.status,
+    });
+  }
+}
+
+async function assertNotCancelled(ctx: RunContext, runId: string): Promise<void> {
+  if (await isRunCancelled(ctx.supabase, runId)) throw new RunCancelledError();
+}

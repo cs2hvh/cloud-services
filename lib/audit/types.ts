@@ -13,6 +13,7 @@ export type AuditServiceType =
   | 'auth'
   | 'git_webhook'
   | 'ai_agent'
+  | 'agentcore_agent'
   | 'knowledge_base'
   | 'domain'
   | 'compute';

@@ -19,7 +19,7 @@ import {
   AgentMessages,
   AgentUsage,
   AgentApiKeys,
-  PlatformModels,
+  modelPriceUsdPerMillion,
 } from '@/lib/supabase/queries/ai_agents';
 import { Billing } from '@/lib/supabase/queries/billing';
 import {
@@ -29,10 +29,10 @@ import {
   buildMessages,
   buildRAGSystemPrompt,
   createRAGPipeline,
-  calculateCost,
 } from '@/lib/ai';
 import { LLMMessage } from '@/lib/ai/types';
 import { z } from 'zod';
+import { limitByUser } from '@/lib/cooldown/userbased';
 import { sanitizeValidationError, logError } from '@/lib/api/error-sanitizer';
 import type { ChunkSearchResult } from '@/lib/ai/types';
 
@@ -41,28 +41,6 @@ type StreamingLLMClient = {
   createCompletion: OpenRouterClient['createCompletion'];
   createStreamingCompletion: OpenRouterClient['createStreamingCompletion'];
 };
-
-// Simple in-memory rate limiter for public endpoints
-const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
-
-function checkRateLimit(key: string, limit: number): { allowed: boolean; remaining: number } {
-  const now = Date.now();
-  const windowMs = 60_000; // 1 minute
-  
-  const record = rateLimitStore.get(key);
-  
-  if (!record || now > record.resetAt) {
-    rateLimitStore.set(key, { count: 1, resetAt: now + windowMs });
-    return { allowed: true, remaining: limit - 1 };
-  }
-  
-  if (record.count >= limit) {
-    return { allowed: false, remaining: 0 };
-  }
-  
-  record.count++;
-  return { allowed: true, remaining: limit - record.count };
-}
 
 // Validation schema for chat request
 const chatRequestSchema = z.object({
@@ -123,12 +101,20 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
     }
 
-    // CORS check for allowed origins
+    // Origin allow-list. An empty list still means "no restriction configured",
+    // which is the existing contract — but once a customer HAS configured one,
+    // it must hold for every caller, not just browsers.
+    //
+    // This previously read `allowed_origins.length > 0 && origin`, so a request
+    // with no Origin header skipped the check entirely. Browsers always send
+    // one; curl and any script never do. The allow-list therefore restricted
+    // exactly the clients that were not the threat. A missing Origin is now a
+    // refusal, matching the public-key rule on the inference side.
     const origin = request.headers.get('origin');
-    if (agent.allowed_origins.length > 0 && origin) {
-      const isAllowed = agent.allowed_origins.some(
-        allowed => allowed === '*' || allowed === origin
-      );
+    if (agent.allowed_origins.length > 0) {
+      const isAllowed = origin
+        ? agent.allowed_origins.some((allowed) => allowed === '*' || allowed === origin)
+        : agent.allowed_origins.includes('*');
       if (!isAllowed) {
         return NextResponse.json(
           { error: 'Origin not allowed' },
@@ -137,19 +123,28 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
     }
 
-    // Rate limiting by IP or user
-    const clientId = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 
-                     request.headers.get('x-real-ip') || 
+    // Rate limiting by IP, through the SHARED Redis limiter every other route
+    // uses. This was a module-level Map, which lives inside one server process:
+    // with N instances the real ceiling was N x the configured rpm, and it reset
+    // to zero on every cold start. On an endpoint that can be called with no
+    // credential at all and spends the agent owner's credits, that is the one
+    // place a decorative limit is least affordable.
+    const clientId = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+                     request.headers.get('x-real-ip') ||
                      'unknown';
-    const rateLimitKey = `agent:${endpointId}:${clientId}`;
-    const { allowed, remaining } = checkRateLimit(rateLimitKey, agent.rate_limit_rpm);
-    
-    if (!allowed) {
+    const rl = await limitByUser(`${endpointId}:${clientId}`, {
+      prefix: 'rl:agent-chat',
+      limit: agent.rate_limit_rpm,
+      windowMs: 60_000,
+    });
+
+    if (!rl.allowed) {
+      const retryAfter = rl.retryAfterSec;
       return NextResponse.json(
-        { error: 'Rate limit exceeded', retry_after: 60 },
-        { 
+        { error: 'Rate limit exceeded', retry_after: retryAfter },
+        {
           status: 429,
-          headers: { 'Retry-After': '60' },
+          headers: { 'Retry-After': String(retryAfter) },
         }
       );
     }
@@ -183,8 +178,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     // OPTIMIZATION: Parallelize all pre-LLM operations
     // Start these promises early to run concurrently
-    const platformModelPromise = usePlatformBilling 
-      ? PlatformModels.get_by_model_id(agent.model_id) 
+    // Just the price. This used to fetch a whole catalogue row, but that row's
+    // only job here was carrying a price — and it is itself priced from
+    // inference.models, so it was a round trip for a number we can ask for.
+    const pricePromise = usePlatformBilling
+      ? modelPriceUsdPerMillion(agent.model_id)
       : Promise.resolve(null);
     
     const balancePromise = usePlatformBilling 
@@ -210,10 +208,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const historyPromise = convId ? AgentMessages.get_recent(convId, 10) : Promise.resolve([]);
 
     // Wait for conversation and history in parallel
-    const [convResult, history, platformModel, userBalance, modelKeyData] = await Promise.all([
+    const [convResult, history, price, userBalance, modelKeyData] = await Promise.all([
       convPromise,
       historyPromise,
-      platformModelPromise,
+      pricePromise,
       balancePromise,
       modelKeyPromise,
     ]);
@@ -241,6 +239,23 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           { status: 402 }
         );
       }
+    }
+
+    // The price was resolved above, BEFORE the model runs. A platform-billed
+    // run whose model has no price used to reach the model, answer, and then
+    // bill 0 because `cost > 0` was false — a free completion we paid the
+    // upstream for. Refusing to guess a price is only half the rule; not doing
+    // the work is the other half.
+    //
+    // Not applicable on a customer's own key: nothing is billed to us.
+    if (usePlatformBilling && !price) {
+      return NextResponse.json(
+        {
+          error: 'Model unavailable',
+          message: `"${agent.model_id}" has no price configured, so it cannot be billed. Pick another model or ask an administrator to price it.`,
+        },
+        { status: 409 }
+      );
     }
 
     const conversationHistory: LLMMessage[] = history.map(m => ({
@@ -404,9 +419,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             await AgentConversations.update_stats(convId, newMessageCount, newTotalTokens);
 
             // Calculate cost - use platform model pricing if available
-            const cost = platformModel 
-              ? PlatformModels.calculate_cost(platformModel, promptTokens, completionTokens)
-              : calculateCost(agent.model_id, promptTokens, completionTokens);
+            const cost = price
+              ? (promptTokens / 1_000_000) * price.input + (completionTokens / 1_000_000) * price.output
+              : 0;
             
             // Deduct credits from user balance if using platform billing
             if (usePlatformBilling && cost > 0) {
@@ -455,7 +470,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           'Connection': 'keep-alive',
           'X-Accel-Buffering': 'no', // Disable nginx buffering
           'Transfer-Encoding': 'chunked',
-          'X-RateLimit-Remaining': remaining.toString(),
+          'X-RateLimit-Remaining': String(rl.remaining),
           ...corsHeaders,
         },
       });
@@ -504,9 +519,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     await AgentConversations.update_stats(convId, newMessageCount, newTotalTokens);
 
     // Calculate cost - use platform model pricing if available
-    const cost = platformModel 
-      ? PlatformModels.calculate_cost(platformModel, usage.prompt_tokens, usage.completion_tokens)
-      : calculateCost(agent.model_id, usage.prompt_tokens, usage.completion_tokens);
+    const cost = price
+        ? (usage.prompt_tokens / 1_000_000) * price.input + (usage.completion_tokens / 1_000_000) * price.output
+        : 0;
     
     // Deduct credits from user balance if using platform billing
     if (usePlatformBilling && cost > 0) {
@@ -523,7 +538,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     // Build response with CORS headers
     const responseHeaders: HeadersInit = {
-      'X-RateLimit-Remaining': remaining.toString(),
+      'X-RateLimit-Remaining': String(rl.remaining),
       ...corsHeaders,
     };
 

@@ -1,22 +1,32 @@
 /**
  * GET /api/inference/fine-tuning/jobs/[id]/log-url
  *
- * Returns a short-lived presigned HTTPS URL for the training log stored at
- * r2://ahura-ft-adapters/.../training.log. The dashboard hits this when the
- * user clicks "download log ↗" — opening r2:// in a browser doesn't work,
- * and the R2 bucket isn't public, so we sign-on-demand.
+ * Returns the training log stored at r2://ahura-ft-adapters/.../training.log
+ * — scrubbed, not a raw presigned URL to the object.
  *
- * Expiry is short (1 hour) — users will re-request if they need it later.
+ * Found live (2026-07-17, Phase-0 billing audit): this used to mint a
+ * presigned URL straight to the RAW log — train.sh (infra/runpod/training-
+ * images/axolotl/train.sh) tees axolotl's real stdout to it verbatim, so
+ * every RunPod/kubectl/internal-path mention in a training run's own output
+ * would go to the customer completely unscrubbed. Fixed by fetching the
+ * object server-side and running it through stripInfraIdentifiers()
+ * (lib/inference/error-messages.ts) before it ever leaves this route — no
+ * raw copy of the log is ever handed to a caller. (No live UI caller of this
+ * route existed yet, so this is a contract change with zero blast radius,
+ * not a breaking one.)
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { authenticateUser } from "@/lib/auth/server-auth";
+import { controlPlaneAuth } from "@/lib/inference/control-plane-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
-import { getActiveOrgForUser } from "@/lib/inference/orgs";
+import { stripInfraIdentifiers } from "@/lib/inference/error-messages";
 
-const URL_TTL_SECONDS = 6 * 3600;
+// A training log can run long on a multi-epoch job; cap what we'll ever
+// buffer/return so a huge log can't blow up this route's memory or response
+// size — same "never inline unbounded" discipline as agent-runner's sandbox
+// output cap (MAX_OUTPUT_CHARS in workers/agent-runner/src/tools/code.ts).
+const MAX_LOG_CHARS = 2_000_000; // ~2MB of text
 
 function isUuid(s: string): boolean {
   return /^[0-9a-f-]{36}$/i.test(s);
@@ -43,23 +53,23 @@ function parseR2Url(url: string): { bucket: string; key: string } | null {
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await authenticateUser();
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "cookie", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
   const { id } = await params;
   if (!isUuid(id)) return NextResponse.json({ error: "Invalid job id" }, { status: 400 });
 
-  const rl = await limitByUser(auth.user!.id, {
+  const rl = await limitByUser(auth.subject, {
     prefix: "rl:inf-ft-log-url",
     limit: 30,
     windowMs: 60_000,
   });
   if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
 
-  const org = await getActiveOrgForUser(auth.user!.id);
-  if (!org) return NextResponse.json({ error: "No inference org" }, { status: 404 });
+  const org = { org_id: auth.orgId, role: auth.orgRole };
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -124,16 +134,21 @@ export async function GET(
   });
 
   try {
-    const url = await getSignedUrl(
-      s3,
-      new GetObjectCommand({ Bucket: parsed.bucket, Key: parsed.key }),
-      { expiresIn: URL_TTL_SECONDS }
-    );
-    return NextResponse.json({ success: true, url, expires_in: URL_TTL_SECONDS });
+    const obj = await s3.send(new GetObjectCommand({ Bucket: parsed.bucket, Key: parsed.key }));
+    const raw = await obj.Body?.transformToString("utf-8");
+    if (raw == null) {
+      return NextResponse.json({ error: "Log object was empty or unreadable" }, { status: 500 });
+    }
+
+    const truncated = raw.length > MAX_LOG_CHARS;
+    const body = truncated ? raw.slice(0, MAX_LOG_CHARS) : raw;
+    const log = stripInfraIdentifiers(body) + (truncated ? "\n\n…(log truncated)" : "");
+
+    return NextResponse.json({ success: true, log, truncated });
   } catch (err) {
-    console.error("[FT log-url] sign failed", err);
+    console.error("[FT log-url] fetch failed", err);
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Failed to sign URL" },
+      { error: err instanceof Error ? err.message : "Failed to fetch log" },
       { status: 500 }
     );
   }

@@ -25,10 +25,11 @@
  * Returns: { scanned, reaped, errors, errors_detail }.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { withCronRun } from "@/lib/inference/cron-heartbeat";
 import { createClient } from "@supabase/supabase-js";
 
 import { RunPodClient } from "@/lib/services/runpod/client";
-import { chargeFinetuneUsage } from "@/lib/inference/finetune-billing";
+import { chargeFinetuneUsage, computeFinetuneCostCents } from "@/lib/inference/finetune-billing";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -73,7 +74,7 @@ async function podStillAlive(podId: string): Promise<boolean> {
   }
 }
 
-export async function POST(request: NextRequest) {
+async function sweep(request: NextRequest) {
   const token = request.headers.get("x-ahura-internal-token");
   const expected = process.env.BATCH_PROCESSOR_TOKEN;
   if (!expected || !token || token !== expected) {
@@ -117,8 +118,7 @@ export async function POST(request: NextRequest) {
           ? Date.parse(row.created_at)
           : now;
       const elapsedSeconds = Math.max(0, Math.round((now - startMs) / 1000));
-      const hourly = Number(row.hourly_cost_cents) || 0;
-      const costCents = hourly > 0 ? Math.ceil((hourly * elapsedSeconds) / 3600) : 0;
+      const costCents = computeFinetuneCostCents(row.hourly_cost_cents, elapsedSeconds);
 
       // Win the terminal transition atomically — only the sweep that flips the
       // job out of a non-terminal state reaps + charges it.
@@ -223,4 +223,10 @@ export async function POST(request: NextRequest) {
     errors,
     errors_detail: errDetails,
   });
+}
+
+// Heartbeat wrapper. Without it this sweep's only trace is a Cloudflare log line,
+// which no admin page can read — see lib/inference/cron-heartbeat.ts.
+export async function POST(request: NextRequest) {
+  return withCronRun("finetune-watchdog", () => sweep(request));
 }

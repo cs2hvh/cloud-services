@@ -13,6 +13,7 @@ import { createClient } from "@supabase/supabase-js";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { getActiveOrgForUser } from "@/lib/inference/orgs";
+import { resolveControlPlaneAuth } from "@/lib/inference/api-key-auth";
 
 interface UsageRow {
   created_at: string;
@@ -29,10 +30,39 @@ interface UsageRow {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = await authenticateUser();
-  if (!auth.authenticated) return auth.response;
+  // Accepts an `ahu_` key. Reading your own spend is the first thing a customer
+  // automates — reconciling our figure against their own — and it was previously
+  // reachable only from a browser, and only via the cookie-only auth helper, so
+  // even a script holding a valid Supabase JWT was refused.
+  const resolved = await resolveControlPlaneAuth(
+    request,
+    async () => {
+      const a = await authenticateUser();
+      return a.authenticated
+        ? { ok: true as const, userId: a.user!.id, email: a.user!.email ?? "" }
+        : { ok: false as const, response: a.response };
+    },
+    async (userId) => {
+      const o = await getActiveOrgForUser(userId);
+      return o ? { org_id: o.org_id, role: o.role, org_name: o.org_name, org_slug: o.org_slug } : null;
+    },
+    undefined,
+    true // agent-scoped keys allowed — but see ownKeyOnly below: they are
+         // filtered to their OWN spend, which is what GET /v1/key already
+         // gives any key at the edge.
+  );
+  if (!resolved.ok) return resolved.response;
+  const auth = resolved.auth;
 
-  const rl = await limitByUser(auth.user!.id, {
+  // A read costs nothing, so no billable-action refusal. But "costs nothing"
+  // is not "reveals nothing": org-wide spend, and the names and prefixes of
+  // every other key, must not be readable by a key scoped to one agent — a
+  // public key is embeddable in a browser, so that would publish them.
+  //
+  // An agent-scoped (hence every public) key therefore sees ONLY its own rows.
+  // An org-level private key, like a session, still sees the whole org.
+  const ownKeyOnly = auth.apiKey?.agentId ? auth.apiKey.keyId : null;
+  const rl = await limitByUser(auth.subject, {
     prefix: "rl:inf-usage-summary",
     limit: 60,
     windowMs: 60_000,
@@ -41,8 +71,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
   }
 
-  const org = await getActiveOrgForUser(auth.user!.id);
-  if (!org) return NextResponse.json({ error: "No inference org" }, { status: 404 });
+  const org = { org_id: auth.orgId };
 
   const daysParam = Number(request.nextUrl.searchParams.get("days") ?? "7");
   const days = Number.isFinite(daysParam) ? Math.min(Math.max(1, daysParam), 90) : 7;
@@ -61,14 +90,21 @@ export async function GET(request: NextRequest) {
   // Pull all rows in window for this org (org-scoped via WHERE)
   // For 100k req/hour scale we'll add pagination in Phase 2; for now full pull
   // is fine since most orgs see <10k req/day in early access.
-  const { data, error } = await supabase
+  let usageQuery = supabase
     .schema("inference")
     .from("usage")
     .select(
       "created_at, api_key_id, model_id, modality, input_tokens, output_tokens, cost_cents, latency_ms, status, billed_to, cache_kind"
     )
     .eq("org_id", org.org_id)
-    .gte("created_at", since.toISOString())
+    .gte("created_at", since.toISOString());
+
+  // Narrowed at the QUERY, not filtered out of the response — a scoped key
+  // must never have the other rows in hand, because every total computed
+  // below would otherwise still be an org-wide number.
+  if (ownKeyOnly) usageQuery = usageQuery.eq("api_key_id", ownKeyOnly);
+
+  const { data, error } = await usageQuery
     .order("created_at", { ascending: false })
     .returns<UsageRow[]>();
 
@@ -157,9 +193,13 @@ export async function GET(request: NextRequest) {
     .sort((a, b) => b.spent_cents - a.spent_cents)
     .slice(0, 10);
 
-  const topKeyIds = [...keyBuckets.entries()]
-    .sort((a, b) => b[1].spent - a[1].spent)
-    .slice(0, 10);
+  // The per-key breakdown names other keys ("Production server", prefix, last
+  // four). That is a key inventory, so a scoped key gets none of it — even
+  // though its own rows are all it could see anyway, this keeps the intent
+  // explicit rather than relying on the filter above staying correct.
+  const topKeyIds = ownKeyOnly
+    ? []
+    : [...keyBuckets.entries()].sort((a, b) => b[1].spent - a[1].spent).slice(0, 10);
 
   // Resolve names + previews for the top-N keys in a single query so we
   // can render "Production server (ahu_live_...••••)" instead of bare
@@ -218,7 +258,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     success: true,
-    org: { id: org.org_id, slug: org.org_slug, name: org.org_name },
+    org: { id: auth.orgId, slug: auth.orgSlug, name: auth.orgName },
     summary: {
       month,
       month_spent_cents: monthSpentCents,

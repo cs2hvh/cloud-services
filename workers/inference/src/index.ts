@@ -20,17 +20,50 @@ import { Hono } from "hono";
 import { logger } from "hono/logger";
 import { cors } from "hono/cors";
 
-import type { AuditEvent, Env, HonoVariables, UsageEvent } from "./types.ts";
+import type { Env, HonoVariables } from "./types.ts";
 import { authMiddleware } from "./middleware/auth.ts";
+import { agentScopeMiddleware } from "./middleware/agent-scope.ts";
+import { originCheckMiddleware } from "./middleware/origin-check.ts";
 import { spendCheckMiddleware } from "./middleware/spend.ts";
 import { rateLimitMiddleware } from "./middleware/rate-limit.ts";
+import { featureGateMiddleware } from "./middleware/feature-gate.ts";
 import { chatCompletions } from "./routes/chat-completions.ts";
 import { embeddings } from "./routes/embeddings.ts";
 import { listModels } from "./routes/models.ts";
 import { keyInfo } from "./routes/key.ts";
 import { messagesShim } from "./routes/messages.ts";
+import { rerank } from "./routes/rerank.ts";
+import { moderations } from "./routes/moderations.ts";
+import { imageGenerations } from "./routes/images.ts";
+import { createVideoJob, getVideoJob, getVideoContent, retryVideoJob } from "./routes/video-generations.ts";
+import { createMusicJob } from "./routes/music-generations.ts";
+import { audioSpeech } from "./routes/audio-speech.ts";
+import { audioTranscriptions } from "./routes/audio-transcriptions.ts";
+import { ocr } from "./routes/ocr.ts";
+import { responses, createAgentRun } from "./routes/responses.ts";
+import { getAgentRun, streamAgentRun, cancelAgentRun } from "./routes/agent-runs.ts";
+import { agentToolUsage } from "./routes/agent-tool-usage.ts";
+import {
+  listAgents, createAgent, getAgent, updateAgent, deleteAgent,
+  listAgentKeys, createAgentKey, revokeAgentKey, rotateAgentKey,
+  purgeAgentMemories,
+} from "./routes/agent-management.ts";
+import {
+  listMcpServers, createMcpServer, updateMcpServer, deleteMcpServer,
+} from "./routes/mcp-servers.ts";
+import {
+  listCollections, getCollection, queryCollection, upsertRows,
+  listRows, bulkDeleteRows, getRow, deleteRow,
+} from "./routes/vector-collections.ts";
+import { answerFromCollection } from "./routes/vector-answer.ts";
+import {
+  listConnectors, createConnector, getConnector, updateConnector,
+  deleteConnector, syncConnector, listConnectorDocuments,
+} from "./routes/connectors.ts";
+import { agentManagementAuthMiddleware } from "./middleware/agent-management-auth.ts";
 import { handleUsageBatch } from "./consumers/usage.ts";
 import { handleAuditBatch } from "./consumers/audit.ts";
+import { handleTraceBatch } from "./consumers/trace.ts";
 
 const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
 
@@ -54,6 +87,9 @@ app.use(
       "X-Ahura-Guardrail",
       "X-Ahura-Cache",
       "X-Ahura-Cache-TTL",
+      "X-Ahura-Trace-Id",
+      "X-Ahura-Prompt",
+      "X-Ahura-Prompt-Vars",
     ],
     exposeHeaders: [
       "X-Ahura-Request-Id",
@@ -62,6 +98,8 @@ app.use(
       "X-Ahura-Cache",
       "X-Ahura-Cache-Age",
       "X-Ahura-Guardrail",
+      "X-Ahura-Prompt-Version",
+      "X-Ahura-Trace-Id",
     ],
     maxAge: 86400,
   })
@@ -94,12 +132,50 @@ app.get("/v1/health", (c) =>
 const v1 = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
 
 v1.use("*", authMiddleware);
+v1.use("*", agentScopeMiddleware);
+v1.use("*", originCheckMiddleware);
 v1.use("*", spendCheckMiddleware);
 v1.use("*", rateLimitMiddleware);
+// Per-capability kill switches. LAST of the gates on purpose: a request refused
+// here must still have been authenticated and rate-limited, so a disabled
+// capability can't be used as an unmetered probe of which keys are valid. Only
+// spending routes are gated — see middleware/feature-gate.ts.
+v1.use("*", featureGateMiddleware);
 
 // Core inference surface — OpenAI compatible
 v1.post("/chat/completions", chatCompletions);
 v1.post("/embeddings", embeddings);
+
+// Agents v2 (agentcore) — durable Responses API. POST enqueues a run (202 +
+// run_id); the agent-runner executes it. GET/stream/cancel read the durable run.
+// Static "runs" segment first so it doesn't collide with :id.
+v1.post("/responses", responses);
+v1.get("/agents/runs/:id/stream", streamAgentRun);
+v1.get("/agents/runs/:id", getAgentRun);
+v1.post("/agents/runs/:id/cancel", cancelAgentRun);
+v1.post("/agents/:id/runs", createAgentRun);
+
+// Phase 1 — Rerank + Moderation (OpenRouter proxy: Cohere + Llama Guard)
+v1.post("/rerank", rerank);
+v1.post("/moderations", moderations);
+
+// Phase 1 — Image generation
+v1.post("/images/generations", imageGenerations);
+// Slice 4 — Async video generation (POST creates job, GET polls status)
+v1.post("/videos", createVideoJob);
+v1.get("/videos/:id/content", getVideoContent);  // proxy before :id catch-all
+v1.get("/videos/:id", getVideoJob);
+v1.post("/videos/:id/retry", retryVideoJob);
+
+// Music generation (synchronous via Lyria streaming, like TTS)
+v1.post("/audio/music", createMusicJob);
+
+// Slice 3 — TTS + STT (OpenRouter gpt-audio-mini / voxtral proxy)
+v1.post("/audio/speech", audioSpeech);
+v1.post("/audio/transcriptions", audioTranscriptions);
+
+// Slice 5 — OCR / Document AI (Gemini via OpenRouter)
+v1.post("/ocr", ocr);
 
 // Catalog + introspection
 v1.get("/models", listModels);
@@ -109,6 +185,90 @@ v1.get("/key", keyInfo);
 v1.post("/messages", messagesShim);
 
 app.route("/v1", v1);
+
+// Agent MANAGEMENT surface (create/list/get/update/delete an agent; mint/
+// list/revoke/rotate its keys; MCP server + knowledge-base CRUD —
+// routes/agent-management.ts, mcp-servers.ts, vector-collections.ts).
+//
+// This is a SEPARATE Hono() instance for code organization only — mounting
+// it as a second `app.route("/v1", ...)` does NOT give it an isolated
+// middleware scope. Found live (2026-07-18): Hono's `.route()` flattens a
+// sub-app's routes (including its `.use("*", ...)` registrations) into the
+// parent's one shared routing table, so the ORIGINAL `v1` group's
+// authMiddleware/agentScopeMiddleware/originCheckMiddleware/
+// spendCheckMiddleware/rateLimitMiddleware ALL still match every path
+// registered here too, regardless of which instance the route was declared
+// on. That's fine for auth/agentScope/originCheck/rateLimit (see below),
+// but spendCheckMiddleware needed an explicit fix — see its own file:
+// hitting the org's hard cap must never lock a customer out of deleting a
+// runaway agent or revoking a leaking key, the one thing that would let
+// them fix it, so it now recognizes these paths and skips itself for them.
+//
+// authMiddleware: kept here too even though `v1`'s copy already runs first
+// in practice (registration order) — cheap, and keeps this group correct
+// on its own rather than silently depending on that ordering.
+// agentManagementAuthMiddleware: the one thing genuinely new — private,
+// unrestricted keys only (narrower than agentScopeMiddleware/
+// originCheckMiddleware's already-bled-through checks, which no-op for
+// such a key anyway).
+// rateLimitMiddleware: deliberately NOT re-declared — `v1`'s copy already
+// applies via the bleed-through above; declaring it again here would
+// double-charge the token bucket for every request.
+const v1Management = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
+v1Management.use("*", authMiddleware);
+v1Management.use("*", agentManagementAuthMiddleware);
+
+v1Management.get("/agents", listAgents);
+v1Management.post("/agents", createAgent);
+v1Management.get("/agents/:id/keys", listAgentKeys);
+v1Management.post("/agents/:id/keys", createAgentKey);
+v1Management.delete("/agents/:id/keys/:keyId", revokeAgentKey);
+v1Management.post("/agents/:id/keys/:keyId/rotate", rotateAgentKey);
+v1Management.get("/agents/:id", getAgent);
+v1Management.patch("/agents/:id", updateAgent);
+v1Management.delete("/agents/:id", deleteAgent);
+v1Management.delete("/agents/:id/memories", purgeAgentMemories);
+
+// MCP server registry (routes/mcp-servers.ts) — same auth/skip-spend
+// reasoning as the agent-CRUD routes above.
+v1Management.get("/mcp-servers", listMcpServers);
+v1Management.post("/mcp-servers", createMcpServer);
+v1Management.patch("/mcp-servers/:id", updateMcpServer);
+v1Management.delete("/mcp-servers/:id", deleteMcpServer);
+
+// Knowledge base / vector collections (routes/vector-collections.ts) — list/
+// get/query/upsert/rows only; collection create/delete stay dashboard-only
+// (credit-ledger — see that file's header for why).
+v1Management.get("/vector/collections", listCollections);
+v1Management.get("/vector/collections/:id", getCollection);
+v1Management.post("/vector/collections/:id/query", queryCollection);
+v1Management.post("/vector/collections/:id/answer", answerFromCollection);
+v1Management.post("/vector/collections/:id/upsert", upsertRows);
+v1Management.get("/vector/collections/:id/rows", listRows);
+v1Management.delete("/vector/collections/:id/rows", bulkDeleteRows);
+v1Management.get("/vector/collections/:id/rows/:rowId", getRow);
+v1Management.delete("/vector/collections/:id/rows/:rowId", deleteRow);
+
+// RAG connectors (routes/connectors.ts) — control-plane CRUD + sync trigger.
+// The sync work + its embedding spend happen out of band in workers/data-runner
+// (metered via the on-behalf-of /v1/embeddings pipeline), so the trigger itself
+// is a management route. Doc: nextstespsAI/20-rag-connectors-and-data-runner.md.
+v1Management.get("/vector/collections/:id/connectors", listConnectors);
+v1Management.post("/vector/collections/:id/connectors", createConnector);
+v1Management.get("/connectors/:id", getConnector);
+v1Management.patch("/connectors/:id", updateConnector);
+v1Management.delete("/connectors/:id", deleteConnector);
+v1Management.post("/connectors/:id/sync", syncConnector);
+v1Management.get("/connectors/:id/documents", listConnectorDocuments);
+
+app.route("/v1", v1Management);
+
+// Agent tool-usage ingress (S1/S2 billing bridge) — auth only, deliberately
+// outside the v1 group: this reports cost already incurred by a completed
+// tool step, so spendCheck/rateLimit (which gate NEW requests) don't apply.
+// authMiddleware's on-behalf-of path + the route's own isOnBehalfOf check
+// together restrict this to agent-runner, never a customer's own API key.
+app.post("/v1/agent-tool-usage", authMiddleware, agentToolUsage);
 
 // ───────────────────────────────────────────────────────────────
 // Error fallback — never leak stack traces; always JSON
@@ -160,13 +320,23 @@ export default {
   fetch: app.fetch.bind(app),
 
   async queue(
-    batch: MessageBatch<UsageEvent | AuditEvent>,
+    batch: MessageBatch<unknown>,
     env: Env
   ): Promise<void> {
-    if (batch.queue === "ahura-inference-usage") {
-      await handleUsageBatch(batch as MessageBatch<UsageEvent>, env);
-    } else if (batch.queue === "ahura-inference-audit") {
-      await handleAuditBatch(batch as MessageBatch<AuditEvent>, env);
+    // To add a new queue: import its handler, register it here.
+    // The queue name must match the `queue` field in wrangler.toml [[queues.consumers]].
+    const QUEUE_HANDLERS: Record<
+      string,
+      (batch: MessageBatch<never>, env: Env) => Promise<void>
+    > = {
+      "ahura-inference-usage": handleUsageBatch as never,
+      "ahura-inference-audit": handleAuditBatch as never,
+      "ahura-inference-trace": handleTraceBatch as never,
+    };
+
+    const handler = QUEUE_HANDLERS[batch.queue];
+    if (handler) {
+      await handler(batch as MessageBatch<never>, env);
     } else {
       console.warn(
         JSON.stringify({
@@ -195,6 +365,7 @@ export default {
    */
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
     ctx.waitUntil(runServingPodWatchdog(env, event));
+    ctx.waitUntil(runMediaJobWatchdog(env, event));
     const minuteOfHour = new Date(event.scheduledTime).getUTCMinutes();
     // Fine-tuning watchdog every 5 min: reaps orphaned FT jobs (stale
     // heartbeat) and zombie GPU pods left on already-terminal jobs. Its
@@ -202,6 +373,20 @@ export default {
     // sweep makes RunPod API calls — every 5 min is plenty.
     if (minuteOfHour % 5 === 0) {
       ctx.waitUntil(runFinetuneWatchdog(env, event));
+      // Backstop for orphaned eval runs (runner died mid-run). Pure status
+      // flip — no pod/cost to settle — so a generous stale threshold is fine
+      // at the 5-min cadence.
+      ctx.waitUntil(runEvalWatchdog(env, event));
+      // Backstop for orphaned agentcore runs (runner died / past expires_at).
+      // Pure status flip to 'expired' — no sandbox/cost to settle in S1.
+      ctx.waitUntil(runAgentRunReaper(env, event));
+      // S3 counterpart: reap orphaned sandbox sessions (runner died before its
+      // dispose() finally-block settled the session row) past idle_deadline.
+      ctx.waitUntil(runAgentSessionReaper(env, event));
+      // RAG connectors: enqueue scheduled connectors that are due, and reap
+      // syncs whose data-runner died mid-flight (stale heartbeat).
+      ctx.waitUntil(runConnectorScheduler(env, event));
+      ctx.waitUntil(runIngestWatchdog(env, event));
       // Meter BYO deployments (RunPod Serverless) for GPU worker uptime.
       ctx.waitUntil(runDeploymentMeter(env, event));
     }
@@ -248,6 +433,15 @@ async function runServingPodWatchdog(env: Env, event: ScheduledEvent): Promise<v
   );
 }
 
+async function runMediaJobWatchdog(env: Env, event: ScheduledEvent): Promise<void> {
+  await runControlPlaneSweep(
+    env,
+    event,
+    "/api/inference/internal/media-job-watchdog",
+    "media-job watchdog"
+  );
+}
+
 async function runFinetuneWatchdog(env: Env, event: ScheduledEvent): Promise<void> {
   await runControlPlaneSweep(
     env,
@@ -273,12 +467,57 @@ async function runGpuReconcile(env: Env, event: ScheduledEvent): Promise<void> {
   await runControlPlaneSweep(env, event, "/api/internal/gpu/reconcile", "gpu reconcile");
 }
 
+async function runEvalWatchdog(env: Env, event: ScheduledEvent): Promise<void> {
+  await runControlPlaneSweep(
+    env,
+    event,
+    "/api/inference/internal/eval-watchdog",
+    "eval watchdog"
+  );
+}
+
 async function runDeploymentMeter(env: Env, event: ScheduledEvent): Promise<void> {
   await runControlPlaneSweep(
     env,
     event,
     "/api/inference/internal/deployment-meter",
     "deployment meter"
+  );
+}
+
+async function runAgentRunReaper(env: Env, event: ScheduledEvent): Promise<void> {
+  await runControlPlaneSweep(
+    env,
+    event,
+    "/api/agents/internal/run-reaper",
+    "agent run-reaper"
+  );
+}
+
+async function runAgentSessionReaper(env: Env, event: ScheduledEvent): Promise<void> {
+  await runControlPlaneSweep(
+    env,
+    event,
+    "/api/agents/internal/session-reaper",
+    "agent session-reaper"
+  );
+}
+
+async function runConnectorScheduler(env: Env, event: ScheduledEvent): Promise<void> {
+  await runControlPlaneSweep(
+    env,
+    event,
+    "/api/inference/internal/connector-scheduler",
+    "connector scheduler"
+  );
+}
+
+async function runIngestWatchdog(env: Env, event: ScheduledEvent): Promise<void> {
+  await runControlPlaneSweep(
+    env,
+    event,
+    "/api/inference/internal/ingest-watchdog",
+    "ingest watchdog"
   );
 }
 

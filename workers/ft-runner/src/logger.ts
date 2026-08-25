@@ -1,17 +1,9 @@
 /**
- * Structured JSON logger. k8s log shippers (Loki, Datadog) all parse the
- * single-line JSON the default pino formatter emits — no pretty-printing
- * in production.
+ * The ft-runner's named logger instance, built from runner-core's factory.
+ * Re-exported here so the rest of the codebase keeps importing `{ logger }`
+ * from "./logger.js" unchanged.
  */
-import { pino } from "pino";
+import { makeLogger, type Logger } from "@ahura/runner-core";
 
-export const logger = pino({
-  level: process.env.LOG_LEVEL ?? "info",
-  base: {
-    service: "ahura-ft-runner",
-    version: process.env.APP_VERSION ?? "0.1.0",
-  },
-  timestamp: pino.stdTimeFunctions.isoTime,
-});
-
-export type Logger = typeof logger;
+export const logger = makeLogger("ahura-ft-runner");
+export type { Logger };

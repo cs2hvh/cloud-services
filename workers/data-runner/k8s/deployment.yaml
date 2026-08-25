@@ -1,0 +1,113 @@
+# ahura-data-runner Deployment
+#
+# Processes queued inference.connectors by syncing each source (S3 / web-crawl)
+# into its bound vector collection. Like eval-runner, this needs NO GPU — it
+# only makes HTTP calls to our own /v1/embeddings and /v1/ocr endpoints.
+#
+# Single replica is safe for v1: MAX_CONCURRENT_JOBS controls how many
+# connectors sync in parallel within the process; the claim is atomic
+# (UPDATE WHERE status='queued') so multiple replicas won't pick the same one.
+# Raise replicas only when a single replica's sync throughput is the bottleneck.
+#
+# Required secret: ahura-data-runner-secrets (see bottom of this file).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ahura-data-runner
+  namespace: ahura
+  labels:
+    app: ahura-data-runner
+    tier: backend
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: ahura-data-runner
+  template:
+    metadata:
+      labels:
+        app: ahura-data-runner
+    spec:
+      terminationGracePeriodSeconds: 120
+      containers:
+        - name: runner
+          image: ghcr.io/cs2hvh/ahura-data-runner:latest
+          imagePullPolicy: Always
+          ports:
+            - name: health
+              containerPort: 8080
+              protocol: TCP
+          envFrom:
+            - secretRef:
+                name: ahura-data-runner-secrets
+          env:
+            - name: LOG_LEVEL
+              value: "info"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: health
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: health
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 2
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ahura-data-runner-health
+  namespace: ahura
+spec:
+  type: ClusterIP
+  selector:
+    app: ahura-data-runner
+  ports:
+    - port: 8080
+      targetPort: health
+      protocol: TCP
+      name: health
+
+# ── Secret ────────────────────────────────────────────────────────────────────
+#
+# Do NOT hand-create this. It comes from ./secret.yaml.template, rendered with
+# values from ~/.ahura-lke.env (outside the repo) by the same script that
+# applies every other runner:
+#
+#   export KUBECONFIG=$HOME/.kube/lke-ahura.yaml
+#   set -a; source ~/.ahura-lke.env; set +a
+#   bash infra/k8s/lke/02-apply-all.sh
+#
+# NOTE: `image:` above is pinned to :latest, and .github/workflows/data-runner-image.yml
+# only tags :latest on a push to dev/master — a feature-branch build publishes
+# :<branch> and :sha-<short> instead. Deploying from a feature branch therefore
+# needs an explicit image override, or the tag will not exist. There is also no
+# auto-rollout (docs/PRODUCTION.md §5): after a new image is pushed, run
+#   kubectl -n ahura rollout restart deploy/ahura-data-runner

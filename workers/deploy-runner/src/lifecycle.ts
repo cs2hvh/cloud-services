@@ -13,7 +13,7 @@
  * state. A duplicate replay is a no-op.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Job } from "bullmq";
+import type { RunnerJob } from "@ahura/runner-core";
 import type { RunnerEnv } from "./env.js";
 import type { Logger } from "./logger.js";
 import type { RunPod } from "./runpod.js";
@@ -49,7 +49,7 @@ export interface LifecycleDeps {
   logger: Logger;
 }
 
-export async function processJob(deps: LifecycleDeps, bullJob: Job<DeployJobPayload>): Promise<void> {
+export async function processJob(deps: LifecycleDeps, bullJob: RunnerJob<DeployJobPayload>): Promise<void> {
   const { logger } = deps;
   const { deploymentId, action } = bullJob.data;
   const log = logger.child({ deploymentId, action, bullJobId: bullJob.id });

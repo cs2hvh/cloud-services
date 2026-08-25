@@ -17,7 +17,7 @@ import { createClient } from "@supabase/supabase-js";
 import { createHmac, timingSafeEqual } from "crypto";
 import { emitInferenceEvent } from "@/lib/inference/notifications";
 import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
-import { chargeFinetuneUsage } from "@/lib/inference/finetune-billing";
+import { chargeFinetuneUsage, computeFinetuneCostCents } from "@/lib/inference/finetune-billing";
 import { RunPodClient } from "@/lib/services/runpod/client";
 
 const WEBHOOK_SECRET = process.env.FT_WEBHOOK_SECRET ?? "";
@@ -52,12 +52,6 @@ interface WebhookPayload {
   final_loss?: number;
   sample_outputs?: Array<{ prompt: string; output: string }>;
   error?: string;
-}
-
-/** Hourly $/hr from RunPod → final cost_cents based on actual training_seconds. */
-function computeCostCents(hourlyCostCents: number | null, trainingSeconds: number): number {
-  if (!hourlyCostCents || hourlyCostCents <= 0 || trainingSeconds <= 0) return 0;
-  return Math.ceil((hourlyCostCents * trainingSeconds) / 3600);
 }
 
 function isUuid(s: string): boolean {
@@ -162,7 +156,7 @@ export async function POST(
   // Cost still applies to failed runs — RunPod billed us for the pod-up
   // time, customer should see what they paid for.
   if (payload.status === "failed") {
-    const costCents = computeCostCents(existing.hourly_cost_cents, payload.elapsed_seconds);
+    const costCents = computeFinetuneCostCents(existing.hourly_cost_cents, payload.elapsed_seconds);
     const safeError =
       customerSafeErrorMessage(payload.error) ||
       "Training did not complete. Re-run the job; if it fails again, try a different GPU size or contact support.";
@@ -234,7 +228,7 @@ export async function POST(
   ) {
     // GPU time was consumed (training ran to completion before the gate), so
     // charge for it — same exactly-once atomic-win pattern as the failure path.
-    const costCents = computeCostCents(existing.hourly_cost_cents, payload.elapsed_seconds);
+    const costCents = computeFinetuneCostCents(existing.hourly_cost_cents, payload.elapsed_seconds);
     const { data: won } = await supabase
       .schema("inference")
       .from("finetunes")
@@ -262,7 +256,7 @@ export async function POST(
     samples.length > 0 &&
     samples.some((s) => typeof s.output === "string" && s.output.trim().length > 0);
   if (samples.length > 0 && !hasUsableSample) {
-    const costCents = computeCostCents(existing.hourly_cost_cents, payload.elapsed_seconds);
+    const costCents = computeFinetuneCostCents(existing.hourly_cost_cents, payload.elapsed_seconds);
     const { data: won } = await supabase
       .schema("inference")
       .from("finetunes")
@@ -301,7 +295,7 @@ export async function POST(
   // We'll add a managed-serving tier later as a separate product line
   // (vLLM Multi-LoRA shared per base — Fireworks/Together pattern).
   // Until then, the inference gateway never routes for FT outputs.
-  const costCents = computeCostCents(existing.hourly_cost_cents, payload.elapsed_seconds);
+  const costCents = computeFinetuneCostCents(existing.hourly_cost_cents, payload.elapsed_seconds);
 
   // Win the terminal transition atomically — see the failure path. Charge
   // only if we flipped the job to completed, so a retried webhook can't

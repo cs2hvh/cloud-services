@@ -17,6 +17,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { Billing } from "@/lib/supabase/queries/billing";
 
+/** Hourly $/hr from RunPod → final cost_cents based on actual training_seconds.
+ *  Shared by every terminal path (webhook success/failure, cancel) so there is
+ *  exactly one cost formula, not one per caller. */
+export function computeFinetuneCostCents(hourlyCostCents: number | null, trainingSeconds: number): number {
+  if (!hourlyCostCents || hourlyCostCents <= 0 || trainingSeconds <= 0) return 0;
+  return Math.ceil((hourlyCostCents * trainingSeconds) / 3600);
+}
+
 // Loose client type so the routes' createClient(...) instances assign cleanly
 // and .schema() accepts the inference schema.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

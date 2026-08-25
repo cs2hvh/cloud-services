@@ -17,7 +17,7 @@ import {
   AgentConversations,
   AgentMessages,
   AgentUsage,
-  PlatformModels,
+  modelPriceUsdPerMillion,
 } from '@/lib/supabase/queries/ai_agents';
 import { Billing } from '@/lib/supabase/queries/billing';
 import {
@@ -27,7 +27,6 @@ import {
   buildMessages,
   buildRAGSystemPrompt,
   createRAGPipeline,
-  calculateCost,
 } from '@/lib/ai';
 import { LLMMessage } from '@/lib/ai/types';
 import { z } from 'zod';
@@ -99,8 +98,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const usePlatformBilling = (agent as any).use_platform_billing === true;
 
     // OPTIMIZATION: Start all parallel fetches early
-    const platformModelPromise = usePlatformBilling 
-      ? PlatformModels.get_by_model_id(agent.model_id) 
+    // Just the price — the catalogue row's only job here was carrying one.
+    const pricePromise = usePlatformBilling
+      ? modelPriceUsdPerMillion(agent.model_id)
       : Promise.resolve(null);
     
     const balancePromise = usePlatformBilling 
@@ -123,10 +123,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const historyPromise = convId ? AgentMessages.get_recent(convId, 10) : Promise.resolve([]);
 
     // Wait for ALL promises in parallel
-    const [convResult, history, platformModel, userBalance, modelKeyData] = await Promise.all([
+    const [convResult, history, price, userBalance, modelKeyData] = await Promise.all([
       convPromise, 
       historyPromise,
-      platformModelPromise,
+      pricePromise,
       balancePromise,
       modelKeyPromise,
     ]);
@@ -155,6 +155,19 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           { status: 402 }
         );
       }
+    }
+
+    // The price was resolved above, BEFORE the model runs — see the chat
+    // route for why: an unpriced platform-billed run used to answer and then
+    // bill 0, i.e. a free completion we paid the upstream for.
+    if (usePlatformBilling && !price) {
+      return NextResponse.json(
+        {
+          error: 'Model unavailable',
+          message: `"${agent.model_id}" has no price configured, so it cannot be billed. Pick another model or ask an administrator to price it.`,
+        },
+        { status: 409 }
+      );
     }
 
     const conversationHistory: LLMMessage[] = history.map(m => ({
@@ -305,9 +318,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             const totalTokens = promptTokens + completionTokens;
             
             // Calculate cost using platform model pricing if available
-            const cost = platformModel 
-              ? PlatformModels.calculate_cost(platformModel, promptTokens, completionTokens)
-              : calculateCost(agent.model_id, promptTokens, completionTokens);
+            const cost = price
+                ? (promptTokens / 1_000_000) * price.input + (completionTokens / 1_000_000) * price.output
+                : 0;
 
             // Send done event
             controller.enqueue(
@@ -403,9 +416,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     await AgentConversations.update_stats(convId, newMessageCount, newTotalTokens);
 
     // Calculate cost using platform model pricing if available
-    const cost = platformModel 
-      ? PlatformModels.calculate_cost(platformModel, usage.prompt_tokens, usage.completion_tokens)
-      : calculateCost(agent.model_id, usage.prompt_tokens, usage.completion_tokens);
+    const cost = price
+          ? (usage.prompt_tokens / 1_000_000) * price.input + (usage.completion_tokens / 1_000_000) * price.output
+          : 0;
     
     // Deduct credits if using platform billing
     if (usePlatformBilling && cost > 0) {

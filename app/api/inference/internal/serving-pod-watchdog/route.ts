@@ -22,6 +22,7 @@
  * platform can log/alert on.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { withCronRun } from "@/lib/inference/cron-heartbeat";
 import { createClient } from "@supabase/supabase-js";
 import {
   terminateServingPod,
@@ -41,7 +42,7 @@ interface RowToReap {
   serving_pod_auto_stop_at: string;
 }
 
-export async function POST(request: NextRequest) {
+async function sweep(request: NextRequest) {
   const token = request.headers.get("x-ahura-internal-token");
   const expected = process.env.BATCH_PROCESSOR_TOKEN;
   if (!expected || !token || token !== expected) {
@@ -117,4 +118,10 @@ export async function POST(request: NextRequest) {
     errors,
     errors_detail: errDetails,
   });
+}
+
+// Heartbeat wrapper. Without it this sweep's only trace is a Cloudflare log line,
+// which no admin page can read — see lib/inference/cron-heartbeat.ts.
+export async function POST(request: NextRequest) {
+  return withCronRun("serving-pod-watchdog", () => sweep(request));
 }

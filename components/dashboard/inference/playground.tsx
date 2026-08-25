@@ -73,6 +73,15 @@ export interface PlaygroundModel {
   output_price_per_mtok: number | null;
 }
 
+/** Lightweight model descriptor used by per-modality service components (images, TTS, STT, …). */
+export interface ServiceModel {
+  model_id: string;
+  display_name: string;
+  is_featured: boolean;
+  tier: string | null;
+  capabilities: Record<string, unknown> | null;
+}
+
 export interface PlaygroundPreset {
   id: string;
   name: string;
@@ -109,11 +118,13 @@ export function Playground({
   presets,
   apiBase,
   orgName,
+  tabBar,
 }: {
   models: PlaygroundModel[];
   presets: PlaygroundPreset[];
   apiBase: string;
   orgName: string;
+  tabBar?: React.ReactNode;
 }) {
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [keySetupOpen, setKeySetupOpen] = useState(false);
@@ -637,6 +648,7 @@ ${streamOn
         size="md"
         actions={
           <>
+            {tabBar}
             <ModeToggle mode={mode} onChange={setMode} />
             {apiKey ? (
               <GhostButton onClick={() => setKeySetupOpen(true)}>

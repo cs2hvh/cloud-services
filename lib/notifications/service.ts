@@ -179,6 +179,7 @@ export function createServiceNotification(params: {
     firewall: 'Firewall Rule',
     spectrum: 'Spectrum App',
     ai_agent: 'AI Agent',
+    agentcore_agent: 'Agent',
     knowledge_base: 'Knowledge Base',
     domain: 'Domain',
     billing: 'Billing',

@@ -109,6 +109,18 @@ export function bytesToBase64(bytes: Uint8Array): string {
 }
 
 /**
+ * Postgres bytea WIRE format for an INSERT/UPDATE via PostgREST: the
+ * `\x<hex>` form. Mirrors lib/inference/crypto.ts's helper of the same name
+ * (Next.js side) — used when a route writes a freshly-encrypted ciphertext,
+ * as opposed to postgresByteaToBytes below which reads one back.
+ */
+export function bytesToPostgresBytea(bytes: Uint8Array): string {
+  let hex = "";
+  for (const b of bytes) hex += b.toString(16).padStart(2, "0");
+  return `\\x${hex}`;
+}
+
+/**
  * Postgres bytea is returned by PostgREST as a base64 string by default
  * when using the supabase-js client (transit format). This helper
  * unwraps that into a Uint8Array we can hand to decryptAesGcm.

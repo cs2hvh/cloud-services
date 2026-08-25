@@ -1,12 +1,9 @@
-import { pino } from "pino";
+/**
+ * The deploy-runner's named logger instance, built from runner-core's factory.
+ * Re-exported so the rest of the codebase keeps importing `{ logger }` from
+ * "./logger.js" unchanged.
+ */
+import { makeLogger, type Logger } from "@ahura/runner-core";
 
-export const logger = pino({
-  level: process.env.LOG_LEVEL ?? "info",
-  base: {
-    service: "ahura-deploy-runner",
-    version: process.env.APP_VERSION ?? "0.1.0",
-  },
-  timestamp: pino.stdTimeFunctions.isoTime,
-});
-
-export type Logger = typeof logger;
+export const logger = makeLogger("ahura-deploy-runner");
+export type { Logger };

@@ -40,8 +40,6 @@ const modelUpdateSchema = z.object({
   display_name: z.string().min(1).optional(),
   provider: z.string().min(1).optional(),
   description: z.string().optional().nullable(),
-  input_cost_per_million: z.number().min(0).optional(),
-  output_cost_per_million: z.number().min(0).optional(),
   context_window: z.number().min(1000).optional(),
   supports_vision: z.boolean().optional(),
   supports_function_calling: z.boolean().optional(),
@@ -134,6 +132,20 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       ...validation.data,
       description: validation.data.description ?? undefined,
     };
+
+    // A body of only unknown keys (a price, say — no longer accepted here)
+    // survives validation because zod strips them, and then reaches the DB as
+    // an empty UPDATE, which fails as a 500. Nothing to update is a bad
+    // request, not a server fault.
+    if (Object.values(updatePayload).every((v) => v === undefined)) {
+      return NextResponse.json(
+        {
+          error:
+            "No updatable fields supplied. Price is not settable here — it comes from inference.models.",
+        },
+        { status: 400 }
+      );
+    }
 
     // Update model
     const result = await PlatformModels.update(id, updatePayload);

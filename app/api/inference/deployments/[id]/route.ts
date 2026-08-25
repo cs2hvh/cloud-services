@@ -4,12 +4,10 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { authenticateUser } from "@/lib/auth/server-auth";
+import { controlPlaneAuth } from "@/lib/inference/control-plane-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
-import { getOrBootstrapOrgForUser } from "@/lib/inference/orgs";
 import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
 import { enqueueDeploymentJob } from "@/lib/inference/deploy-queue";
-import { internalError } from "@/lib/inference/api-errors";
 import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
 
 function isUuid(s: string): boolean {
@@ -17,30 +15,26 @@ function isUuid(s: string): boolean {
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await authenticateUser();
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "cookie", org: "bootstrap", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
   const { id } = await params;
   if (!isUuid(id)) {
     return NextResponse.json({ error: "Invalid deployment id" }, { status: 400 });
   }
 
-  const rl = await limitByUser(auth.user!.id, {
+  const rl = await limitByUser(auth.subject, {
     prefix: "rl:inf-deploy-detail",
     limit: 60,
     windowMs: 60_000,
   });
   if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
 
-  let org;
-  try {
-    org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
-  } catch (err) {
-    return internalError("Org resolution failed", err, "org_resolution_failed");
-  }
+  const org = { org_id: auth.orgId, role: auth.orgRole, org_name: auth.orgName, org_slug: auth.orgSlug };
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -81,28 +75,24 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await authenticateUser();
-  if (!auth.authenticated) return auth.response;
+  const authResult = await controlPlaneAuth(request, { session: "cookie", org: "bootstrap", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
 
   const { id } = await params;
   if (!isUuid(id)) {
     return NextResponse.json({ error: "Invalid deployment id" }, { status: 400 });
   }
 
-  const rl = await limitByUser(auth.user!.id, {
+  const rl = await limitByUser(auth.subject, {
     prefix: "rl:inf-deploy-delete",
     limit: 10,
     windowMs: 60_000,
   });
   if (!rl.allowed) return NextResponse.json({ error: "Too Many Requests" }, { status: 429 });
 
-  let org;
-  try {
-    org = await getOrBootstrapOrgForUser(auth.user!.id, auth.user!.email ?? "");
-  } catch (err) {
-    return internalError("Org resolution failed", err, "org_resolution_failed");
-  }
-  if (org.role === "viewer") {
+  const org = { org_id: auth.orgId, role: auth.orgRole, org_name: auth.orgName, org_slug: auth.orgSlug };
+  if (auth.via === "session" && org.role === "viewer") {
     return NextResponse.json({ error: "Viewers cannot delete deployments" }, { status: 403 });
   }
 
@@ -158,7 +148,7 @@ export async function DELETE(
   const ctx = auditContextFrom(request);
   void recordAudit({
     orgId: org.org_id,
-    actorUserId: auth.user!.id,
+    actorUserId: auth.userId,
     action: "deployment.deleted",
     targetType: "deployment",
     targetId: id,

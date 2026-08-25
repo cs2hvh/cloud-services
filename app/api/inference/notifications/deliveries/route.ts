@@ -6,10 +6,9 @@
  *
  * Bounded to last 50 deliveries.
  */
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { authenticateUser } from "@/lib/auth/server-auth";
-import { getActiveOrgForUser } from "@/lib/inference/orgs";
+import { controlPlaneAuth } from "@/lib/inference/control-plane-auth";
 
 interface DeliveryRow {
   id: string;
@@ -23,11 +22,11 @@ interface DeliveryRow {
   delivered_at: string | null;
 }
 
-export async function GET() {
-  const auth = await authenticateUser();
-  if (!auth.authenticated) return auth.response;
-  const org = await getActiveOrgForUser(auth.user!.id);
-  if (!org) return NextResponse.json({ error: "No inference org" }, { status: 404 });
+export async function GET(request: NextRequest) {
+  const authResult = await controlPlaneAuth(request, { session: "cookie", requireOrgKey: true });
+  if (!authResult.ok) return authResult.response;
+  const auth = authResult.auth;
+  const org = { org_id: auth.orgId, role: auth.orgRole };
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
