@@ -102,8 +102,22 @@ measured at 1.0 — every app holding a pod all day at 2–3 millicores, which i
 the always-on cost model (~$52k/month at 10k apps against a $5 price) rather
 than the ~$18–20k the plan assumes.
 
-**Proven live:** `v2-docker` at zero pods, a cold request served 200 with real
-content in 7.6s, the next request in 24ms.
+**Proven live, the complete cycle with no bypass:** the sweep measured 30s of no
+traffic across two readings, slept the app to zero pods on its own, a cold
+request woke it and was served 200 in 7.5s, and the next request took 45ms. The
+reconciler then observed the activator's stamp and cleared the sleep flag.
+
+Both halves of the measurement were verified separately, because only one of
+them is safety-critical:
+
+- No traffic across the window → `IDLE for 30s` → slept.
+- Seven requests during the window → `awake — traffic` → **not** slept.
+
+And one refusal fired for real rather than in a test: an earlier run reported
+`awake — counter-reset` because the gateway had just been redeployed and its
+counters had zeroed. The window it would otherwise have called idle spanned a
+restart it could not see through, and it declined to sleep on evidence it could
+not trust.
 
 - Idleness is **measured, not timed** — Traefik exports a request counter per
   router, and a router is per hostname. Two readings that did not move, never
