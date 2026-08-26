@@ -40,12 +40,26 @@ Exit codes are meant for schedulers. `fleet-drift` exits 1 on drift.
 `dns-drift` exits 1 on drift and **2 on a claimable hostname**, which is a
 different severity and deserves a different page.
 
-## Scheduling it — the last mile, and it is not done
+## Scheduling it — the premise, not the last mile
 
-**Nothing runs any of this automatically.** That is a decision nobody has made
-yet, not an oversight, and it is the single thing standing between this lane
-and being useful. The argument the whole lane makes is that a reconciler nobody
-runs is the same as no reconciler — and right now, nobody runs these.
+**Nothing runs any of this automatically, and until something does, none of it
+means anything.**
+
+This is not a fourth item after the modules, the surface and the tests. It is
+the assumption all three rest on. Unscheduled, the operator surface shows a
+fleet nobody is reconciling, the drift table records drift nobody is repairing,
+and the R2 leak measured growing 697 MB → 1083 MB in a single hour keeps
+growing. Every one of those reads correctly and changes nothing.
+
+The claim this lane makes — that a reconciler nobody runs is the same as no
+reconciler — was literally true of this codebase two hours ago. The product
+lane grepped for `reconcileProject`'s callers, found the only one was a proof
+script, and held `routingLive = false` against being told twice that routing
+worked. They were right, and the fix was a runner rather than a correction to
+them.
+
+The same is true here today. These scripts are correct, tested against live
+infrastructure, and inert.
 
 Two things are worth scheduling, and they are different jobs:
 
@@ -70,6 +84,22 @@ it rather than discovered afterwards:
 - **Usage rows are interval deltas**, so a missed run loses that interval and
   nothing else. It cannot double-count, and `unobserved_seconds` records the
   gap so the period stays honest about it.
+
+**The first property is verified against the real table rather than asserted.**
+Two sweeps 43 minutes apart: the second recorded 15 open observations and
+resolved 2 that had cleared, and the surviving 17 read `open for 43m` rather
+than restarting at zero. The two that closed were the `v2-express` and
+`v2-docker` hostnames, opened when nothing wrote `paas.aliases` rows and closed
+when the deploy path started recording:
+
+```
+unrecorded  hostname  resolved after  43m  v2-express.ahurasense.com
+unrecorded  hostname  resolved after  43m  v2-docker.ahurasense.com
+```
+
+That is the whole point of the table stated as an actual answer: this drift
+appeared, lasted 43 minutes, and is gone. Before it existed, the same fix would
+have left no trace that anything had ever been wrong.
 
 A run that cannot reach its dependency does **not** resolve its scope — an
 empty result from a failed Cloudflare read is indistinguishable from a clean
