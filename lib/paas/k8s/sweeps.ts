@@ -117,11 +117,18 @@ export const SWEEP_JOBS: SweepJob[] = [
     // Reads networkpolicies and endpoints, NEITHER of which the shared reader
     // role granted before this. Both added narrowly, both read-only.
     //
-    // NOT VERIFIED UNDER DENIAL. The script is written to void rather than
-    // report clean when it cannot read, but I added the grants instead of first
-    // running it without them — so that path rests on e6's tests, not on
-    // observation here. Worth closing, because a sweep that reports an
-    // unprotected fleet as protected is worse than no sweep at all.
+    // VERIFIED UNDER DENIAL, which is the check that matters here: a sweep
+    // reporting an unprotected fleet as protected is worse than no sweep.
+    // Re-run against a ServiceAccount holding only the PRE-widening grants —
+    // the sweep exactly as it would have run had the missing grants gone
+    // unnoticed:
+    //
+    //   EXIT=1
+    //   UNREADABLE  app-prj-...  policies could not be listed —
+    //               this namespace is unevaluated, not protected
+    //
+    // Not exit 0, not "PROTECTED", not silence. The claim that it voids rather
+    // than reports clean is now observed rather than inherited.
     needs: ["k8s"],
     why: "The tenant egress policy denies the control plane's CURRENT address, read from Endpoints at reconcile time. That address moves on an upgrade, rebuild or failover, and every deployed policy then silently stops covering it — nothing fails, the hole just reopens. Indexed by NAMESPACE rather than by policy, so a tenant with no policy at all is visible; walking policies asks whether the policies are correct, walking namespaces asks whether each tenant is protected, and only the second notices an absence.",
   },
