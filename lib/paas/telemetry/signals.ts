@@ -87,7 +87,10 @@ export interface AppUsageLike {
 
 export interface BuildUsageLike {
   builds: number;
-  unterminated: number;
+  /** Past their deadline with no destroyed_at. A leak. */
+  overdue: number;
+  /** Running, inside their deadline. Normal, and never a signal. */
+  inFlight?: number;
   buildSeconds: number;
 }
 
@@ -193,17 +196,21 @@ export function detectSignals(input: SignalInput): Signal[] {
   // ── build tier ────────────────────────────────────────────────────────────
 
   if (input.builds) {
-    if (input.builds.unterminated > 0) {
+    // ONLY overdue VMs. A build running inside its deadline has no
+    // destroyed_at either, and firing a critical every time someone deploys is
+    // how an alert becomes something people mute. `expires_at` is what tells
+    // the two apart, and it is in the schema precisely for this.
+    if (input.builds.overdue > 0) {
       signals.push({
         kind: "unterminated-build",
         severity: "critical",
         subject: "build tier",
-        detail: `${input.builds.unterminated} build VM(s) with no destroyed_at`,
+        detail: `${input.builds.overdue} build VM(s) past expires_at with no destroyed_at`,
         action:
-          `Either builds are in flight, or VMs leaked. The meter bills these as zero, ` +
-          `so a leak here is invisible in revenue and visible only on the Linode bill. ` +
-          `Cross-check scripts/v3/fleet-drift.ts.`,
-        value: input.builds.unterminated,
+          `The reaper should have taken these and did not. The meter bills an open
+           interval as zero, so this leak is invisible in revenue and shows up only on
+           the Linode bill. Cross-check scripts/v3/fleet-drift.ts.`.replace(/\s+/g, " "),
+        value: input.builds.overdue,
         threshold: 0,
       });
     }

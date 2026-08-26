@@ -145,7 +145,7 @@ test("a deployment with no pod-seconds does not count towards sprawl", () => {
 test("an unterminated build VM is critical, because the meter bills it as zero", () => {
   const s = detectSignals({
     apps: [],
-    builds: { builds: 3, unterminated: 1, buildSeconds: 300 },
+    builds: { builds: 3, overdue: 1, buildSeconds: 300 },
     windowSeconds: DAY,
   });
 
@@ -157,16 +157,31 @@ test("an unterminated build VM is critical, because the meter bills it as zero",
 test("ordinary build volume is quiet", () => {
   const s = detectSignals({
     apps: [],
-    builds: { builds: 4, unterminated: 0, buildSeconds: 714 },
+    builds: { builds: 4, overdue: 0, buildSeconds: 714 },
     windowSeconds: DAY,
   });
   assert.equal(summarise(s).quiet, true);
 });
 
+test("a build RUNNING right now raises nothing at all", () => {
+  // Caught on the live cluster: a build in flight has no destroyed_at, and the
+  // first version called that a critical leak — so the operator view fired a
+  // critical every time anyone deployed. An alert that fires on normal
+  // operation is one people learn to ignore.
+  const s = detectSignals({
+    apps: [],
+    builds: { builds: 5, overdue: 0, inFlight: 1, buildSeconds: 900 },
+    windowSeconds: DAY,
+  });
+
+  assert.equal(summarise(s).quiet, true);
+  assert.equal(s.some((x) => x.kind === "unterminated-build"), false);
+});
+
 test("a build storm is flagged, since each build leases a real Linode", () => {
   const s = detectSignals({
     apps: [],
-    builds: { builds: 200, unterminated: 0, buildSeconds: 60_000 },
+    builds: { builds: 200, overdue: 0, buildSeconds: 60_000 },
     windowSeconds: DAY,
   });
   assert.equal(kinds(s).includes("build-storm"), true);
@@ -178,7 +193,7 @@ test("a build storm is flagged, since each build leases a real Linode", () => {
 test("critical signals sort above warnings", () => {
   const s = detectSignals({
     apps: [app({ warmFraction: 1 })],
-    builds: { builds: 1, unterminated: 2, buildSeconds: 60 },
+    builds: { builds: 1, overdue: 2, buildSeconds: 60 },
     windowSeconds: DAY,
   });
 
@@ -194,7 +209,7 @@ test("no apps and no builds is quiet", () => {
 test("every signal carries an action a person can act on", () => {
   const s = detectSignals({
     apps: [app({ warmFraction: 1, restarts: 20, peakPods: 9 })],
-    builds: { builds: 500, unterminated: 3, buildSeconds: 99_999 },
+    builds: { builds: 500, overdue: 3, buildSeconds: 99_999 },
     windowSeconds: DAY,
   });
 

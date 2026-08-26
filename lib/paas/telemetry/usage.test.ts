@@ -240,7 +240,8 @@ test("build time comes from recorded timestamps, so it is exact", () => {
   assert.equal(u.builds, 2);
   assert.equal(u.buildSeconds, 270 + 120);
   assert.equal(u.longestSeconds, 270);
-  assert.equal(u.unterminated, 0);
+  assert.equal(u.overdue, 0);
+  assert.equal(u.inFlight, 0);
 });
 
 test("a VM with no destroyed_at bills nothing, because an open interval is unbounded", () => {
@@ -252,15 +253,62 @@ test("a VM with no destroyed_at bills nothing, because an open interval is unbou
         created_at: "2026-08-26T10:00:00Z",
         destroyed_at: null,
         instance_type: "g6-standard-2",
+        expires_at: "2026-08-26T11:00:00Z",
       },
     ],
     PERIOD_START,
     PERIOD_END,
+    new Date("2026-08-26T18:00:00Z"), // long past the deadline
   );
 
   assert.equal(u.builds, 1);
   assert.equal(u.buildSeconds, 0, "a leaked VM must not become an unbounded invoice");
-  assert.equal(u.unterminated, 1);
+  assert.equal(u.overdue, 1);
+});
+
+test("a build RUNNING inside its deadline is in flight, not a leak", () => {
+  // Both look identical in the row — destroyed_at is null either way. Only
+  // expires_at separates them, and calling this a leak fires a critical alert
+  // every time anyone deploys, which is how an alert gets muted.
+  const u = buildUsage(
+    [
+      {
+        ref: "bvm_running",
+        deployment_id: "d1",
+        created_at: "2026-08-26T10:00:00Z",
+        destroyed_at: null,
+        instance_type: "g6-standard-2",
+        expires_at: "2026-08-26T11:00:00Z",
+      },
+    ],
+    PERIOD_START,
+    PERIOD_END,
+    new Date("2026-08-26T10:03:00Z"), // three minutes in
+  );
+
+  assert.equal(u.inFlight, 1);
+  assert.equal(u.overdue, 0, "a build in progress is not a leak");
+  assert.equal(u.buildSeconds, 0, "and still bills nothing until it ends");
+});
+
+test("a VM with no expires_at at all is treated as in flight, not accused", () => {
+  const u = buildUsage(
+    [
+      {
+        ref: "bvm_no_deadline",
+        deployment_id: null,
+        created_at: "2026-08-26T10:00:00Z",
+        destroyed_at: null,
+        instance_type: "g6-standard-2",
+      },
+    ],
+    PERIOD_START,
+    PERIOD_END,
+    new Date("2026-08-26T18:00:00Z"),
+  );
+
+  assert.equal(u.overdue, 0, "no deadline is not evidence of a missed one");
+  assert.equal(u.inFlight, 1);
 });
 
 test("builds outside the period are excluded", () => {

@@ -199,7 +199,7 @@ export async function usageView(): Promise<UsageView> {
   const now = new Date();
   const vmRows = await db.select<BuildVmLifetime>(
     "build_vms",
-    "select=ref,deployment_id,created_at,destroyed_at,instance_type&order=created_at",
+    "select=ref,deployment_id,created_at,destroyed_at,instance_type,expires_at&order=created_at",
   );
   const builds = buildUsage(vmRows, new Date(now.getTime() - 24 * 3600 * 1000), now);
 

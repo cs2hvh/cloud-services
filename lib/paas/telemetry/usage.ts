@@ -216,14 +216,29 @@ export interface BuildVmLifetime {
   created_at: string;
   destroyed_at: string | null;
   instance_type: string;
+  /** The reaper's deadline. Present on every row; the schema requires it. */
+  expires_at?: string;
 }
 
 export interface BuildUsage {
   builds: number;
   /** Exact, not sampled — these come from recorded timestamps. */
   buildSeconds: number;
-  /** Builds with no destroyed_at. Either in flight, or leaked. */
-  unterminated: number;
+  /**
+   * No destroyed_at yet, and still inside its deadline. A build in flight.
+   * Completely normal, and NOT a finding — flagging it would fire a critical
+   * alert every time anyone deploys.
+   */
+  inFlight: number;
+  /**
+   * No destroyed_at and PAST expires_at. The reaper should have taken this and
+   * did not, so it is billing with nothing intending it to.
+   *
+   * The distinction matters because the two look identical in the row: both
+   * are simply `destroyed_at is null`. `expires_at` is what separates them,
+   * which is exactly what the schema put it there for.
+   */
+  overdue: number;
   longestSeconds: number;
 }
 
@@ -235,10 +250,16 @@ export interface BuildUsage {
  * a leak the fleet reconciler will report, and billing an open-ended interval
  * would turn a leaked VM into an unbounded invoice.
  */
-export function buildUsage(rows: BuildVmLifetime[], periodStart: Date, periodEnd: Date): BuildUsage {
+export function buildUsage(
+  rows: BuildVmLifetime[],
+  periodStart: Date,
+  periodEnd: Date,
+  now: Date = periodEnd,
+): BuildUsage {
   let builds = 0;
   let buildSeconds = 0;
-  let unterminated = 0;
+  let inFlight = 0;
+  let overdue = 0;
   let longestSeconds = 0;
 
   for (const r of rows) {
@@ -248,7 +269,10 @@ export function buildUsage(rows: BuildVmLifetime[], periodStart: Date, periodEnd
 
     builds += 1;
     if (!r.destroyed_at) {
-      unterminated += 1;
+      // Past its own deadline is a leak; inside it is just a build running.
+      const deadline = r.expires_at ? Date.parse(r.expires_at) : NaN;
+      if (Number.isFinite(deadline) && now.getTime() > deadline) overdue += 1;
+      else inFlight += 1;
       continue;
     }
     const ended = new Date(r.destroyed_at);
@@ -259,7 +283,7 @@ export function buildUsage(rows: BuildVmLifetime[], periodStart: Date, periodEnd
     longestSeconds = Math.max(longestSeconds, seconds);
   }
 
-  return { builds, buildSeconds, unterminated, longestSeconds };
+  return { builds, buildSeconds, inFlight, overdue, longestSeconds };
 }
 
 // ── turning observations into what a sampler stores ─────────────────────────

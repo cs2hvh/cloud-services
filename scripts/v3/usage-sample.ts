@@ -102,7 +102,7 @@ const periodSeconds = Math.max(1, (endedAt.getTime() - startedAt.getTime()) / 10
 
 const vmRows = await db.select<BuildVmLifetime>(
   "build_vms",
-  "select=ref,deployment_id,created_at,destroyed_at,instance_type&order=created_at",
+  "select=ref,deployment_id,created_at,destroyed_at,instance_type,expires_at&order=created_at",
 );
 const dayStart = new Date(endedAt.getTime() - 24 * 3600 * 1000);
 const builds = buildUsage(vmRows, dayStart, endedAt);
@@ -163,7 +163,8 @@ console.log(
   `\n  builds in the last 24h: ${builds.builds}, ` +
     `${(builds.buildSeconds / 60).toFixed(1)} build-minutes, ` +
     `longest ${(builds.longestSeconds / 60).toFixed(1)}m` +
-    (builds.unterminated ? `, ${builds.unterminated} with no destroyed_at (billed as zero)` : ""),
+    (builds.inFlight ? `, ${builds.inFlight} in flight` : "") +
+    (builds.overdue ? `, ${builds.overdue} PAST DEADLINE and still billing` : ""),
 );
 console.log(
   `\n  NOT MEASURED: bandwidth. The only honest source is the gateway, which sees\n` +
