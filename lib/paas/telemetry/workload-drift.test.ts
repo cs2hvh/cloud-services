@@ -184,6 +184,19 @@ test("a non-ready row with no workload is not a finding — it never claimed to 
   }
 });
 
+test("a deployment queued for a long time is not drift — the queue is the design", () => {
+  // Webhook-driven deploys mean rows can sit queued before a worker picks
+  // them up, which the infrastructure lane flagged as newly normal. A
+  // reconciler that called a long queue a fault would page on the build
+  // tier working as intended.
+  const r = run({
+    deployments: [row({ state: "queued", created_at: "2020-01-01T00:00:00Z" })],
+  });
+
+  assert.equal(r.findings.length, 0, "age alone is not evidence of a problem here");
+  assert.equal(r.clean, true);
+});
+
 // ── placement accounting ────────────────────────────────────────────────────
 
 test("a running workload with no placement row breaks capacity accounting", () => {
