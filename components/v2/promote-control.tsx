@@ -38,7 +38,16 @@ export function PromoteControl({
   hostname: string;
   currentDeploymentRef: string | null;
   candidates: PromotableDeployment[];
-  /** False until the alias-routing reconciler exists. */
+  /**
+   * True only when something RUNS the reconciler automatically — not merely
+   * when it exists.
+   *
+   * As of 636a8225 reconcileProject() is written and proven live, but the only
+   * caller in the tree is scripts/v2/promote-rollback-proof.ts. No worker,
+   * cron or route invokes it, so an alias write moves the pointer and nothing
+   * else happens until someone runs it by hand. Saying "now serving" here
+   * would be the same overclaim as v1's dashboard.
+   */
   routingLive: boolean;
 }) {
   const router = useRouter();
@@ -76,8 +85,10 @@ export function PromoteControl({
 
     setResult(
       routingLive
-        ? `${hostname} now serves this deployment.`
-        : `${hostname} now records this deployment. Traffic follows once routing is wired up.`
+        ? // Not "now serving": rollback scales a stopped pod back up, so the
+          // hostname answers a few seconds later, not immediately.
+          `${hostname} points at this deployment. The pod is starting; traffic follows shortly.`
+        : `${hostname} now records this deployment. Traffic follows when the reconciler runs — nothing schedules it yet, so that is currently a manual step.`
     );
     setBusy(false);
     setSelected("");
