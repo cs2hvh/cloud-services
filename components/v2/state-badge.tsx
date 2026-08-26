@@ -91,6 +91,10 @@ export function Duration({ ms }: { ms: number | null }) {
  */
 const REPLICA_TONE: Record<string, string> = {
   serving: "bg-emerald-400/10 text-emerald-300 border-emerald-400/30",
+  // Asleep is a HEALTHY state for a live app, not a degraded one, so it reads
+  // calm rather than warning. It is deliberately not the same colour as
+  // scaled-to-zero, which is an old build nobody is serving.
+  asleep: "bg-sky-400/10 text-sky-300 border-sky-400/30",
   "running-unrouted": "bg-amber-400/10 text-amber-300 border-amber-400/30",
   "scaled-to-zero": "bg-white/[0.05] text-white/45 border-white/[0.12]",
   "not-ready": "bg-sky-400/10 text-sky-300 border-sky-400/30",
@@ -101,6 +105,8 @@ const REPLICA_TONE: Record<string, string> = {
 
 const REPLICA_LABEL: Record<string, string> = {
   serving: "Serving",
+  // Never "Stopped" and never "0 replicas". This is the user's LIVE app.
+  asleep: "Sleeping — wakes on next request",
   "running-unrouted": "Running, unrouted",
   "scaled-to-zero": "Scaled to zero",
   "not-ready": "Not ready",
@@ -126,7 +132,9 @@ export function ReplicaBadge({
         tone
       )}
       title={
-        status === "running-unrouted"
+        status === "asleep"
+          ? "Idle and scaled to zero on purpose. The next request wakes it, which takes a few seconds."
+          : status === "running-unrouted"
           ? "Ready replicas that no hostname reaches — costs money, serves nothing."
           : status === "unknown"
             ? "The cluster could not be read. This is not the same as zero."

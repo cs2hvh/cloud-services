@@ -72,6 +72,13 @@ export interface DeploymentRow {
    */
   container_port: number | null;
   run_as_user: number | null;
+  /**
+   * Non-null means asleep ON PURPOSE: idle, at zero replicas, waking on the
+   * next request. Distinct from superseded, which is also zero replicas but is
+   * an OLD build kept for rollback. Rendering them the same shows someone
+   * their live production app as stopped.
+   */
+  scaled_to_zero_at: string | null;
   queued_at: string;
   started_at: string | null;
   ready_at: string | null;
@@ -82,7 +89,7 @@ export interface DeploymentRow {
 export const DEPLOYMENT_COLUMNS =
   "ref, state, trigger, git_sha, git_ref, git_message, git_author, " +
   "image_repo, image_digest, error_code, error_message, " +
-  "container_port, run_as_user, " +
+  "container_port, run_as_user, scaled_to_zero_at, " +
   "queued_at, started_at, ready_at";
 
 export const DEPLOYMENT_COLUMNS_EXPANDED =
@@ -114,6 +121,8 @@ export interface DeploymentDto {
   label: string;
   /** What this build runs as. null means it was built before these were recorded. */
   runtime: { port: number | null; user: number | null };
+  /** Timestamp it was put to sleep, or null. Feeds replicaStates. */
+  scaledToZeroAt: string | null;
   image: { repo: string; digest: string } | null;
   error: { code: string | null; message: string } | null;
   timing: {
@@ -168,6 +177,7 @@ export function toDeploymentDto(row: DeploymentRow): DeploymentDto {
     // when the commit is not recorded.
     label: placeholder || row.git_sha === null ? row.ref : row.git_sha.slice(0, 7),
     runtime: { port: row.container_port, user: row.run_as_user },
+    scaledToZeroAt: row.scaled_to_zero_at,
     image:
       row.image_repo && row.image_digest
         ? { repo: row.image_repo, digest: row.image_digest }

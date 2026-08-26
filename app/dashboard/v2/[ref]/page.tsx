@@ -171,6 +171,10 @@ export default async function ProjectPage({ params }: Params) {
         ref: d.ref,
         state: d.state,
         image_digest: d.image?.digest ?? null,
+        // Optional in DeploymentFact, but omitting it silently degrades: a
+        // sleeping production app becomes indistinguishable from a superseded
+        // old build, and the user is shown "stopped" for their live site.
+        scaled_to_zero_at: d.scaledToZeroAt,
       })),
       { servingRef }
     );
