@@ -13,13 +13,16 @@ change anything, run by a person who has read a report first.
 ## Running it
 
 ```bash
-node --test "lib/paas/telemetry/*.test.ts"                                   # 226 tests, no deps
+node --test "lib/paas/telemetry/*.test.ts"                                   # 353 tests, no deps
 node --env-file=.env --env-file=.env.local scripts/v3/operator-view.ts       # everything, once
 node --env-file=.env --env-file=.env.local scripts/v3/fleet-drift.ts --prove
 node --env-file=.env --env-file=.env.local scripts/v3/dns-drift.ts
 node --env-file=.env --env-file=.env.local scripts/v3/r2-drift.ts
 node --env-file=.env --env-file=.env.local scripts/v3/workload-drift.ts
 node --env-file=.env --env-file=.env.local scripts/v3/usage-sample.ts --samples 20 --interval 30
+node --env-file=.env --env-file=.env.local scripts/v3/traffic-watch.ts --samples 20 --interval 30
+node --env-file=.env --env-file=.env.local scripts/v3/density-check.ts        # pricing arithmetic
+node --env-file=.env --env-file=.env.local scripts/v3/sandbox-overhead.ts     # declared vs real
 node --env-file=.env --env-file=.env.local scripts/v3/pod-logs.ts <ns> <pod>
 node --env-file=.env --env-file=.env.local scripts/v3/telemetry-probe.ts
 
@@ -125,19 +128,28 @@ consumes them.
 | Module | Does | Tests |
 |---|---|---|
 | `telemetry/reconcile.ts` | Linode vs `paas.clusters` / `paas.build_vms`, priced | 25 |
-| `telemetry/build-log.ts` | Build-log sanitisation — stage allowlist, then patterns | 22 |
+| `telemetry/build-log.ts` | Build-log sanitisation — stage allowlist, then patterns | 27 |
 | `telemetry/runtime-logs.ts` | Pod logs: clamping, previous-container, path validation | 19 |
-| `telemetry/usage.ts` | Warm-seconds, pod-seconds, build-minutes | 23 |
+| `telemetry/usage.ts` | Warm-seconds, pod-seconds, build-minutes | 25 |
+| `telemetry/usage-store.ts` | Interval deltas → `paas.usage_samples` | 25 |
 | `telemetry/dns-drift.ts` | Cloudflare vs Ingress vs `paas.aliases` | 17 |
 | `telemetry/r2-drift.ts` | R2 objects vs `paas.deployments` | 20 |
-| `telemetry/workload-drift.ts` | K8s Deployments vs `paas.deployments` | 17 |
-| `telemetry/signals.ts` | Abuse and quota signals — detection only | 17 |
-| `telemetry/drift-history.ts` | Findings → `paas.drift_observations` | 13 |
-| `telemetry/usage-store.ts` | Interval deltas → `paas.usage_samples` | 19 |
+| `telemetry/r2-reap.ts` | What is safe to delete, and what only looks it | 14 |
+| `telemetry/workload-drift.ts` | K8s Deployments vs `paas.deployments` | 23 |
+| `telemetry/signals.ts` | Abuse and quota signals — detection only | 22 |
+| `telemetry/drift-history.ts` | Findings → `paas.drift_observations` | 15 |
 | `telemetry/metrics.ts` | metrics.k8s.io quantities → cores and bytes | 18 |
+| `telemetry/traffic.ts` | Request shape: organic, keep-alive, or unobserved | 20 |
+| `telemetry/quota.ts` | Whether a ResourceQuota can be enforced without eviction | 25 |
+| `telemetry/trivy.ts` | Three verdicts — `undecided` blocks, it does not pass | 16 |
+| `telemetry/density.ts` | Pods per node: kubelet cut, sandbox charge, $/pod | 9 |
+| `telemetry/sandbox.ts` | What a gVisor sandbox costs vs what we charge for it | 9 |
+| `telemetry/cadence.ts` | Whether a schedule can produce what it claims to measure | 9 |
+| `telemetry/exit-codes.ts` | What a sweep's exit code means to a scheduler | — |
 | `telemetry/operator.ts` | Composition for the API and dashboard | — |
 | `telemetry/fleet-source.ts` | The I/O half. Every call is a GET | — |
-| `telemetry/admin-boundary.test.ts` | Test-only: enforces the admin security boundary | 7 |
+| `telemetry/admin-boundary.test.ts` | Test-only: enforces the admin security boundary | 8 |
+| `telemetry/write-safety.test.ts` | Test-only: no write in this lane swallows its failure | 7 |
 
 Surfaces: `GET /api/v2/admin/{fleet,hostnames,workloads,storage,metrics,usage}`,
 `GET /api/v2/admin/pods/{namespace}/{pod}/logs`, and `/dashboard/v2/admin`.
@@ -201,10 +213,12 @@ warm **100%** of the time as **4.3% warm** — and not degraded. The sampler had
 run for two minutes of the hour, and `unobserved_seconds` only records gaps
 *between* samples, never the stretch where nothing sampled at all.
 
-The plan's entire v2 business case is a ~5× gap — ~$52k/month always-on against
-~$18–20k with idle-to-zero — resting on one unmeasured number, and that number
-is the warm fraction. The first attempt to measure it was wrong by roughly
-**23×, in the direction that says the model is already achieved**.
+At the time, the plan's entire v2 business case was a ~5× gap — ~$52k/month
+always-on against ~$18–20k with idle-to-zero — resting on one unmeasured number,
+and that number was the warm fraction. (Pricing went flat on 2026-08-26, so the
+warm fraction no longer sets the price; see above for what it measures now.) The
+first attempt to measure it was wrong by roughly **23×, in the direction that
+says the model is already achieved**.
 
 Had that reached the pricing conversation it would have confirmed what everyone
 wants to be true, with a real measurement behind it. A number that flatters the
@@ -304,23 +318,103 @@ destroy the only account of how a live app was built.
 
 ## The finding that matters commercially
 
-The approved plan prices the platform on the **warm fraction** and says plainly
-that it is unmeasured. It is now measured, and today it is **1.0**.
+**The pod-density table in `05-pricing.md` §2 is 19% high, and two tiers stop
+working.** It asks for 110 tenant pods on a `g6-standard-16`; 89 fit. The deploy
+lane derived those figures, said so, and asked for them to be measured — this is
+that measurement, and `scripts/v3/density-check.ts` reruns it.
 
-That is expected — scale-to-zero is unimplemented — but it means the fleet
-currently costs the *always-on* model in the plan: ~$52k/month and $5.20 per app
-at scale, against a $5 price. The idle-to-zero model that makes the business
-work assumes roughly 5% of apps continuously busy, 15% warm ~30% of the day, and
-80% warm ~2%.
+Two independent errors that compound:
 
-Two things follow, and neither is an engineering decision:
+- **The kubelet's cut was never counted.** §2 allows "4 GB per node for system
+  overhead (Cilium, gVisor installer, metrics, DaemonSets)". That describes
+  system *pods*, which request only 0.81 GiB. But the kubelet reserves its own
+  slice before any pod schedules, and it is larger: **1.90 GiB on the live
+  `g6-standard-4`, 24.5% of capacity**, and ~5.5 GiB on the 64 GB shape. So
+  "60 GB usable" is really 55.77.
+- **The sandbox charge is 4.5× what the table allows.** §2 budgets 30 MB per pod
+  for the gVisor sentry. `gvisor.ts:65` declares `overhead.podFixed` at
+  **128Mi**, and `manifests.ts:323` puts every tenant pod on that RuntimeClass.
+  The scheduler *adds* podFixed to the pod's requests, so what the sentry
+  consumes at runtime is beside the point — 128Mi is what the node is billed.
+  `01-discovery.md:974` predicted exactly this, warning the sentry figure had no
+  primary source and had to be measured "before it enters any pricing model".
 
-1. Scale-to-zero is not an optimisation to schedule later. It is the difference
-   between the two cost models.
-2. Once it exists, a warm fraction of 1.0 means either a genuinely busy app or a
-   keep-alive pinger. The plan lists **warm-time pricing policy** as an open
-   business decision — price it, cap free warm hours, or detect and act. The
-   measurement is ready for whichever is chosen.
+At §2's 15% platform loading, against the published prices:
+
+| Tier | Was | Now | Margin |
+|---|---|---|---|
+| Starter 512Mi | $4.01 | **$4.96** vs $5 | 20% → **0.8%** |
+| Basic 1Gi | $7.89 | **$9.01** vs $9 | 12% → **−0.1%** |
+| Standard 2Gi | $15.77 | $16.98 vs $19 | 17% → 10.6% |
+| Plus 4Gi | $31.54 | $33.97 vs $39 | 19% → 12.9% |
+
+Basic sells below cost. The error is worst at the small tiers because a fixed
+per-pod charge is proportionally largest on the smallest pod.
+
+It also **inverts the shape choice**. `02-architecture.md:161` prefers the 32 GB
+shape "by ~15%/pod" because RAM binds before the 110-pod cap on it. At 128Mi of
+overhead RAM binds on *every* shape, so that reasoning selects nothing, and the
+proportionally larger kubelet reservation makes the smaller node worse:
+`g6-standard-16` $4.31/pod, `g6-standard-8` $4.57, `g6-dedicated-16` $6.86.
+
+The 64 GB figures are **derived, not measured** — this cluster runs
+`g6-standard-4`. Capacity and allocatable are read from real nodes; the big
+shape's allocatable comes from the tiered kubelet formula, anchored to the real
+node it reproduces to within 50 MiB. The report labels this on every run. Buy
+one and re-run to replace the derivation.
+
+### About half of it is recoverable, and only that half is ours
+
+The two errors are not equally fixable. The kubelet's ~5.5 GiB is physics and
+stays. The 128Mi sandbox charge is a **declaration we chose**, and
+`scripts/v3/sandbox-overhead.ts` measures it against reality — all three running
+sandboxed pods cost **less in total** (sentry, gofer *and* application together:
+66.3, 88.9, 93.5 MiB) than the sandbox charge alone.
+
+So the declaration is above its own ceiling. What that is worth, for 512Mi pods
+on a `g6-standard-16`:
+
+| `podFixed` | Pods | $/pod | Tier cost |
+|---|---|---|---|
+| **128Mi** *(today)* | 89 | $4.31 | $4.96 |
+| 96Mi | 93 | $4.13 | $4.75 |
+| 64Mi | 99 | $3.88 | $4.46 |
+| 32Mi | 104 | $3.69 | $4.25 |
+
+At 64Mi, Starter returns from 0.8% margin to ~10.8%.
+
+**No replacement value is proposed, deliberately.** The sentry is not separable:
+cAdvisor sees cgroups, and a gVisor pod is one opaque cgroup holding sentry,
+gofer and app together — that opacity is the product working. The result is a
+*ceiling*, not a figure, and reserving too little kills pods under load. The
+safe number comes from a load test. What is established is that there is room
+worth measuring for, and that repricing before measuring would be repricing
+against a number already known to be wrong in the expensive direction.
+
+The parsing carries this lane's recurring defect in its most expensive location:
+**a gVisor pod exposes no named container series at all.** Summing named
+containers — how you would total any normal pod — returns **zero** for every
+sandboxed pod, which reads as a free sandbox and argues for cutting the
+reservation to nothing. Absence of container series on a sandboxed pod means
+unreadable, never empty. It is a test, not a comment.
+
+### Warm fraction, and what flat pricing did to it
+
+Measured, and today it is **1.0** — expected, since scale-to-zero is
+unimplemented. When the plan priced on warm time this was the central number and
+a free uptime pinger was a revenue threat.
+
+**Pricing is now flat** (`05-pricing.md`, decided 2026-08-26), so that question
+is closed: a customer pays the same whether the app sleeps or not. The
+measurement did not become useless, it changed job. Under a flat rate a pinged
+app and a busy app pay the same and cost the same, so traffic shape is no longer
+a pricing input — it is a **margin and abuse signal**, and the only thing that
+distinguishes a keep-alive from a customer. CPU cannot: a pinged app is warm,
+running, and almost perfectly idle. `traffic.ts` classifies the shape;
+`traffic-watch.ts` runs it.
+
+Scale-to-zero remains the difference between the two cost models, and under flat
+pricing every hour it saves is margin rather than a smaller invoice.
 
 `usage.ts` measures warm-seconds from pod phase and container start time, so it
 needs no metrics-server and works today.

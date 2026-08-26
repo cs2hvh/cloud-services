@@ -1,6 +1,18 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { kubeletReservedBytes, nodeDensity, costPerPod, compareDensity } from "./density.ts";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+import {
+  kubeletReservedBytes,
+  nodeDensity,
+  costPerPod,
+  compareDensity,
+  parseDensityTable,
+  parseNodePrice,
+} from "./density.ts";
+
+const DOC = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "docs", "v2", "05-pricing.md");
 
 const MIB = 1024 ** 2;
 const GIB = 1024 ** 3;
@@ -97,6 +109,79 @@ test("comparison reports the direction that costs money", () => {
   assert.ok(c.shortfall > 0, "fewer pods fit than claimed");
   assert.ok(c.costErrorPct !== null && c.costErrorPct > 0, "so the claimed cost is an understatement");
   assert.ok(c.actualCostUsd !== null && c.actualCostUsd > c.claimedCostUsd);
+});
+
+test("the real pricing doc parses — this is the check that it still can", () => {
+  // Reads the actual file. If someone reformats the table, this fails and says
+  // so, rather than the checker silently comparing against a stale copy.
+  const claim = parseDensityTable(readFileSync(DOC, "utf8"));
+  assert.ok(claim !== null, "could not find the pod-density table in 05-pricing.md");
+  assert.ok(claim.rows.length >= 4, `expected at least 4 tier rows, got ${claim.rows.length}`);
+  assert.match(claim.nodeType, /^g6-/);
+  assert.ok(claim.usableClaimGb > 0);
+
+  // Every row must carry all three facts. A row that parsed to a zero pod count
+  // would compare clean against any density at all.
+  for (const r of claim.rows) {
+    assert.ok(r.podBytes > 0, `${r.podLabel} parsed to zero bytes`);
+    assert.ok(r.pods > 0, `${r.podLabel} parsed to zero pods`);
+    assert.ok(r.costUsd > 0, `${r.podLabel} parsed to zero cost`);
+  }
+});
+
+test("the node price is read from the doc, not assumed", () => {
+  const md = readFileSync(DOC, "utf8");
+  const claim = parseDensityTable(md);
+  assert.ok(claim !== null);
+  const price = parseNodePrice(md, claim.nodeType);
+  assert.ok(price !== null && price > 0, `no price found for ${claim.nodeType}`);
+
+  // The doc's own arithmetic must be self-consistent: price / pods = $/pod.
+  // If it is not, the table was edited in one place and not the other.
+  for (const r of claim.rows) {
+    const implied = price / r.pods;
+    assert.ok(
+      Math.abs(implied - r.costUsd) / r.costUsd < 0.02,
+      `${r.podLabel}: table says $${r.costUsd} but $${price}/${r.pods} = $${implied.toFixed(2)}`,
+    );
+  }
+});
+
+test("an unreadable table is null, never an empty claim list", () => {
+  // The dangerous failure: zero rows compare clean against any measurement, so
+  // a doc this cannot read would be reported as verified.
+  assert.equal(parseDensityTable("# no table here"), null);
+  assert.equal(parseDensityTable(""), null);
+  assert.equal(parseDensityTable("| Pod RAM | On `g6-standard-16` (60 GB usable) | $/pod/mo |"), null);
+});
+
+test("a row that does not parse aborts the read rather than being skipped", () => {
+  const md = [
+    "| Pod RAM | On `g6-standard-16` (60 GB usable) | $/pod/mo |",
+    "|---|---|---|",
+    "| 512 MB | 110 | **$3.49** |",
+    "| 1 GB | who knows | **$6.86** |",
+  ].join("\n");
+  // Silently dropping the bad row would leave a claim that looks complete and
+  // has quietly stopped checking one of the tiers.
+  assert.equal(parseDensityTable(md), null);
+});
+
+test("an italic annotation on the pod count does not defeat the parse", () => {
+  const md = [
+    "| Pod RAM | On `g6-standard-16` (60 GB usable) | $/pod/mo |",
+    "|---|---|---|",
+    "| 512 MB | 110 *(kubelet cap binds, not RAM)* | **$3.49** |",
+  ].join("\n");
+  const claim = parseDensityTable(md);
+  assert.equal(claim?.rows[0].pods, 110);
+  assert.equal(claim?.rows[0].podBytes, 512 * 1024 ** 2);
+});
+
+test("an unknown node type has no price, rather than a plausible one", () => {
+  const md = "| `g6-standard-16` | 16 | 64 GB | **$384** | 20 TB |";
+  assert.equal(parseNodePrice(md, "g6-standard-16"), 384);
+  assert.equal(parseNodePrice(md, "g6-standard-32"), null);
 });
 
 test("a table that understates density reports a negative shortfall", () => {
