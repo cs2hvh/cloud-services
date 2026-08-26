@@ -128,10 +128,36 @@ behavioural tests replaying confirmed v1 criticals.
   - **The controls are the design.** Public egress and DNS *must* succeed or the
     run is void: a probe pod with no network fails every negative test and
     reports perfect isolation.
-- **No egress rate limiting**, no crypto-mining heuristics, no abuse response.
-  This is the remaining abuse gap. NetworkPolicy cannot express bandwidth, so it
-  needs either CNI bandwidth annotations or Cloudflare — *the Cloudflare plan is
-  a user decision.*
+- ~~No inbound rate limiting~~ — **DONE** 2026-08-26 (`148293e2`). Per-tenant,
+  50 rps / 100 burst, on **every** route rather than opt-in. Traefik middleware
+  via the **file provider** — there is no `--providers.kubernetescrd` here, so a
+  Middleware CRD would be stored and never read.
+  - **Verified by making it bite.** At the real limit, 200 parallel requests gave
+    zero 429s — indistinguishable from the middleware not being attached.
+    Dropping to `average=1` settled it: limited host **1×200 / 19×429**, control
+    host **20×200 / 0×429**. The control is what makes the first line mean
+    anything.
+  - Keyed on `CF-Connecting-IP`. The socket peer is always a Cloudflare address,
+    so limiting on it would put every visitor of every tenant in one bucket and
+    let one busy app throttle the platform.
+  - **Cloudflare plans do not solve this.** Rate limiting rules come from a
+    per-zone pool and don't scale to one rule per tenant at 10,000 apps;
+    per-hostname rules for custom hostnames are Enterprise. Separately: the API
+    reports `ahurasense.com` on **`Free Website`, price 0, no pending change** —
+    if a Pro subscription was bought, it is not on this zone.
+- **Egress bandwidth is still unbounded**, and this is the actual abuse vector —
+  a tenant mining, spamming or exfiltrating makes **outbound** connections that
+  never pass through Cloudflare or the gateway. **No Cloudflare plan addresses
+  it at any price.**
+  - Kubernetes expresses this with `kubernetes.io/egress-bandwidth`, which needs
+    the **bandwidth CNI plugin**. Checked: this cluster's conflist has
+    `calico, host-local, portmap` — **no bandwidth plugin**, so those annotations
+    would apply cleanly and shape nothing. Adding it on LKE is the open question,
+    since node config is not exposed.
+- **Origin is reachable directly**, bypassing both Cloudflare and the
+  `CF-Connecting-IP` rate limit (such requests share one bucket). Restricting the
+  origin to Cloudflare's published ranges is the complementary control.
+- No crypto-mining heuristics, no abuse response.
 - **Free-plan Cloudflare**: per-tenant WAF is Enterprise-only; 1 rate-limit rule.
 - ~~No reserved-hostname list~~ — **DONE** (`e70a5506`). A tenant could have
   claimed `api` or `www`: the deploy path only checked `paas.aliases`, and live
@@ -148,12 +174,25 @@ behavioural tests replaying confirmed v1 criticals.
 - **Nothing has RENDERED.** The repo typechecks and lints, but no route has
   served a request and no component has mounted. The reduced env is now in the
   UI worktree; the render attempt is the UI lane's next step.
-- **Custom domains: verified, not yet certified.** Challenge-response ownership
-  and proxy-aware routing are built and tested — including the case that breaks
-  the naive check, where a Cloudflare-proxied domain resolves to Cloudflare
-  rather than to us. **Certificates are blocked**: Cloudflare for SaaS returns
-  `code 1404: No quota has been allocated for this zone`. *User action —*
-  SSL/TLS → Custom Hostnames.
+- ~~Custom domains blocked on certificates~~ — **PROVEN END TO END** 2026-08-26
+  on a real third-party domain. `app.ahurasense.ai` → **200**, its own
+  certificate (`CN=app.ahurasense.ai`, Google Trust Services), serving content
+  identical to the app's platform hostname.
+  - Cloudflare for SaaS needed a **Fallback Origin** before any custom hostname
+    could be added at all — created `fallback.ahurasense.com` (proxied) and set
+    it. The `1404` quota error was gone once the feature was enabled.
+  - Ownership passed via the **CNAME**, not the TXT: Cloudflare treats a CNAME
+    into our zone as proof and stops asking for the ownership record.
+  - **I pointed the fallback origin at the Kubernetes API server**
+    (`172.236.163.171`) instead of the gateway (`172.236.185.23`) — that IP was
+    fresh in context from the isolation work minutes earlier. It surfaced as
+    `CN=kube-apiserver` at the origin and HTTP `526`. The record was proxied, and
+    the API server requires client certificates Cloudflare was not presenting, so
+    such requests reached the control plane and could not authenticate. Live for
+    roughly 40 minutes. Corrected. Kept here rather than quietly fixed: it
+    happened minutes after proving *tenants* could not reach that endpoint.
+  - Still manual. `paas.domains` challenge-verification is the self-service
+    version of what was done by hand here, and is the remaining wiring.
 - **Preview deployments: routed and sized.** Free, 48h from last push,
   Starter-sized, always 1 instance. A push to a non-production branch now lands
   in its own preview environment (`environments.forBranch`, named after the raw
