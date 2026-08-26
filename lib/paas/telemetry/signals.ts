@@ -26,6 +26,7 @@
  */
 
 export type SignalKind =
+  | "warm-and-idle"
   | "always-warm"
   | "restart-storm"
   | "replica-sprawl"
@@ -83,7 +84,25 @@ export interface AppUsageLike {
   restarts: number;
   peakPods: number;
   podSeconds: number;
+  /**
+   * Cores, from metrics.k8s.io. Undefined when metrics-server is not serving.
+   *
+   * This is what separates warm-and-serving from warm-and-idle, and that is
+   * the distinction the $5 price turns on — a busy app holding a pod is a
+   * customer getting value, an idle one holding a pod is the platform paying
+   * for nothing. Without it, `always-warm` cannot tell them apart.
+   */
+  cpuCores?: number | null;
 }
+
+/**
+ * Below this, an app is doing essentially nothing.
+ *
+ * 10 millicores is 1% of a core. Measured on the live cluster, the three
+ * running apps sat at 2–3 millicores — a third of this bar — while each held
+ * a full pod slot.
+ */
+export const IDLE_CORES = 0.01;
 
 export interface BuildUsageLike {
   builds: number;
@@ -117,7 +136,33 @@ export function detectSignals(input: SignalInput): Signal[] {
     // A degraded warm figure must not raise an economics alarm: the sampler
     // having gaps is our problem, and billing or throttling a customer over
     // our own missing data is the kind of mistake that is very hard to undo.
-    if (!app.degraded && app.warmFraction >= t.alwaysWarm) {
+    const warm = !app.degraded && app.warmFraction >= t.alwaysWarm;
+    const idle = typeof app.cpuCores === "number" && app.cpuCores < IDLE_CORES;
+
+    // Warm AND idle is the strongest case in this file, and it is only
+    // expressible once metrics exist. An app holding a full pod slot at 0.3%
+    // of a core is not a customer getting value — it is the platform paying
+    // the always-on price for nothing. `always-warm` alone cannot distinguish
+    // this from a genuinely busy app, and those need opposite responses.
+    if (warm && idle) {
+      signals.push({
+        kind: "warm-and-idle",
+        severity: "warn",
+        subject: app.appKey,
+        detail:
+          `warm ${pct(app.warmFraction)} of the last ${hours(input.windowSeconds)} at ` +
+          `${((app.cpuCores as number) * 1000).toFixed(0)}m CPU — holding a pod slot and ` +
+          `doing essentially nothing.`,
+        action:
+          `The clearest scale-to-zero case there is. Under the plan's model 80% of apps ` +
+          `should look like this, and each one currently costs a full always-on pod. ` +
+          `A busy always-warm app is a customer to price for; this is not that.`,
+        value: app.cpuCores as number,
+        threshold: IDLE_CORES,
+      });
+    }
+
+    if (warm && !idle) {
       signals.push({
         kind: "always-warm",
         severity: "warn",
@@ -126,9 +171,12 @@ export function detectSignals(input: SignalInput): Signal[] {
           `warm ${pct(app.warmFraction)} of the last ${hours(input.windowSeconds)}. ` +
           `Costs what an always-on app costs, whatever the plan says it is priced at.`,
         action:
-          `Expected while scale-to-zero is unimplemented. Once it exists, this pattern ` +
-          `means either a genuinely busy app or a keep-alive pinger, and those need ` +
-          `different answers — one is a customer to upsell, the other is a policy question.`,
+          typeof app.cpuCores === "number"
+            ? `Warm and actually using CPU — a customer getting value from the pod they ` +
+              `hold. This is the one to price for rather than scale to zero.`
+            : `Expected while scale-to-zero is unimplemented. Without metrics this cannot ` +
+              `be told apart from a warm-and-idle app, and those need opposite responses ` +
+              `— one is a customer to price for, the other is the platform paying for nothing.`,
         value: app.warmFraction,
         threshold: t.alwaysWarm,
       });

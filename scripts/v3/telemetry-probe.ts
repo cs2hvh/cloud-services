@@ -12,6 +12,7 @@
  * READ-ONLY. GETs against the Kubernetes API.
  */
 
+import { db } from "../../lib/paas/db.ts";
 import { loadKubeconfig, kube } from "../../lib/paas/k8s/client.ts";
 
 const KUBECONFIG = process.env.V2_KUBECONFIG ?? "C:/ahura-secrets/kubeconfig-v2-dev.yaml";
@@ -80,6 +81,50 @@ for (const n of tenantNs) {
         `${rc > 0 ? `  restarts=${rc}` : ""}${waiting ? `  waiting=${waiting}` : ""}`,
     );
   }
+}
+
+// ── what the paas schema can actually store ─────────────────────────────────
+//
+// Checked against the live database rather than the migration files. The two
+// disagree more often than anyone expects: a value applied by hand, or a
+// migration not yet committed, and a grep of supabase/migrations reports the
+// wrong answer confidently.
+
+async function rpcAccepts(fn: string, args: Record<string, unknown>): Promise<boolean> {
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.replace(/^"|"$/g, "") ?? "";
+  const base = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/^"|"$/g, "").replace(/\/+$/, "");
+  const res = await fetch(`${base}/rest/v1/rpc/${fn}`, {
+    method: "POST",
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/json",
+      "Content-Profile": "paas",
+      "Accept-Profile": "paas",
+    },
+    body: JSON.stringify(args),
+  });
+  return res.ok;
+}
+
+console.log(`\npaas schema`);
+for (const table of ["drift_observations", "usage_samples"]) {
+  const reachable = await db
+    .select(table, "select=*&limit=1")
+    .then(() => true)
+    .catch(() => false);
+  console.log(`  ${table.padEnd(22)} ${ok(reachable)}`);
+}
+
+// resolve_drift_not_in with an empty open-set is a no-op when no observation
+// of that kind is open, so this probes the enum without writing anything.
+for (const kind of ["unrecorded", "stale", "denied", "unpriced", "expired", "claimable"]) {
+  const accepted = await rpcAccepts("resolve_drift_not_in", {
+    p_kind: kind,
+    p_resource_type: "probe_nonexistent",
+    p_still_open: [],
+  });
+  console.log(`  drift_kind '${kind}'`.padEnd(26) + ` ${ok(accepted)}`);
 }
 
 // ── sandbox posture, since it gates everything else ─────────────────────────

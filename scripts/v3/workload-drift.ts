@@ -53,7 +53,7 @@ const [rows, placementRows, clusters] = await Promise.all([
   // paas.deployments has no created_at — it tracks queued_at/started_at/ready_at.
   // queued_at is the one that always exists, so it is what orders a project's
   // deployments when deciding which is superseded.
-  db.select<DeploymentRowLike>("deployments", "select=ref,state,project_id,created_at:queued_at"),
+  db.select<DeploymentRowLike>("deployments", "select=ref,state,project_id,scaled_to_zero_at,created_at:queued_at"),
   // deployment_placements keys on deployment_id; resolve to refs so the
   // classifier compares like with like.
   db.select<{ deployment_id: string; namespace: string }>(
@@ -76,8 +76,15 @@ const placements: PlacementLike[] = placementRows.map((p) => ({
 }));
 
 const report = reconcileWorkloads({ workloads, deployments: rows, placements });
+
+// EVERY pod, platform namespaces included. pod_allocated counts against the
+// LKE pod cap and that cap counts everything — comparing it to the tenant
+// count above reports a large false drift on a consistent cluster.
+const allPods = await k.get<{ items: Array<{ status?: { phase?: string } }> }>("/api/v1/pods", true);
+const runningPods = (allPods?.items ?? []).filter((p) => p.status?.phase === "Running").length;
+
 const recordedPods = clusters.reduce((n, c) => n + c.pod_allocated, 0);
-const capacity = capacityDrift(recordedPods, report.observedPods);
+const capacity = capacityDrift(recordedPods, runningPods);
 
 if (JSON_OUT) {
   console.log(JSON.stringify({ ...report, capacity, clusters }, null, 2));
@@ -88,7 +95,8 @@ const line = "─".repeat(96);
 console.log(`\nWorkload drift — Kubernetes Deployments vs paas.deployments`);
 console.log(line);
 console.log(
-  `  cluster: ${workloads.length} tenant Deployment(s), ${report.observedPods} pod(s) ready`,
+  `  cluster: ${workloads.length} tenant Deployment(s), ${report.observedPods} pod(s) ready` +
+    (report.asleep ? `, ${report.asleep} asleep on purpose` : ""),
 );
 console.log(`  records: ${rows.length} deployment row(s), ${placements.length} placement(s)`);
 console.log(line);
@@ -109,8 +117,8 @@ console.log(
     (report.unaccountedPods > 0 ? `   ← capacity nobody is selling and nothing will reap` : ""),
 );
 console.log(
-  `  pod_allocated     ${capacity.recorded} recorded, ${capacity.observed} observed, ` +
-    `drift ${capacity.drift >= 0 ? "+" : ""}${capacity.drift}` +
+  `  pod_allocated     ${capacity.recorded} recorded, ${capacity.observed} running ` +
+    `cluster-wide (platform included), drift ${capacity.drift >= 0 ? "+" : ""}${capacity.drift}` +
     (capacity.significant ? `   ← placement is scheduling against fiction` : ""),
 );
 console.log(

@@ -39,6 +39,12 @@ import {
   type DeploymentRowLike,
   type WorkloadDriftReport,
 } from "./workload-drift.ts";
+import {
+  byDeployment,
+  podUsage,
+  type DeploymentUsage,
+  type PodMetricsLike,
+} from "./metrics.ts";
 import { assertControlPlaneReachable, loadCloudInventory, loadControlPlane } from "./fleet-source.ts";
 import { MONTH_HOURS, reconcile, type DriftReport } from "./reconcile.ts";
 import { ingressHosts, reconcileHostnames, type AliasLike, type DnsDriftReport } from "./dns-drift.ts";
@@ -269,7 +275,7 @@ export async function workloadView(): Promise<WorkloadView> {
     .map(workloadFrom);
 
   const [rows, placementRows, withIds, clusters] = await Promise.all([
-    db.select<DeploymentRowLike>("deployments", "select=ref,state,project_id,created_at:queued_at"),
+    db.select<DeploymentRowLike>("deployments", "select=ref,state,project_id,scaled_to_zero_at,created_at:queued_at"),
     db.select<{ deployment_id: string; namespace: string }>(
       "deployment_placements",
       "select=deployment_id,namespace",
@@ -285,12 +291,16 @@ export async function workloadView(): Promise<WorkloadView> {
   }));
 
   const drift = reconcileWorkloads({ workloads, deployments: rows, placements });
+
+  // EVERY pod, platform namespaces included — see capacityDrift's docblock.
+  // pod_allocated counts against the LKE pod cap and that cap counts
+  // everything, so comparing it to the tenant count reports a false drift.
+  const allPods = await k.get<{ items: Array<{ status?: { phase?: string } }> }>("/api/v1/pods", true);
+  const runningPods = (allPods?.items ?? []).filter((p) => p.status?.phase === "Running").length;
+
   return {
     drift,
-    capacity: capacityDrift(
-      clusters.reduce((n, c) => n + c.pod_allocated, 0),
-      drift.observedPods,
-    ),
+    capacity: capacityDrift(clusters.reduce((n, c) => n + c.pod_allocated, 0), runningPods),
   };
 }
 
@@ -316,12 +326,62 @@ export async function r2View(): Promise<R2View> {
   };
 }
 
+// ── CPU and memory ──────────────────────────────────────────────────────────
+
+export interface MetricsView {
+  deployments: DeploymentUsage[];
+  /** Pods whose usage could not be read at all. */
+  unreadable: number;
+}
+
+/**
+ * Per-app CPU and memory from the metrics.k8s.io aggregated API.
+ *
+ * Throws when metrics-server is not installed rather than returning zeros.
+ * An idle app and a missing metrics API produce the same number, and a
+ * dashboard showing 0m CPU for every app looks like a working dashboard —
+ * which is the failure mode this whole lane exists to argue against.
+ */
+export async function metricsView(): Promise<MetricsView> {
+  const k = cluster();
+
+  const list = await k.get<{ items: PodMetricsLike[] }>(
+    "/apis/metrics.k8s.io/v1beta1/pods",
+    true,
+  );
+  if (!list) {
+    throw new Error(
+      "[paas/telemetry] metrics.k8s.io is not serving — metrics-server is not installed. " +
+        "Reporting zeros here would be indistinguishable from an idle fleet.",
+    );
+  }
+
+  const pods = (list.items ?? [])
+    .filter((m) => !PLATFORM_NS.has(m.metadata.namespace))
+    .map(podUsage);
+
+  return {
+    deployments: byDeployment(pods, deploymentRefFromPodName),
+    unreadable: pods.filter((p) => p.cpuCores === null || p.memoryBytes === null).length,
+  };
+}
+
+/**
+ * metrics.k8s.io returns pod names without labels, so the deployment has to
+ * come from the name. Same convention as usage.ts's fallback path: strip the
+ * replicaset and pod suffixes Kubernetes appends.
+ */
+function deploymentRefFromPodName(podName: string): string {
+  return podName.split("-").slice(0, -2).join("-") || podName;
+}
+
 export interface OperatorView {
   generatedAt: string;
   fleet: FleetView | { error: string };
   hostnames: HostnameView | { error: string };
   workloads: WorkloadView | { error: string };
   storage: R2View | { error: string };
+  metrics: MetricsView | { error: string };
   usage: UsageView | { error: string };
 }
 
@@ -341,13 +401,22 @@ export async function operatorView(): Promise<OperatorView> {
     }
   };
 
-  const [fleet, hostnames, workloads, storage, usage] = await Promise.all([
+  const [fleet, hostnames, workloads, storage, metrics, usage] = await Promise.all([
     settle(fleetView),
     settle(hostnameView),
     settle(workloadView),
     settle(r2View),
+    settle(metricsView),
     settle(usageView),
   ]);
 
-  return { generatedAt: new Date().toISOString(), fleet, hostnames, workloads, storage, usage };
+  return {
+    generatedAt: new Date().toISOString(),
+    fleet,
+    hostnames,
+    workloads,
+    storage,
+    metrics,
+    usage,
+  };
 }

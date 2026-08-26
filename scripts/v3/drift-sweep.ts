@@ -46,27 +46,14 @@ const RECORD = process.argv.includes("--record");
 const KUBECONFIG = process.env.V2_KUBECONFIG ?? "C:/ahura-secrets/kubeconfig-v2-dev.yaml";
 
 /**
- * PostgREST RPC. lib/paas/db.ts has no rpc helper yet and it is not my module
- * to extend; this is the only caller, so it lives here until there is a second.
+ * PostgREST RPC, now `db.rpc`.
+ *
+ * This file inlined its own until a second caller appeared — the
+ * infrastructure lane needed one for an enum-mirror test and promoted it,
+ * which is exactly the trigger the inline copy's comment named. One
+ * implementation, no behaviour change.
  */
-async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.replace(/^"|"$/g, "") ?? "";
-  const base = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/^"|"$/g, "").replace(/\/+$/, "");
-  const res = await fetch(`${base}/rest/v1/rpc/${fn}`, {
-    method: "POST",
-    headers: {
-      apikey: key,
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-      "Content-Profile": "paas",
-      "Accept-Profile": "paas",
-    },
-    body: JSON.stringify(args),
-  });
-  const text = await res.text();
-  if (!res.ok) throw new Error(`[drift-sweep] rpc ${fn} -> ${res.status}: ${text.slice(0, 300)}`);
-  return (text ? JSON.parse(text) : null) as T;
-}
+const rpc = db.rpc;
 
 await assertControlPlaneReachable();
 
@@ -209,10 +196,12 @@ for (const s of sweeps) {
 
 console.log(line);
 console.log(`  ${total} observation(s) across ${sweeps.length} sweep(s)`);
-console.log(
-  `  NOT recorded, no honest drift_kind for them: ${UNMAPPED.join(", ")}. ` +
-    `Both are still reported by their own tools.`,
-);
+if (UNMAPPED.length) {
+  console.log(
+    `  NOT recorded, no honest drift_kind for them: ${UNMAPPED.join(", ")}. ` +
+      `Still reported by their own tools.`,
+  );
+}
 
 if (!RECORD) {
   console.log(`\n  Report only. Re-run with --record to write history.\n`);

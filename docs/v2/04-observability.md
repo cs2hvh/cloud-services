@@ -13,7 +13,7 @@ change anything, run by a person who has read a report first.
 ## Running it
 
 ```bash
-node --test "lib/paas/telemetry/*.test.ts"                                   # 159 tests, no deps
+node --test "lib/paas/telemetry/*.test.ts"                                   # 226 tests, no deps
 node --env-file=.env --env-file=.env.local scripts/v3/operator-view.ts       # everything, once
 node --env-file=.env --env-file=.env.local scripts/v3/fleet-drift.ts --prove
 node --env-file=.env --env-file=.env.local scripts/v3/dns-drift.ts
@@ -29,9 +29,9 @@ node --env-file=.env --env-file=.env.local scripts/v3/drift-sweep.ts --record # 
 node --env-file=.env --env-file=.env.local scripts/v3/drift-sweep.ts --history
 ```
 
-`drift-sweep --record` is the one thing intended for a scheduler. It takes
-around two minutes, since it reads Linode, Cloudflare, R2 and the cluster in
-one pass — fine on a five-minute cron, too slow for anything interactive.
+`drift-sweep --record` takes around two minutes, since it reads Linode,
+Cloudflare, R2 and the cluster in one pass — fine on a schedule, too slow for
+anything interactive. See **Scheduling it** below.
 
 Both env files are required: Supabase credentials live in `.env`, the `V2_*`
 ones in `.env.local`.
@@ -39,6 +39,74 @@ ones in `.env.local`.
 Exit codes are meant for schedulers. `fleet-drift` exits 1 on drift.
 `dns-drift` exits 1 on drift and **2 on a claimable hostname**, which is a
 different severity and deserves a different page.
+
+## Scheduling it — the premise, not the last mile
+
+**Nothing runs any of this automatically, and until something does, none of it
+means anything.**
+
+This is not a fourth item after the modules, the surface and the tests. It is
+the assumption all three rest on. Unscheduled, the operator surface shows a
+fleet nobody is reconciling, the drift table records drift nobody is repairing,
+and the R2 leak measured growing 697 MB → 1083 MB in a single hour keeps
+growing. Every one of those reads correctly and changes nothing.
+
+The claim this lane makes — that a reconciler nobody runs is the same as no
+reconciler — was literally true of this codebase two hours ago. The product
+lane grepped for `reconcileProject`'s callers, found the only one was a proof
+script, and held `routingLive = false` against being told twice that routing
+worked. They were right, and the fix was a runner rather than a correction to
+them.
+
+The same is true here today. These scripts are correct, tested against live
+infrastructure, and inert.
+
+Two things are worth scheduling, and they are different jobs:
+
+```bash
+# Drift, every 15 minutes. Records open findings and closes what cleared, so
+# "how long has this been broken" stays answerable. ~2 minutes per run.
+*/15 * * * *  cd /srv/app && node --env-file=.env --env-file=.env.local \
+              scripts/v3/drift-sweep.ts --record
+
+# Usage, every 5 minutes. The interval IS the resolution of the warm fraction:
+# 5 minutes bounds the attribution error at 5 minutes per app per gap.
+*/5 * * * *   cd /srv/app && node --env-file=.env --env-file=.env.local \
+              scripts/v3/usage-sample.ts --samples 1 --record
+```
+
+Two properties make these safe to run unattended, and both were designed for
+it rather than discovered afterwards:
+
+- **`record_drift` does not reset `observed_at`** on something already open, so
+  sweeping every 15 minutes measures duration instead of restarting the clock.
+- **Usage rows are interval deltas**, so a missed run loses that interval and
+  nothing else. It cannot double-count, and `unobserved_seconds` records the
+  gap so the period stays honest about it.
+
+**The first property is verified against the real table rather than asserted.**
+Two sweeps 43 minutes apart: the second recorded 15 open observations and
+resolved 2 that had cleared, and the surviving 17 read `open for 43m` rather
+than restarting at zero. The two that closed were the `v2-express` and
+`v2-docker` hostnames, opened when nothing wrote `paas.aliases` rows and closed
+when the deploy path started recording:
+
+```
+unrecorded  hostname  resolved after  43m  v2-express.ahurasense.com
+unrecorded  hostname  resolved after  43m  v2-docker.ahurasense.com
+```
+
+That is the whole point of the table stated as an actual answer: this drift
+appeared, lasted 43 minutes, and is gone. Before it existed, the same fix would
+have left no trace that anything had ever been wrong.
+
+A run that cannot reach its dependency does **not** resolve its scope — an
+empty result from a failed Cloudflare read is indistinguishable from a clean
+one, and closing every open observation because a read failed would erase
+exactly the durations the table exists to measure.
+
+Alerting is a separate decision. The exit codes carry the severity; nothing
+consumes them.
 
 ## What exists
 
@@ -53,39 +121,131 @@ different severity and deserves a different page.
 | `telemetry/workload-drift.ts` | K8s Deployments vs `paas.deployments` | 17 |
 | `telemetry/signals.ts` | Abuse and quota signals — detection only | 17 |
 | `telemetry/drift-history.ts` | Findings → `paas.drift_observations` | 13 |
+| `telemetry/usage-store.ts` | Interval deltas → `paas.usage_samples` | 19 |
+| `telemetry/metrics.ts` | metrics.k8s.io quantities → cores and bytes | 18 |
 | `telemetry/operator.ts` | Composition for the API and dashboard | — |
 | `telemetry/fleet-source.ts` | The I/O half. Every call is a GET | — |
+| `telemetry/admin-boundary.test.ts` | Test-only: enforces the admin security boundary | 7 |
 
-Surfaces: `GET /api/v2/admin/{fleet,hostnames,usage}` and
-`/dashboard/v2/admin`.
+Surfaces: `GET /api/v2/admin/{fleet,hostnames,workloads,storage,metrics,usage}`,
+`GET /api/v2/admin/pods/{namespace}/{pod}/logs`, and `/dashboard/v2/admin`.
+
+The dashboard calls `operatorView()` directly rather than fetching its own API —
+a round trip to its own process would add a failure mode and an auth hop for
+nothing. Each of its sections renders independently, because an operator
+dashboard is most useful exactly when one dependency is broken — the metrics
+section currently proves that, reporting that metrics-server is absent while
+the other five render normally.
 
 ## What the live system currently says
 
-Read on 2026-08-26 against LKE `647920`:
+Read on 2026-08-26 against LKE `647920`, after the infrastructure lane acted
+on everything below that is marked fixed.
+
+**Clean:**
 
 - **$116.07/month standing, $0.00 unaccounted.** Every Linode resource has a
   control-plane row and every row has a resource.
-- **0 claimable hostnames.** Nothing resolves to the gateway unrouted.
-- **3 of 4 live hostnames have no `paas.aliases` row.** `publish-app.ts` creates
-  the DNS record and the Ingress and writes no row, so promote and rollback —
-  which the schema supports as a single write — have nothing to read.
-- **5 apps, all warm 100% of the time, 1 pod each.** There is no scale-to-zero.
-- **Two deployments running concurrently** in `prj-node-js-getting-started`.
-  This turned out to be real: every deploy left the previous Deployment at full
-  replicas, silently doubling cost per deploy. Fixed in `636a8225`, which now
-  scales superseded deployments to zero and keeps the object so rollback stays
-  a scale-up. The pair observed here predate that fix.
-- **486.3 MB reclaimable in R2 — 70% of the bucket**, and nothing prunes it.
-  Independently measured at the same figure by the infrastructure lane.
-- **Two apps are DOWN** with `ready` rows, so the control plane and any alias
-  pointing at them believe they are live. One is Pending on
-  `CreateContainerConfigError`; the other restarts repeatedly after starting
-  gunicorn cleanly and being SIGTERM'd — a readiness probe or port mismatch,
-  not an app fault.
-- **4 unaccounted pods**, and `clusters.pod_allocated` says 0 against 5 actually
-  running. Placement currently believes the cluster is empty. Since LKE enforces
-  the pod cap hard, a number that drifts low means scheduling onto a cluster
-  that is fuller than the record admits.
+- **0 claimable hostnames**, and all four live hostnames now have a
+  `paas.aliases` row. Three did not: `deploy-e2e.ts` applied Kubernetes objects
+  directly and wrote no rows, so promote and rollback had nothing to read.
+  Fixed at the source — the deploy path now records as the only way to deploy —
+  rather than by backfilling, which would have papered over a script that could
+  still create untracked infrastructure.
+- **0 unaccounted pods.** Four workloads were running with no
+  `paas.deployments` row; the same fix cleared them.
+- **0 apps down.** Two had `ready` rows and zero ready replicas — one Pending on
+  `CreateContainerConfigError`, one restarting after starting gunicorn cleanly
+  and being SIGTERM'd. The second was a port mismatch, not an app fault, which
+  is why the previous-container log mattered: it showed the app working.
+- **Superseded deployments sit at 0/0 replicas with the object kept**, so
+  rollback is a scale-up rather than a rebuild. Every deploy used to leave the
+  previous Deployment at full replicas, silently doubling pod count per deploy.
+
+- **`clusters.pod_allocated` is derived, not counted**, and self-heals. It read
+  0 because five places read the column and none wrote it. It is now recomputed
+  from the cluster each sweep — installing metrics-server moved it 23 → 24 with
+  no intervention, which an incremented counter would have required someone to
+  remember.
+
+**Still open:**
+
+- **846 MB reclaimable in R2 — 73% of the bucket.** It was 486 MB two hours
+  earlier: every redeploy writes a fresh `image.tar` that nothing deletes, so
+  this scales with deploy frequency rather than being a fixed backlog. That is a
+  different argument at 10,000 apps than it looks like at five.
+- **Warm fraction is 1.0, and the apps are doing nothing.** With metrics-server
+  live the reading is `100.0% warm, 2–3m cpu` — each app holds a full pod slot
+  at roughly 0.3% of a core. There is no scale-to-zero, so the fleet costs the
+  always-on model in the plan while delivering nothing that needs it.
+
+### The meter was flattering the cost model by 23×, and `period_seconds` caught it
+
+The most consequential bug this lane shipped, and it is worth stating in
+business terms rather than as a metering detail.
+
+Running `--period` against real stored samples reported three apps that are
+warm **100%** of the time as **4.3% warm** — and not degraded. The sampler had
+run for two minutes of the hour, and `unobserved_seconds` only records gaps
+*between* samples, never the stretch where nothing sampled at all.
+
+The plan's entire v2 business case is a ~5× gap — ~$52k/month always-on against
+~$18–20k with idle-to-zero — resting on one unmeasured number, and that number
+is the warm fraction. The first attempt to measure it was wrong by roughly
+**23×, in the direction that says the model is already achieved**.
+
+Had that reached the pricing conversation it would have confirmed what everyone
+wants to be true, with a real measurement behind it. A number that flatters the
+case and is confident about it is worse than no number.
+
+It is also the strongest argument for a schedule: a meter that runs only when
+someone remembers produces exactly this failure by construction, because
+"nobody was watching" and "nothing was happening" are the same reading.
+
+The fix uses the `period_seconds` column the infrastructure lane added over the
+requested shape, for an unrelated reason — pod-seconds alone is ambiguous
+between one pod for five minutes and five pods for one. Summing it gives
+coverage, warm fraction divides by what was *watched*, and coverage below 95%
+marks the period degraded. Rows written before the column fall back to the old
+semantics.
+
+### The migrations do not describe the database
+
+`grep -rn "expired\|claimable" supabase/migrations/*paas*` returns nothing, and
+the live `paas.drift_kind` enum has both. Six values in the database, four in
+the files. Reproduced independently from two different worktrees.
+
+Anyone reasoning about that schema from the repository — a future session, a
+reviewer, either of the other lanes — gets a confident wrong answer. This was
+nearly acted on in both directions at once: a peer's claim that the values
+existed was almost taken on trust, then almost rejected on the file grep.
+Trusting would have been right by accident; checking the file would have been
+wrong on evidence.
+
+So `scripts/v3/telemetry-probe.ts` probes the live schema instead: each enum
+value with a no-op `resolve_drift_not_in`, which changes nothing when no
+observation of that kind is open. Before assuming what the schema supports,
+run it.
+
+### Rules that enforce themselves
+
+Three constraints in this lane are tests that read real source, not comments:
+
+- `build-log.test.ts` reads `lib/paas/build/vm.ts` and fails if the build
+  script emits a stage marker the sanitiser does not classify.
+- `admin-boundary.test.ts` reads every file under `app/api/v2/admin` and fails
+  if one becomes tenant-scoped, imports a service-role client, can return
+  before authorising, or answers 403.
+- `metrics.test.ts` pins that binary suffixes are matched before decimal ones,
+  so `Mi` can never be read as `M`.
+
+Each replaced a comment. The pattern came from a review point that landed
+hard: a rule written against "safety that depends on the next person
+remembering" is itself safety that depends on the next person remembering, if
+it lives in a docblock. Both boundary suites also prove they can *fail* —
+`tenantScopeIn` is tested against synthetic violations, and the suite refuses
+to run against an empty directory. A check that cannot detect a violation sits
+green forever, which is the failure `fleet-drift --prove` exists to rule out.
 
 ### The defect fleet reconciliation cannot see
 
@@ -230,21 +390,35 @@ so no RLS is being bypassed. The gate fails closed on every path and returns
 
 **Blocked on the infrastructure lane:**
 
-- **metrics-server is not installed** — `metrics.k8s.io` is absent from `/apis`.
-  Per-app CPU and memory (T4) cannot be built until it is. On LKE it usually
-  needs `--kubelet-insecure-tls` or the right `--kubelet-preferred-address-types`.
+*(metrics-server and the two extra `drift_kind` values were listed here and
+have both landed. T4 was built while `metrics.k8s.io` was absent and was
+correct on its first contact with real data — `2943895n` → `3m`,
+`65240Ki` → `63.7 MiB` — which is the argument for testing quantity parsing
+rather than trusting it. Reading `Mi` as `M` understates memory by 4.6% and
+throws nothing. `metricsView()` still throws when the API is absent rather than
+returning zeros: an idle app and a missing metrics API produce the same number,
+and a dashboard showing `0m` everywhere looks like a working one.)*
+
 - **Two more `paas.drift_kind` values.** `expired` and `claimable` have no
   honest home in the four that exist, so their *history* is not recorded — see
   the mapping note in `drift-history.ts`. Both are still reported by their own
   tools and exit codes; only duration is missing.
 
+*(`paas.usage_samples` was listed here as a missing table. It was applied
+while this was being written — a missing table needs a migration, an empty
+one needs a runner, and those are different asks. See the scheduling section.)*
+
 **Not started:**
 
-- **Persisting usage samples.** The sampler runs and the arithmetic is tested,
-  but nothing writes samples anywhere, so warm fraction exists only for the
-  duration of one process. This is the single highest-value remaining item: it
-  is what turns the measurement into something billing can read. Needs a table
-  shaped like `drift_observations` — the pattern is now established.
+- **Streaming an in-flight build log.** Architecturally blocked rather than
+  unbuilt: `vm.ts` uploads the log ONCE, from its exit trap, so there is no
+  incremental object to follow. Real streaming needs the build VM to upload
+  chunks periodically — a change in the build lane. Fetch, sanitise and
+  paginate are done, which covers the stated acceptance criterion.
+- **Anything that runs on a schedule.** Every sweep is scheduler-ready — exit 0
+  clean, exit 1 drift, exit 2 for a claimable hostname — and nothing schedules
+  them. `drift-sweep.ts --record` is the one intended for cron, at roughly two
+  minutes per run. This is a standing configuration decision rather than code.
 - **A `rpc()` helper in `lib/paas/db.ts`.** `drift-sweep.ts` inlines one
   because it is currently the only caller. Second caller should promote it.
 - **Log streaming.** Fetch and paginate are done; following an in-flight build

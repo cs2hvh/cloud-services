@@ -16,6 +16,7 @@
  */
 
 import { operatorView } from "../../lib/paas/telemetry/operator.ts";
+import { formatBytes, formatCores } from "../../lib/paas/telemetry/metrics.ts";
 
 const JSON_OUT = process.argv.includes("--json");
 const view = await operatorView();
@@ -102,6 +103,22 @@ if (failed(view.storage)) {
     const b = s.byDisposition[d];
     if (b.objects) console.log(`  ${d.toUpperCase().padEnd(11)} ${String(b.objects).padStart(4)} object(s)  ${mb(b.bytes)}`);
   }
+}
+
+// ── metrics ─────────────────────────────────────────────────────────────────
+console.log(`\n${line}\nCPU AND MEMORY`);
+if (failed(view.metrics)) {
+  console.log(`  unavailable: ${view.metrics.error}`);
+} else {
+  const m = view.metrics;
+  for (const d of m.deployments) {
+    console.log(
+      `  ${d.deploymentRef.padEnd(22)} ${formatCores(d.cpuCores).padStart(8)} cpu  ` +
+        `${formatBytes(d.memoryBytes).padStart(10)}  ${d.pods} pod(s)` +
+        (d.unreadable ? `  ${d.unreadable} unreadable` : ""),
+    );
+  }
+  if (m.deployments.length === 0) console.log(`  no tenant pods reporting metrics`);
 }
 
 // ── usage ───────────────────────────────────────────────────────────────────
