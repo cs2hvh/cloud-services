@@ -57,13 +57,28 @@ async function probe(repo: string, branch: string, path: string): Promise<string
 export async function inspectRepo(
   repo: string,
   rootDirectory?: string | null,
+  /**
+   * Probe THIS branch instead of guessing between main and master.
+   *
+   * A preview builds a feature branch's commit, but detection decides HOW to
+   * build it — framework, package manager, port, Dockerfile. Guessing main here
+   * means a preview gets the right code and the wrong recipe: a branch that adds
+   * a Dockerfile or changes its start script would build as whatever main is.
+   * Silent, and it makes previews untrustworthy for exactly the changes people
+   * open them to review.
+   *
+   * If the named branch has no marker files, detection fails loudly rather than
+   * falling back to main — building the wrong recipe is worse than refusing.
+   */
+  explicitBranch?: string | null,
 ): Promise<{ branch: string; files: RepoFiles }> {
   const dir = rootDirectory ? `${rootDirectory.replace(/^\/+|\/+$/g, "")}/` : "";
   const branch =
-    (await probe(repo, "main", `${dir}README.md`)) !== null ||
+    explicitBranch ??
+    ((await probe(repo, "main", `${dir}README.md`)) !== null ||
     (await probe(repo, "main", `${dir}package.json`)) !== null
       ? "main"
-      : "master";
+      : "master");
 
   const files: RepoFiles = { paths: [], contents: {} };
   for (const f of [...new Set(MARKER_FILES)]) {
@@ -193,7 +208,15 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
     );
   }
 
-  const { branch, files } = await inspectRepo(opts.repo, opts.rootDirectory);
+  // Resolve the recorded deployment FIRST when there is one, because its branch
+  // decides what detection should look at. Reading it after detection is what
+  // made every build — preview included — detect against main.
+  const adopted = opts.existingDeploymentRef ? await deployments.byRef(opts.existingDeploymentRef) : null;
+  if (opts.existingDeploymentRef && !adopted) {
+    throw new Error(`deployment ${opts.existingDeploymentRef} not found`);
+  }
+
+  const { branch, files } = await inspectRepo(opts.repo, opts.rootDirectory, adopted?.git_ref ?? null);
   const detection = detectFramework(files);
   const pm = detectPackageManager(files);
   const port = servingPort(detection);
@@ -230,9 +253,8 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
   // than creating a second one. The runtime facts are written now, because the
   // webhook could not know them — it had a commit, not a framework.
   let d: DeploymentRow;
-  if (opts.existingDeploymentRef) {
-    const found = await deployments.byRef(opts.existingDeploymentRef);
-    if (!found) throw new Error(`deployment ${opts.existingDeploymentRef} not found`);
+  if (adopted) {
+    const found = adopted;
     if (found.state !== "queued") {
       // Refusing rather than rebuilding is what stops two workers, or a worker
       // and a retry, from both building one commit.
@@ -509,6 +531,19 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
       });
       say("dns", `${rec.name} -> ${rec.content} proxied`);
     }
+  } else {
+    // LOUD, because the deploy otherwise reports complete success while leaving
+    // a hostname that resolves to nothing. Everything else here succeeded — the
+    // image published, the alias row exists, the Ingress routes — so the only
+    // symptom is NXDOMAIN, which looks like a DNS problem rather than a deploy
+    // that skipped a step.
+    //
+    // Reachable in the real path, not just in scripts: the build worker reads
+    // the gateway address from the LoadBalancer's status, and that is null while
+    // the address is still being assigned. An absent input silently turning a
+    // step into a no-op is the same failure this codebase keeps finding; here it
+    // ends in an app nobody can reach.
+    say("dns", `SKIPPED — no gateway address given, so ${alias.hostname} will not resolve`);
   }
 
   return {
