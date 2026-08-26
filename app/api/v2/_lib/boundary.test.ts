@@ -290,7 +290,18 @@ test("the sleep-fact detector distinguishes passing it from not", () => {
  *
  * String scanning has survived every edit, so that is what this uses.
  */
-function allowMissingOnWrite(src: string): string[] {
+/**
+ * Returns BOTH what it found and how many sites it examined.
+ *
+ * cloud-app-v2-d8 s point, and it is the fix for how this check failed twice:
+ * a guard that can only pass or fail has one silent failure mode — examining
+ * nothing and reporting clean. A guard with a third state, could-not-observe,
+ * has none. Both times my predicate matched zero sites and PASSED; an
+ * examined count would have shown zero on the first run, with no paired proof
+ * needed.
+ */
+function allowMissingSites(src: string): { examined: number; onWrite: string[] } {
+  let examined = 0;
   const bad: string[] = [];
   let at = src.indexOf("allowMissing");
   while (at >= 0) {
@@ -301,6 +312,7 @@ function allowMissingOnWrite(src: string): string[] {
     const flagged =
       after.startsWith(":") && after.slice(1).trimStart().startsWith("true");
     if (flagged) {
+      examined += 1;
       // The method appears in the same object literal. Look back to the
       // nearest opening brace and forward to the closing one.
       const open = src.lastIndexOf("{", at);
@@ -320,16 +332,27 @@ function allowMissingOnWrite(src: string): string[] {
     }
     at = src.indexOf("allowMissing", at + 1);
   }
-  return bad;
+  return { examined, onWrite: bad };
 }
 
 test("allowMissing never appears on a write", () => {
+  let examined = 0;
   const offenders: string[] = [];
   for (const file of REAL) {
-    for (const method of allowMissingOnWrite(read(file))) {
-      offenders.push(`${file}: allowMissing on ${method}`);
-    }
+    const r = allowMissingSites(read(file));
+    examined += r.examined;
+    for (const method of r.onWrite) offenders.push();
   }
+
+  // THE THIRD STATE. Zero sites examined does not mean clean, it means the
+  // scanner is broken — which is exactly how this check passed twice while
+  // reading nothing. The lane genuinely uses allowMissing on GET in
+  // runtime-logs, so zero here is always a bug in this file.
+  assert.ok(
+    examined > 0,
+    "examined zero allowMissing sites: the scanner is broken, not the code"
+  );
+
   assert.deepEqual(offenders, [], "a swallowed write failure reports success");
 });
 
@@ -337,15 +360,19 @@ test("the allowMissing detector tells a read from a write", () => {
   const write = code(
     'await k.raw<string>({ method: "PUT", path: p, allowMissing: true });'
   );
-  assert.deepEqual(allowMissingOnWrite(write), ["PUT"], "a write must be caught");
+  assert.deepEqual(allowMissingSites(write).onWrite, ["PUT"], "a write must be caught");
 
   const readOk = code(
     'await k.raw<string>({ method: "GET", path: p, allowMissing: true });'
   );
-  assert.deepEqual(allowMissingOnWrite(readOk), [], "a GET is legitimate");
+  const ok = allowMissingSites(readOk);
+  assert.deepEqual(ok.onWrite, [], "a GET is legitimate");
+  assert.equal(ok.examined, 1, "a legitimate GET is still an examined site");
 
   const noFlag = code('await k.raw<string>({ method: "DELETE", path: p });');
-  assert.deepEqual(allowMissingOnWrite(noFlag), [], "no flag, no finding");
+  const none = allowMissingSites(noFlag);
+  assert.deepEqual(none.onWrite, [], "no flag, no finding");
+  assert.equal(none.examined, 0, "and nothing to examine");
 });
 
 // ── the same predicates against a fixture tree ───────────────────────
