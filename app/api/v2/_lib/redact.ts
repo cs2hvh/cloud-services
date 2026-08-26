@@ -71,17 +71,18 @@ export function redactBuildLog(input: string): {
   redacted: boolean;
 } {
   let text = input;
-  let redacted = false;
 
   for (const { re, replace } of PATTERNS) {
     // Fresh lastIndex each pass; these are /g and reused across calls.
     re.lastIndex = 0;
-    if (re.test(text)) {
-      redacted = true;
-      re.lastIndex = 0;
-      text = text.replace(re, replace);
-    }
+    text = text.replace(re, replace);
   }
 
-  return { text, redacted };
+  // Compare the result rather than trusting that a match implies a change.
+  // A pattern can match text a previous pattern already replaced and produce
+  // an identical string — flagging that would tell the reader something was
+  // removed when nothing was. app-deploy-3 hit the same class in their
+  // sanitiser: a stage marked dropped that had no body still set the flag. A
+  // sanitiser that cries wolf gets ignored, and then it is not a defence.
+  return { text, redacted: text !== input };
 }
