@@ -86,7 +86,8 @@ installations 0 · open drift 15 · pod_allocated 25 · scale_to_zero on 1
 - Image scan gate — pass / fail / **could-not-determine blocks**
 - Drift detection across Linode, DNS, workloads, R2, with history
 - Usage metering: warm-seconds, pod-seconds, build-minutes
-- Traffic shape per hostname: organic vs keep-alive-shaped vs none
+- Traffic shape per hostname: organic vs keep-alive-shaped vs none, sampled on
+  the same tick as pod usage so warmth and traffic describe one window
 
 **Tests:** ~530 (deploy) + 326 (observability) + 46 (UI). Plus 11 database
 behavioural tests replaying confirmed v1 criticals.
@@ -115,6 +116,19 @@ behavioural tests replaying confirmed v1 criticals.
   holds a pod all day at 2–3 millicores with zero requests. That is the ~$52k/mo
   model at 10k apps, not the ~$18–20k the plan assumes. Scale-to-zero is built and
   proven but **opt-in, default off** (1 project enabled).
+- **Warmth and traffic are now measured over the same window**, so an always-warm
+  app is separable into "a customer using the pod they hold" and "the platform
+  paying the always-on price for nobody". Live, from one run:
+
+  ```
+  dpl-e2404975a02e   99.9% warm   ALWAYS WARM; ORGANIC
+  dpl-e2215252040c   99.9% warm   ALWAYS WARM; NO-TRAFFIC; warmth NOT justified
+  ```
+
+  Identical warm fraction, identical cost, opposite answers. **The open
+  warm-time pricing decision is exactly the choice between those two rows**, and
+  it could not be stated that way before — warm fraction alone cannot tell them
+  apart, and neither can CPU.
 - **~360 MB of orphaned R2 tarballs are permanently unreclaimable** — builds that
   published nothing, so there is no durable copy to justify deleting them.
   "65% reclaimable" overstates what the reaper can recover.
