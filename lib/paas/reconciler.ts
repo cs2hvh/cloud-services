@@ -276,7 +276,10 @@ export async function reconcileProject(
           projectRef: project.ref,
           namespace: ns,
           image,
-          port: 3000,
+          // From the DEPLOYMENT, not from today's detection: rolling back must
+          // restore the port and uid that build actually ran with.
+          port: d.container_port ?? 3000,
+          runAsUser: d.run_as_user ?? undefined,
           replicas: 1,
           envSecretName: envSecretRef,
           envHash,
@@ -311,16 +314,30 @@ export async function reconcileProject(
       true,
     );
     const currently = svc?.spec?.selector?.["ahura.cloud/deployment"];
-    if (currently !== target.ref) {
+    const currentPort = svc?.spec?.ports?.[0]?.targetPort;
+    const desiredPort = target.container_port ?? 3000;
+
+    // ALWAYS apply, exactly like the Deployment above. Applying only when the
+    // SELECTOR changed meant a corrected targetPort never converged: the pod
+    // was healthy on 8000 while the Service still pointed at 3000, and the
+    // gateway returned 502 with nothing obviously wrong anywhere. Conditional
+    // apply is how a reconciler quietly stops reconciling.
+    const svcDrifted = svc != null && (currently !== target.ref || currentPort !== desiredPort);
+    if (svc == null || svcDrifted) {
       actions.push({
         kind: "repoint",
         target: project.ref,
-        detail: `service selector ${currently ?? "(none)"} -> ${target.ref}`,
+        detail:
+          currently !== target.ref
+            ? `service selector ${currently ?? "(none)"} -> ${target.ref}`
+            : `service targetPort ${currentPort} -> ${desiredPort}`,
       });
+    }
+    {
       if (!dry) {
         await k.apply(
           `/api/v1/namespaces/${ns}/services/${project.ref}`,
-          appService({ deploymentRef: target.ref, projectRef: project.ref, namespace: ns, port: 3000 }),
+          appService({ deploymentRef: target.ref, projectRef: project.ref, namespace: ns, port: target.container_port ?? 3000 }),
         );
       }
     }

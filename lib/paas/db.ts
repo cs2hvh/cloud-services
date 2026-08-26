@@ -228,6 +228,7 @@ export interface DeploymentRow {
   trigger: string; git_sha: string; git_ref: string;
   image_repo: string | null; image_digest: string | null;
   error_code: string | null; error_message: string | null;
+  container_port: number | null; run_as_user: number | null;
   queued_at: string; started_at: string | null; ready_at: string | null;
 }
 export interface AliasRow {
@@ -298,11 +299,14 @@ export const deployments = {
   create: async (input: {
     projectId: string; environmentId: string; trigger: string;
     gitSha: string; gitRef: string; gitMessage?: string | null;
+    containerPort?: number; runAsUser?: number;
   }) =>
     (await db.insert<DeploymentRow>("deployments", {
       project_id: input.projectId, environment_id: input.environmentId,
       trigger: input.trigger, git_sha: input.gitSha, git_ref: input.gitRef,
       git_message: input.gitMessage ?? null, state: "queued",
+      container_port: input.containerPort ?? null,
+      run_as_user: input.runAsUser ?? null,
     }))[0],
   /**
    * Advance state. The DB trigger refuses to move a terminal deployment or to
