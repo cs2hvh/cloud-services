@@ -80,7 +80,7 @@ RUN printf 'server {\\n\\
  && sed -i 's|user  nginx;||' /etc/nginx/nginx.conf \\
  && sed -i 's|/var/run/nginx.pid|/tmp/nginx.pid|' /etc/nginx/nginx.conf \\
  && chown -R 101:101 /usr/share/nginx/html /var/cache/nginx /etc/nginx
-USER 101
+USER 101:101
 EXPOSE 8080
 `.trim();
 
@@ -112,8 +112,8 @@ ENV NODE_ENV=production
 ENV PORT=${d.port}
 # Run as the stock non-root 'node' user, never as root.
 RUN addgroup -g 1001 -S app 2>/dev/null || true
-COPY --from=builder --chown=node:node /app ./
-USER node
+COPY --from=builder --chown=1000:1000 /app ./
+USER 1000:1000
 EXPOSE ${d.port}
 CMD ${start.includes(" ") ? `["sh","-c","${start.replace(/"/g, '\\"')}"]` : `["${pm}","run","${start}"]`}
 `;
@@ -178,8 +178,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PORT=${d.port}
 ENV PATH="/opt/venv/bin:$PATH"
 COPY --from=builder /opt/venv /opt/venv
 RUN useradd -u 1001 -m app
-COPY --from=builder --chown=app:app /app /app
-USER app
+COPY --from=builder --chown=1001:1001 /app /app
+USER 1001:1001
 EXPOSE ${d.port}
 CMD ["sh","-c","${start.replace(/"/g, '\\"')}"]
 `;
@@ -201,7 +201,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \\
 FROM gcr.io/distroless/static-debian12:nonroot AS runner
 ENV PORT=${d.port}
 COPY --from=builder /out/server /server
-USER nonroot:nonroot
+USER 65532:65532
 EXPOSE ${d.port}
 ENTRYPOINT ["/server"]
 `;
@@ -221,9 +221,9 @@ RUN cp $(ls ${maven ? "target" : "build/libs"}/*.jar | grep -v sources | head -1
 FROM eclipse-temurin:21-jre-alpine AS runner
 WORKDIR /app
 ENV PORT=${d.port}
-RUN addgroup -S app && adduser -S app -G app
-COPY --from=builder --chown=app:app /app.jar /app/app.jar
-USER app
+RUN addgroup -g 1001 -S app && adduser -u 1001 -S app -G app
+COPY --from=builder --chown=1001:1001 /app.jar /app/app.jar
+USER 1001:1001
 EXPOSE ${d.port}
 ENTRYPOINT ["java","-XX:MaxRAMPercentage=75","-jar","/app/app.jar"]
 `;
@@ -242,8 +242,8 @@ COPY Gemfile Gemfile.loc[k] ./
 RUN bundle config set --local without 'development test' && bundle install
 COPY . .
 ${d.buildCommand ? `RUN ${d.buildCommand} || true` : ""}
-RUN useradd -u 1001 -m app && chown -R app:app /app
-USER app
+RUN useradd -u 1001 -m app && chown -R 1001:1001 /app
+USER 1001:1001
 EXPOSE ${d.port}
 CMD ["sh","-c","${(i.startCommandOverride ?? d.startCommand ?? "").replace(/"/g, '\\"')}"]
 `;
@@ -282,6 +282,22 @@ export function generateDockerfile(input: DockerfileInput): string | null {
  * by nginx on 8080 regardless of what detection guessed, so the manifest and
  * the container must agree on this one number.
  */
+/**
+ * The numeric UID the generated image runs as.
+ *
+ * Kubernetes refuses to start a pod with runAsNonRoot when the image declares
+ * a NAMED user ("container has runAsNonRoot and image has non-numeric user"),
+ * so both the Dockerfile and the pod spec state the uid numerically.
+ */
+export function runtimeUid(detection: Detection): number {
+  switch (detection.runtime) {
+    case "static": return 101;   // nginx unprivileged
+    case "go": return 65532;     // distroless nonroot
+    case "node": return 1000;    // stock node user
+    default: return 1001;        // python, java, ruby: created explicitly
+  }
+}
+
 export function servingPort(detection: Detection): number {
   return detection.runtime === "static" ? 8080 : detection.port;
 }

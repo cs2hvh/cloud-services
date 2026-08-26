@@ -35,11 +35,16 @@ test("every generated runtime stage drops root", () => {
   for (const d of cases) {
     const df = generateDockerfile(input({ detection: d }));
     assert.ok(df, `expected a Dockerfile for ${d.framework}`);
-    assert.match(
-      df!,
-      /USER\s+(node|app|nonroot|101)/,
-      `${d.framework} runtime stage must run as non-root`,
-    );
+    // The UID must be NUMERIC. Kubernetes refuses to start a pod with
+    // runAsNonRoot when the image declares a named user — "image has
+    // non-numeric user (node), cannot verify user is non-root". That failed on
+    // the live cluster, which is why this asserts the shape rather than just
+    // the presence of a USER line.
+    const users = [...df!.matchAll(/^USER\s+(\S+)/gm)].map((m) => m[1]);
+    assert.ok(users.length > 0, `${d.framework} declares no USER`);
+    for (const u of users) {
+      assert.match(u, /^[1-9]\d*(:[1-9]\d*)?$/, `${d.framework} USER "${u}" must be a numeric non-zero uid`);
+    }
   }
 });
 
@@ -115,7 +120,7 @@ test("static site with no build step skips the builder stage entirely", () => {
 test("Go produces a distroless nonroot image", () => {
   const df = generateDockerfile(input({ detection: detect(["go.mod"]) }))!;
   assert.match(df, /distroless/);
-  assert.match(df, /USER nonroot:nonroot/);
+  assert.match(df, /USER 65532/);
   assert.match(df, /CGO_ENABLED=0/);
 });
 
@@ -123,7 +128,7 @@ test("Python venv is copied into a clean runner stage", () => {
   const df = generateDockerfile(input({ detection: detect(["requirements.txt"], { "requirements.txt": "fastapi" }) }))!;
   assert.match(df, /python -m venv \/opt\/venv/);
   assert.match(df, /COPY --from=builder \/opt\/venv \/opt\/venv/);
-  assert.match(df, /USER app/);
+  assert.match(df, /USER 1001/);
 });
 
 test("Java bounds heap to the container, not the host", () => {
