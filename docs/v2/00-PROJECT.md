@@ -343,7 +343,7 @@ been reviewed. The credential surface was derived carefully, from the imports,
 and was still wrong. The guard did not catch carelessness — it caught a correct
 method applied to the wrong artifact. Care does not substitute for a guard.
 
-### Two ways a guard goes vacuous, and they look identical from outside
+### Three ways a guard goes vacuous, and they look identical from outside
 
 The third-state rule above covers the **input** side: a check that observes
 nothing must say so rather than pass. It does **not** cover the output side.
@@ -354,13 +354,47 @@ examined every call site, and then **discarded every finding**. `examined > 0`
 passed, because the input side was genuinely fine. A counter placed before the
 push cannot see an empty push.
 
+A later instance proved a third mode, and it is the worst of them because the
+guard is *working correctly* at every point you would think to look.
+
+`sandbox-overhead.ts` had two halves. The **ceiling** said the declared sandbox
+charge was larger than any pod's whole footprint — costs density, recoverable
+whenever. **Headroom** said whether pods were near what was set aside for them —
+ends in the kernel OOM-killing whichever pod allocates next, possibly a
+different tenant's. The script returned clean as soon as the ceiling half
+passed, skipping headroom entirely.
+
+That was harmless for as long as the declaration was generous. Then `podFixed`
+was cut 128Mi → 64Mi **on the strength of that monitor** — and 64Mi is inside
+the pods' own footprints, so the ceiling check now passes by construction. The
+early exit fired every time. The one check standing between the smaller
+reservation and an OOM went silent at exactly the moment it started mattering.
+
 | Failure | What it looks like | What catches it |
 |---|---|---|
 | Observes nothing | green | report `examined`, refuse at 0 |
 | Observes, then discards | green | assert a **known-bad input** still produces a finding, every run |
+| Observes, until the change retires it | green | ask whether the guard's precondition survives the thing it guards |
 
-The second is not optional decoration. It is the only thing separating "found
-nothing" from "cannot report anything".
+The third defeats both earlier defences. `examined` is honestly non-zero. A
+known-bad input still produces a finding — on the half that still runs. The
+early exit happens *after* a genuine, successful, correct examination, and it is
+conditional on state that **the guarded change itself creates**.
+
+**The property to look for: does this guard's precondition survive the change it
+exists to watch?** The ceiling half was only ever meaningful while the
+declaration was generous, so cutting the declaration retired the check. A guard
+whose relevance is inversely coupled to the risk it guards is not a guard.
+
+Two rules fall out, and the second is the operational one:
+
+- **A check with more than one half must not let either half's silence stand for
+  the whole.** They fail in different directions; state that, and make clean
+  mean *both* are clean.
+- **After making the change a monitor licensed, run the monitor again and
+  confirm it still says something.** A safety check that goes quiet once the
+  risky change is made is worse than no check, because its silence reads as
+  reassurance — and unlike the other two failures, nobody is looking any more.
 
 ### The tools themselves lie, and that is a different problem
 
