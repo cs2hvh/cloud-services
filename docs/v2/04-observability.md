@@ -13,7 +13,7 @@ change anything, run by a person who has read a report first.
 ## Running it
 
 ```bash
-node --test "lib/paas/telemetry/*.test.ts"                                   # 442 tests, no deps
+node --test "lib/paas/telemetry/*.test.ts"                                   # 465 tests, no deps
 node --env-file=.env --env-file=.env.local scripts/v3/operator-view.ts       # everything, once
 node --env-file=.env --env-file=.env.local scripts/v3/fleet-drift.ts --prove
 node --env-file=.env --env-file=.env.local scripts/v3/dns-drift.ts
@@ -26,6 +26,7 @@ node --env-file=.env --env-file=.env.local scripts/v3/sandbox-overhead.ts     # 
 node --env-file=.env --env-file=.env.local scripts/v3/sweep-health.ts         # are the sweeps running
 node --env-file=.env --env-file=.env.local scripts/v3/cost-attribution.ts     # per-app cost vs tier
 node --env-file=.env --env-file=.env.local scripts/v3/preview-reap.ts         # what a reap would delete
+node --env-file=.env --env-file=.env.local scripts/v3/netpolicy-drift.ts      # tenant egress still denied
 node --env-file=.env --env-file=.env.local scripts/v3/pod-logs.ts <ns> <pod>
 node --env-file=.env --env-file=.env.local scripts/v3/telemetry-probe.ts
 
@@ -81,8 +82,9 @@ right for an *early* exit, before anything has been written.
 No test catches this; it needs live infrastructure to reproduce. **Run the
 script and check `$?`** — the same rule as the rest of §8 of
 [`00-PROJECT.md`](00-PROJECT.md): before trusting a tool's clean result, make it
-report a dirty one once. All nine `scripts/v3` entries are verified twice each,
-every code inside the contract.
+report a dirty one once. Run each twice: the failure that produced this rule
+was intermittent before it was consistent, and a single clean run is what it
+looked like the first time.
 
 Two rules the sweeps follow that are easy to get backwards:
 
@@ -237,7 +239,8 @@ Two things the episode is worth remembering for:
 | `telemetry/sandbox.ts` | Sandbox cost vs what we charge, and headroom against it | 21 |
 | `telemetry/attribution.ts` | Per-app cost against tier, and whether it still fits | 16 |
 | `telemetry/reap-safety.ts` | Whether a reap plan is fit for a human to act on | 17 |
-| `telemetry/preview-index.ts` | Which previews the reaper can see, and which it cannot | 14 |
+| `telemetry/preview-index.ts` | Which previews the reaper can see, and which it cannot | 15 |
+| `telemetry/netpolicy-drift.ts` | Tenant egress vs the live control-plane address | 17 |
 | `telemetry/sweep-health.ts` | Whether the sweeps ran, and whether findings survive | 13 |
 | `telemetry/cadence.ts` | Whether a schedule can produce what it claims to measure | 9 |
 | `telemetry/exit-codes.ts` | What a sweep's exit code means to a scheduler | — |
@@ -611,6 +614,53 @@ it is unexamined and may be reaped next run for reasons nobody chose.
 Findings sort oldest first with unknown age **last** — an unreadable age is not
 an extreme value, and sorting it as one would put the entries that must never be
 reaped at the top of the list a human reads.
+
+### The egress policy the control plane can invalidate on its own
+
+The deploy lane found a tenant pod could open a socket to the API server
+despite an egress rule denying `10.0.0.0/8`. The API's ClusterIP is
+`10.128.0.1`, inside that range — but **kube-proxy DNATs the ClusterIP to the
+real endpoint before egress policy is evaluated**, and on LKE that endpoint is
+public. The policy saw a public destination and allowed it under `0.0.0.0/0`.
+
+> **An `except` list cannot protect an address the policy never sees.**
+
+The private-range denial is real — a cross-tenant connection to `10.2.0.33` was
+refused in the same run — and does nothing whatever for anything DNAT'd. A guard
+that works perfectly on the traffic it sees, and never sees the traffic that
+matters.
+
+Their fix denies the endpoint's real address, read from the `kubernetes`
+Endpoints **at reconcile time** rather than hardcoded. Right, and it creates the
+thing `netpolicy-drift.ts` watches: **a policy written from a value read once is
+correct until that value moves.** The control plane's address changes on an
+upgrade, a rebuild or a failover, and every deployed policy then silently stops
+covering it. Nothing fails; the hole reopens, and the only symptom is that
+something previously refused is not.
+
+Indexed by **namespace**, not by policy — same reason previews are indexed by
+environment. A namespace with no policy at all is the dangerous case and is
+invisible to anything walking the policies that exist. Walking policies asks
+*are the policies correct*; walking namespaces asks *is each tenant protected*,
+and only the second can notice an absence. A null policy list (unreadable) and
+an empty one (nothing constrains this tenant) are kept distinct for the same
+reason.
+
+**The run can be void.** If the Endpoints cannot be read, or list no addresses,
+the check that matters cannot run and the report says so rather than clean —
+correct policies do not make an unevaluated run clean. That is the deploy lane's
+own control pointed the other way: their probe pod with no network fails every
+negative test and reports perfect isolation; here an unreadable endpoint list
+leaves nothing for a policy to fail against, so every policy looks sufficient.
+
+**Not a probe, deliberately.** `scripts/v2/isolation-proof.ts` answers the
+stronger question — what a pod can *actually* reach — by creating and deleting a
+pod, which is a write. This lane creates nothing, and the sweeps' ClusterRole is
+`get`/`list` only with a test enforcing it, so building the probe here would
+mean breaking one invariant to check another. Configuration continuously and
+cheaply here; behaviour, on demand, where writes are allowed. Neither
+substitutes for the other — this cannot see a rule that does not do what it
+says, and the probe cannot run every fifteen minutes.
 
 ### Indexed by environment, not by alias
 
