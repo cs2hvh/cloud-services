@@ -115,8 +115,15 @@ behavioural tests replaying confirmed v1 criticals.
   holds a pod all day at 2–3 millicores with zero requests. That is the ~$52k/mo
   model at 10k apps, not the ~$18–20k the plan assumes. Scale-to-zero is built and
   proven but **opt-in, default off** (1 project enabled).
-- **~360 MB of orphaned R2 tarballs are permanently unreclaimable** — builds that
-  published nothing, so there is no durable copy to justify deleting them.
+- **R2 tarballs no longer accumulate.** Every build wrote a full OCI archive
+  and nothing deleted it: 592 MB across 8 deployments, 65% of the bucket. The
+  deploy path now deletes the tar once it has read the registry's own storage
+  and confirmed BOTH the manifest blob and the repository revision link — the
+  blob alone is shared across repositories, so a correct digest under the wrong
+  repo reports 1 of 2 present. Applies to NEW deploys; the existing 592 MB stays
+  for the reaper and a human, deliberately.
+- **~360 MB of that is permanently unreclaimable** — builds that published
+  nothing, so there is no durable copy to justify deleting them.
   "65% reclaimable" overstates what the reaper can recover.
 
 ---
