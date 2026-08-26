@@ -82,6 +82,18 @@ export interface DeployOptions {
   /** Point the DNS record at this gateway address. Skipped when absent. */
   gatewayIp?: string | null;
   onProgress?: (stage: string, detail: string) => void;
+  /**
+   * Build an ALREADY-RECORDED deployment instead of creating one.
+   *
+   * The webhook records a queued deployment and returns — a build takes minutes
+   * and GitHub times a delivery out in ten seconds. The worker then calls this
+   * with the ref it recorded, so the row a user is already watching is the row
+   * that gets built, rather than a second one appearing beside it.
+   *
+   * The commit is already known for these (it came from the push event), so the
+   * build's own rev-parse only fills a gap it cannot overwrite.
+   */
+  existingDeploymentRef?: string;
 }
 
 export interface DeployResult {
@@ -144,9 +156,24 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
     (await environments.production(project.id)) ??
     (await environments.create({ projectId: project.id, kind: "production", name: "production" }));
 
+  // A worker building an already-recorded deployment adopts that row rather
+  // than creating a second one. The runtime facts are written now, because the
+  // webhook could not know them — it had a commit, not a framework.
+  let d: DeploymentRow;
+  if (opts.existingDeploymentRef) {
+    const found = await deployments.byRef(opts.existingDeploymentRef);
+    if (!found) throw new Error(`deployment ${opts.existingDeploymentRef} not found`);
+    if (found.state !== "queued") {
+      // Refusing rather than rebuilding is what stops two workers, or a worker
+      // and a retry, from both building one commit.
+      throw new Error(`deployment ${found.ref} is ${found.state}, not queued — refusing to rebuild it`);
+    }
+    d = await deployments.setRuntimeFacts(found.ref, { containerPort: port, runAsUser: runtimeUid(detection) });
+    say("deployment", `${d.ref} adopted (${d.trigger})`);
+  } else {
   // The deployment row exists BEFORE any build resource is leased, so a crash
   // anywhere below leaves a visible record rather than an orphan.
-  const d = await deployments.create({
+  d = await deployments.create({
     projectId: project.id,
     environmentId: env.id,
     trigger: "manual",
@@ -169,6 +196,7 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
     runAsUser: runtimeUid(detection),
   });
   say("deployment", `${d.ref} queued`);
+  }
 
   // ── 2. build ──────────────────────────────────────────────────────────────
   await deployments.setState(d.ref, { state: "building", startedAt: true });
@@ -184,7 +212,11 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
     deploymentRef: d.ref,
     cloneUrl: `https://github.com/${opts.repo}.git`,
     gitRef: branch,
-    gitSha: "HEAD",
+    // Build the commit the ROW records, when it records one. A webhook-created
+    // deployment knows its sha from the push event, and the branch may have
+    // moved on by the time the worker gets here. "HEAD" means the branch tip,
+    // which is right only when no particular commit was asked for.
+    gitSha: d.git_sha ?? "HEAD",
     dockerfile,
     rootDirectory: opts.rootDirectory ?? null,
     imageName: `${project.ref}:${d.ref}`,

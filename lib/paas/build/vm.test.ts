@@ -20,7 +20,9 @@ function req(over: Partial<BuildRequest> = {}): BuildRequest {
     deploymentRef: "dpl-abc123",
     cloneUrl: "https://github.com/acme/site.git",
     gitRef: "main",
-    gitSha: "abc1234",
+    // A FULL sha. `git fetch origin <short-sha>` is refused by GitHub, so the
+    // renderer requires 40 hex characters or the literal "HEAD".
+    gitSha: "abc1234abc1234abc1234abc1234abc1234abc12",
     dockerfile: "FROM alpine\n",
     imageName: "acme/site:dpl-abc123",
     ...over,
@@ -94,4 +96,32 @@ test("single quotes in a substituted value are refused rather than escaped", () 
     /single quote/,
     "values land inside single quotes; a quote would break out",
   );
+});
+
+test("a specific commit is checked out, not just the branch tip", () => {
+  // A webhook records the sha from the push event and the worker builds later.
+  // Without this, a branch that moved in between produces a deployment row
+  // asserting a commit it did not build.
+  const s = renderCloudInit(req({ gitSha: "63c6674c478b697fc20a6412c78a5f7a2dcf14be" }), URLS);
+  assert.match(s, /GIT_SHA_REQUESTED='63c6674c478b697fc20a6412c78a5f7a2dcf14be'/);
+  assert.match(s, /fetch --depth=1 origin "\$GIT_SHA_REQUESTED"/);
+  assert.match(s, /checkout --detach FETCH_HEAD/);
+});
+
+test("HEAD means the branch tip and skips the checkout", () => {
+  const s = renderCloudInit(req({ gitSha: "HEAD" }), URLS);
+  assert.match(s, /GIT_SHA_REQUESTED='HEAD'/, "the request is recorded in the script");
+  assert.doesNotMatch(s, /fetch --depth=1 origin 'HEAD'/, "HEAD must not become a fetch argument");
+});
+
+test("a sha that is not a commit is REFUSED at render time", () => {
+  // It reaches a git fetch argument and comes from a webhook payload, so shape
+  // is checked rather than trusted.
+  for (const bad of ["main; rm -rf /", "../../etc", "not-a-sha", "63c6674", "--upload-pack=evil"]) {
+    assert.throws(
+      () => renderCloudInit(req({ gitSha: bad }), URLS),
+      /is not a commit sha/,
+      `expected refusal for ${JSON.stringify(bad)}`,
+    );
+  }
 });

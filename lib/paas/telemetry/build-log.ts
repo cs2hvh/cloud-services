@@ -67,6 +67,19 @@ export const STAGES: Array<{ marker: RegExp; name: string; policy: StagePolicy; 
       "the controlled ERROR line does not.",
   },
   {
+    marker: /^--- checkout ---$/,
+    name: "checkout",
+    policy: "marker-only",
+    why:
+      "Added when webhook deploys began building a SPECIFIC commit rather than " +
+      "the branch tip. The marker shows the stage ran; the body is dropped for " +
+      "the same reason the clone stage is — git talks to the remote here and " +
+      "prints it in its own error output. The requested sha is echoed INSIDE " +
+      "the body and therefore not shown, which costs nothing: it is recorded " +
+      "on the deployment row and displayed in the UI. The controlled ERROR " +
+      "line still explains a failure.",
+  },
+  {
     marker: /^--- Dockerfile ---$/,
     name: "dockerfile",
     policy: "show",

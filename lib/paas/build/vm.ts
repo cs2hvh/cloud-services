@@ -161,6 +161,31 @@ const CLOUD_INIT_LINES: string[] = [
   "rm -f /home/builder/.git-credentials",
   "sudo -u builder git config --global --unset credential.helper 2>/dev/null || true",
   "",
+  // Build the commit we were ASKED for, not whatever the branch points at now.
+  //
+  // A webhook records the sha from the push event, then the worker builds some
+  // seconds or minutes later. If another push landed in between, a plain
+  // --branch clone gets the newer commit while the row still claims the older
+  // one — the deployment asserting it built a commit it did not build, with a
+  // digest that cannot be traced back to any recorded source.
+  //
+  // Empty or 'HEAD' means "whatever the branch tip is", which is the correct
+  // behaviour for a manual deploy with no commit in mind.
+  "GIT_SHA_REQUESTED='@@GIT_SHA@@'",
+  "if [ -n \"$GIT_SHA_REQUESTED\" ] && [ \"$GIT_SHA_REQUESTED\" != 'HEAD' ]; then",
+  // Static marker, like every other stage. Interpolating the sha here made the
+  // marker unclassifiable in build-log.ts, whose allowlist is matched against
+  // this source and therefore sees the un-substituted placeholder. The sha is
+  // recorded on the deployment row and shown in the UI, so the log does not
+  // need to carry it.
+  "  echo '--- checkout ---'",
+  "  echo \"requested commit: $GIT_SHA_REQUESTED\"",
+  "  sudo -u builder git -C /home/builder/src fetch --depth=1 origin \"$GIT_SHA_REQUESTED\" \\",
+  "    || fail 'requested commit could not be fetched'",
+  "  sudo -u builder git -C /home/builder/src checkout --detach FETCH_HEAD \\",
+  "    || fail 'requested commit could not be checked out'",
+  "fi",
+  "",
   "cd '/home/builder/src@@ROOT_DIR@@' || fail 'root directory not found in repository'",
   // Capture the sha rather than only printing it. Recording what a build
   // ACTUALLY built is what makes a rollback target identifiable — without it
@@ -264,6 +289,7 @@ export function renderCloudInit(
     "@@META_PUT@@": urls.metaPut,
     "@@IMAGE_PUT@@": urls.imagePut,
     "@@GIT_REF@@": req.gitRef,
+    "@@GIT_SHA@@": req.gitSha ?? "HEAD",
     "@@CLONE_URL@@": req.cloneUrl,
     "@@CREDENTIAL_BLOCK@@": credentialBlock,
     "@@ROOT_DIR@@": rootDir,
@@ -271,6 +297,14 @@ export function renderCloudInit(
     "@@BUILD_ARGS_B64@@": buildArgsB64,
     "@@IMAGE_NAME@@": req.imageName,
   };
+
+  // The sha reaches a `git fetch` argument, so its shape is checked rather than
+  // trusted. It arrives from a webhook payload — attacker-influenced input —
+  // and the quote check below alone would admit plenty that is not a commit.
+  const sha = subs["@@GIT_SHA@@"];
+  if (sha !== "HEAD" && !/^[0-9a-f]{40}$/.test(sha)) {
+    throw new Error(`[build/vm] refusing to render: gitSha ${JSON.stringify(sha)} is not a commit sha`);
+  }
 
   // Every substituted value lands inside single quotes in the script, so a
   // literal single quote would break out. Refuse rather than escape: these

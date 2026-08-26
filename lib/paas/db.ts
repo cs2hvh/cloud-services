@@ -250,6 +250,17 @@ export const projects = {
   list: () => db.select<ProjectRow>("projects", "select=*&deleted_at=is.null&order=created_at"),
   byRef: async (ref: string) =>
     (await db.select<ProjectRow>("projects", `select=*&ref=eq.${ref}`))[0] ?? null,
+
+  /**
+   * Resolve a project from a repository full name, for webhook delivery.
+   * Deleted projects are excluded: a push to a repo whose project was removed
+   * must not resurrect it.
+   */
+  byRepoFullName: async (fullName: string) =>
+    (await db.select<ProjectRow>(
+      "projects",
+      `select=*&repo_full_name=eq.${encodeURIComponent(fullName)}&deleted_at=is.null`,
+    ))[0] ?? null,
   bySlug: async (teamId: string, slug: string) =>
     (await db.select<ProjectRow>(
       "projects", `select=*&team_id=eq.${teamId}&slug=eq.${slug}&deleted_at=is.null`,
@@ -286,6 +297,38 @@ export const environments = {
 export const deployments = {
   byRef: async (ref: string) =>
     (await db.select<DeploymentRow>("deployments", `select=*&ref=eq.${ref}`))[0] ?? null,
+
+  /**
+   * Find an existing deployment for a commit. GitHub retries webhook
+   * deliveries, and without this a retry builds the same commit again — double
+   * spend, and two deploys of one commit racing each other to the alias.
+   */
+  byProjectAndSha: async (projectId: string, sha: string) =>
+    (await db.select<DeploymentRow>(
+      "deployments",
+      `select=*&project_id=eq.${projectId}&git_sha=eq.${sha}&order=queued_at.desc&limit=1`,
+    ))[0] ?? null,
+
+  /**
+   * Write the runtime facts a build discovered onto an already-recorded row.
+   *
+   * These are NOT covered by the immutability trigger, and deliberately so: a
+   * webhook records a commit before anything has looked at the repository, so
+   * the port and uid are genuinely unknown until detection runs. They are
+   * written once here, before the pod that consumes them exists.
+   */
+  setRuntimeFacts: async (ref: string, facts: { containerPort?: number; runAsUser?: number }) =>
+    (await db.update<DeploymentRow>("deployments", `ref=eq.${ref}`, {
+      ...(facts.containerPort != null ? { container_port: facts.containerPort } : {}),
+      ...(facts.runAsUser != null ? { run_as_user: facts.runAsUser } : {}),
+    }))[0],
+
+  /** Queued deployments oldest first — the build worker's work list. */
+  queued: (limit = 10) =>
+    db.select<DeploymentRow>(
+      "deployments",
+      `select=*&state=eq.queued&order=queued_at.asc&limit=${limit}`,
+    ),
   forProject: (projectId: string, limit = 50) =>
     db.select<DeploymentRow>(
       "deployments", `select=*&project_id=eq.${projectId}&order=queued_at.desc&limit=${limit}`,
