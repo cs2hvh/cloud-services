@@ -10,7 +10,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { getObject, r2Keys } from "@/lib/paas/build/r2.ts";
-import { redactBuildLog } from "@/app/api/v2/_lib/redact";
+import { sanitizeBuildLog, tail, alterationNotice } from "@/lib/paas/telemetry/build-log.ts";
 import { getCaller } from "@/app/api/v2/_lib/auth";
 import {
   DEPLOYMENT_COLUMNS_EXPANDED,
@@ -24,7 +24,7 @@ export const dynamic = "force-dynamic";
 
 type Params = { params: Promise<{ ref: string }> };
 
-const MAX_LOG_BYTES = 512 * 1024;
+const LOG_TAIL_LINES = 400;
 
 export default async function DeploymentPage({ params }: Params) {
   const { ref } = await params;
@@ -51,15 +51,18 @@ export default async function DeploymentPage({ params }: Params) {
 
   // Authorization already happened above; only now is R2 touched.
   let log: string | null = null;
+  let logNotice: string | null = null;
   let logError = false;
   try {
     const bytes = await getObject(r2Keys.buildLog(d.ref));
     if (bytes) {
-      // Redact before truncating so a credential straddling the cut is still
-      // caught. Same helper the API route uses — one set of rules.
-      const { text } = redactBuildLog(bytes.toString("utf8"));
-      // Tail, not head — a build fails at the end.
-      log = bytes.byteLength > MAX_LOG_BYTES ? text.slice(-MAX_LOG_BYTES) : text;
+      // Sanitise the whole log, then take the tail. The type forbids the
+      // reverse order — a credential straddling a cut looks innocuous in both
+      // halves. Same module the API route uses, so one set of rules.
+      const clean = sanitizeBuildLog(bytes.toString("utf8"));
+      log = tail(clean, LOG_TAIL_LINES).lines.join("
+");
+      logNotice = alterationNotice(clean);
     }
   } catch (err) {
     console.error("[dashboard/v2] build log read failed:", err);
@@ -153,9 +156,14 @@ export default async function DeploymentPage({ params }: Params) {
           }
         />
       ) : (
-        <pre className="max-h-[560px] overflow-auto border border-white/[0.09] bg-black/40 p-4 font-mono text-[12px] leading-[1.65] text-white/75">
-          {log}
-        </pre>
+        <>
+          {logNotice && (
+            <p className="m-0 mb-2 text-[12px] text-white/40">{logNotice}</p>
+          )}
+          <pre className="max-h-[560px] overflow-auto border border-white/[0.09] bg-black/40 p-4 font-mono text-[12px] leading-[1.65] text-white/75">
+            {log}
+          </pre>
+        </>
       )}
     </Shell>
   );

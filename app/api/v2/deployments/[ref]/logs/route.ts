@@ -16,7 +16,12 @@
  */
 
 import { getObject, r2Keys } from "@/lib/paas/build/r2.ts";
-import { redactBuildLog } from "../../../_lib/redact";
+import {
+  sanitizeBuildLog,
+  paginate,
+  tail,
+  alterationNotice,
+} from "@/lib/paas/telemetry/build-log.ts";
 import { getCaller } from "../../../_lib/auth";
 import {
   json,
@@ -30,8 +35,8 @@ export const dynamic = "force-dynamic";
 
 type Params = { params: Promise<{ ref: string }> };
 
-/** Cap what a single response can return; a runaway build can write a lot. */
-const MAX_BYTES = 2 * 1024 * 1024;
+/** Lines returned when the caller does not ask for a page. */
+const DEFAULT_TAIL_LINES = 200;
 
 export async function GET(request: Request, { params }: Params) {
   const caller = await getCaller();
@@ -82,17 +87,27 @@ export async function GET(request: Request, { params }: Params) {
     });
   }
 
-  // Redact BEFORE truncating, so a credential split across the cut is still
-  // caught. See _lib/redact.ts — the clone URL carries a live token.
-  const { text: safe, redacted } = redactBuildLog(body.toString("utf8"));
-  const truncated = body.byteLength > MAX_BYTES;
-  // Keep the TAIL when truncating: the failure is at the end of a build log,
-  // not the beginning.
-  const text = truncated ? safe.slice(-MAX_BYTES) : safe;
+  // Sanitise the WHOLE log, then page. paginate() takes a SanitizedLog rather
+  // than a string precisely so this order cannot be reversed: cutting first
+  // would let a credential straddling the boundary through, since each half
+  // looks innocuous and a slice cannot know which stage it came from.
+  const clean = sanitizeBuildLog(body.toString("utf8"));
 
-  const asText = new URL(request.url).searchParams.get("format") === "text";
-  if (asText) {
-    return new Response(text, {
+  const params = new URL(request.url).searchParams;
+  const offsetRaw = params.get("offset");
+  const page =
+    offsetRaw === null
+      ? // No page requested: the end, because a build fails at the end.
+        tail(clean, DEFAULT_TAIL_LINES)
+      : paginate(clean, {
+          offset: Number(offsetRaw) || 0,
+          // limit is clamped server-side regardless of what is asked for.
+          limit: Number(params.get("limit")) || undefined,
+        });
+
+  if (params.get("format") === "text") {
+    return new Response(page.lines.join("
+"), {
       status: 200,
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
@@ -104,12 +119,14 @@ export async function GET(request: Request, { params }: Params) {
   return json({
     ref: deployment.ref,
     state: deployment.state,
-    log: text,
-    bytes: body.byteLength,
-    truncated,
-    redacted,
-    ...(truncated
-      ? { note: `Showing the last ${MAX_BYTES} bytes of ${body.byteLength}.` }
-      : {}),
+    lines: page.lines,
+    offset: page.offset,
+    total: page.total,
+    hasMore: page.hasMore,
+    sourceBytes: body.byteLength,
+    altered: clean.altered,
+    // Names the CLASS of thing removed, never what was found — "we removed a
+    // GitHub token" is itself a hint.
+    alterationNotice: alterationNotice(clean),
   });
 }

@@ -18,7 +18,6 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { slugify } from "./serialize.ts";
-import { redactBuildLog } from "./redact.ts";
 import { checkCustomDomain } from "./domains.ts";
 import { fromPostgrestError } from "./http.ts";
 import {
@@ -94,46 +93,9 @@ test("checkCustomDomain rejects malformed input", () => {
   }
 });
 
-// ── build log redaction ──────────────────────────────────────────────
-
-test("redactBuildLog removes a tokenised clone URL", () => {
-  const r = redactBuildLog(
-    "fatal: could not read from https://x-access-token:ghs_AAAAAAAAAAAAAAAAAAAAAA@github.com/a/b.git"
-  );
-  assert.ok(!r.text.includes("ghs_"), "token must not survive");
-  assert.equal(r.redacted, true);
-});
-
-test("redactBuildLog removes presigned R2 signatures", () => {
-  // These grant write to the image tar — replace it and you replace what
-  // gets deployed. They are query parameters, not userinfo.
-  const r = redactBuildLog(
-    "curl -X PUT 'https://r2/b/image.tar?X-Amz-Credential=AKIAX%2Fauto&X-Amz-Signature=deadbeefcafe'"
-  );
-  assert.ok(!r.text.includes("deadbeefcafe"));
-  assert.ok(!r.text.includes("AKIAX"));
-  // The parameter names survive so a reader can still see what the request was.
-  assert.ok(r.text.includes("X-Amz-Signature="));
-});
-
-test("redactBuildLog leaves ordinary output alone", () => {
-  const clean = "npm install finished in 12s\n> build complete";
-  const r = redactBuildLog(clean);
-  assert.equal(r.text, clean);
-  assert.equal(r.redacted, false);
-});
-
-test("redactBuildLog is idempotent and does not cry wolf", () => {
-  // A pattern matching text an earlier pattern already replaced produces an
-  // identical string. Reporting that as a redaction tells the reader content
-  // was removed when none was, and a sanitiser that cries wolf gets ignored.
-  const once = redactBuildLog(
-    "clone https://x-access-token:ghs_BBBBBBBBBBBBBBBBBBBBBB@github.com/a/b.git"
-  );
-  const twice = redactBuildLog(once.text);
-  assert.equal(twice.text, once.text, "second pass must change nothing");
-  assert.equal(twice.redacted, false, "second pass must not claim a redaction");
-});
+// Build-log redaction is no longer tested here: redact.ts is deleted and
+// lib/paas/telemetry/build-log.ts owns it, with its own suite. Testing a copy
+// of that logic from this side would report green while the two diverged.
 
 // ── postgrest error mapping ──────────────────────────────────────────
 
