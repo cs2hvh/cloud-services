@@ -13,7 +13,7 @@ change anything, run by a person who has read a report first.
 ## Running it
 
 ```bash
-node --test "lib/paas/telemetry/*.test.ts"                                   # 404 tests, no deps
+node --test "lib/paas/telemetry/*.test.ts"                                   # 421 tests, no deps
 node --env-file=.env --env-file=.env.local scripts/v3/operator-view.ts       # everything, once
 node --env-file=.env --env-file=.env.local scripts/v3/fleet-drift.ts --prove
 node --env-file=.env --env-file=.env.local scripts/v3/dns-drift.ts
@@ -213,6 +213,7 @@ Two things the episode is worth remembering for:
 | `telemetry/density.ts` | Pods per node: kubelet cut, sandbox charge, $/pod | 9 |
 | `telemetry/sandbox.ts` | Sandbox cost vs what we charge, and headroom against it | 21 |
 | `telemetry/attribution.ts` | Per-app cost against tier, and whether it still fits | 16 |
+| `telemetry/reap-safety.ts` | Whether a reap plan is fit for a human to act on | 17 |
 | `telemetry/sweep-health.ts` | Whether the sweeps ran, and whether findings survive | 13 |
 | `telemetry/cadence.ts` | Whether a schedule can produce what it claims to measure | 9 |
 | `telemetry/exit-codes.ts` | What a sweep's exit code means to a scheduler | — |
@@ -547,6 +548,46 @@ against Starter economics would report a healthy margin on an app we might be
 losing money on. Unread usage is a finding, never a quiet app, and it is counted
 separately so "3 apps with findings" cannot come to mean "3 apps we failed to
 read".
+
+### Checking a reap plan from outside the thing that produced it
+
+The preview reaper deletes **running environments**, which makes it the sharpest
+version of the R2 lesson: there, a bad classification destroys the only account
+of how an app was built; here it destroys the app.
+
+The split follows that. `lib/paas/previews.ts` (deploy lane) decides what is
+reapable. `reap-safety.ts` checks that decision, and the value is entirely in
+its being on the other side of a lane boundary — **a classifier cannot catch the
+bug that makes it classify everything the same way, because the bug is in the
+thing doing the catching.** It duplicates what `previews.ts` promises on
+purpose: the promise is what is being verified.
+
+Nothing here can authorise a deletion, only stop one. `safeToReview` is named
+that rather than `safeToReap`, and findings carry `actionable: false` by type.
+
+The load-bearing refusal is **unknown age**, covered three ways — `null`, `NaN`,
+and future-dated. `NaN` is tested explicitly because it passes `age > ttl` as
+false *and* `!age` as true, so it lands in whichever branch you did not think
+about. Future-dated is its own refusal rather than "young": that is clock skew,
+not a preview from tomorrow.
+
+The one that is easy to miss: **a plan that reaps nearly everything is refused
+as a broken rule.** The signature of broken date parsing is not a strange entry,
+it is a *uniform* one — everything looks ancient and the plan reads as decisive.
+The ceiling is 0.9 rather than 1.0 because a rule reaping 95% of what it sees is
+already likelier broken than right, and the costs are asymmetric: refusing a
+genuine mass-cleanup costs a second look, accepting a broken one deletes running
+environments. One-of-one does not trip it.
+
+An **unexplained keep** is refused too. Kept-by-default is not kept-by-decision:
+an item kept because a rule said so is safe, one kept because nothing classified
+it is unexamined and may be reaped next run for reasons nobody chose.
+
+Findings sort oldest first with unknown age **last** — an unreadable age is not
+an extreme value, and sorting it as one would put the entries that must never be
+reaped at the top of the list a human reads.
+
+`scripts/v3/preview-reap.ts` lands when `previews.ts` does.
 
 ### Warm fraction, and what flat pricing did to it
 
