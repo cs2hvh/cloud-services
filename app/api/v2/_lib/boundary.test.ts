@@ -4,41 +4,52 @@
  * _lib/auth.ts states the rule: nothing in app/api/v2 may reach for a
  * service-role client, because v1 enabled RLS on every table and then bypassed
  * it on 100% of queries, leaving authorization to hand-written per-route
- * checks — and one omission was a confirmed IDOR.
+ * checks — and one omission was a confirmed IDOR. My aliases route states a
+ * second rule: elevate the operation, never the authorization decision, never
+ * a tenant-scoped write.
  *
- * That rule was prose in a header, in a directory people will keep editing.
- * app-deploy-3 made the point that this is the same shape as their own
- * traversal finding: safety that depends on the next person remembering. So
- * these tests read the real files and fail when the boundary moves.
+ * Both were prose in headers, in files people will keep editing. That is the
+ * same shape as the traversal bug app-deploy-3 found in their own lane —
+ * safety that depends on the next person remembering.
  *
- * Three properties this cannot compromise on:
+ * ── HOW THIS PROVES IT CAN FAIL ──────────────────────────────────────
  *
- *  - COMMENTS ARE STRIPPED FIRST. auth.ts's own header names
- *    `createServiceClient` in the sentence forbidding it. A raw-source check
- *    fails on the warning, and "make the test pass by deleting the warning" is
- *    the worst available outcome.
+ * A boundary test that cannot detect a violation sits green forever and is
+ * read as proof, which makes it worse than no test.
  *
- *  - IT MUST BE ABLE TO FAIL. A boundary test that cannot detect a violation
- *    sits green forever and is worse than nothing, because it is read as
- *    proof. Each check is exercised against a synthetic violation below.
+ * I first proved this by injecting real violations into real route files,
+ * confirming failure, and reverting. That verifies the whole machinery, but
+ * only for whoever ran it that day — and app-deploy-3 reported the same
+ * technique being refused by a safety classifier when they tried it, which is
+ * reason enough not to build a practice on it. A verification step that
+ * sometimes needs an exception quietly stops being performed.
  *
- *  - IT MUST REFUSE AN EMPTY SET. If the glob stops matching — a rename, a
- *    move — every check passes vacuously.
+ * So the violations now live in a FIXTURE TREE written to a temp directory and
+ * discovered by the same walk(), stripped by the same code(), and judged by
+ * the same checker functions as the real run. One implementation of each
+ * checker across both paths: two would let the fixture pass while the real
+ * check rotted, the same failure as testing a copy of logic owned elsewhere.
+ * This runs on every invocation, including for whoever changes the traversal
+ * months from now. Adopted from app-deploy-3, whose version of this idea was
+ * better than mine.
  *
- * app/api/v2/admin/** is deliberately EXCLUDED. It belongs to the
- * observability lane, is fleet-scoped by construction rather than
- * tenant-scoped, and has its own boundary suite. Asserting things here about
- * files owned there would report green while the two diverged.
+ * app/api/v2/admin/** is deliberately EXCLUDED — it belongs to the
+ * observability lane, is fleet-scoped by construction, and has its own
+ * boundary suite. Asserting here about files owned there reports green while
+ * the two diverge.
  */
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 const ROOT = "app/api/v2";
 
-/** Source with comments and string literals removed. */
+// ── the machinery, used by both the real run and the fixture ─────────
+
+/** Source with comments removed. */
 function code(source: string): string {
   return source
     .replace(/\/\*[\s\S]*?\*\//g, " ")
@@ -48,7 +59,6 @@ function code(source: string): string {
 function walk(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name);
-    // admin/ is the other lane's; .test.ts files are not the surface.
     if (entry.isDirectory()) {
       if (entry.name !== "admin") walk(path, out);
     } else if (entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts")) {
@@ -58,121 +68,161 @@ function walk(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-const FILES = walk(ROOT);
-const ROUTES = FILES.filter((f) => f.endsWith("route.ts"));
+/** Reaches past RLS: the service-role client, the PostgREST module, or the key. */
+const reachesPastRls = (src: string) =>
+  /createServiceClient|paas\/db|SUPABASE_SERVICE_ROLE_KEY|SERVICE_ROLE/.test(src);
+
+/** Writes the alias as the platform rather than as the caller. */
+const callsPromoteAndConverge = (src: string) => /promoteAndConverge/.test(src);
+
+/** 403 confirms a row exists and lets someone enumerate another team's refs. */
+const answers403 = (src: string) => /\b403\b/.test(src);
+
+/** Ciphertext must never reach a response. */
+const selectsCiphertext = (src: string) => /select\([^)]*value_ct/.test(src);
+
+/**
+ * Handlers that can return before resolving a caller.
+ *
+ * Scans only inside an exported handler body. A `return` in a module-level
+ * helper is not an early exit from the request — reviewing app-deploy-3's
+ * guard.ts, my first version flagged exactly that and was wrong.
+ */
+function gateViolations(src: string): string[] {
+  const bad: string[] = [];
+  for (const method of ["GET", "POST", "PATCH", "PUT", "DELETE"]) {
+    const at = src.indexOf(`export async function ${method}(`);
+    if (at < 0) continue;
+    const body = src.slice(at);
+    const gate = body.indexOf("getCaller()");
+    const ret = body.indexOf("return ");
+    if (gate < 0) bad.push(`${method}: never resolves a caller`);
+    else if (ret >= 0 && ret < gate) bad.push(`${method}: returns before the gate`);
+  }
+  return bad;
+}
+
+const REAL = walk(ROOT);
+const REAL_ROUTES = REAL.filter((f) => f.endsWith("route.ts"));
+const read = (f: string) => code(readFileSync(f, "utf8"));
+
+// ── the real surface ─────────────────────────────────────────────────
 
 test("the file set is non-empty, or every check below is vacuous", () => {
-  assert.ok(FILES.length >= 10, `expected the v2 API surface, found ${FILES.length}`);
-  assert.ok(ROUTES.length >= 8, `expected route handlers, found ${ROUTES.length}`);
+  assert.ok(REAL.length >= 10, `expected the v2 API surface, found ${REAL.length}`);
+  assert.ok(REAL_ROUTES.length >= 8, `expected handlers, found ${REAL_ROUTES.length}`);
 });
 
-test("no tenant route reaches for a service-role client", () => {
-  // The rule from _lib/auth.ts. lib/paas/db.ts is PostgREST with the service
-  // key; createServiceClient bypasses RLS outright. Either one turns RLS back
-  // into decoration.
-  const offenders: string[] = [];
-  for (const file of FILES) {
-    const src = code(readFileSync(file, "utf8"));
-    if (/createServiceClient|paas\/db|SUPABASE_SERVICE_ROLE_KEY|SERVICE_ROLE/.test(src)) {
-      offenders.push(file);
-    }
-  }
-  assert.deepEqual(offenders, [], "these reach past RLS");
+test("no tenant route reaches past RLS", () => {
+  assert.deepEqual(REAL.filter((f) => reachesPastRls(read(f))), []);
 });
 
-test("no handler calls promoteAndConverge", () => {
-  // It performs the alias write itself with the service role — a tenant-scoped
-  // write outside RLS. The infrastructure lane keeps it for scripts and
-  // workers, which have no user context. A request handler must resolve and
-  // write through RLS and elevate only the cluster convergence.
-  const offenders = FILES.filter((f) =>
-    /promoteAndConverge/.test(code(readFileSync(f, "utf8")))
+test("no handler writes the alias as the platform", () => {
+  // promoteAndConverge performs the alias write with the service role — a
+  // tenant-scoped write outside RLS. Scripts and workers may call it; a
+  // request handler resolves and writes through RLS and elevates only the
+  // cluster convergence.
+  assert.deepEqual(REAL.filter((f) => callsPromoteAndConverge(read(f))), []);
+});
+
+test("every handler resolves a caller before it can return", () => {
+  const bad = REAL_ROUTES.flatMap((f) =>
+    gateViolations(read(f)).map((v) => `${f} ${v}`)
   );
-  assert.deepEqual(offenders, [], "a handler must not write as the platform");
+  assert.deepEqual(bad, []);
 });
 
-test("every route resolves a caller before it can return anything", () => {
-  const offenders: string[] = [];
-  for (const file of ROUTES) {
-    const src = code(readFileSync(file, "utf8"));
-    // Only inside an exported handler body — a `return` in a module-level
-    // helper is not an early exit from the request, and a naive scan flags it.
-    // (app-deploy-3 hit exactly that false positive reviewing their own.)
-    for (const method of ["GET", "POST", "PATCH", "PUT", "DELETE"]) {
-      const at = src.indexOf(`export async function ${method}(`);
-      if (at < 0) continue;
-      const body = src.slice(at);
-      const gate = body.indexOf("getCaller()");
-      const ret = body.indexOf("return ");
-      if (gate < 0) {
-        offenders.push(`${file}:${method} never resolves a caller`);
-      } else if (ret >= 0 && ret < gate) {
-        offenders.push(`${file}:${method} returns before the gate`);
-      }
-    }
-  }
-  assert.deepEqual(offenders, [], "unauthenticated code paths");
+test("nothing answers 403 — invisible is indistinguishable from absent", () => {
+  assert.deepEqual(REAL.filter((f) => answers403(read(f))), []);
 });
 
-test("nothing answers 403 — invisible must be indistinguishable from absent", () => {
-  // A 403 confirms the row exists, which lets someone enumerate another team's
-  // refs. RLS returns no rows for both "absent" and "not yours".
-  const offenders = FILES.filter((f) => /\b403\b/.test(code(readFileSync(f, "utf8"))));
-  assert.deepEqual(offenders, [], "403 leaks existence");
-});
-
-test("no route selects value_ct", () => {
-  // v1's public API returned every decrypted value in one unaudited response.
-  // The defence is that no read path can produce ciphertext to decrypt.
-  const offenders = FILES.filter((f) => {
-    const src = code(readFileSync(f, "utf8"));
-    // The write sets it; a select would name it inside a column list string.
-    return /select\([^)]*value_ct/.test(src);
-  });
-  assert.deepEqual(offenders, [], "ciphertext must not reach a response");
+test("no read path selects ciphertext", () => {
+  assert.deepEqual(REAL.filter((f) => selectsCiphertext(read(f))), []);
 });
 
 test("auth.ts still states the rules these tests enforce", () => {
-  // If the header is rewritten, that should force a decision about whether
-  // these tests still describe the boundary — rather than leaving assertions
-  // enforcing a rule nobody has written down any more.
+  // Rewriting the header should force a decision about whether these tests
+  // still describe the boundary, rather than leaving assertions enforcing a
+  // rule nobody has written down any more.
   const header = readFileSync(join(ROOT, "_lib", "auth.ts"), "utf8");
-  assert.match(header, /createServiceClient/, "the rule must remain stated");
+  assert.match(header, /createServiceClient/);
   assert.match(header, /RLS/);
 });
 
-// ── the checks must be able to fail ──────────────────────────────────
-// A boundary test that cannot detect a violation is read as proof and is worse
-// than no test. These exercise the detectors against synthetic sources.
+// ── the same machinery against a fixture tree ────────────────────────
+// Proves the checkers, the traversal, the comment stripping and the exclusion
+// rules all still work — every run, not once.
 
-test("the detectors fire on violations", () => {
-  const stripped = code(`
-    // createServiceClient in a comment must NOT count
-    /* nor promoteAndConverge in a block comment */
-    import { createServiceClient } from "@/lib/supabase/server";
-  `);
-  assert.match(stripped, /createServiceClient/, "real import detected");
-  assert.equal(
-    (stripped.match(/createServiceClient/g) ?? []).length,
-    1,
-    "the commented mention must be stripped, only the import counts"
-  );
-  assert.doesNotMatch(stripped, /promoteAndConverge/, "block comment stripped");
+function buildFixture(): string {
+  const root = mkdtempSync(join(tmpdir(), "v2-boundary-"));
+  const nested = join(root, "projects", "[ref]");
+  mkdirSync(nested, { recursive: true });
 
-  // A handler returning before its gate.
-  const bad = code(`
-    export async function GET() {
-      if (x) return notFound();
-      const caller = await getCaller();
-    }
-  `);
-  const at = bad.indexOf("export async function GET(");
-  const body = bad.slice(at);
-  assert.ok(
-    body.indexOf("return ") < body.indexOf("getCaller()"),
-    "an early return must be detectable"
+  // Violates all four properties at once, and is nested so the walk has to
+  // find it rather than reading one flat directory.
+  writeFileSync(
+    join(nested, "route.ts"),
+    [
+      `import { createServiceClient } from "@/lib/supabase/server";`,
+      `import { promoteAndConverge } from "@/lib/paas/reconciler.ts";`,
+      `export async function GET() {`,
+      `  if (x) return apiError("no", "no", 403);`,
+      `  const caller = await getCaller();`,
+      `  await db.from("env_vars").select("key, value_ct");`,
+      `}`,
+    ].join("\n"),
+    "utf8"
   );
 
-  assert.match(code(`return apiError("x", "y", 403);`), /\b403\b/);
-  assert.match(code(`.select("key, value_ct")`), /select\([^)]*value_ct/);
+  // Clean, but NAMES the forbidden things in comments only. This is the case
+  // that actually matters: auth.ts's header names createServiceClient in the
+  // sentence forbidding it, and a raw-source check fails on its own warning.
+  writeFileSync(
+    join(root, "clean.ts"),
+    [
+      `// Nothing here may import createServiceClient or use promoteAndConverge.`,
+      `/* Nor answer 403, nor select value_ct. */`,
+      `export const fine = true;`,
+    ].join("\n"),
+    "utf8"
+  );
+
+  // A .test.ts inside the tree must be ignored, so nobody can silence the
+  // suite by adding one.
+  writeFileSync(join(root, "route.test.ts"), `createServiceClient(); // 403`, "utf8");
+
+  // An admin/ directory must be skipped — it is the other lane's.
+  mkdirSync(join(root, "admin"), { recursive: true });
+  writeFileSync(join(root, "admin", "route.ts"), `createServiceClient();`, "utf8");
+
+  return root;
+}
+
+test("the checkers detect a real violation in a discovered file", () => {
+  const root = buildFixture();
+  const found = walk(root);
+
+  const bad = found.filter((f) => f.endsWith("route.ts") && !f.includes("admin"));
+  assert.equal(bad.length, 1, "the walk must find the nested violating route");
+
+  const src = read(bad[0]);
+  assert.ok(reachesPastRls(src), "service-role import must be detected");
+  assert.ok(callsPromoteAndConverge(src), "platform write must be detected");
+  assert.ok(answers403(src), "403 must be detected");
+  assert.ok(selectsCiphertext(src), "value_ct select must be detected");
+  assert.deepEqual(gateViolations(src), ["GET: returns before the gate"]);
+});
+
+test("a file naming the forbidden things only in comments reads clean", () => {
+  const src = read(join(buildFixture(), "clean.ts"));
+  assert.ok(!reachesPastRls(src), "a warning must not count as a violation");
+  assert.ok(!callsPromoteAndConverge(src));
+  assert.ok(!answers403(src));
+  assert.ok(!selectsCiphertext(src));
+});
+
+test("the suite cannot be silenced by adding a .test.ts or an admin dir", () => {
+  const found = walk(buildFixture());
+  assert.ok(!found.some((f) => f.endsWith(".test.ts")), "tests are not the surface");
+  assert.ok(!found.some((f) => f.includes("admin")), "admin belongs to the other lane");
 });
