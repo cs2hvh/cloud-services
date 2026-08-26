@@ -11,12 +11,21 @@
  * whether an app may sleep, this decides whether the money an awake app costs
  * is buying anything.
  *
- * WHY THIS EXISTS: the plan's cost model is a ~5x gap resting on the warm
- * fraction, and it names the way that breaks — a free uptime pinger, thirty
- * seconds of setup, and the fraction goes to 1.0. Warm-time pricing is listed
- * as an open BUSINESS decision. This is the measurement that decision needs,
- * and it cannot come from CPU: a pinged app is warm, running, and almost
- * perfectly idle.
+ * WHAT THIS IS FOR CHANGED AFTER IT WAS BUILT, and the note is left here
+ * rather than rewritten away because the change is the interesting part.
+ *
+ * It was built to inform warm-time pricing: the plan's cost model was a ~5x
+ * gap resting on the warm fraction, and a free uptime pinger could force that
+ * fraction to 1.0 in thirty seconds. Pricing is now FLAT — static per-instance,
+ * pick a size and a count — so that decision is closed and this is no longer
+ * an input to it.
+ *
+ * It answers a different question now, and arguably a better one. Under a flat
+ * rate a pinged app and a busy app pay the same and cost the same, so traffic
+ * shape stops being a pricing signal and becomes an ABUSE and MARGIN one: a
+ * keep-alive is pure cost with no offsetting revenue, and its shape is the only
+ * thing that distinguishes it from a customer. CPU cannot — a pinged app is
+ * warm, running, and almost perfectly idle.
  *
  * A short run measures a short window. The shape of a day is what matters and
  * this cannot see one; treat a ten-minute run as proof the measurement works,
@@ -72,7 +81,6 @@ async function counts(): Promise<Map<string, number> | null> {
     const body = await k.raw<string>({
       method: "GET",
       path: `/api/v1/namespaces/${PAAS_NAMESPACE}/pods/${pod.metadata.name}:8080/proxy/metrics`,
-      raw: true,
     });
     return parseRouterCounts(String(body));
   } catch {
@@ -177,6 +185,7 @@ console.log(
 );
 console.log(
   `\n  policy: quiet at or below ${QUIET_REQUESTS_PER_HOUR} req/hr, even below ${KEEP_ALIVE_REGULARITY} spread.\n` +
-    `  A short run cannot see the shape of a day — treat this as proof the measurement\n` +
-    `  works, not as the number the pricing decision needs.\n`,
+    `  Under flat pricing a keep-alive is cost with no revenue, so this is a margin and\n` +
+    `  abuse signal rather than a pricing input. A short run cannot see the shape of a\n` +
+    `  day — treat this as proof the measurement works, not as the number.\n`,
 );
