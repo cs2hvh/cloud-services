@@ -127,10 +127,22 @@ behavioural tests replaying confirmed v1 criticals.
    CronJobs live in `ahura-system`, verified by running rather than by applying:
    `usage-sample` recorded 3 apps at 99.8% warm, `fleet-drift` exited clean at
    $116.07/month standing with $0.00 unaccounted. See §6.
-2. **`npm install` + get the dashboard actually executing.** The largest body of
-   never-run code on the project — 16 routes and 6 components across the UI and
-   admin lanes, none of which has ever rendered. **The user declined `npm install`
-   previously**, so this is a decision to revisit, not an oversight to fix.
+2. ~~**`npm install`**~~ — **DONE** 2026-08-26, approved by the user. 687 packages.
+   The repo compiled for the first time: **21 type errors across 26,000 lines**,
+   now down to **3**, each owned by a lane actively fixing it. What it found:
+   - `ProjectRow` declared neither `scale_to_zero` nor `idle_seconds` while
+     `idle-sweep.ts` read both — on the path that decides whether an app sleeps.
+   - All 8 admin routes imported `_lib/http`, which existed only on the UI
+     branch. The admin API would have failed at build.
+   - A log route shadowed its own `params`, crashing on the first request to any
+     build log (UI lane, fixed).
+   - Two files had unterminated string literals that
+     `node --experimental-strip-types --check` **exits 0 on**. Every "parses
+     clean" claim made with that command was weaker than stated.
+3. **Nothing has rendered yet.** Typecheck and lint are a far stronger floor than
+   yesterday, but no route has served a request and no component has mounted.
+   `next build` needs real env in the UI worktree — **a user decision**, since it
+   means putting a secrets file there.
 3. **Install the GitHub App** on `cs2hvh` and prove one real customer push.
 4. **Reserved-hostname list** before any signup path opens.
 5. **Preview deployments** — needs the user's policy decision first.
@@ -244,6 +256,44 @@ database credential because `db` is not among its *direct* imports — it arrive
 through `fleet-source.ts`. It refused to run rather than reporting every
 resource as unrecorded. **The transitive closure is the credential surface, not
 the import line.**
+
+This one is the positive case, and it is the strongest argument in this section:
+the refusal caught a bug in **another session's** work, in code that had already
+been reviewed. The credential surface was derived carefully, from the imports,
+and was still wrong. The guard did not catch carelessness — it caught a correct
+method applied to the wrong artifact. Care does not substitute for a guard.
+
+### Two ways a guard goes vacuous, and they look identical from outside
+
+The third-state rule above covers the **input** side: a check that observes
+nothing must say so rather than pass. It does **not** cover the output side.
+
+A seventh instance proved the gap. A detector's `offenders.push()` lost its
+argument to the same mangling that ate the regexes — so the scan ran correctly,
+examined every call site, and then **discarded every finding**. `examined > 0`
+passed, because the input side was genuinely fine. A counter placed before the
+push cannot see an empty push.
+
+| Failure | What it looks like | What catches it |
+|---|---|---|
+| Observes nothing | green | report `examined`, refuse at 0 |
+| Observes, then discards | green | assert a **known-bad input** still produces a finding, every run |
+
+The second is not optional decoration. It is the only thing separating "found
+nothing" from "cannot report anything".
+
+### And the exit code is part of the check
+
+Two tools reported success while failing, in the same hour:
+
+- `tsc | head` returns **HEAD's** exit code. A pipeline reports its *last*
+  command, so `tsc | tee`, `tsc | grep`, `tsc | head` all report green
+  regardless of `tsc`.
+- `node --experimental-strip-types --check` **exits 0** on a file with nine
+  syntax errors, including unterminated string literals.
+
+Both are the same shape as everything else here: the failure signal existed and
+something downstream swallowed it.
 
 **The rule:** a parse that yields nothing, a read that returns nothing, and a
 write whose failure is swallowed all look exactly like success. Distinguish
