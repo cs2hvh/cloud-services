@@ -61,13 +61,12 @@ export default async function ProjectsPage() {
             Connect a Git repository to create one.
           </Empty>
           <Notice
-            tone="blocked"
-            title="Connecting a repository is not available yet."
-            action="Waiting on the GitHub App installation link."
+            title="Connect a GitHub repository to get started."
+            action="You need admin on the team you are connecting to."
             className="mt-3"
           >
-            The GitHub App has no installations recorded against a team, so the
-            connect flow cannot identify which repositories are yours.
+            Installing the app records which repositories your team can deploy.
+            Nothing is deployed until you pick one.
           </Notice>
         </>
       ) : (

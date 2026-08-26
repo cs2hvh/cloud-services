@@ -24,7 +24,10 @@ export type PaasTable =
   | "deployments"
   | "aliases"
   | "domains"
-  | "env_vars";
+  | "env_vars"
+  // SELECT only for `authenticated`; writes go through
+  // paas.link_installation(), which requires admin on the target team.
+  | "installations";
 
 export interface Caller {
   userId: string;

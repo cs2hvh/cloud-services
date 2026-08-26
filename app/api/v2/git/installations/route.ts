@@ -9,7 +9,7 @@
 import { listInstallations } from "@/lib/paas/github/app.ts";
 import { getCaller } from "../../_lib/auth";
 import { json, unauthenticated, apiError } from "../../_lib/http";
-import { callerInstallationIds } from "../_lib/scope";
+import { callerInstallations } from "../_lib/scope";
 
 export const dynamic = "force-dynamic";
 
@@ -17,19 +17,19 @@ export async function GET() {
   const caller = await getCaller();
   if (!caller) return unauthenticated();
 
-  const allowed = await callerInstallationIds(caller);
+  const linked = await callerInstallations(caller);
+  const allowed = linked.map((i) => i.installationId);
 
   if (allowed.length === 0) {
-    // Not an error: a team that has never connected a repo. The client shows
-    // the install call-to-action. Deliberately not falling back to the
-    // unscoped list to make this case "work".
+    // Not an error: a team that has never connected a repo. Since 2c2b8d83
+    // this is recoverable — /api/v2/git/connect starts an install and the
+    // callback records the link — so the client can offer the action rather
+    // than reporting a dead end.
     return json({
       installations: [],
-      canConnectNew: false,
-      note:
-        "No GitHub App installation is linked to your team yet. Linking a new " +
-        "installation is not available until the platform records the " +
-        "installation-to-team mapping.",
+      canConnectNew: true,
+      connectUrl: "/api/v2/git/connect",
+      note: "No GitHub App installation is linked to your team yet.",
     });
   }
 
@@ -62,7 +62,8 @@ export async function GET() {
 
   return json({
     installations: mine,
-    canConnectNew: false,
+    canConnectNew: true,
+    connectUrl: "/api/v2/git/connect",
     ...(stale.length > 0
       ? {
           staleInstallationIds: stale,
