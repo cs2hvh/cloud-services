@@ -117,6 +117,11 @@ export function AiOverview() {
               </SelectContent>
             </Select>
             <Button asChild size="sm" variant="outline">
+              <Link href="/ai/workloads">
+                GPU workloads <ArrowRight className="ml-2 h-3.5 w-3.5" />
+              </Link>
+            </Button>
+            <Button asChild size="sm" variant="outline">
               <Link href="/ai/models">
                 Model catalog <ArrowRight className="ml-2 h-3.5 w-3.5" />
               </Link>
