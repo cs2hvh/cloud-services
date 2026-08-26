@@ -40,7 +40,34 @@ export class KubeError extends Error {
  * arbitrary user input, so it extracts the three fields it needs rather than
  * pulling in a YAML parser. It throws if the shape is not what LKE emits.
  */
+const SA_DIR = "/var/run/secrets/kubernetes.io/serviceaccount";
+
+/**
+ * In-cluster credentials, as projected by Kubernetes into every pod with a
+ * mounted ServiceAccount token.
+ *
+ * The scheduled sweeps run as pods, where the host kubeconfig this repo uses
+ * from a laptop simply does not exist. Returns null rather than throwing so the
+ * caller can fall back — but note the distinction the rest of this codebase
+ * keeps: null here means "not running in a cluster", NOT "cluster unreachable".
+ */
+export function inClusterContext(): KubeContext | null {
+  try {
+    const token = readFileSync(`${SA_DIR}/token`, "utf8").trim();
+    const ca = readFileSync(`${SA_DIR}/ca.crt`);
+    const host = process.env.KUBERNETES_SERVICE_HOST;
+    const port = process.env.KUBERNETES_SERVICE_PORT ?? "443";
+    if (!token || !host) return null;
+    return { server: `https://${host}:${port}`, token, ca };
+  } catch {
+    return null;
+  }
+}
+
 export function loadKubeconfig(path: string): KubeContext {
+  const inCluster = inClusterContext();
+  if (inCluster) return inCluster;
+
   const raw = readFileSync(path, "utf8");
   const server = raw.match(/server:\s*(\S+)/)?.[1];
   const token = raw.match(/token:\s*(\S+)/)?.[1];
