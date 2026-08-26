@@ -42,9 +42,18 @@ git URL → detect framework → generate Dockerfile
 
 ### Test coverage
 
-- **48 unit tests**, zero dependencies (`node --test lib/paas/build/*.test.ts`)
+- **~530 unit tests**, zero dependencies (`node --test --experimental-strip-types
+  --env-file=.env --env-file=.env.local "lib/paas/**/*.test.ts"`) — roughly 290
+  in the deploy lane and 240 in the observability lane
 - **10 real public repositories** exercised through detection
 - **11 database behavioural tests** replaying confirmed v1 criticals
+- **Live-enum mirror tests** that SKIP rather than pass when the database is
+  unreachable — skip means "could not check", pass means "checked and fine", and
+  conflating them is how a suite goes green while asserting nothing
+
+**Not covered:** the ~29 dashboard files in `app/dashboard/v2` and `app/api/v2`.
+`npm install` has never been run in this repo, so they have never been
+typechecked, linted, or executed. They are inspected code, not working code.
 
 ---
 
@@ -55,13 +64,9 @@ than one that reads as unfinished.
 
 ### Blocking untrusted tenants — read this before opening signups
 
-- **gVisor is NOT installed.** `cluster-status.ts` reports 0 RuntimeClasses.
-  Tenant pods run as ordinary containers today. Given three runC container-escape
-  CVEs in November 2025, **this cluster must not run untrusted code as it
-  stands.** The manifests already accept `runtimeClassName`; the sandbox itself
-  is not deployed. Installing it on LKE needs a privileged DaemonSet that writes
-  `runsc` onto each host and restarts containerd — invasive enough that it should
-  be done deliberately, not unattended.
+- **gVisor IS installed** and proven — a tenant pod reports
+  `Linux version 4.19.0-gvisor`. Pinned to release `20260817`. This section
+  previously said the opposite for some time after it stopped being true.
 - **No image scanning.** The publisher is the correct seam for a blocking Trivy
   gate. It is not implemented, so today it pushes whatever it is given.
 - **No ResourceQuota or LimitRange** per tenant namespace, so one tenant can
@@ -70,16 +75,34 @@ than one that reads as unfinished.
 
 ### Blocking a real customer
 
-- **Aliases are not database-driven.** Routing works, but `publish-app.ts` is
-  invoked by hand. Nothing reads the `aliases` table to create Ingress objects,
-  and promote/rollback are not yet wired to it — the schema supports both as a
-  single write, but no code performs it.
-- **No webhook-driven deploys.** The GitHub App is built and verified and
-  webhook signature verification exists, but nothing is wired to a push event.
-- **No dashboard.** No API routes, no UI. Everything runs from `scripts/v2/`.
-- **No environment variables.** The schema stores them encrypted; nothing reads,
-  decrypts or injects them yet.
-- **No preview deployments**, no build logs surfaced to users, no metrics.
+- **Aliases ARE database-driven.** All five live hostnames carry `paas.aliases`
+  rows; the reconciler creates an Ingress per alias and promote/rollback are one
+  `UPDATE` of `aliases.deployment_id`. Each alias routes to its own deployment,
+  verified with two hostnames on one project serving two different builds.
+- **Webhook-driven deploys work.** `POST /api/v2/webhooks/github` verifies the
+  signature over raw bytes and records a queued deployment;
+  `scripts/v2/build-worker.ts` builds it. Proven end to end — a signed push built
+  commit `88e10137` exactly and served it publicly.
+  **But the GitHub App is installed on no account,** so no real push has ever
+  reached the endpoint. Proven against the live database is not proven in
+  production.
+- **Dashboard and API routes exist** (`app/dashboard/v2`, `app/api/v2`) — see the
+  testing caveat above: none of it has ever been executed.
+- **Environment variables work** — AES-256-GCM, decrypted and injected via
+  `envFrom`, with no code path that returns a placeholder when it cannot decrypt.
+- **metrics-server is installed** and serving per-pod CPU and memory.
+- **Still missing:** preview deployments for non-production branches (per-alias
+  routing supports them; policy for hostname, lifetime and payer does not
+  exist), and build logs surfaced to users.
+
+### The most expensive thing not done
+
+- **Scale to zero is not implemented, and warm fraction is measured at 1.0.**
+  Every app is warm 100% of the time, so the fleet is paying the always-on cost
+  model — roughly $52k/month at 10k apps against a $5 price, rather than the
+  $18–20k the plan assumes. The three live apps sit at 2–3 millicores each: they
+  are not merely idle-ish, they are doing essentially nothing while holding full
+  pods. This is the difference between two cost models, not an optimisation.
 
 ### Deferred by decision
 

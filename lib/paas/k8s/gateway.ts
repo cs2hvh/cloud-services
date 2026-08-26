@@ -185,6 +185,26 @@ export function gatewayDeployment(replicas = 1) {
                 // self-signed cert and Cloudflare Full (Strict) returns 526.
                 "--providers.file.directory=/config",
                 "--providers.file.watch=true",
+                // Per-router request counters, on the ping port.
+                //
+                // This is how idleness is MEASURED rather than guessed. Scaling
+                // an app to zero on a timer that does not know whether anyone
+                // is using it is how a platform takes down a live app; the
+                // counter is the difference between "no requests since we last
+                // looked" and "we did not look".
+                //
+                // addrouterslabels gives a counter per router, which is per
+                // hostname — the granularity the decision is actually made at.
+                "--metrics.prometheus=true",
+                "--metrics.prometheus.addrouterslabels=true",
+                // `traefik`, NOT `ping`. The internal entrypoint that --ping and
+                // the dashboard live on is named `traefik` and listens on :8080;
+                // our container port is *labelled* "ping", which is not the same
+                // thing. Naming a non-existent entrypoint does not fail the
+                // process — Traefik logs "EntryPoint doesn't exist" and serves
+                // 404 on /metrics while otherwise running perfectly, which is
+                // exactly the shape of failure that reads as success.
+                "--metrics.prometheus.entrypoint=traefik",
               ],
               ports: [
                 { name: "web", containerPort: 8000 },
