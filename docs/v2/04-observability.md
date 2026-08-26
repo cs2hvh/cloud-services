@@ -13,7 +13,7 @@ change anything, run by a person who has read a report first.
 ## Running it
 
 ```bash
-node --test "lib/paas/telemetry/*.test.ts"                                   # 344 tests, no deps
+node --test "lib/paas/telemetry/*.test.ts"                                   # 353 tests, no deps
 node --env-file=.env --env-file=.env.local scripts/v3/operator-view.ts       # everything, once
 node --env-file=.env --env-file=.env.local scripts/v3/fleet-drift.ts --prove
 node --env-file=.env --env-file=.env.local scripts/v3/dns-drift.ts
@@ -22,6 +22,7 @@ node --env-file=.env --env-file=.env.local scripts/v3/workload-drift.ts
 node --env-file=.env --env-file=.env.local scripts/v3/usage-sample.ts --samples 20 --interval 30
 node --env-file=.env --env-file=.env.local scripts/v3/traffic-watch.ts --samples 20 --interval 30
 node --env-file=.env --env-file=.env.local scripts/v3/density-check.ts        # pricing arithmetic
+node --env-file=.env --env-file=.env.local scripts/v3/sandbox-overhead.ts     # declared vs real
 node --env-file=.env --env-file=.env.local scripts/v3/pod-logs.ts <ns> <pod>
 node --env-file=.env --env-file=.env.local scripts/v3/telemetry-probe.ts
 
@@ -142,6 +143,7 @@ consumes them.
 | `telemetry/quota.ts` | Whether a ResourceQuota can be enforced without eviction | 25 |
 | `telemetry/trivy.ts` | Three verdicts — `undecided` blocks, it does not pass | 16 |
 | `telemetry/density.ts` | Pods per node: kubelet cut, sandbox charge, $/pod | 9 |
+| `telemetry/sandbox.ts` | What a gVisor sandbox costs vs what we charge for it | 9 |
 | `telemetry/cadence.ts` | Whether a schedule can produce what it claims to measure | 9 |
 | `telemetry/exit-codes.ts` | What a sweep's exit code means to a scheduler | — |
 | `telemetry/operator.ts` | Composition for the API and dashboard | — |
@@ -360,6 +362,41 @@ The 64 GB figures are **derived, not measured** — this cluster runs
 shape's allocatable comes from the tiered kubelet formula, anchored to the real
 node it reproduces to within 50 MiB. The report labels this on every run. Buy
 one and re-run to replace the derivation.
+
+### About half of it is recoverable, and only that half is ours
+
+The two errors are not equally fixable. The kubelet's ~5.5 GiB is physics and
+stays. The 128Mi sandbox charge is a **declaration we chose**, and
+`scripts/v3/sandbox-overhead.ts` measures it against reality — all three running
+sandboxed pods cost **less in total** (sentry, gofer *and* application together:
+66.3, 88.9, 93.5 MiB) than the sandbox charge alone.
+
+So the declaration is above its own ceiling. What that is worth, for 512Mi pods
+on a `g6-standard-16`:
+
+| `podFixed` | Pods | $/pod | Tier cost |
+|---|---|---|---|
+| **128Mi** *(today)* | 89 | $4.31 | $4.96 |
+| 96Mi | 93 | $4.13 | $4.75 |
+| 64Mi | 99 | $3.88 | $4.46 |
+| 32Mi | 104 | $3.69 | $4.25 |
+
+At 64Mi, Starter returns from 0.8% margin to ~10.8%.
+
+**No replacement value is proposed, deliberately.** The sentry is not separable:
+cAdvisor sees cgroups, and a gVisor pod is one opaque cgroup holding sentry,
+gofer and app together — that opacity is the product working. The result is a
+*ceiling*, not a figure, and reserving too little kills pods under load. The
+safe number comes from a load test. What is established is that there is room
+worth measuring for, and that repricing before measuring would be repricing
+against a number already known to be wrong in the expensive direction.
+
+The parsing carries this lane's recurring defect in its most expensive location:
+**a gVisor pod exposes no named container series at all.** Summing named
+containers — how you would total any normal pod — returns **zero** for every
+sandboxed pod, which reads as a free sandbox and argues for cutting the
+reservation to nothing. Absence of container series on a sandboxed pod means
+unreadable, never empty. It is a test, not a comment.
 
 ### Warm fraction, and what flat pricing did to it
 
