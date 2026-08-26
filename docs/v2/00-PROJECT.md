@@ -108,7 +108,30 @@ behavioural tests replaying confirmed v1 criticals.
 ## 4. What is NOT done
 
 ### Blocks opening signups to untrusted tenants
+- ~~Tenant isolation unverified~~ — **MEASURED AND FIXED** 2026-08-26 (`ff559b9d`).
+  `scripts/v2/isolation-proof.ts` probes from a real tenant namespace under the
+  same gVisor RuntimeClass as customer workloads. It found a breach: **a tenant
+  pod could open a TCP connection to the Kubernetes API server**, despite
+  `10.0.0.0/8` being denied and the ClusterIP `10.128.0.1` sitting inside it.
+  - **kube-proxy DNATs the ClusterIP to the real endpoint before egress policy
+    is evaluated**, and on LKE that endpoint is public — so the policy saw a
+    public destination and allowed it. Generalised: **an `except` list cannot
+    protect an address the policy never sees.** The private-range block is real
+    for direct pod-to-pod traffic (cross-tenant was refused in the same run) and
+    does nothing for anything DNAT'd.
+  - Severity, stated honestly: TLS did not complete from that client, and tenant
+    pods carry no ServiceAccount token. Unnecessary attack surface rather than a
+    live path to credentials.
+  - Fixed by denying the endpoint's real address, read from the `kubernetes`
+    Endpoints at reconcile time — hardcoding would be correct here and silently
+    permissive on the next cluster, and the object applies cleanly either way.
+  - **The controls are the design.** Public egress and DNS *must* succeed or the
+    run is void: a probe pod with no network fails every negative test and
+    reports perfect isolation.
 - **No egress rate limiting**, no crypto-mining heuristics, no abuse response.
+  This is the remaining abuse gap. NetworkPolicy cannot express bandwidth, so it
+  needs either CNI bandwidth annotations or Cloudflare — *the Cloudflare plan is
+  a user decision.*
 - **Free-plan Cloudflare**: per-tenant WAF is Enterprise-only; 1 rate-limit rule.
 - ~~No reserved-hostname list~~ — **DONE** (`e70a5506`). A tenant could have
   claimed `api` or `www`: the deploy path only checked `paas.aliases`, and live
