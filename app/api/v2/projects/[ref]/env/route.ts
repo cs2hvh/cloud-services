@@ -12,19 +12,22 @@
  * write-only from here, which is the correct default anyway: a dashboard needs
  * to SET secrets far more often than it needs to show them.
  *
- * Storage is `value_ct bytea` + `dek_id`. This route cannot encrypt either, so
- * writes go through paas.put_env_var(), also owned by the other lane. Both
- * gaps return notEnabled() rather than pretending.
+ * Writes encrypt here, in the route, so the master key never leaves the
+ * server — and the INSERT still goes through the RLS client, so RLS remains
+ * the authorization boundary. lib/paas/secrets deliberately exports no
+ * decrypt path for this lane: values reach containers via the reconciler and
+ * never come back through the API.
  */
 
 import { isPublicEnvKey } from "@/lib/paas/build/dockerfile.ts";
+import { encryptEnvValue, bytesToPgHex } from "@/lib/paas/secrets.ts";
 import { getCaller } from "../../../_lib/auth";
 import {
   json,
   unauthenticated,
   notFound,
   invalid,
-  notEnabled,
+  conflict,
   fromPostgrestError,
   apiError,
 } from "../../../_lib/http";
@@ -137,17 +140,91 @@ export async function PUT(request: Request, { params }: Params) {
   // end up disagreeing about whether a value is baked into an image.
   const isPublic = isPublicEnvKey(key);
 
-  // env_vars.value_ct is bytea and dek_id is NOT NULL: a row cannot be written
-  // without encrypting first, and the encryption path lives in the
-  // infrastructure lane. Refusing outright is the only honest option — writing
-  // a plaintext value into a column named "ciphertext" would be far worse than
-  // a 503, and silently dropping the write would be worse still.
-  return notEnabled(
-    `Environment variables cannot be saved yet: no encryption path is wired up, so nothing was written. "${key}" would be stored as ${
-      isPublic ? "a public build argument" : "a runtime-only secret"
-    }.`,
-    "Waiting on paas.put_env_var() from the infrastructure lane."
-  );
+  // Encrypt before the write. projectRef and key are bound into the key
+  // derivation and the AAD, so a row copied to another project or renamed onto
+  // a public-prefixed key becomes undecryptable rather than quietly readable
+  // in the wrong context.
+  let valueCt: string;
+  let dekId: string;
+  try {
+    const enc = encryptEnvValue(project.ref, key, body.value);
+    valueCt = bytesToPgHex(enc.valueCt);
+    dekId = enc.dekId;
+  } catch (err) {
+    // Most likely a missing master key. Never fall back to storing plaintext
+    // in a column named ciphertext.
+    console.error("[v2/env] encryption failed:", err);
+    return apiError(
+      "internal",
+      "Could not encrypt the value. Nothing was written.",
+      500
+    );
+  }
+
+  // Not an upsert. paas.env_vars' unique index is an EXPRESSION index —
+  // (project_id, COALESCE(environment_id, '000...'), key) — and PostgREST's
+  // onConflict only accepts plain column names, so it cannot name this
+  // constraint. Update-then-insert is the honest way to express it.
+  const stamp = new Date().toISOString();
+  const { data: updated, error: updateError } = await caller.db
+    .from("env_vars")
+    .update({
+      value_ct: valueCt,
+      dek_id: dekId,
+      is_public: isPublic,
+      updated_at: stamp,
+    })
+    .eq("project_id", project.id)
+    .eq("key", key)
+    .is("environment_id", null)
+    .select("key")
+    .maybeSingle();
+
+  if (updateError) {
+    const mapped = fromPostgrestError(updateError);
+    if (mapped) return mapped;
+    console.error("[v2/env] update failed:", updateError);
+    return apiError("internal", "Could not save the variable.", 500);
+  }
+
+  if (!updated) {
+    const { error: insertError } = await caller.db.from("env_vars").insert({
+      project_id: project.id,
+      environment_id: null,
+      key,
+      value_ct: valueCt,
+      dek_id: dekId,
+      is_public: isPublic,
+    });
+
+    if (insertError) {
+      // Two concurrent first-writes of the same key: the expression index
+      // rejects the loser. Report it rather than silently discarding a value
+      // the user believes they saved.
+      if (insertError.code === "23505") {
+        return conflict(
+          `"${key}" was created by another request at the same time. Try again.`
+        );
+      }
+      const mapped = fromPostgrestError(insertError);
+      if (mapped) return mapped;
+      console.error("[v2/env] insert failed:", insertError);
+      return apiError("internal", "Could not save the variable.", 500);
+    }
+  }
+
+  return json({
+    key,
+    isPublic,
+    status: "saved_restarting",
+    // Kubernetes reads envFrom once at container start, so a Secret change is
+    // invisible to a running pod. The reconciler rolls the pods via a content
+    // hash on the template. Saying "saved" alone would imply it already took
+    // effect, which it has not.
+    note: isPublic
+      ? "Saved. This is a build argument, so it applies on the next deployment, not to running pods."
+      : "Saved. Pods restart to pick up the new value, so it takes effect in a few seconds.",
+  });
 }
 
 export async function DELETE(request: Request, { params }: Params) {

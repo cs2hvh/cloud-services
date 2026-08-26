@@ -284,7 +284,7 @@ export default async function ProjectPage({ params }: Params) {
         <EnvEditor
           projectRef={project.ref}
           variables={variables}
-          canSave={false}
+          canSave
         />
       </Section>
 

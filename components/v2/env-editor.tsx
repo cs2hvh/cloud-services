@@ -63,7 +63,11 @@ export function EnvEditor({
 }: {
   projectRef: string;
   variables: EnvVarSummary[];
-  /** False until the platform has an encryption path; PUT returns 503. */
+  /**
+   * False disables saving and says so. It was false until 48fc6034, when the
+   * encryption path landed; there is no longer a reason to pass false unless a
+   * future gap reopens.
+   */
   canSave: boolean;
 }) {
   const scopes = useMemo(() => {
@@ -158,7 +162,12 @@ export function EnvEditor({
       delete next[activeScope];
       return next;
     });
-    setMessage(`Saved ${saved} variable${saved === 1 ? "" : "s"}.`);
+    // Not just "Saved". Kubernetes reads envFrom once at container start, so
+    // the reconciler rolls the pods to apply a change — it is neither instant
+    // nor zero-downtime, and saying otherwise implies it already took effect.
+    setMessage(
+      `Saved ${saved} variable${saved === 1 ? "" : "s"} — restarting to apply.`
+    );
     setBusy(false);
   }
 
