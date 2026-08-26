@@ -110,6 +110,45 @@ export interface DeployResult {
  * `error` state — which is the point: a failure anyone can see beats a
  * failure that leaves no trace.
  */
+/**
+ * What a caller must supply to enqueue a build for an already-recorded row.
+ *
+ * THE SPLIT THIS EXISTS TO ENFORCE
+ *
+ * Master needs a "redeploy" button. The enqueue is a TENANT-SCOPED WRITE and
+ * belongs under RLS in their route; the build is a privileged operation and
+ * belongs here. Handing them a function that does both would mean a route
+ * writing paas.deployments with the service role — the exact thing the
+ * elevation rule forbids, and now the thing boundary.test.ts fails on.
+ *
+ * So the seam is: THEY create the deployment row through RLS, and pass me the
+ * ref. I never decide who may deploy; I only build what is already recorded.
+ */
+export interface EnqueuedBuild {
+  deploymentRef: string;
+  accepted: boolean;
+  reason?: string;
+}
+
+/**
+ * Accept an already-recorded deployment for building.
+ *
+ * Validates that the row is real and genuinely queued, and returns rather than
+ * throwing so a caller can report a useful reason. Does NOT build — the worker
+ * picks it up. An endpoint that accepted a trigger and then built inline would
+ * time out and report success for a build nobody watched.
+ */
+export async function acceptQueuedDeployment(deploymentRef: string): Promise<EnqueuedBuild> {
+  const d = await deployments.byRef(deploymentRef);
+  if (!d) return { deploymentRef, accepted: false, reason: "no such deployment" };
+  if (d.state !== "queued") {
+    // Refusing rather than rebuilding is what stops a double-click, a retry and
+    // a worker from all building one deployment.
+    return { deploymentRef, accepted: false, reason: `deployment is ${d.state}, not queued` };
+  }
+  return { deploymentRef, accepted: true };
+}
+
 export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult> {
   const say = opts.onProgress ?? (() => {});
   const k = kube(kubeContextFromEnv());
