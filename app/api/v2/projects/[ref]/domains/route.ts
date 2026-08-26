@@ -8,6 +8,7 @@
  * a Cloudflare stack trace at them or reporting success it cannot deliver.
  */
 
+import { checkCustomDomain } from "../../../_lib/domains";
 import { getCaller } from "../../../_lib/auth";
 import {
   json,
@@ -22,21 +23,6 @@ import {
 export const dynamic = "force-dynamic";
 
 type Params = { params: Promise<{ ref: string }> };
-
-/**
- * A hostname, validated strictly because it becomes a routing key. Each label
- * 1-63 chars, alphanumeric with internal hyphens, at least two labels, 253
- * total. v1 accepted malformed hostnames and one of them collided across
- * tenants.
- */
-const HOSTNAME =
-  /^(?=.{1,253}$)(?!-)[a-z0-9-]{1,63}(?<!-)(\.(?!-)[a-z0-9-]{1,63}(?<!-))+$/;
-
-/** Hosts we serve ourselves; a tenant claiming one would hijack the platform. */
-const RESERVED_SUFFIXES = [
-  "ahurasense.com",
-  "apps.ahurasense.com",
-];
 
 interface DomainRow {
   ref: string;
@@ -127,21 +113,17 @@ export async function POST(request: Request, { params }: Params) {
     return invalid("Request body must be JSON.");
   }
 
-  const domain =
-    typeof body.domain === "string" ? body.domain.trim().toLowerCase() : "";
-  if (!HOSTNAME.test(domain)) {
-    return invalid("That is not a valid domain name.", { domain: "malformed" });
+  // checkCustomDomain lives in _lib/domains.ts so it can actually be executed
+  // — see app/api/v2/_lib/pure.test.ts. Nothing else in this directory runs.
+  const checked = checkCustomDomain(body.domain);
+  if (!checked.ok) {
+    return checked.reason === "reserved"
+      ? invalid("That domain belongs to the platform and cannot be claimed.", {
+          domain: "reserved",
+        })
+      : invalid("That is not a valid domain name.", { domain: "malformed" });
   }
-  if (
-    RESERVED_SUFFIXES.some(
-      (suffix) => domain === suffix || domain.endsWith(`.${suffix}`)
-    )
-  ) {
-    return invalid(
-      "That domain belongs to the platform and cannot be claimed.",
-      { domain: "reserved" }
-    );
-  }
+  const domain = checked.domain;
 
   const project = await resolveProject(caller, ref);
   if (!project) return notFound("Project");
