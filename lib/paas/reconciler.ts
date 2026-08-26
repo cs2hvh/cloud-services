@@ -27,7 +27,7 @@
  *    routes nowhere is a lie the control plane is telling.
  */
 
-import { kube, type KubeContext } from "./k8s/client.ts";
+import { kube, loadKubeconfig, type KubeContext } from "./k8s/client.ts";
 import {
   appDeployment,
   appService,
@@ -268,4 +268,73 @@ export async function promote(projectId: string, deploymentRef: string): Promise
   const alias = await aliases.production(projectId);
   if (!alias) throw new Error("project has no production alias");
   return aliases.point(alias.ref, d.id);
+}
+
+// ── entrypoints ─────────────────────────────────────────────────────────────
+//
+// A control loop with no runner is not a control loop. The functions above were
+// only ever invoked by a proof script, which meant an alias write from the UI
+// moved the database pointer and nothing reached the cluster until a human ran
+// a script. Peer review caught that; these are the callers that close it.
+//
+// Two triggers, deliberately, because they fail differently:
+//
+//   EDGE-TRIGGERED (promoteAndConverge) — converge immediately after a write,
+//   so a promote takes effect in seconds rather than whenever a timer fires.
+//   Fast, but it is lost if the process dies mid-call.
+//
+//   LEVEL-TRIGGERED (the loop in scripts/v2/reconcile-loop.ts) — re-derive
+//   desired state from scratch on an interval, so anything the edge trigger
+//   missed is repaired without anyone noticing. Slow, but it cannot lose work.
+//
+// Neither alone is sufficient: edge-only diverges silently on any failure,
+// level-only makes every promote feel broken for up to one interval.
+
+/** Kube context from the environment, so callers need not know the file path. */
+export function kubeContextFromEnv(): KubeContext {
+  const path = process.env.V2_KUBECONFIG ?? "C:/ahura-secrets/kubeconfig-v2-dev.yaml";
+  return loadKubeconfig(path);
+}
+
+/** Converge one project by its ref. Safe to call from a request handler. */
+export async function reconcileProjectByRef(
+  projectRef: string,
+  opts: { dryRun?: boolean } = {},
+): Promise<ReconcileReport> {
+  const project = await projects.byRef(projectRef);
+  if (!project) throw new Error(`project ${projectRef} not found`);
+  return reconcileProject(kubeContextFromEnv(), project, {
+    dryRun: opts.dryRun,
+    appDomain: process.env.V2_APP_DOMAIN ?? "ahurasense.com",
+  });
+}
+
+/**
+ * Promote and converge in one call. This is what a promote button should hit.
+ *
+ * The alias write is the source of truth and happens FIRST, so if convergence
+ * fails the desired state is still recorded and the background loop repairs it.
+ * Reversing the order would mean a cluster change with no record — the same
+ * create-before-record mistake that left infrastructure untracked earlier.
+ */
+export async function promoteAndConverge(
+  projectId: string,
+  deploymentRef: string,
+): Promise<{ alias: AliasRow; report: ReconcileReport | null; convergeError?: string }> {
+  const alias = await promote(projectId, deploymentRef);
+
+  const project = (await projects.list()).find((p) => p.id === projectId);
+  if (!project) return { alias, report: null, convergeError: "project not found after promote" };
+
+  try {
+    const report = await reconcileProject(kubeContextFromEnv(), project, {
+      appDomain: process.env.V2_APP_DOMAIN ?? "ahurasense.com",
+    });
+    return { alias, report };
+  } catch (e) {
+    // The pointer moved and is durable; the loop will finish the job. Report it
+    // rather than throwing, so the caller can say "promoted, converging" rather
+    // than implying the promote failed when it did not.
+    return { alias, report: null, convergeError: (e as Error).message.slice(0, 300) };
+  }
 }
