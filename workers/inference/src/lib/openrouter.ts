@@ -16,26 +16,31 @@
  */
 import { createClient } from "@supabase/supabase-js";
 import { decryptAesGcm, postgresByteaToBytes } from "./crypto.ts";
+import { DEFAULT_SUPPLIER, type Supplier, type UpstreamPath } from "./suppliers/index.ts";
 import type { Env } from "../types.ts";
 
 export interface OpenRouterForwardOptions {
   env: Env;
   body: unknown;
-  upstreamKey: string;           // either env.OPENROUTER_PLATFORM_KEY or caller's BYOK
-  path: "/chat/completions" | "/embeddings" | "/completions" | "/rerank";
+  upstreamKey: string;           // either the platform key or caller's BYOK
+  path: UpstreamPath;
   signal?: AbortSignal;          // tied to client AbortController for cancel propagation
   extraHeaders?: Record<string, string>;
+  /** Where to send it. Defaults to OpenRouter, which is what every caller got
+   *  before the supplier seam existed and what every caller still gets until
+   *  routing is switched on (plan §12, P4). */
+  supplier?: Supplier;
 }
 
 export async function forwardJson(opts: OpenRouterForwardOptions): Promise<Response> {
-  const url = `${opts.env.OPENROUTER_BASE_URL}${opts.path}`;
+  const supplier = opts.supplier ?? DEFAULT_SUPPLIER;
+  const url = `${supplier.baseUrl(opts.env)}${supplier.path(opts.path)}`;
   return fetch(url, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${opts.upstreamKey}`,
       "Content-Type": "application/json",
-      "HTTP-Referer": "https://ahurasense.com",
-      "X-Title": "AhuraCloud Inference",
+      ...supplier.headers(),
       ...opts.extraHeaders,
     },
     body: JSON.stringify(opts.body),

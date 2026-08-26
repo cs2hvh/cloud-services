@@ -14,7 +14,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 /** Columns the pricing admin reads; kept in one place so route and type agree. */
 export const MODEL_COLUMNS =
-  "model_id, display_name, is_active, serving_type, upstream_provider, upstream_model_id, pricing, upstream_pricing";
+  "model_id, display_name, is_active, serving_type, upstream_provider, preferred_provider, upstream_model_id, pricing, upstream_pricing";
 
 export function inferenceAdminClient(): SupabaseClient {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {

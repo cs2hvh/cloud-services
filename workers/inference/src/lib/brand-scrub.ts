@@ -52,6 +52,14 @@ export function stripInfraFromText(text: string): string {
       "[internal]"
     )
     .replace(/\bopenrouter\.ai\b/gi, "model gateway")
+    .replace(/https?:\/\/(?:www\.|api\.)?wokey\.ai(?:[^\s)\]}"\'>]*[^\s)\]}"\'>.,;:!?])?/gi, "the model gateway")
+    .replace(/\b(?:api\.)?wokey\.ai\b/gi, "model gateway")
+    .replace(/\bWokey\b/gi, "model gateway")
+    // Env var names name the supplier just as plainly as a URL does. The
+    // control-plane scrub (lib/inference/error-messages.ts) and the agent scrub
+    // both did this; the gateway did not, for either supplier. Closed here so
+    // all three agree.
+    .replace(/\b(?:OPENROUTER|WOKEY)_[A-Z_]+\b/g, "upstream config")
     .replace(/\bOpenRouter\b/gi, "model gateway")
     .replace(/\bRunPod\b/gi, "GPU compute")
     .replace(/\bUpstash\b/gi, "cache")

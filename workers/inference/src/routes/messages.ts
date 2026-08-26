@@ -25,6 +25,7 @@ import {
   resolveUpstreamKey,
   streamPassthrough,
 } from "../lib/openrouter.ts";
+import { reportedCostCents } from "../lib/gateway.ts";
 import { lookupCache, shouldCacheMessages, writeCache } from "../lib/cache.ts";
 import {
   extractEmbeddableText,
@@ -95,7 +96,10 @@ interface OpenAIChatResponse {
     prompt_tokens?: number;
     completion_tokens?: number;
     total_tokens?: number;
-    prompt_tokens_details?: { cached_tokens?: number };
+    prompt_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number };
+  /** What OpenRouter charged us, in credits (1 credit = $1). Returned on every
+   *  response including the final streaming chunk — no parameter needed. */
+  cost?: number;
   };
 }
 
@@ -235,6 +239,8 @@ export const messagesShim: Handler<{
           inputTokens: hit.usage?.prompt_tokens ?? null,
           outputTokens: hit.usage?.completion_tokens ?? null,
           cachedTokens: hit.usage?.prompt_tokens ?? null,
+          cacheWriteTokens: null, // served from cache — nothing written
+          reportedUpstreamCostCents: null, // our cache, not theirs
           status: "success",
           cacheKind: "l1",
         })
@@ -297,6 +303,8 @@ export const messagesShim: Handler<{
             inputTokens: semanticHit.usage?.prompt_tokens ?? null,
             outputTokens: semanticHit.usage?.completion_tokens ?? null,
             cachedTokens: semanticHit.usage?.prompt_tokens ?? null,
+            cacheWriteTokens: null, // served from cache — nothing written
+            reportedUpstreamCostCents: null, // our cache, not theirs
             status: "success",
             cacheKind: "semantic",
           })
@@ -354,6 +362,9 @@ export const messagesShim: Handler<{
           ...baseUsageEvent(auth, normalizedModel, requestId, startedAt),
           inputTokens: usage?.input_tokens ?? null,
           outputTokens: usage?.output_tokens ?? null,
+          cachedTokens: usage?.cache_read_input_tokens ?? null,
+          cacheWriteTokens: usage?.cache_creation_input_tokens ?? null,
+          reportedUpstreamCostCents: reportedCostCents(usage?.cost),
           status: "success",
         })
       );
@@ -380,6 +391,8 @@ export const messagesShim: Handler<{
       inputTokens: oaiResp.usage?.prompt_tokens ?? null,
       outputTokens: oaiResp.usage?.completion_tokens ?? null,
       cachedTokens: oaiResp.usage?.prompt_tokens_details?.cached_tokens ?? null,
+      cacheWriteTokens: oaiResp.usage?.prompt_tokens_details?.cache_write_tokens ?? null,
+      reportedUpstreamCostCents: reportedCostCents(oaiResp.usage?.cost),
       status: "success",
     })
   );
@@ -519,7 +532,11 @@ function openaiToAnthropic(resp: OpenAIChatResponse, model: string) {
     stop_sequence: null,
     usage: {
       input_tokens: resp.usage?.prompt_tokens ?? 0,
-      cache_creation_input_tokens: 0,
+      // Was hardcoded 0, which told every Anthropic-format caller that nothing
+      // was ever written to cache — while we were being charged 1.25x-2x input
+      // for exactly those tokens. Reported honestly now; still 0 when the
+      // upstream does not break it out.
+      cache_creation_input_tokens: resp.usage?.prompt_tokens_details?.cache_write_tokens ?? 0,
       cache_read_input_tokens: resp.usage?.prompt_tokens_details?.cached_tokens ?? 0,
       output_tokens: resp.usage?.completion_tokens ?? 0,
     },
@@ -549,6 +566,16 @@ function mapFinishReason(reason: string | null): string {
 interface AnthropicUsage {
   input_tokens?: number;
   output_tokens?: number;
+  /** Anthropic's own names, so the streamed shape matches the non-streamed one.
+   *  Without these the streaming path billed every cache read at the full input
+   *  rate and every cache write at the input rate — most chat traffic streams,
+   *  so that was the majority of Claude requests. */
+  cache_read_input_tokens?: number;
+  cache_creation_input_tokens?: number;
+  /** What the upstream said this cost, in credits. Carried for the same reason
+   *  the cache fields are: most chat traffic streams, so a figure captured only
+   *  on the non-streaming path is captured for the minority of requests. */
+  cost?: number;
 }
 
 function convertOpenAIStreamToAnthropic(
@@ -564,6 +591,9 @@ function convertOpenAIStreamToAnthropic(
   let contentBlockStarted = false;
   let outputTokens = 0;
   let inputTokens: number | undefined;
+  let cacheReadTokens: number | undefined;
+  let cacheWriteTokens: number | undefined;
+  let upstreamCost: number | undefined;
   let finalStopReason = "end_turn";
   let leftover = "";
 
@@ -585,7 +615,14 @@ function convertOpenAIStreamToAnthropic(
             delta?: { content?: string; role?: string };
             finish_reason?: string | null;
           }>;
-          usage?: { prompt_tokens?: number; completion_tokens?: number };
+          usage?: {
+            prompt_tokens?: number;
+            completion_tokens?: number;
+            prompt_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number };
+  /** What OpenRouter charged us, in credits (1 credit = $1). Returned on every
+   *  response including the final streaming chunk — no parameter needed. */
+  cost?: number;
+          };
         };
         try {
           data = JSON.parse(payload);
@@ -638,6 +675,10 @@ function convertOpenAIStreamToAnthropic(
           if (data.usage.prompt_tokens !== undefined) inputTokens = data.usage.prompt_tokens;
           if (data.usage.completion_tokens !== undefined)
             outputTokens = data.usage.completion_tokens;
+          const details = data.usage.prompt_tokens_details;
+          if (details?.cached_tokens !== undefined) cacheReadTokens = details.cached_tokens;
+          if (details?.cache_write_tokens !== undefined) cacheWriteTokens = details.cache_write_tokens;
+          if (data.usage.cost !== undefined) upstreamCost = data.usage.cost;
         }
       }
     },
@@ -651,10 +692,20 @@ function convertOpenAIStreamToAnthropic(
       emit(controller, encoder, "message_delta", {
         type: "message_delta",
         delta: { stop_reason: finalStopReason, stop_sequence: null },
-        usage: { output_tokens: outputTokens },
+        usage: {
+          output_tokens: outputTokens,
+          ...(cacheReadTokens !== undefined ? { cache_read_input_tokens: cacheReadTokens } : {}),
+          ...(cacheWriteTokens !== undefined ? { cache_creation_input_tokens: cacheWriteTokens } : {}),
+        },
       });
       emit(controller, encoder, "message_stop", { type: "message_stop" });
-      onComplete({ input_tokens: inputTokens, output_tokens: outputTokens });
+      onComplete({
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        cache_read_input_tokens: cacheReadTokens,
+        cache_creation_input_tokens: cacheWriteTokens,
+        cost: upstreamCost,
+      });
     },
   });
 
@@ -715,9 +766,12 @@ function baseUsageEvent(
     modality: "chat",
     requestId,
     billedTo: auth.billing,
+    provider: "openrouter",
     inputTokens: null,
     outputTokens: null,
     cachedTokens: null,
+    cacheWriteTokens: null,
+    reportedUpstreamCostCents: null,
     numUnits: null,
     unitLabel: null,
     costCents: 0,

@@ -11,6 +11,7 @@ import {
   type OrgMemberRow,
   type OrgRow,
   type UsageRow,
+  violatesZdrSupplyRule,
 } from "@/lib/admin/inference-orgs";
 
 // Doc: nextstespsAI/21-admin-platform.md (§4, A2). Org-scoped by decision in
@@ -178,5 +179,39 @@ describe("overview", () => {
     expect(o.keys_uncapped).toBe(1); // revoked one excluded
     expect(o.internal_keys_live).toBe(1);
     expect(o.orgs_without_cap).toBe(1); // o2 only; o3 is deleted
+  });
+});
+
+describe("violatesZdrSupplyRule", () => {
+  // ZDR and marketplace supply are incompatible promises: marketplace capacity
+  // may retain a failed request's payload for 14 days, unredacted.
+  it("refuses turning marketplace supply on for an org that already has ZDR", () => {
+    expect(violatesZdrSupplyRule({ zdr_default: true }, { allow_marketplace_supply: true })).toBe(true);
+  });
+
+  it("refuses turning ZDR on for an org that already uses marketplace supply", () => {
+    expect(violatesZdrSupplyRule({ allow_marketplace_supply: true }, { zdr_default: true })).toBe(true);
+  });
+
+  it("refuses setting BOTH in one request — the way it would actually happen", () => {
+    expect(
+      violatesZdrSupplyRule(null, { zdr_default: true, allow_marketplace_supply: true })
+    ).toBe(true);
+  });
+
+  it("allows either one alone", () => {
+    expect(violatesZdrSupplyRule({ zdr_default: true }, { allow_marketplace_supply: false })).toBe(false);
+    expect(violatesZdrSupplyRule({ allow_marketplace_supply: true }, { zdr_default: false })).toBe(false);
+  });
+
+  it("allows turning ZDR ON while turning marketplace supply OFF in the same request", () => {
+    expect(
+      violatesZdrSupplyRule({ allow_marketplace_supply: true }, { zdr_default: true, allow_marketplace_supply: false })
+    ).toBe(false);
+  });
+
+  it("treats absent and null as false, not as unknown", () => {
+    expect(violatesZdrSupplyRule(null, {})).toBe(false);
+    expect(violatesZdrSupplyRule({ zdr_default: null, allow_marketplace_supply: null }, {})).toBe(false);
   });
 });

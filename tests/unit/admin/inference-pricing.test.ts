@@ -374,6 +374,15 @@ describe("summarize", () => {
 
 describe("TOKEN_FIELDS", () => {
   it("matches the jsonb keys the biller reads", () => {
-    expect(TOKEN_FIELDS).toEqual(["input_cents_per_mtok", "cached_cents_per_mtok", "output_cents_per_mtok"]);
+    // Kept in lockstep with rawTokenCostCents() in
+    // workers/inference/src/consumers/usage.ts. A rate this screen cannot edit
+    // is a rate nobody notices going wrong: cache_write was missing from both
+    // for months, and a cache write costs MORE than fresh input.
+    expect(TOKEN_FIELDS).toEqual([
+      "input_cents_per_mtok",
+      "cached_cents_per_mtok",
+      "cache_write_cents_per_mtok",
+      "output_cents_per_mtok",
+    ]);
   });
 });

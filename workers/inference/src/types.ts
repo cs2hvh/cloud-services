@@ -30,6 +30,9 @@ export interface Env {
 
   // Public vars
   OPENROUTER_BASE_URL: string;
+  /** Marketplace supplier. Optional: absent means Wokey is simply not
+   *  configured, and every route resolves to OpenRouter. */
+  WOKEY_BASE_URL?: string;
   SUPABASE_URL: string;
   GATEWAY_VERSION: string;
   ENV: "production" | "preview" | "development";
@@ -41,6 +44,7 @@ export interface Env {
   // Secrets (populated via `wrangler secret put`)
   SUPABASE_SERVICE_ROLE_KEY: string;
   OPENROUTER_PLATFORM_KEY: string;
+  WOKEY_PLATFORM_KEY?: string;
   BYOK_DEK: string;
   // For routing fine-tune + BYO models to their per-deployment serving
   // endpoints on the compute provider's serverless layer.
@@ -151,13 +155,32 @@ export interface UsageEvent {
     | "agent_tool";
   requestId: string;
   billedTo: "platform" | "byok";
+  /** Which supplier actually served this request and therefore charged us.
+   *  Defaults to 'openrouter', which is what every row was before a second
+   *  supplier existed. Without this, upstream_cost_cents is unattributable the
+   *  moment a model can be bought from more than one place. */
+  provider: string;
   inputTokens: number | null;
   outputTokens: number | null;
+  /** Input tokens served from an upstream prompt cache — billed at the cheap
+   *  cached rate. A SUBSET of inputTokens. */
   cachedTokens: number | null;
+  /** Input tokens WRITTEN to an upstream prompt cache. Also a subset of
+   *  inputTokens, and the expensive one: Anthropic charges 1.25x input for a
+   *  5-minute write and 2x for an hour, so a cache write costs MORE than not
+   *  caching at all. Null when the upstream does not report it. */
+  cacheWriteTokens: number | null;
   numUnits: number | null;
   unitLabel: string | null;
   costCents: number;
   upstreamCostCents: number;
+  /** What the SUPPLIER says this request cost us, in cents, when it tells us.
+   *  OpenRouter returns `usage.cost` (in credits) on every response including
+   *  streaming — authoritative, per-request, and independent of whether our
+   *  rate table is synced or even has a row for this modality.
+   *
+   *  Null when the supplier reports nothing; the rate table is the fallback. */
+  reportedUpstreamCostCents: number | null;
   isOffPeak: boolean;
   latencyMs: number;
   ttftMs: number | null;

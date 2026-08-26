@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { FEATURE_SWITCHES, disabledResponseBody, findSwitch } from "@/lib/admin/feature-switches";
 import { GATED_KEYS } from "@/workers/inference/src/middleware/feature-gate";
@@ -13,12 +13,23 @@ import { GATED_KEYS } from "@/workers/inference/src/middleware/feature-gate";
 // the drift this file exists to catch. It is the only test here that reads
 // another deploy unit's source on purpose.
 
-const MIGRATION = join(process.cwd(), "supabase/migrations/20260804000001_ai_admin_operations.sql");
+// Switches arrive in more than one migration now, so the seed side of the
+// comparison reads every migration that writes platform_settings rather than
+// one hard-coded file — otherwise adding a switch in a new migration silently
+// stops being checked, which is the drift this file exists to catch.
+const MIGRATION_DIR = join(process.cwd(), "supabase/migrations");
 
-/** Keys the migration seeds into public.platform_settings. */
+function migrationSql(): string {
+  return readdirSync(MIGRATION_DIR)
+    .filter((f) => f.endsWith(".sql"))
+    .map((f) => readFileSync(join(MIGRATION_DIR, f), "utf8"))
+    .filter((sql) => sql.includes("platform_settings"))
+    .join("\n");
+}
+
+/** Keys the migrations seed into public.platform_settings. */
 function seededKeys(): string[] {
-  const sql = readFileSync(MIGRATION, "utf8");
-  return [...new Set([...sql.matchAll(/'(ai_[a-z_]+_enabled)'/g)].map((m) => m[1]))].sort();
+  return [...new Set([...migrationSql().matchAll(/'(ai_[a-z_]+_enabled)'/g)].map((m) => m[1]))].sort();
 }
 
 describe("the three lists that must agree", () => {
@@ -36,12 +47,30 @@ describe("the three lists that must agree", () => {
     expect(seededKeys()).toEqual(known);
   });
 
-  it("seeds every switch ENABLED, so applying the migration cannot take the platform down", () => {
-    const sql = readFileSync(MIGRATION, "utf8");
+  it("seeds each switch in the state its own failure mode requires", () => {
+    // The invariant is not "always true" — it is "applying a migration cannot
+    // make things worse."
+    //
+    //   capability switches  seed TRUE.  Seeding one false would turn a feature
+    //                        off for every customer the moment it is applied.
+    //   supplier switches    seed FALSE. Off means "buy from OpenRouter", which
+    //                        is exactly the behaviour before the supplier
+    //                        existed. Seeding one true would start routing
+    //                        traffic to a marketplace on migration.
+    const sql = migrationSql();
     for (const spec of FEATURE_SWITCHES) {
-      // Each seed row is `('key', 'true'::jsonb)`.
-      const seeded = new RegExp(`'${spec.key}'\\s*,\\s*'true'::jsonb`).test(sql);
-      expect(seeded, `${spec.key} is not seeded 'true'`).toBe(true);
+      const wanted = spec.default_enabled === false ? "false" : "true";
+      const seeded = new RegExp(`'${spec.key}'\\s*,\\s*'${wanted}'::jsonb`).test(sql);
+      expect(seeded, `${spec.key} is not seeded '${wanted}'`).toBe(true);
+    }
+  });
+
+  it("a switch that defaults OFF reads OFF when its row is missing", () => {
+    // The admin screen and the gateway must agree about an absent row. If the
+    // screen defaulted a supplier switch to enabled, an operator would see
+    // "Wokey: on" while the gateway routed every request to OpenRouter.
+    for (const spec of FEATURE_SWITCHES.filter((x) => x.default_enabled === false)) {
+      expect(spec.default_enabled, spec.key).toBe(false);
     }
   });
 });
@@ -52,11 +81,25 @@ describe("every switch has somewhere that reads it", () => {
   // or route, or it is a switch that does nothing.
   const CONTROL_PLANE_ONLY = ["ai_connector_sync_enabled", "ai_finetuning_enabled"];
 
-  it("is enforced either at the gateway or in a named control-plane route", () => {
+  it("is enforced either at the gateway, in a named control-plane route, or in supplier routing", () => {
+    // Supplier switches are read by the routing resolver rather than the
+    // capability gate: they choose an upstream, they do not refuse a request.
+    const routing = readFileSync(
+      join(process.cwd(), "workers/inference/src/lib/supplier-routing.ts"),
+      "utf8"
+    );
     for (const spec of FEATURE_SWITCHES) {
       const atGateway = GATED_KEYS.includes(spec.key);
       const inControlPlane = CONTROL_PLANE_ONLY.includes(spec.key);
-      expect(atGateway || inControlPlane, `${spec.key} has no enforcement point`).toBe(true);
+      // The resolver builds the key from the supplier id, so match the shape
+      // it constructs rather than a literal that never appears in source.
+      const inRouting =
+        spec.key.startsWith("ai_supplier_") &&
+        routing.includes("`ai_supplier_${supplierId}_enabled`");
+      expect(
+        atGateway || inControlPlane || inRouting,
+        `${spec.key} has no enforcement point`
+      ).toBe(true);
       expect(spec.enforced_in, spec.key).toBeTruthy();
     }
   });

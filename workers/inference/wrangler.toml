@@ -149,6 +149,10 @@ max_concurrency = 2
 # ───────────────────────────────────────────────────────────────
 [vars]
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+# Marketplace supplier. Configuring the URL does NOT switch anything on:
+# routing needs models.preferred_provider set AND an enabled model_routes row
+# AND WOKEY_PLATFORM_KEY present. Absent key = every route stays on OpenRouter.
+WOKEY_BASE_URL = "https://api.wokey.ai/v1"
 SUPABASE_URL = "https://xafjjpgazdxhktpfeuri.supabase.co"
 GATEWAY_VERSION = "0.1.0"
 ENV = "production"
@@ -161,6 +165,12 @@ CONTROL_PLANE_URL = "https://ahurasense.com"
 # Secrets (set via `wrangler secret put` — never commit values):
 #   • SUPABASE_SERVICE_ROLE_KEY  — for inference.lookup_api_key RPC
 #   • OPENROUTER_PLATFORM_KEY    — used for platform-billed requests
+#   • WOKEY_PLATFORM_KEY         — OPTIONAL. Leave unset until a Wokey account
+#                                  exists and the benchmark has passed
+#                                  (docs/inference/supply-routing-plan.md §12,
+#                                  P3). Unset is a normal, safe state: the
+#                                  supplier reports itself unconfigured and
+#                                  traffic serves from OpenRouter.
 #   • BYOK_DEK                   — AES-GCM data encryption key (matches Postgres kms_key_version)
 #   • OTEL_EXPORTER_OTLP_HEADERS — auth header for OTel collector
 #   • BATCH_PROCESSOR_TOKEN      — shared cron secret. MUST equal the

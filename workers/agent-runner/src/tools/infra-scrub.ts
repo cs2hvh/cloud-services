@@ -29,6 +29,7 @@ export function scrubInfraLeakage(text: string): string {
     .replace(/\bUpstash\b/gi, "cache")
     .replace(/\bCloudflare\b/gi, "edge")
     .replace(/\bOpenRouter\b/gi, "model gateway")
+    .replace(/\bWokey\b/gi, "model gateway")
     .replace(/hugging\s?face(\.co)?/gi, "model hub")
     .replace(/\baxolotl\b/gi, "training runtime")
     .replace(/ghcr\.io\/\S+/gi, "training image")
@@ -41,6 +42,7 @@ export function scrubInfraLeakage(text: string): string {
     .replace(/\bagent-runner\b/gi, "agent worker")
     .replace(/\beval-runner\b/gi, "eval worker")
     .replace(/\bOPENROUTER_[A-Z_]+\b/g, "upstream config")
+    .replace(/\bWOKEY_[A-Z_]+\b/g, "upstream config")
     .replace(/\bSUPABASE_[A-Z_]+\b/g, "internal config")
     .replace(/\.supabase\.co\b/gi, "")
     // K8s-shaped internal DNS (e.g. some-svc.ahura.svc.cluster.local) — the

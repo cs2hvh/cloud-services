@@ -23,6 +23,7 @@ import {
   type OrgMemberRow,
   type OrgRow,
   type UsageRow,
+  violatesZdrSupplyRule,
 } from "@/lib/admin/inference-orgs";
 
 export const dynamic = "force-dynamic";
@@ -38,7 +39,7 @@ export async function GET() {
   const inf = () => supabase.schema("inference");
 
   const [orgsRes, membersRes, keysRes, byokRes, usageRes] = await Promise.all([
-    inf().from("orgs").select("id, name, slug, owner_user_id, billing_user_id, hard_cap_cents, monthly_budget_cents, vector_quota, zdr_default, region_pin, deleted_at, created_at").returns<OrgRow[]>(),
+    inf().from("orgs").select("id, name, slug, owner_user_id, billing_user_id, hard_cap_cents, monthly_budget_cents, vector_quota, zdr_default, allow_marketplace_supply, region_pin, deleted_at, created_at").returns<OrgRow[]>(),
     inf().from("org_members").select("org_id, user_id, role, status, joined_at, invited_at").returns<OrgMemberRow[]>(),
     inf().from("api_keys").select("id, org_id, name, key_prefix, key_last_four, key_tier, is_internal_service, rate_limit_rpm, hard_cap_cents, monthly_budget_cents, allowed_models, revoked_at, expires_at, last_used_at, created_at").returns<ApiKeyRow[]>(),
     inf().from("byok_keys").select("id, org_id, provider, name, key_last_four, is_valid, last_verified_at, last_verify_error").returns<ByokKeyRow[]>(),
@@ -131,6 +132,9 @@ export async function PUT(req: NextRequest) {
     update[field] = Math.round(value);
   }
   if (typeof body?.zdr_default === "boolean") update.zdr_default = body.zdr_default;
+  if (typeof body?.allow_marketplace_supply === "boolean") {
+    update.allow_marketplace_supply = body.allow_marketplace_supply;
+  }
 
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
@@ -140,16 +144,30 @@ export async function PUT(req: NextRequest) {
   const { data: before } = await supabase
     .schema("inference")
     .from("orgs")
-    .select("hard_cap_cents, monthly_budget_cents, zdr_default, vector_quota")
+    .select("hard_cap_cents, monthly_budget_cents, zdr_default, vector_quota, allow_marketplace_supply")
     .eq("id", orgId)
     .maybeSingle<Record<string, unknown>>();
+
+  // A zero-data-retention org must never be served by marketplace supply.
+  // The rule itself lives in lib/admin/inference-orgs.ts so it is testable
+  // without a database; this route is simply the only place every caller passes
+  // through, which is why the check belongs here and not in a form.
+  if (violatesZdrSupplyRule(before ?? null, update)) {
+    return NextResponse.json(
+      {
+        error:
+          "A zero-data-retention org cannot use marketplace supply. Marketplace capacity may retain request payloads for up to 14 days on failed requests, which contradicts ZDR. Turn ZDR off first if this is deliberate.",
+      },
+      { status: 409 }
+    );
+  }
 
   const { data, error } = await supabase
     .schema("inference")
     .from("orgs")
     .update(update)
     .eq("id", orgId)
-    .select("id, hard_cap_cents, monthly_budget_cents, zdr_default, vector_quota")
+    .select("id, hard_cap_cents, monthly_budget_cents, zdr_default, vector_quota, allow_marketplace_supply")
     .maybeSingle();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -159,6 +177,7 @@ export async function PUT(req: NextRequest) {
     "hard_cap_cents",
     "monthly_budget_cents",
     "zdr_default",
+    "allow_marketplace_supply",
     "vector_quota",
   ]);
   if (changes.length > 0) {

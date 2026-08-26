@@ -25,16 +25,41 @@ export interface FeatureSwitchSpec {
   effect: string;
   /** Where the switch is enforced, so nobody has to grep for it. */
   enforced_in: string;
+  /**
+   * What a MISSING row means. Defaults to true — see the FAIL OPEN note above.
+   *
+   * Supplier switches set this false. They gate WHICH UPSTREAM serves a
+   * request, not whether a capability exists, so "off" costs a slightly larger
+   * bill rather than a 503 — and failing open would route to a marketplace at
+   * the exact moment we could not verify it was allowed. Without this field the
+   * admin screen would show such a switch as enabled while the gateway treats
+   * it as disabled, which is a worse lie than either behaviour alone.
+   */
+  default_enabled?: boolean;
 }
 
 /**
- * Five switches, each enforced somewhere real.
+ * Six switches, each enforced somewhere real.
+ *
+ * TWO KINDS, and the difference decides how they fail. A CAPABILITY switch
+ * (inference, agents, media, connectors, fine-tuning) turns a product off, so
+ * closing it returns 503 and it must fail OPEN. A SUPPLIER switch chooses where
+ * capacity is bought, so closing it just buys from OpenRouter — it fails CLOSED
+ * and seeds false. Do not flatten them back into one rule.
  *
  * A switch nobody checks is worse than no switch: an operator flips it, believes
  * the bleeding stopped, and it did not. So the list is exactly the capabilities
  * that have an enforcement point, and `enforced_in` names it.
  */
 export const FEATURE_SWITCHES: FeatureSwitchSpec[] = [
+  {
+    key: "ai_supplier_wokey_enabled",
+    label: "Wokey supply (marketplace)",
+    effect:
+      "Turns off model capacity bought from Wokey. Requests that would have gone there serve from OpenRouter instead — nothing fails for customers, it just costs more until this is back on. Safe to flip the moment that supplier misbehaves.",
+    enforced_in: "workers/inference/src/lib/supplier-routing.ts (FAIL CLOSED — unlike the switches below, an unreadable value means OFF, because routing to a marketplace we cannot verify is worse than paying list price)",
+    default_enabled: false,
+  },
   {
     key: "ai_inference_enabled",
     label: "Inference API",
@@ -110,7 +135,7 @@ export async function isFeatureEnabled(key: string): Promise<boolean> {
 /** Every switch's current state, for the admin page. Also fails open per key. */
 export async function readAllSwitches(): Promise<Record<string, boolean>> {
   const state: Record<string, boolean> = {};
-  for (const spec of FEATURE_SWITCHES) state[spec.key] = true;
+  for (const spec of FEATURE_SWITCHES) state[spec.key] = spec.default_enabled ?? true;
   try {
     const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
       auth: { persistSession: false },
@@ -122,7 +147,8 @@ export async function readAllSwitches(): Promise<Record<string, boolean>> {
       .returns<Array<{ key: string; value: unknown }>>();
     for (const row of data ?? []) state[row.key] = row.value !== false;
   } catch {
-    /* fail open — every key stays true */
+    /* fail open for capability switches; supplier switches stay false via
+       default_enabled, matching what the gateway does when it cannot read */
   }
   return state;
 }
