@@ -266,6 +266,88 @@ test("the sleep-fact detector distinguishes passing it from not", () => {
   assert.ok(!passesSleepFact(without), "the omission must be detected");
 });
 
+/**
+ * allowMissing on a WRITE turns every failure into a silent success.
+ *
+ * app-deploy-3 hit this: a quota script reported three namespaces enforced
+ * while creating zero ResourceQuotas, because allowMissing swallowed the
+ * error. On a GET it is correct — a 404 reading a build log genuinely means
+ * there is no log. On a POST, PUT, PATCH or DELETE it means the write did not
+ * happen and nobody was told.
+ *
+ * Checks the k8s raw() call shape: the option and the method appear in the
+ * same object literal.
+ */
+/**
+ * NO REGEX HERE, DELIBERATELY. The first version of this predicate used one
+ * and a patching step stripped every backslash, leaving
+ *
+ *   /raws*<[^>]*>?s*(s*{([sS]*?)}s*)/g
+ *
+ * which matches nothing. The real check then PASSED while examining zero
+ * call sites — the third time today a regex survived a patch badly and left a
+ * vacuous guard. Only the detector proof below caught it.
+ *
+ * String scanning has survived every edit, so that is what this uses.
+ */
+function allowMissingOnWrite(src: string): string[] {
+  const bad: string[] = [];
+  let at = src.indexOf("allowMissing");
+  while (at >= 0) {
+    // trimStart() rather than a regex: this line was /^allowMissings*:s*true/
+    // after a patch ate its backslashes, which matched nothing and made the
+    // whole check vacuous.
+    const after = src.slice(at + "allowMissing".length).trimStart();
+    const flagged =
+      after.startsWith(":") && after.slice(1).trimStart().startsWith("true");
+    if (flagged) {
+      // The method appears in the same object literal. Look back to the
+      // nearest opening brace and forward to the closing one.
+      const open = src.lastIndexOf("{", at);
+      const close = src.indexOf("}", at);
+      const body = src.slice(open < 0 ? 0 : open, close < 0 ? src.length : close);
+      const mAt = body.indexOf("method");
+      if (mAt >= 0) {
+        const after = body.slice(mAt);
+        const q = after.search(/["'`]/);
+        if (q >= 0) {
+          const rest = after.slice(q + 1);
+          const endQ = rest.search(/["'`]/);
+          const method = endQ > 0 ? rest.slice(0, endQ) : "";
+          if (method && method.toUpperCase() !== "GET") bad.push(method);
+        }
+      }
+    }
+    at = src.indexOf("allowMissing", at + 1);
+  }
+  return bad;
+}
+
+test("allowMissing never appears on a write", () => {
+  const offenders: string[] = [];
+  for (const file of REAL) {
+    for (const method of allowMissingOnWrite(read(file))) {
+      offenders.push(`${file}: allowMissing on ${method}`);
+    }
+  }
+  assert.deepEqual(offenders, [], "a swallowed write failure reports success");
+});
+
+test("the allowMissing detector tells a read from a write", () => {
+  const write = code(
+    'await k.raw<string>({ method: "PUT", path: p, allowMissing: true });'
+  );
+  assert.deepEqual(allowMissingOnWrite(write), ["PUT"], "a write must be caught");
+
+  const readOk = code(
+    'await k.raw<string>({ method: "GET", path: p, allowMissing: true });'
+  );
+  assert.deepEqual(allowMissingOnWrite(readOk), [], "a GET is legitimate");
+
+  const noFlag = code('await k.raw<string>({ method: "DELETE", path: p });');
+  assert.deepEqual(allowMissingOnWrite(noFlag), [], "no flag, no finding");
+});
+
 // ── the same predicates against a fixture tree ───────────────────────
 // Every check above must be able to fail. These exercise the SAME functions,
 // on every run, rather than being a proof someone performed once.
