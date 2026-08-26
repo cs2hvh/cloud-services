@@ -16,7 +16,7 @@
  */
 
 import { createSign } from "node:crypto";
-import { paasConfig } from "@/lib/paas/config";
+import { paasConfig } from "../config.ts";
 
 const GH_API = "https://api.github.com";
 const UA = "ahuracloud-deploy-v2";

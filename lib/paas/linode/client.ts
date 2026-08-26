@@ -12,7 +12,7 @@
  * read and delete its own resources.
  */
 
-import { paasConfig } from "@/lib/paas/config";
+import { paasConfig } from "../config.ts";
 
 const MAX_RETRIES = 4;
 const BASE_BACKOFF_MS = 400;
@@ -28,15 +28,24 @@ export type LinodeErrorCode =
   | "TIMEOUT";
 
 export class LinodeError extends Error {
+  code: LinodeErrorCode;
+  status?: number;
+  retryable: boolean;
+  retryAfterMs?: number;
+
   constructor(
-    public code: LinodeErrorCode,
+    code: LinodeErrorCode,
     message: string,
-    public status?: number,
-    public retryable = false,
-    public retryAfterMs?: number,
+    status?: number,
+    retryable = false,
+    retryAfterMs?: number,
   ) {
     super(message);
     this.name = "LinodeError";
+    this.code = code;
+    this.status = status;
+    this.retryable = retryable;
+    this.retryAfterMs = retryAfterMs;
   }
 }
 

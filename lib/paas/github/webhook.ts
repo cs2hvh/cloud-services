@@ -6,7 +6,7 @@
  */
 
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { paasConfig } from "@/lib/paas/config";
+import { paasConfig } from "../config.ts";
 
 /**
  * Verify an `X-Hub-Signature-256` header against the raw request body.
