@@ -25,6 +25,7 @@ node --env-file=.env --env-file=.env.local scripts/v3/density-check.ts        # 
 node --env-file=.env --env-file=.env.local scripts/v3/sandbox-overhead.ts     # declared vs real
 node --env-file=.env --env-file=.env.local scripts/v3/sweep-health.ts         # are the sweeps running
 node --env-file=.env --env-file=.env.local scripts/v3/cost-attribution.ts     # per-app cost vs tier
+node --env-file=.env --env-file=.env.local scripts/v3/preview-reap.ts         # what a reap would delete
 node --env-file=.env --env-file=.env.local scripts/v3/pod-logs.ts <ns> <pod>
 node --env-file=.env --env-file=.env.local scripts/v3/telemetry-probe.ts
 
@@ -64,6 +65,24 @@ by reading it — and a relapse stays invisible until a scheduler acts on it.
 `exit(0)` stays allowed because it is unambiguous. Comments are stripped first,
 so a docblock explaining the old convention describes the problem rather than
 committing it.
+
+**Assign `process.exitCode` for a script's final exit; do not call
+`process.exit()`.** On Windows, `process.exit()` after a long report aborted the
+process with a libuv assertion (`!(handle->flags & UV_HANDLE_CLOSING)`) — the
+report printed in full and correctly, and the shell saw **127**. Two scripts had
+it, and one of them had already been reported as exiting 0: it did, once, then
+aborted twice in a row on re-measurement. An intermittent race that tipped.
+
+It is the exit-code defect in its last available costume — a tool that does the
+work, reports it accurately, and then tells the scheduler it failed. Assigning
+lets Node drain stdout and exit with the code intact. `process.exit()` is still
+right for an *early* exit, before anything has been written.
+
+No test catches this; it needs live infrastructure to reproduce. **Run the
+script and check `$?`** — the same rule as the rest of §8 of
+[`00-PROJECT.md`](00-PROJECT.md): before trusting a tool's clean result, make it
+report a dirty one once. All nine `scripts/v3` entries are verified twice each,
+every code inside the contract.
 
 Two rules the sweeps follow that are easy to get backwards:
 
@@ -587,7 +606,27 @@ Findings sort oldest first with unknown age **last** — an unreadable age is no
 an extreme value, and sorting it as one would put the entries that must never be
 reaped at the top of the list a human reads.
 
-`scripts/v3/preview-reap.ts` lands when `previews.ts` does.
+`scripts/v3/preview-reap.ts` runs it. It found something on its first pass, and
+not the thing either lane was looking for:
+
+```
+1 preview environment(s) THE REAPER CANNOT SEE.
+  env-e3c24db7512d  feature-x  0 deployment(s), 0 ready
+```
+
+**`planReap` walks aliases.** A preview *environment* with no preview *alias* is
+neither reaped nor kept — it is never examined, so no TTL applies to it.
+Harmless today because it holds nothing; the moment one gets a deployment and
+the hostname mint fails, that is a container running free forever, which is the
+exact abuse vector the 48h policy exists to close.
+
+That also answers, with data rather than inference, a question the deploy lane
+raised: how to tell *no previews because the platform reaps them* from *no
+previews because none can exist*. `paas.environments` has `kind=preview` while
+`paas.aliases` has none — the reaper's index is empty while the thing it indexes
+is not. Both cases print differently and **neither prints as clean**;
+examined-zero with no preview environments at all reports as **unproven**, since
+a sweep over an unwired capability reports exactly that forever.
 
 ### Warm fraction, and what flat pricing did to it
 
