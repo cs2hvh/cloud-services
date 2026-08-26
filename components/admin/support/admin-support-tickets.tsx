@@ -25,6 +25,8 @@ interface AdminSupportTicketsProps {
     total: number;
     totalPages: number;
   };
+  /** Route prefix for ticket links — the standalone admin app mounts this at /support. */
+  basePath?: string;
 }
 
 function formatDate(date: string): string {
@@ -48,6 +50,7 @@ function statusBadgeClass(status: SupportTicketStatus): string {
 export default function AdminSupportTickets({
   initialTickets,
   initialPagination,
+  basePath = "/dashboard/admin/support",
 }: AdminSupportTicketsProps) {
   const [tickets, setTickets] = useState(initialTickets);
   const [loading, setLoading] = useState(false);
@@ -335,7 +338,7 @@ export default function AdminSupportTickets({
                           </td>
                           <td className="px-6 py-4">
                             <Link
-                              href={`/dashboard/admin/support/${ticket.id}`}
+                              href={`${basePath}/${ticket.id}`}
                               className="inline-flex h-8 items-center px-3 text-xs bg-neutral-800 hover:bg-neutral-700 text-neutral-300"
                             >
                               View

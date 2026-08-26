@@ -42,7 +42,7 @@ export const MAIN_APP_URL =
 export const ADMIN_SECTIONS: AdminSection[] = [
   { title: "Overview", slug: "", icon: LayoutDashboard, migrated: true, description: "Admin home" },
   { title: "Users", slug: "users", icon: Users, migrated: true, description: "Accounts, roles, suspensions" },
-  { title: "Support", slug: "support", icon: LifeBuoy, migrated: false, description: "Tickets and replies" },
+  { title: "Support", slug: "support", icon: LifeBuoy, migrated: true, description: "Tickets and replies" },
   { title: "Pricing", slug: "pricing", icon: BadgeDollarSign, migrated: false, description: "Plans, promos, categories" },
   { title: "Coupons", slug: "coupons", icon: TicketPercent, migrated: false, description: "Discount codes" },
   { title: "Servers", slug: "servers", icon: Server, migrated: true, description: "Customer VMs — fleet, actions, revenue" },

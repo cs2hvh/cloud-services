@@ -23,6 +23,8 @@ type AdminTicketDetailWithUrl = Omit<AdminSupportTicketDetail, "attachments"> & 
 
 interface AdminSupportTicketDetailProps {
   initialTicket: AdminTicketDetailWithUrl;
+  /** Route prefix of the tickets list — the standalone admin app mounts it at /support. */
+  basePath?: string;
 }
 
 function formatDateTime(date: string): string {
@@ -51,7 +53,10 @@ function actorBadge(actor: "user" | "admin" | "system"): string {
   return "bg-cyan-950/40 text-cyan-300 border-cyan-900";
 }
 
-export default function AdminSupportTicketDetailView({ initialTicket }: AdminSupportTicketDetailProps) {
+export default function AdminSupportTicketDetailView({
+  initialTicket,
+  basePath = "/dashboard/admin/support",
+}: AdminSupportTicketDetailProps) {
   const router = useRouter();
   const [ticket, setTicket] = useState(initialTicket);
   const [statusDraft, setStatusDraft] = useState<SupportTicketStatus>(initialTicket.status);
@@ -143,7 +148,7 @@ export default function AdminSupportTicketDetailView({ initialTicket }: AdminSup
     <div className="flex-1 bg-[#0a0a0a] min-h-screen p-4 sm:p-6 lg:p-8">
       <div className="max-w-[1600px] mx-auto">
         <div className="mb-6">
-          <Link href="/dashboard/admin/support" className="text-xs text-neutral-500 hover:text-neutral-300">
+          <Link href={basePath} className="text-xs text-neutral-500 hover:text-neutral-300">
             Back to support tickets
           </Link>
           <div className="mt-2 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -297,7 +302,8 @@ export default function AdminSupportTicketDetailView({ initialTicket }: AdminSup
                 <option value="resolved">Resolved</option>
                 <option value="closed">Closed</option>
                 <option value="cancelled">Cancelled</option>
-                <option value="permantly_close">Permanently Closed</option>
+                {/* "permantly_close" removed: migration 20260604000001 dropped it
+                    from the DB CHECK, so picking it failed at the constraint. */}
               </select>
               <Button
                 type="button"
