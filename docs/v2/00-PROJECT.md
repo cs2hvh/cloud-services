@@ -154,7 +154,11 @@ The leaf scripts are already split, so per-script scheduling costs almost nothin
 | `workload-drift` | db + k8s | in-cluster, same profile |
 | `r2-drift` | db + r2 | in-cluster, own Secret — needs no cluster access |
 | `dns-drift` | db + cloudflare + k8s | in-cluster, own Secret |
-| `fleet-drift` | linode only | in-cluster, own Secret — needs no cluster or db |
+| `fleet-drift` | db + linode | in-cluster, own Secret — the only job needing **no cluster access** |
+
+`fleet-drift`'s `db` is not visible in its direct imports; it arrives through
+`telemetry/fleet-source.ts`. Shipping it without one made it refuse to run, which
+was the correct outcome and is why the row now reads `db + linode`.
 
 **INSTALLED 2026-08-26** (`b0bf8b60`) — five CronJobs in `ahura-system`, each with
 its own ServiceAccount and only the one Secret it needs. No pod holds more than
