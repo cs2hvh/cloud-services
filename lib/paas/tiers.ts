@@ -77,11 +77,11 @@ export interface Tier {
  * Buying one and re-running replaces the derivation with a measurement.
  */
 export const TIERS: readonly Tier[] = [
-  { id: "starter",  label: "Starter",  cls: "shared",    memoryMib: 512,  vcpu: 1, transferGb: 200,  priceUsd: 7,  priceInr: 649,  costUsd: 4.96 },
-  { id: "basic",    label: "Basic",    cls: "shared",    memoryMib: 1024, vcpu: 1, transferGb: 300,  priceUsd: 12, priceInr: 1099, costUsd: 9.01 },
-  { id: "standard", label: "Standard", cls: "shared",    memoryMib: 2048, vcpu: 2, transferGb: 500,  priceUsd: 23, priceInr: 2099, costUsd: 16.98 },
+  { id: "starter",  label: "Starter",  cls: "shared",    memoryMib: 512,  vcpu: 1, transferGb: 200,  priceUsd: 7,  priceInr: 649,  costUsd: 4.46 },
+  { id: "basic",    label: "Basic",    cls: "shared",    memoryMib: 1024, vcpu: 1, transferGb: 300,  priceUsd: 12, priceInr: 1099, costUsd: 8.49 },
+  { id: "standard", label: "Standard", cls: "shared",    memoryMib: 2048, vcpu: 2, transferGb: 500,  priceUsd: 23, priceInr: 2099, costUsd: 16.36 },
   { id: "plus",     label: "Plus",     cls: "shared",    memoryMib: 4096, vcpu: 2, transferGb: 750,  priceUsd: 45, priceInr: 3999, costUsd: 33.97 },
-  { id: "pro",      label: "Pro",      cls: "dedicated", memoryMib: 2048, vcpu: 1, transferGb: 500,  priceUsd: 35, priceInr: 3199, costUsd: 25.48 },
+  { id: "pro",      label: "Pro",      cls: "dedicated", memoryMib: 2048, vcpu: 1, transferGb: 500,  priceUsd: 35, priceInr: 3199, costUsd: 24.53 },
   { id: "pro-plus", label: "Pro Plus", cls: "dedicated", memoryMib: 4096, vcpu: 2, transferGb: 1000, priceUsd: 69, priceInr: 6199, costUsd: 50.95 },
 ];
 
