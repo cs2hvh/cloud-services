@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { replicaStates, type DeploymentFact } from "./replicas.ts";
 
-const ready = (ref: string): DeploymentFact => ({ ref, state: "ready", image_digest: "sha256:abc" });
+const ready = (ref: string): DeploymentFact => ({ ref, state: "ready", image_digest: "sha256:abc", scaled_to_zero_at: null });
 
 /** A fake cluster. `null` means 404, throwing means transport failure. */
 function fakeClient(table: Record<string, { replicas: number; readyReplicas: number } | null | "throw">) {
@@ -68,7 +68,7 @@ test("a cluster failure reports unknown with NULL counts, never zero", async () 
 });
 
 test("a build that produced no image is not rollable", async () => {
-  const out = await replicaStates("prj-1", [{ ref: "dpl-err", state: "error", image_digest: null }], {
+  const out = await replicaStates("prj-1", [{ ref: "dpl-err", state: "error", image_digest: null, scaled_to_zero_at: null }], {
     client: fakeClient({ "dpl-err": null }),
   });
   assert.equal(out[0].rollable, false);
@@ -123,7 +123,7 @@ test("asleep wins over a running pod during the wake window", async () => {
   assert.equal(out[0].status, "asleep");
 });
 
-test("omitting scaled_to_zero_at keeps the old behaviour", async () => {
+test("an awake deployment passes null explicitly", async () => {
   const out = await replicaStates("prj-1", [ready("dpl-a")], {
     servingRef: "dpl-a",
     client: fakeClient({ "dpl-a": { replicas: 1, readyReplicas: 1 } }),

@@ -37,13 +37,20 @@ export interface DeploymentFact {
   state: string;
   image_digest: string | null;
   /**
-   * Non-null means asleep ON PURPOSE — idle, at zero replicas, and waking on
-   * the next request. Optional so existing callers keep working, but pass it:
-   * without it a sleeping production app is indistinguishable from a
-   * superseded old build, and a user shown "stopped" for their live app will
-   * reasonably conclude it is broken.
+   * Non-null means asleep ON PURPOSE — idle, at zero replicas, waking on the
+   * next request.
+   *
+   * REQUIRED, not optional, and Master is the reason. It was optional so
+   * existing callers kept working, and they pointed out that omitting it does
+   * not fail — it silently DEGRADES: a sleeping production app becomes
+   * indistinguishable from a superseded old build, and the user is shown
+   * "stopped" for their live site.
+   *
+   * An optional field that changes CORRECTNESS rather than completeness is a
+   * trap, because the failure is invisible at the call site. Pass null
+   * explicitly if the deployment is awake.
    */
-  scaled_to_zero_at?: string | null;
+  scaled_to_zero_at: string | null;
 }
 
 export type ReplicaStatus =

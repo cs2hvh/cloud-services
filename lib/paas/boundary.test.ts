@@ -64,6 +64,36 @@ const SERVICE_ROLE_ALLOWED: Array<{ path: string; why: string }> = [
  * does. If a predicate is ever broken, the proof fails rather than the scan
  * quietly passing.
  */
+/**
+ * Strip comments before matching.
+ *
+ * WITHOUT THIS THE TEST PUNISHES DOCUMENTATION. Master's aliases route mentions
+ * promoteAndConverge in a comment explaining why it deliberately uses
+ * reconcileProjectByRef instead — which is the very decision this file exists to
+ * enforce. Flagging that made the cheapest way to go green "delete the comment
+ * that documents the rule", which is worse than having no check at all.
+ *
+ * Third appearance of this trap today: app-deploy-3 hit it in guard.ts, Master
+ * hit it in their own suite and fixed it, and then I shipped it here after
+ * being told about it twice.
+ *
+ * The `[^:]` guard keeps `https://` out of the line-comment pattern.
+ */
+export function stripComments(src: string): string {
+  return src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/[^\n]*/g, "$1");
+}
+
+/**
+ * Test files are not violations.
+ *
+ * A test asserting the forbidden thing is absent must be able to NAME the
+ * forbidden thing. Scanning them also means anyone could silence this suite by
+ * adding a test file — the opposite of what it is for.
+ */
+export function isTestFile(path: string): boolean {
+  return /\.test\.tsx?$/.test(path);
+}
+
 export const FORBIDDEN = {
   serviceRoleDb: {
     name: "service-role db client",
@@ -111,8 +141,8 @@ test("no request handler imports the service-role database client", () => {
 
   for (const f of appFiles()) {
     const r = rel(f);
-    if (allowed.has(r)) continue;
-    const src = readFileSync(f, "utf8");
+    if (allowed.has(r) || isTestFile(r)) continue;
+    const src = stripComments(readFileSync(f, "utf8"));
     if (FORBIDDEN.serviceRoleDb.test(src)) offenders.push(r);
   }
 
@@ -134,7 +164,8 @@ test("no request handler performs a tenant-scoped write through the reconciler",
   // write under RLS. This is what keeps that a property rather than a habit.
   const offenders: string[] = [];
   for (const f of appFiles()) {
-    const src = readFileSync(f, "utf8");
+    if (isTestFile(rel(f))) continue;
+    const src = stripComments(readFileSync(f, "utf8"));
     if (FORBIDDEN.tenantWriteViaReconciler.test(src)) offenders.push(rel(f));
   }
   assert.deepEqual(
@@ -201,4 +232,46 @@ test("the db predicate does not confuse neighbouring modules for the client itse
   assert.equal(t('from "@/lib/paas/telemetry/operator"'), false);
   assert.equal(t('from "@/lib/paas/k8s/client"'), false);
   assert.equal(t('from "@/lib/paas/replicas"'), false, "the shaped accessor is the SAFE way to read this");
+});
+
+test("a comment EXPLAINING the rule is not a violation of it", () => {
+  // Master's aliases route mentions promoteAndConverge in a comment saying why
+  // it deliberately uses reconcileProjectByRef instead. Flagging that made the
+  // cheapest way to go green "delete the comment documenting the rule" — worse
+  // than having no check at all. Third time this trap appeared today.
+  const documented = `
+    // We deliberately do NOT call promoteAndConverge here: it does a
+    // tenant-scoped write with the service role. Alias is written under RLS
+    // above, then we converge.
+    await reconcileProjectByRef(ref);
+  `;
+  assert.equal(FORBIDDEN.tenantWriteViaReconciler.test(stripComments(documented)), false);
+
+  const blockComment = `/* see also: import { projects } from "@/lib/paas/db" */\nexport async function GET() {}`;
+  assert.equal(FORBIDDEN.serviceRoleDb.test(stripComments(blockComment)), false);
+});
+
+test("real code is still caught when it sits next to a comment", () => {
+  // The other half. Stripping comments must not become a way to hide a call.
+  const sneaky = `
+    // this is fine, honest
+    import { projects } from "@/lib/paas/db";
+    await promoteAndConverge(a, b); // documented above
+  `;
+  const src = stripComments(sneaky);
+  assert.equal(FORBIDDEN.serviceRoleDb.test(src), true);
+  assert.equal(FORBIDDEN.tenantWriteViaReconciler.test(src), true);
+});
+
+test("stripComments does not eat a URL", () => {
+  const src = 'const u = "https://github.com/a/b.git";';
+  assert.equal(stripComments(src).includes("github.com/a/b.git"), true);
+});
+
+test("a test file cannot silence this suite", () => {
+  // Scanning *.test.ts would mean anyone could add a test naming the forbidden
+  // thing and turn the suite red until it was excluded — or, worse, could
+  // silence it by getting it excluded.
+  assert.equal(isTestFile("app/api/v2/_lib/boundary.test.ts"), true);
+  assert.equal(isTestFile("app/api/v2/projects/[ref]/aliases/route.ts"), false);
 });
