@@ -13,7 +13,7 @@ change anything, run by a person who has read a report first.
 ## Running it
 
 ```bash
-node --test "lib/paas/telemetry/*.test.ts"                                   # 353 tests, no deps
+node --test "lib/paas/telemetry/*.test.ts"                                   # 372 tests, no deps
 node --env-file=.env --env-file=.env.local scripts/v3/operator-view.ts       # everything, once
 node --env-file=.env --env-file=.env.local scripts/v3/fleet-drift.ts --prove
 node --env-file=.env --env-file=.env.local scripts/v3/dns-drift.ts
@@ -23,6 +23,7 @@ node --env-file=.env --env-file=.env.local scripts/v3/usage-sample.ts --samples 
 node --env-file=.env --env-file=.env.local scripts/v3/traffic-watch.ts --samples 20 --interval 30
 node --env-file=.env --env-file=.env.local scripts/v3/density-check.ts        # pricing arithmetic
 node --env-file=.env --env-file=.env.local scripts/v3/sandbox-overhead.ts     # declared vs real
+node --env-file=.env --env-file=.env.local scripts/v3/sweep-health.ts         # are the sweeps running
 node --env-file=.env --env-file=.env.local scripts/v3/pod-logs.ts <ns> <pod>
 node --env-file=.env --env-file=.env.local scripts/v3/telemetry-probe.ts
 
@@ -57,38 +58,28 @@ same number.
 
 ## Scheduling it — the premise, not the last mile
 
-**Nothing runs any of this automatically, and until something does, none of it
-means anything.**
+**A reconciler nobody runs is the same as no reconciler.** That is the
+assumption the modules, the surface and the tests all rest on, and it was
+literally true of this codebase for most of the day. The product lane grepped
+for `reconcileProject`'s callers, found the only one was a proof script, and
+held `routingLive = false` against being told twice that routing worked. They
+were right, and the fix was a runner rather than a correction to them.
 
-This is not a fourth item after the modules, the surface and the tests. It is
-the assumption all three rest on. Unscheduled, the operator surface shows a
-fleet nobody is reconciling, the drift table records drift nobody is repairing,
-and the R2 leak measured growing 697 MB → 1083 MB in a single hour keeps
-growing. Every one of those reads correctly and changes nothing.
+**Five sweeps now run as CronJobs** in `ahura-system`, installed by
+`scripts/v2/install-sweeps.ts --apply`:
 
-The claim this lane makes — that a reconciler nobody runs is the same as no
-reconciler — was literally true of this codebase two hours ago. The product
-lane grepped for `reconcileProject`'s callers, found the only one was a proof
-script, and held `routingLive = false` against being told twice that routing
-worked. They were right, and the fix was a runner rather than a correction to
-them.
+| Sweep | Schedule |
+|---|---|
+| `sweep-usage-sample` | `*/15 * * * *` |
+| `sweep-workload-drift` | `8,23,38,53 * * * *` |
+| `sweep-r2-drift` | `12 * * * *` |
+| `sweep-dns-drift` | `26 * * * *` |
+| `sweep-fleet-drift` | `44 * * * *` |
 
-The same is true here today. These scripts are correct, tested against live
-infrastructure, and inert.
-
-Two things are worth scheduling, and they are different jobs:
-
-```bash
-# Drift, every 15 minutes. Records open findings and closes what cleared, so
-# "how long has this been broken" stays answerable. ~2 minutes per run.
-*/15 * * * *  cd /srv/app && node --env-file=.env --env-file=.env.local \
-              scripts/v3/drift-sweep.ts --record
-
-# Usage, every 5 minutes. The interval IS the resolution of the warm fraction:
-# 5 minutes bounds the attribution error at 5 minutes per app per gap.
-*/5 * * * *   cd /srv/app && node --env-file=.env --env-file=.env.local \
-              scripts/v3/usage-sample.ts --samples 1 --record
-```
+**Four of them have self-fired successfully. One has never succeeded**, and
+that is a live finding rather than a footnote — see below. Run
+`scripts/v3/sweep-health.ts` for the current state; it is also the last section
+of `operator-view.ts`.
 
 Two properties make these safe to run unattended, and both were designed for
 it rather than discovered afterwards:
@@ -123,6 +114,51 @@ exactly the durations the table exists to measure.
 Alerting is a separate decision. The exit codes carry the severity; nothing
 consumes them.
 
+### One sweep has never worked, and the other four prove less than they look
+
+`sweep-r2-drift` has fired every hour since 14:51 and **never succeeded**. It is
+not broken: it runs, produces a complete and correct report, and exits `10` —
+*ran and found something* — which Kubernetes marks as a failed Job.
+
+The deployed ConfigMap carries pre-contract source (`process.exit(clean ? 0 :
+1)`) and the deployed command has no exit-code translation, so its real findings
+reach the scheduler as a crash. `sweeps.ts` behaved correctly throughout: it
+**refuses** to translate `10`/`11` unless it can see the contract in the shipped
+source, precisely so a mapping is never applied to the wrong convention. The
+contract shipped after the CronJobs were installed, and nothing re-deployed
+them.
+
+**The other four matter more.** They are green because they have found nothing.
+All five lack the translation, so the first real finding from any of them will
+look exactly like a crash — a green fleet was evidence of an empty platform, not
+a working pipeline, and there was no way to tell those apart from outside.
+
+That is why `sweep-health.ts` checks two independent things and never lets the
+first imply the second:
+
+| | |
+|---|---|
+| **Did it run** | `lastScheduleTime` vs `lastSuccessfulTime` |
+| **Would a finding survive** | read from the **deployed** container command, not the source that built it — the cluster may be running an older manifest, and the question is what the cluster does |
+
+A sweep that has never succeeded reports `domainUnobserved`, and the wording is
+the point: **its silence is not evidence of anything.** This lane's recurring
+defect turned on the lane itself, and the worst instance of it yet — the missing
+observation was the one that would have revealed the others were missing.
+
+`never-succeeded` is kept distinct from `failing`: a sweep with a past success
+has observed its domain and is merely stale, one without has never observed it
+at all, and collapsing them overstates the first case while burying the second.
+
+**Not fixed.** The repair is `scripts/v2/install-sweeps.ts --apply`, which
+writes cron infrastructure and needs a human. The dry run confirms it would ship
+the contract and enable the translation:
+
+```
+running source: 387a1e0492457c2d — STALE; this tree is fb62210cb697a766
+exit-code contract: present — 10/11 (ran and found something) will report success
+```
+
 ## What exists
 
 | Module | Does | Tests |
@@ -144,6 +180,7 @@ consumes them.
 | `telemetry/trivy.ts` | Three verdicts — `undecided` blocks, it does not pass | 16 |
 | `telemetry/density.ts` | Pods per node: kubelet cut, sandbox charge, $/pod | 9 |
 | `telemetry/sandbox.ts` | What a gVisor sandbox costs vs what we charge for it | 9 |
+| `telemetry/sweep-health.ts` | Whether the sweeps ran, and whether findings survive | 13 |
 | `telemetry/cadence.ts` | Whether a schedule can produce what it claims to measure | 9 |
 | `telemetry/exit-codes.ts` | What a sweep's exit code means to a scheduler | — |
 | `telemetry/operator.ts` | Composition for the API and dashboard | — |
