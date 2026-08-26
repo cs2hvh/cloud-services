@@ -24,6 +24,8 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const money = (n: number, places = 2) => `$${n.toFixed(places)}`;
+const mb = (bytes: number) =>
+  bytes >= 1024 ** 3 ? `${(bytes / 1024 ** 3).toFixed(2)} GB` : `${(bytes / 1024 ** 2).toFixed(0)} MB`;
 
 function Panel({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
@@ -93,7 +95,7 @@ export default async function OperatorPage() {
   if (!admin.ok) notFound();
 
   const view = await operatorView();
-  const { fleet, hostnames, usage } = view;
+  const { fleet, hostnames, workloads, storage, usage } = view;
 
   return (
     <main className="mx-auto max-w-5xl space-y-6 p-6">
@@ -185,6 +187,82 @@ export default async function OperatorPage() {
             <p className="mt-3 text-xs text-neutral-500">
               {hostnames.drift.findings.filter((f) => f.status === "foreign").length} record(s) in
               the zone are not the platform&apos;s and are never touched.
+            </p>
+          </>
+        )}
+      </Panel>
+
+      <Panel
+        title="Workloads"
+        subtitle="Kubernetes Deployments against paas.deployments — the layer fleet drift cannot see"
+      >
+        {"error" in workloads ? (
+          <Unavailable error={workloads.error} />
+        ) : (
+          <>
+            <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <Stat label="Pods" value={String(workloads.drift.observedPods)} />
+              <Stat
+                label="Unaccounted"
+                value={String(workloads.drift.unaccountedPods)}
+                tone={workloads.drift.unaccountedPods > 0 ? "bad" : "good"}
+              />
+              <Stat label="pod_allocated" value={String(workloads.capacity.recorded)} />
+              <Stat
+                label="Drift"
+                value={`${workloads.capacity.drift >= 0 ? "+" : ""}${workloads.capacity.drift}`}
+                tone={workloads.capacity.significant ? "bad" : undefined}
+              />
+            </div>
+
+            {workloads.capacity.significant ? (
+              <p className="mb-3 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                Placement reads <code>pod_allocated</code> to decide where the next app goes, and
+                LKE enforces the pod cap hard. This number is scheduling against fiction.
+              </p>
+            ) : null}
+
+            <ul>
+              {workloads.drift.findings
+                .filter((f) => f.status !== "healthy")
+                .map((f) => (
+                  <Finding
+                    key={f.deploymentRef}
+                    status={f.status}
+                    label={f.deploymentRef}
+                    detail={f.detail}
+                    action={f.action || undefined}
+                    cost={`${f.pods} pod${f.pods === 1 ? "" : "s"}`}
+                  />
+                ))}
+            </ul>
+          </>
+        )}
+      </Panel>
+
+      <Panel title="Object storage" subtitle="R2 against paas.deployments — nothing prunes this bucket">
+        {"error" in storage ? (
+          <Unavailable error={storage.error} />
+        ) : (
+          <>
+            <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <Stat label="Total" value={mb(storage.drift.totalBytes)} />
+              <Stat
+                label="Reclaimable"
+                value={mb(storage.drift.reclaimableBytes)}
+                tone={storage.drift.reclaimableBytes > 0 ? "bad" : "good"}
+              />
+              <Stat label="Per month" value={money(storage.drift.totalMonthlyUsd, 4)} />
+              <Stat
+                label="Objects"
+                value={String(storage.drift.findings.length)}
+              />
+            </div>
+            <p className="text-xs text-neutral-500">
+              Reclaimable is <code>image.tar</code> for ready deployments — a transfer artifact
+              whose image already lives digest-pinned in the registry — plus artifacts of builds
+              that were never published. Build logs are never counted, even orphaned ones: a
+              missing row is not proof the app is gone.
             </p>
           </>
         )}

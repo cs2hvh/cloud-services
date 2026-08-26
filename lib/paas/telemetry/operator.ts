@@ -23,8 +23,22 @@
 
 import { db } from "../db.ts";
 import { paasConfig } from "../config.ts";
+import { listObjects } from "../build/r2.ts";
 import { listDnsRecords } from "../edge/cloudflare.ts";
 import { loadKubeconfig, kube } from "../k8s/client.ts";
+import {
+  reconcileR2,
+  type DeploymentLike as R2DeploymentLike,
+  type R2DriftReport,
+} from "./r2-drift.ts";
+import {
+  capacityDrift,
+  reconcileWorkloads,
+  workloadFrom,
+  type CapacityDrift,
+  type DeploymentRowLike,
+  type WorkloadDriftReport,
+} from "./workload-drift.ts";
 import { assertControlPlaneReachable, loadCloudInventory, loadControlPlane } from "./fleet-source.ts";
 import { MONTH_HOURS, reconcile, type DriftReport } from "./reconcile.ts";
 import { ingressHosts, reconcileHostnames, type AliasLike, type DnsDriftReport } from "./dns-drift.ts";
@@ -225,10 +239,89 @@ export async function usageView(): Promise<UsageView> {
 
 // ── everything, for one dashboard render ────────────────────────────────────
 
+// ── workloads ───────────────────────────────────────────────────────────────
+
+export interface WorkloadView {
+  drift: WorkloadDriftReport;
+  capacity: CapacityDrift;
+}
+
+/**
+ * Kubernetes Deployments against `paas.deployments`.
+ *
+ * The layer `fleetView` structurally cannot see: a workload with no row lives
+ * inside Kubernetes, on a node that IS recorded, in a cluster that IS
+ * recorded. Fleet drift reports clean while the pod rides along.
+ */
+export async function workloadView(): Promise<WorkloadView> {
+  const k = cluster();
+
+  const deploymentList = await k.get<{
+    items: Array<{
+      metadata: { name: string; namespace: string; labels?: Record<string, string> };
+      spec?: { replicas?: number };
+      status?: { readyReplicas?: number };
+    }>;
+  }>("/apis/apps/v1/deployments", true);
+
+  const workloads = (deploymentList?.items ?? [])
+    .filter((d) => !PLATFORM_NS.has(d.metadata.namespace))
+    .map(workloadFrom);
+
+  const [rows, placementRows, withIds, clusters] = await Promise.all([
+    db.select<DeploymentRowLike>("deployments", "select=ref,state,project_id,created_at:queued_at"),
+    db.select<{ deployment_id: string; namespace: string }>(
+      "deployment_placements",
+      "select=deployment_id,namespace",
+    ),
+    db.select<{ id: string; ref: string }>("deployments", "select=id,ref"),
+    db.select<{ pod_allocated: number }>("clusters", "select=pod_allocated&state=eq.ready"),
+  ]);
+
+  const idToRef = new Map(withIds.map((d) => [d.id, d.ref]));
+  const placements = placementRows.map((p) => ({
+    ref: idToRef.get(p.deployment_id),
+    namespace: p.namespace,
+  }));
+
+  const drift = reconcileWorkloads({ workloads, deployments: rows, placements });
+  return {
+    drift,
+    capacity: capacityDrift(
+      clusters.reduce((n, c) => n + c.pod_allocated, 0),
+      drift.observedPods,
+    ),
+  };
+}
+
+// ── object storage ──────────────────────────────────────────────────────────
+
+export interface R2View {
+  drift: R2DriftReport;
+}
+
+/**
+ * R2 objects against `paas.deployments`. Nothing prunes this bucket, so it
+ * grows monotonically and is invisible in every other report.
+ */
+export async function r2View(): Promise<R2View> {
+  const [objects, deployments, projects] = await Promise.all([
+    listObjects(""),
+    db.select<R2DeploymentLike>("deployments", "select=ref,state,image_digest"),
+    db.select<{ ref: string }>("projects", "select=ref"),
+  ]);
+
+  return {
+    drift: reconcileR2({ objects, deployments, liveProjectRefs: projects.map((p) => p.ref) }),
+  };
+}
+
 export interface OperatorView {
   generatedAt: string;
   fleet: FleetView | { error: string };
   hostnames: HostnameView | { error: string };
+  workloads: WorkloadView | { error: string };
+  storage: R2View | { error: string };
   usage: UsageView | { error: string };
 }
 
@@ -248,11 +341,13 @@ export async function operatorView(): Promise<OperatorView> {
     }
   };
 
-  const [fleet, hostnames, usage] = await Promise.all([
+  const [fleet, hostnames, workloads, storage, usage] = await Promise.all([
     settle(fleetView),
     settle(hostnameView),
+    settle(workloadView),
+    settle(r2View),
     settle(usageView),
   ]);
 
-  return { generatedAt: new Date().toISOString(), fleet, hostnames, usage };
+  return { generatedAt: new Date().toISOString(), fleet, hostnames, workloads, storage, usage };
 }

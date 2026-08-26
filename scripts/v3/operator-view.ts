@@ -67,6 +67,43 @@ if (failed(view.hostnames)) {
   );
 }
 
+// ── workloads ───────────────────────────────────────────────────────────────
+console.log(`\n${line}\nWORKLOADS`);
+if (failed(view.workloads)) {
+  console.log(`  unavailable: ${view.workloads.error}`);
+} else {
+  const w = view.workloads;
+  console.log(
+    `  ${w.drift.observedPods} pod(s) observed, ${w.drift.unaccountedPods} unaccounted   ` +
+      `pod_allocated ${w.capacity.recorded} recorded / ${w.capacity.observed} observed` +
+      (w.capacity.significant ? `   ← placement is scheduling against fiction` : ""),
+  );
+  for (const f of w.drift.findings.filter((x) => x.status !== "healthy")) {
+    console.log(
+      `  ${f.status.toUpperCase().padEnd(16)} ${f.deploymentRef.padEnd(20)} ` +
+        `${String(f.pods).padStart(2)} pod(s)  ${f.detail}`,
+    );
+  }
+}
+
+// ── storage ─────────────────────────────────────────────────────────────────
+console.log(`\n${line}\nOBJECT STORAGE`);
+if (failed(view.storage)) {
+  console.log(`  unavailable: ${view.storage.error}`);
+} else {
+  const s = view.storage.drift;
+  const mb = (b: number) => `${(b / 1024 ** 2).toFixed(1)} MB`;
+  console.log(
+    `  ${mb(s.totalBytes)} total, ${mb(s.reclaimableBytes)} reclaimable ` +
+      `(${((s.reclaimableBytes / Math.max(1, s.totalBytes)) * 100).toFixed(0)}%), ` +
+      `~$${s.reclaimableMonthlyUsd.toFixed(4)}/month`,
+  );
+  for (const d of ["redundant", "orphan", "unknown"] as const) {
+    const b = s.byDisposition[d];
+    if (b.objects) console.log(`  ${d.toUpperCase().padEnd(11)} ${String(b.objects).padStart(4)} object(s)  ${mb(b.bytes)}`);
+  }
+}
+
 // ── usage ───────────────────────────────────────────────────────────────────
 console.log(`\n${line}\nRUNNING NOW`);
 if (failed(view.usage)) {
