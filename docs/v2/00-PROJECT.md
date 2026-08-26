@@ -123,11 +123,14 @@ behavioural tests replaying confirmed v1 criticals.
 
 ## 5. Next steps, in order
 
-1. **Durable scheduling** — *in progress, deploy lane.* See §6; this is the
-   premise of everything else. Today's sweeps are session-scoped and die with the
-   session that started them.
+1. ~~**Durable scheduling**~~ — **DONE** 2026-08-26, commit `b0bf8b60`. Five
+   CronJobs live in `ahura-system`, verified by running rather than by applying:
+   `usage-sample` recorded 3 apps at 99.8% warm, `fleet-drift` exited clean at
+   $116.07/month standing with $0.00 unaccounted. See §6.
 2. **`npm install` + get the dashboard actually executing.** The largest body of
-   never-run code on the project.
+   never-run code on the project — 16 routes and 6 components across the UI and
+   admin lanes, none of which has ever rendered. **The user declined `npm install`
+   previously**, so this is a decision to revisit, not an oversight to fix.
 3. **Install the GitHub App** on `cs2hvh` and prove one real customer push.
 4. **Reserved-hostname list** before any signup path opens.
 5. **Preview deployments** — needs the user's policy decision first.
@@ -153,10 +156,22 @@ The leaf scripts are already split, so per-script scheduling costs almost nothin
 | `dns-drift` | db + cloudflare + k8s | in-cluster, own Secret |
 | `fleet-drift` | linode only | in-cluster, own Secret — needs no cluster or db |
 
-**Decision: five separate CronJobs in a dedicated namespace, each with its own
-ServiceAccount and only the one Secret it needs.** No pod holds more than one
-external credential. `drift-sweep.ts` stays as a manual aggregate tool and is
-never scheduled.
+**INSTALLED 2026-08-26** (`b0bf8b60`) — five CronJobs in `ahura-system`, each with
+its own ServiceAccount and only the one Secret it needs. No pod holds more than
+one vendor credential. `drift-sweep.ts` stays a manual tool and is never
+scheduled.
+
+Source ships as a **ConfigMap into `node:24-alpine`** — no image build, since
+these are zero-dependency TypeScript under `--experimental-strip-types`. The
+import closure is walked (20 files, 195 KB) and the installer refuses at 90% of
+the 1 MiB cap. Install with `scripts/v2/install-sweeps.ts --apply`; it dry-runs
+by default and **verifies its own writes by reading them back**.
+
+`backoffLimit` is 0: the drift scripts exit non-zero when they FIND something,
+not only when they fail, so a "failed" sweep is usually one that worked. The
+overloading is a known gap — exit 1 means both "found drift" and "could not
+run", so a scheduler cannot alert on real errors alone. Splitting them is the
+observability lane's change.
 
 ---
 
@@ -204,11 +219,27 @@ Three independent instances in one day, in three different costumes:
 - An idle sweep reading an empty router map would have reported **no traffic**
   rather than *could not measure*.
 
-And its mirror on the write side:
+And its mirror on the write side — the same defect with the polarity flipped.
+The three above read nothing and concluded the world was empty; this one wrote
+nothing and concluded the world had changed. Both promote a null to a fact:
 
 - `allowMissing: true` on a **write** turns every failure into a silent success.
   A quota script reported three namespaces enforced while creating zero
   ResourceQuotas.
+
+And the sharpest instance, because the tool that detects the bug had the bug:
+
+- The **check written to catch `allowMissing` on writes** had its regex
+  backslashes eaten by a patching step — twice — leaving a pattern matching
+  nothing. The check passed both times having examined **zero call sites**. Only
+  a paired detector-proof caught it. The predicate now uses `indexOf` /
+  `startsWith` and no regex at all.
+
+A sixth, found while scheduling the sweeps: `fleet-drift` was shipped without a
+database credential because `db` is not among its *direct* imports — it arrives
+through `fleet-source.ts`. It refused to run rather than reporting every
+resource as unrecorded. **The transitive closure is the credential surface, not
+the import line.**
 
 **The rule:** a parse that yields nothing, a read that returns nothing, and a
 write whose failure is swallowed all look exactly like success. Distinguish
