@@ -171,9 +171,26 @@ behavioural tests replaying confirmed v1 criticals.
   because both recording paths are lossy by nature: a webhook retries a few
   times and stops, and a browser callback fires once. Neither has a reconciler
   in it.
-- **Nothing has RENDERED.** The repo typechecks and lints, but no route has
-  served a request and no component has mounted. The reduced env is now in the
-  UI worktree; the render attempt is the UI lane's next step.
+- ~~Nothing has RENDERED~~ — **IT RENDERS** 2026-08-26. `next dev --turbopack`
+  on :3010, Next 15.5.15. The marketing homepage serves 200 with live GPU
+  pricing, `/signin` serves 200, and **all seven v2 routes compiled clean with
+  zero server errors**:
+  - `/dashboard/v2/admin` → **307 → `/signin?redirectTo=…`**, auth guard working.
+  - All six `/api/v2/admin/*` → **404 by design** (`adminNotFound()`), so an
+    unauthenticated caller cannot even learn the endpoint exists.
+  - `/api/v2/webhooks/github` POST unsigned → **401**. Signature verification
+    rejecting through the real HTTP stack, not only in unit tests.
+  - Reached via `next dev`, which compiles per route — so the `GPU_MARKUP_PCT`
+    error that blocks `next build` never compiles unless the GPU wizard is
+    visited. `next build` is still blocked; the app is still runnable.
+- **`ADMIN_EMAILS` is not set**, and the server says so at startup: operator
+  authorization falls back to `user_profiles.roles`, *"which is weaker: it is
+  data a compromised account may be able to reach, and it guards fleet cost,
+  cluster ids and every tenant's name."* Must be set before production.
+- **No customer-facing v2 UI exists.** One page (`/dashboard/v2/admin`) and
+  seven API routes, all operator-only. No signup, no project creation, no deploy
+  button, no app list — everything a customer would do runs through scripts
+  today. This is the largest remaining piece.
 - ~~Custom domains blocked on certificates~~ — **PROVEN END TO END** 2026-08-26
   on a real third-party domain. `app.ahurasense.ai` → **200**, its own
   certificate (`CN=app.ahurasense.ai`, Google Trust Services), serving content
