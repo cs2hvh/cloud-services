@@ -12,9 +12,11 @@ import InternalClustersTab from "./internal-clusters-tab";
 interface PageProps {
   all_clusters: Admin_KubernetesCluster[];
   all_products: Tables<"products">[];
+  /** Route prefix of the page hosting this view (admin panel passes its own). */
+  basePath?: string;
 }
 
-export default function AdminKubernetes({ all_clusters, all_products }: PageProps) {
+export default function AdminKubernetes({ all_clusters, all_products, basePath = "/dashboard/admin/kubernetes" }: PageProps) {
   const [activeTab, setActiveTab] = useState("k8s-users");
 
   const userClusterCount = all_clusters.filter((c) => c.node_config?.provision_config?.type !== "internal").length;
@@ -75,7 +77,7 @@ export default function AdminKubernetes({ all_clusters, all_products }: PageProp
           </TabsList>
 
           <TabsContent value="k8s-users" className="mt-0">
-            <KubernetesUsersTab all_clusters={all_clusters} />
+            <KubernetesUsersTab all_clusters={all_clusters} basePath={basePath} />
           </TabsContent>
 
           <TabsContent value="k8s-plans" className="mt-0">

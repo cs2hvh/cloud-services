@@ -43,11 +43,13 @@ import Link from "next/link";
 
 interface KubernetesUsersTabProps {
   all_clusters: Admin_KubernetesCluster[];
+  /** Route prefix of the page hosting this tab (admin panel passes its own). */
+  basePath?: string;
 }
 
 const CLUSTERS_PER_PAGE = 10;
 
-export default function KubernetesUsersTab({ all_clusters }: KubernetesUsersTabProps) {
+export default function KubernetesUsersTab({ all_clusters, basePath = "/dashboard/admin/kubernetes" }: KubernetesUsersTabProps) {
   const router = useRouter();
 
   // Exclude internal platform clusters from the user view (check explicit type, not project_id)
@@ -284,7 +286,7 @@ export default function KubernetesUsersTab({ all_clusters }: KubernetesUsersTabP
               </SelectItem>
             </SelectContent>
           </Select>
-          <Link href="/dashboard/admin/kubernetes/assign">
+          <Link href={`${basePath}/assign`}>
             <Button
               className="cursor-pointer h-10 px-4 text-sm bg-blue-900/50 hover:bg-blue-800 text-blue-300 border-0"
             >

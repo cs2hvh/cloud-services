@@ -35,6 +35,8 @@ interface PageProps {
   products: Tables<"products">[];
   role?: "user" | "admin";
   allUsers?: Array<{ id: string; email: string; username?: string }>;
+  /** Where the admin variant returns after creation (admin panel passes its own). */
+  adminReturnPath?: string;
 }
 
 type K8sCpuType = "shared" | "dedicated" | "gpu";
@@ -61,6 +63,7 @@ const NewClusterForm = ({
   products,
   role = "user",
   allUsers = [],
+  adminReturnPath = "/dashboard/admin/kubernetes",
 }: PageProps) => {
   const router = useRouter();
 
@@ -197,7 +200,7 @@ const NewClusterForm = ({
       if (settled.status === 200) {
         toast.info("Kubernetes cluster creation started");
         if (role === "admin") {
-          router.push("/dashboard/admin/kubernetes");
+          router.push(adminReturnPath);
         } else {
           const id = settled.data?.clusterId;
           router.push(
@@ -242,7 +245,7 @@ const NewClusterForm = ({
       <div className="relative z-10 px-6 py-7 sm:px-10 sm:py-9 max-w-[1560px] mx-auto">
         {/* Back link */}
         <Link
-          href="/dashboard/services/kubernetes"
+          href={role === "admin" ? adminReturnPath : "/dashboard/services/kubernetes"}
           className={`${MONO} inline-flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.14em] text-white/40 hover:text-white/75 transition-colors mb-5`}
         >
           ← Back to clusters

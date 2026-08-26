@@ -55,6 +55,19 @@ const nextConfig: NextConfig = {
     ],
   },
 
+  // Reused components carry a few links that only exist on the main site
+  // (legal pages, user-dashboard deep links). Send those to the main app
+  // instead of 404ing on this origin.
+  async redirects() {
+    const main = process.env.NEXT_PUBLIC_MAIN_APP_URL || "https://ahuracloud.com";
+    return [
+      { source: "/privacy", destination: `${main}/privacy`, permanent: false },
+      { source: "/terms", destination: `${main}/terms`, permanent: false },
+      { source: "/legal/:path*", destination: `${main}/legal/:path*`, permanent: false },
+      { source: "/dashboard/:path*", destination: `${main}/dashboard/:path*`, permanent: false },
+    ];
+  },
+
   async headers() {
     return [
       {

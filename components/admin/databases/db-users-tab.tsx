@@ -41,11 +41,13 @@ import { getErrorMessage } from "@/config/functions";
 
 interface DbUsersTabProps {
   all_databases: Admin_Database[];
+  /** Route prefix of the page hosting this tab (admin panel passes its own). */
+  basePath?: string;
 }
 
 const DATABASES_PER_PAGE = 10;
 
-export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
+export default function DbUsersTab({ all_databases, basePath = "/dashboard/admin/databases" }: DbUsersTabProps) {
   const router = useRouter();
   const [allDatabasesLocal, setAllDatabasesLocal] = useState(all_databases);
   const [databases, setDatabases] = useState(
@@ -309,7 +311,7 @@ export default function DbUsersTab({ all_databases }: DbUsersTabProps) {
           </Select>
 
           <Button
-            onClick={() => router.push("/dashboard/admin/databases/assign")}
+            onClick={() => router.push(`${basePath}/assign`)}
             className="cursor-pointer h-8 px-3 text-xs bg-blue-900/50 hover:bg-blue-800 text-blue-300 border-0"
           >
             <Plus className="h-4 w-4" />

@@ -11,9 +11,11 @@ import DbPlansTab from "./db-plans-tab";
 interface PageProps {
   all_databases: Admin_Database[];
   all_products: Tables<"products">[];
+  /** Route prefix of the page hosting this view (admin panel passes its own). */
+  basePath?: string;
 }
 
-export default function AdminDatabases({ all_databases, all_products }: PageProps) {
+export default function AdminDatabases({ all_databases, all_products, basePath = "/dashboard/admin/databases" }: PageProps) {
   const [activeTab, setActiveTab] = useState("db-users");
 
   return (
@@ -60,7 +62,7 @@ export default function AdminDatabases({ all_databases, all_products }: PageProp
           </TabsList>
 
           <TabsContent value="db-users" className="mt-0">
-            <DbUsersTab all_databases={all_databases} />
+            <DbUsersTab all_databases={all_databases} basePath={basePath} />
           </TabsContent>
 
           <TabsContent value="db-plans" className="mt-0">

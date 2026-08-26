@@ -56,15 +56,15 @@ export const ADMIN_SECTIONS: AdminSection[] = [
   { title: "Hosts", slug: "hosts", icon: HardDrive, migrated: false, description: "Proxmox hypervisors", group: "Compute" },
   { title: "GPU", slug: "gpu", icon: Cpu, migrated: false, description: "GPU inventory and sync", group: "Compute" },
   { title: "Game", slug: "game", icon: Gamepad2, migrated: false, description: "Game hosting console", group: "Compute" },
-  { title: "Kubernetes", slug: "kubernetes", icon: Boxes, migrated: false, description: "Managed clusters", group: "Compute" },
+  { title: "Kubernetes", slug: "kubernetes", icon: Boxes, migrated: true, description: "Managed clusters", group: "Compute" },
 
   { title: "AI Labs", slug: "ai", icon: Sparkles, migrated: true, description: "Inference — usage, models, health", group: "Services" },
   { title: "AI Agents", slug: "ai-agents", icon: Bot, migrated: false, description: "Agent builder product", group: "Services" },
-  { title: "Databases", slug: "databases", icon: Database, migrated: false, description: "Managed databases", group: "Services" },
+  { title: "Databases", slug: "databases", icon: Database, migrated: true, description: "Managed databases", group: "Services" },
   { title: "Object Storage", slug: "object-storage", icon: Archive, migrated: false, description: "Buckets and spaces", group: "Services" },
   { title: "Network & DDoS", slug: "network-ddos", icon: ShieldAlert, migrated: false, description: "Spectrum apps", group: "Services" },
   { title: "Platform Apps", slug: "platform-apps", icon: AppWindow, migrated: false, description: "PaaS deployments", group: "Services" },
-  { title: "Domains", slug: "domains", icon: Globe, migrated: false, description: "Registrations and transfers", group: "Services" },
+  { title: "Domains", slug: "domains", icon: Globe, migrated: true, description: "Registrations and transfers", group: "Services" },
   { title: "Cluster Monitor", slug: "cluster-monitor", icon: Activity, migrated: false, description: "Internal cluster health", group: "Services" },
 
   { title: "Pricing", slug: "pricing", icon: BadgeDollarSign, migrated: false, description: "Plans, promos, categories", group: "Commerce" },

@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "admin:dev"],
       "port": 3001
+    },
+    {
+      "name": "admin-clone",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["next", "dev", "apps/admin"],
+      "autoPort": true
     }
   ]
 }

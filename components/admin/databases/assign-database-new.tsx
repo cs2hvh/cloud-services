@@ -51,7 +51,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { Tables } from "@/lib/supabase/types";
 
-const AdminDatabaseAssign = ({ products, locations, allUsers, allProjects }: AdminDatabaseAssignProps) => {
+const AdminDatabaseAssign = ({ products, locations, allUsers, allProjects, basePath = "/dashboard/admin/databases" }: AdminDatabaseAssignProps & {
+  /** Route prefix of the databases page to return to (admin panel passes its own). */
+  basePath?: string;
+}) => {
   const [isLoading, setIsLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [termsAccepted, setTermsAccepted] = useState(false);
@@ -201,7 +204,7 @@ const AdminDatabaseAssign = ({ products, locations, allUsers, allProjects }: Adm
       const response = await submitDatabaseAssignment(state, availablePlans, termsAccepted);
       if (response.status === 200) {
         toast.success(response?.data?.message || "creating database for user");
-        router.push("/dashboard/admin/databases");
+        router.push(basePath);
       }
     } catch (error: unknown) {
       console.log(error);
