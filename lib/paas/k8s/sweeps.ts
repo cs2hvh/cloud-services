@@ -56,7 +56,7 @@ export const SWEEP_JOBS: SweepJob[] = [
     script: "scripts/v3/usage-sample.ts",
     schedule: "*/15 * * * *",
     needs: ["db", "k8s"],
-    why: "Warm-seconds and traffic on the same tick. The warm-time pricing decision rests on this series, so it must be a history and not a snapshot.",
+    why: "Warm-seconds and traffic on the same tick. Under flat pricing this is a margin and abuse signal rather than a price input, and it must be a history and not a snapshot.",
   },
   {
     name: "workload-drift",

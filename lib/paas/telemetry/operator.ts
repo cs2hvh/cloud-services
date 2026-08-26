@@ -57,6 +57,7 @@ import {
   type PodLike,
 } from "./usage.ts";
 import { detectSignals, summarise, type Signal, type SignalSummary } from "./signals.ts";
+import { sweepHealthReport, type SweepHealthReport } from "./sweep-health.ts";
 
 const V2_TAG = "ahura-v2";
 const BUILD_TAG = "ahura-v2-build";
@@ -326,6 +327,55 @@ export async function r2View(): Promise<R2View> {
   };
 }
 
+// ── are the observers running ───────────────────────────────────────────────
+
+export interface SweepView {
+  report: SweepHealthReport;
+}
+
+/**
+ * The section that watches the other sections.
+ *
+ * Every view above reports on the platform. None of them could report that the
+ * sweep feeding it had been failing every hour since it was installed, which is
+ * how that went unnoticed — a sweep that never runs produces silence, and
+ * silence renders exactly like a clean result.
+ */
+export async function sweepView(): Promise<SweepView> {
+  const k = cluster();
+  const ns = process.env.V2_PAAS_NAMESPACE ?? "ahura-system";
+  const list = await k.get<{
+    items: Array<{
+      metadata: { name: string };
+      spec?: {
+        schedule?: string;
+        suspend?: boolean;
+        jobTemplate?: { spec?: { template?: { spec?: { containers?: Array<{ command?: string[] }> } } } };
+      };
+      status?: { lastScheduleTime?: string; lastSuccessfulTime?: string };
+    }>;
+  }>(`/apis/batch/v1/namespaces/${ns}/cronjobs`);
+
+  // Throwing beats returning an empty report. No CronJobs and an unreadable API
+  // both render as "nothing wrong with the sweeps", which is the one answer
+  // this section must never give by accident.
+  if (!list) throw new Error(`could not list CronJobs in ${ns}`);
+
+  return {
+    report: sweepHealthReport(
+      (list.items ?? []).map((c) => ({
+        name: c.metadata.name,
+        schedule: c.spec?.schedule ?? "",
+        suspended: c.spec?.suspend ?? false,
+        lastScheduleTime: c.status?.lastScheduleTime ?? null,
+        lastSuccessfulTime: c.status?.lastSuccessfulTime ?? null,
+        command: c.spec?.jobTemplate?.spec?.template?.spec?.containers?.[0]?.command ?? [],
+      })),
+      Date.now(),
+    ),
+  };
+}
+
 // ── CPU and memory ──────────────────────────────────────────────────────────
 
 export interface MetricsView {
@@ -383,6 +433,7 @@ export interface OperatorView {
   storage: R2View | { error: string };
   metrics: MetricsView | { error: string };
   usage: UsageView | { error: string };
+  sweeps: SweepView | { error: string };
 }
 
 /**
@@ -401,13 +452,14 @@ export async function operatorView(): Promise<OperatorView> {
     }
   };
 
-  const [fleet, hostnames, workloads, storage, metrics, usage] = await Promise.all([
+  const [fleet, hostnames, workloads, storage, metrics, usage, sweeps] = await Promise.all([
     settle(fleetView),
     settle(hostnameView),
     settle(workloadView),
     settle(r2View),
     settle(metricsView),
     settle(usageView),
+    settle(sweepView),
   ]);
 
   return {
@@ -418,5 +470,6 @@ export async function operatorView(): Promise<OperatorView> {
     storage,
     metrics,
     usage,
+    sweeps,
   };
 }
