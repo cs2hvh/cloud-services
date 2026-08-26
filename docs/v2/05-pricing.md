@@ -160,11 +160,41 @@ of which were real.
 
 ---
 
-## 7. Open
+## 7. Previews — decided
 
-- **Preview lifetime and payer.** The only pricing question still unanswered. Under
-  flat pricing the natural answer is that previews are included but bounded — N
-  concurrent previews per app, expiring some days after the branch is deleted — but
-  the numbers are the user's call.
+**Free, short-lived, and smaller than production.**
+
+| | |
+|---|---|
+| Price | **Free.** Not billed, not counted against the app's tier. |
+| Lifetime | **48 hours** from last push, then reaped |
+| Size | **Starter resources** (512 MB / 1 shared vCPU), whatever the app's tier is |
+| Instances | Always **1**, regardless of the app's instance count |
+
+The three levers are chosen together because free-and-unbounded is the abuse
+vector, and each one alone is not enough:
+
+- **Free** is what makes the feature worth having. A preview nobody opens because
+  it costs money is a feature nobody uses.
+- **48 hours** bounds the accumulation. A busy repo produces previews continuously;
+  without an expiry they are a fleet that only grows. Reaped on a timer, not on
+  branch deletion — a branch nobody deletes would otherwise pin a container forever.
+- **Starter-sized, single instance** bounds the cost of each one. A preview exists
+  to be looked at, not to serve load, so it does not inherit a Plus tier's 4 GB.
+  This is what stops "free preview" meaning "free 4 GB container": the most
+  expensive thing a preview can cost us is **$4.01/month prorated over 48 hours —
+  about $0.27** — and it stops mattering entirely once idle-to-zero is on, because
+  a preview nobody opens holds no pod at all.
+
+**Not yet decided:** a per-app concurrency cap. 48 hours bounds the *age* of a
+preview but not how many exist at once, and a script pushing branches in a loop is
+the obvious abuse. Worth adding a cap when abuse response is built, rather than
+guessing a number now.
+
+---
+
+## 8. Open
+
 - **INR as the billing currency**, rather than a display conversion of USD. Matters
   for the India-first positioning and for payment rails.
+- **Preview concurrency cap** — see above.
