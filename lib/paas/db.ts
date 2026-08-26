@@ -77,6 +77,12 @@ export const db = {
   update: <T>(table: string, query: string, patch: unknown) =>
     req<T[]>("PATCH", `${table}?${query}`, patch, "return=representation"),
   delete: (table: string, query: string) => req<null>("DELETE", `${table}?${query}`),
+  /**
+   * Call a SECURITY DEFINER function. Promoted here from an inline copy in
+   * drift-sweep.ts once a second caller appeared — app-deploy-3 was right not
+   * to extend this module for one use, and right that the second use should.
+   */
+  rpc: <T>(fn: string, args: Record<string, unknown> = {}) => req<T>("POST", `rpc/${fn}`, args),
   /** Prove the schema is reachable before a script starts creating resources. */
   async reachable(): Promise<boolean> {
     try {
@@ -222,10 +228,21 @@ export interface ProjectRow {
   production_branch: string; root_directory: string | null; framework: string | null;
 }
 export interface EnvironmentRow { id: string; ref: string; project_id: string; kind: string; name: string }
+/**
+ * Mirrors the paas.deployment_trigger enum EXACTLY.
+ *
+ * The webhook route was written with "push" and the enum value is "git_push",
+ * so every real delivery would have failed with a 400 from PostgREST at the
+ * moment a customer first pushed. A bare `string` here let a typo through
+ * typechecking and into production; this makes the compiler the thing that
+ * catches it, and the test below pins it against the live database.
+ */
+export type DeploymentTrigger = "git_push" | "pull_request" | "manual" | "redeploy" | "rollback";
+
 export interface DeploymentRow {
   id: string; ref: string; project_id: string; environment_id: string;
   state: "queued" | "building" | "publishing" | "ready" | "error" | "canceled";
-  trigger: string; git_sha: string; git_ref: string;
+  trigger: DeploymentTrigger; git_sha: string | null; git_ref: string;
   image_repo: string | null; image_digest: string | null;
   error_code: string | null; error_message: string | null;
   container_port: number | null; run_as_user: number | null;
@@ -340,7 +357,7 @@ export const deployments = {
       `select=*&project_id=eq.${projectId}&state=eq.ready&order=ready_at.desc&limit=${limit}`,
     ),
   create: async (input: {
-    projectId: string; environmentId: string; trigger: string;
+    projectId: string; environmentId: string; trigger: DeploymentTrigger;
     gitSha: string | null; gitRef: string; gitMessage?: string | null;
     containerPort?: number; runAsUser?: number;
   }) =>

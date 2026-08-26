@@ -94,7 +94,7 @@ const env =
 const d = await deployments.create({
   projectId: project.id,
   environmentId: env.id,
-  trigger: "push",
+  trigger: "git_push",
   gitSha: push.sha,
   gitRef: decision.deploy ? decision.branch : project.production_branch,
   gitMessage: push.message,
