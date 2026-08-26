@@ -7,7 +7,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { detectFramework, detectPackageManager, type RepoFiles } from "./detect.ts";
+import { detectFramework, detectPackageManager, parseExposedPort, type RepoFiles } from "./detect.ts";
 
 function repo(paths: string[], contents: Record<string, string> = {}): RepoFiles {
   return { paths, contents };
@@ -202,4 +202,40 @@ test("lockfile beats packageManager field", () => {
     ),
     "yarn",
   );
+});
+
+// ── Dockerfile EXPOSE parsing ───────────────────────────────────────────────
+// A repo-supplied Dockerfile chooses its own port. Guessing 3000 produces a pod
+// whose readiness probe can never pass, so the port is read from the file.
+
+test("EXPOSE is read from a repo-supplied Dockerfile", () => {
+  const d = detectFramework(repo(["Dockerfile"], { Dockerfile: "FROM nginx\nEXPOSE 8080\n" }));
+  assert.equal(d.framework, "dockerfile");
+  assert.equal(d.port, 8080);
+  assert.match(d.reason, /EXPOSE 8080/);
+});
+
+test("the LAST EXPOSE wins, since it belongs to the final stage", () => {
+  const df = "FROM node AS build\nEXPOSE 3000\nFROM nginx AS run\nEXPOSE 80\n";
+  assert.equal(detectFramework(repo(["Dockerfile"], { Dockerfile: df })).port, 80);
+});
+
+test("EXPOSE with a protocol suffix is understood", () => {
+  assert.equal(parseExposedPort("EXPOSE 5000/tcp"), 5000);
+  assert.equal(parseExposedPort("EXPOSE 5000/udp"), 5000);
+});
+
+test("variable EXPOSE is ignored rather than mis-parsed", () => {
+  assert.equal(parseExposedPort("EXPOSE $PORT"), null);
+  assert.equal(parseExposedPort("EXPOSE ${PORT}"), null);
+});
+
+test("no EXPOSE falls back to 3000 and says so", () => {
+  const d = detectFramework(repo(["Dockerfile"], { Dockerfile: "FROM scratch\n" }));
+  assert.equal(d.port, 3000);
+  assert.match(d.reason, /No EXPOSE found/);
+});
+
+test("an out-of-range port is rejected", () => {
+  assert.equal(parseExposedPort("EXPOSE 99999"), null);
 });

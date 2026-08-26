@@ -67,6 +67,22 @@ function dep(pkg: PackageJson | null, name: string): boolean {
   return Boolean(pkg.dependencies?.[name] ?? pkg.devDependencies?.[name]);
 }
 
+/**
+ * Read the last EXPOSE from a Dockerfile.
+ *
+ * When a repository supplies its own Dockerfile we do not get to choose the
+ * port, so guessing 3000 produces a pod whose readiness probe can never pass.
+ * The last EXPOSE wins because it belongs to the final stage in a multi-stage
+ * build. Variable forms such as `EXPOSE $PORT` are ignored, since they cannot
+ * be resolved without building the image.
+ */
+export function parseExposedPort(dockerfile: string): number | null {
+  const matches = [...dockerfile.matchAll(/^[ \t]*EXPOSE[ \t]+(\d{1,5})(?:\/(?:tcp|udp))?[ \t]*$/gim)];
+  if (!matches.length) return null;
+  const port = Number(matches[matches.length - 1][1]);
+  return port > 0 && port <= 65535 ? port : null;
+}
+
 /** npm | yarn | pnpm | bun, from lockfile then packageManager field. */
 export function detectPackageManager(files: RepoFiles): "npm" | "yarn" | "pnpm" | "bun" {
   if (has(files, "pnpm-lock.yaml")) return "pnpm";
@@ -87,15 +103,18 @@ export function detectPackageManager(files: RepoFiles): "npm" | "yarn" | "pnpm" 
 export function detectFramework(files: RepoFiles): Detection {
   // 1. Explicit Dockerfile — the escape hatch, and it outranks everything.
   if (has(files, "Dockerfile")) {
+    const exposed = parseExposedPort(files.contents["Dockerfile"] ?? "");
     return {
       framework: "dockerfile",
       runtime: "docker",
       buildCommand: null,
       startCommand: null,
       outputDirectory: null,
-      port: 3000,
+      port: exposed ?? 3000,
       confidence: "certain",
-      reason: "Repository contains a Dockerfile; building it as-is.",
+      reason: exposed
+        ? `Repository contains a Dockerfile; building it as-is, EXPOSE ${exposed}.`
+        : "Repository contains a Dockerfile; building it as-is. No EXPOSE found, assuming 3000 — set the port explicitly if that is wrong.",
     };
   }
 
@@ -393,6 +412,7 @@ export function detectFramework(files: RepoFiles): Detection {
 
 /** Files worth fetching before detection runs. Keep small: these are API calls. */
 export const DETECTION_FILES = [
+  "Dockerfile",
   "package.json",
   "next.config.js",
   "next.config.mjs",
