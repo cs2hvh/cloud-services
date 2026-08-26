@@ -1,0 +1,136 @@
+/**
+ * Deployment shapes shared by the list, detail and log routes.
+ *
+ * Deployments are immutable in paas: git_sha and image_digest are write-once
+ * and terminal states (ready/error/canceled) cannot be changed. Nothing here
+ * exposes a mutation, and the DTO is read-shaped on purpose — a UI that can
+ * see an "edit" field will eventually grow a button for it.
+ */
+
+export const TERMINAL_STATES = ["ready", "error", "canceled"] as const;
+export type DeploymentState =
+  | "queued"
+  | "building"
+  | "publishing"
+  | (typeof TERMINAL_STATES)[number];
+
+export type DeploymentTrigger =
+  | "git_push"
+  | "pull_request"
+  | "manual"
+  | "redeploy"
+  | "rollback";
+
+export interface DeploymentRow {
+  ref: string;
+  state: DeploymentState;
+  trigger: DeploymentTrigger;
+  git_sha: string;
+  git_ref: string;
+  git_message: string | null;
+  git_author: string | null;
+  image_repo: string | null;
+  image_digest: string | null;
+  error_code: string | null;
+  error_message: string | null;
+  queued_at: string;
+  started_at: string | null;
+  ready_at: string | null;
+  projects?: { ref: string; name: string; repo_full_name: string } | null;
+  environments?: { ref: string; kind: string; name: string } | null;
+}
+
+export const DEPLOYMENT_COLUMNS =
+  "ref, state, trigger, git_sha, git_ref, git_message, git_author, " +
+  "image_repo, image_digest, error_code, error_message, " +
+  "queued_at, started_at, ready_at";
+
+export const DEPLOYMENT_COLUMNS_EXPANDED =
+  `${DEPLOYMENT_COLUMNS}, ` +
+  "projects:project_id (ref, name, repo_full_name), " +
+  "environments:environment_id (ref, kind, name)";
+
+export interface DeploymentDto {
+  ref: string;
+  state: DeploymentState;
+  isTerminal: boolean;
+  trigger: DeploymentTrigger;
+  commit: {
+    sha: string;
+    shortSha: string;
+    ref: string;
+    message: string | null;
+    author: string | null;
+  };
+  image: { repo: string; digest: string } | null;
+  error: { code: string | null; message: string } | null;
+  timing: {
+    queuedAt: string;
+    startedAt: string | null;
+    readyAt: string | null;
+    /** Wall-clock ms from start to terminal state; null while still running. */
+    durationMs: number | null;
+  };
+  project: { ref: string; name: string; repoFullName: string } | null;
+  environment: { ref: string; kind: string; name: string } | null;
+}
+
+function durationMs(row: DeploymentRow): number | null {
+  if (!row.started_at) return null;
+  // A deployment that errored has no ready_at, so fall back to nothing rather
+  // than measuring against now() — a failed build is not still running, and
+  // showing a growing timer for it would be a lie.
+  const end = row.ready_at;
+  if (!end) return null;
+  const ms = new Date(end).getTime() - new Date(row.started_at).getTime();
+  return Number.isFinite(ms) && ms >= 0 ? ms : null;
+}
+
+export function toDeploymentDto(row: DeploymentRow): DeploymentDto {
+  return {
+    ref: row.ref,
+    state: row.state,
+    isTerminal: (TERMINAL_STATES as readonly string[]).includes(row.state),
+    trigger: row.trigger,
+    commit: {
+      sha: row.git_sha,
+      shortSha: row.git_sha.slice(0, 7),
+      ref: row.git_ref,
+      message: row.git_message,
+      author: row.git_author,
+    },
+    image:
+      row.image_repo && row.image_digest
+        ? { repo: row.image_repo, digest: row.image_digest }
+        : null,
+    error:
+      row.state === "error"
+        ? {
+            code: row.error_code,
+            // Never leave this empty: an errored deployment with no message is
+            // the state users complain about most.
+            message: row.error_message ?? "The build failed without a message.",
+          }
+        : null,
+    timing: {
+      queuedAt: row.queued_at,
+      startedAt: row.started_at,
+      readyAt: row.ready_at,
+      durationMs: durationMs(row),
+    },
+    project: row.projects
+      ? {
+          ref: row.projects.ref,
+          name: row.projects.name,
+          repoFullName: row.projects.repo_full_name,
+        }
+      : null,
+    environment: row.environments
+      ? {
+          ref: row.environments.ref,
+          kind: row.environments.kind,
+          name: row.environments.name,
+        }
+      : null,
+  };
+}
