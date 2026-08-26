@@ -23,15 +23,18 @@ export async function GET() {
   try {
     const supabase = await createServiceClient();
 
-    const [{ data: servers, error }, { data: types }] = await Promise.all([
-      supabase
-        .from("servers")
-        .select(
-          "id, provider, status, location, plan_slug, hourly_cost, monthly_cost, created_at, linode_id",
-        )
-        .limit(10000),
-      supabase.from("linode_types").select("id, hourly_usd"),
-    ]);
+    const [{ data: servers, error }, { data: types }, { data: hosts }, { data: linodeRegions }] =
+      await Promise.all([
+        supabase
+          .from("servers")
+          .select(
+            "id, provider, status, location, plan_slug, hourly_cost, monthly_cost, created_at, linode_id",
+          )
+          .limit(10000),
+        supabase.from("linode_types").select("id, hourly_usd"),
+        supabase.from("proxmox_hosts").select("id, name, region, display_region"),
+        supabase.from("linode_regions").select("id, label"),
+      ]);
 
     if (error) {
       console.error("[Admin Servers] overview failed:", error.message);
@@ -46,6 +49,24 @@ export async function GET() {
       (types ?? []).map((t) => [`linode:${t.id}`, Number(t.hourly_usd) || 0]),
     );
 
+    // servers.location is polymorphic: a proxmox_hosts.id for Proxmox rows,
+    // a Linode region id (us-ord) for Linode rows — label both for humans.
+    const hostLabel = new Map(
+      (hosts ?? []).map((h) => [
+        h.id,
+        h.display_region || h.region || h.name || h.id,
+      ]),
+    );
+    const linodeRegionLabel = new Map(
+      (linodeRegions ?? []).map((r) => [r.id, r.label || r.id]),
+    );
+    const regionLabel = (s: { provider: string | null; location: string | null }) => {
+      if (!s.location) return "unknown";
+      return s.provider === "linode"
+        ? linodeRegionLabel.get(s.location) || s.location
+        : hostLabel.get(s.location) || s.location;
+    };
+
     const byStatus: Record<string, number> = {};
     const byProvider: Record<string, number> = {};
     const byRegion: Record<string, number> = {};
@@ -58,12 +79,13 @@ export async function GET() {
       byStatus[status] = (byStatus[status] || 0) + 1;
       const provider = s.provider || "proxmox";
       byProvider[provider] = (byProvider[provider] || 0) + 1;
-      const region = s.location || "unknown";
+      const region = regionLabel(s);
       byRegion[region] = (byRegion[region] || 0) + 1;
 
       const billable = status !== "failed" && status !== "error";
       if (billable) {
-        mrr += Number(s.monthly_cost) || 0;
+        // Older Proxmox rows only carry hourly_cost — fall back to hourly × 720.
+        mrr += Number(s.monthly_cost) || (Number(s.hourly_cost) || 0) * 720;
         if (provider === "linode") {
           const customer = Number(s.hourly_cost) || 0;
           const list = listPrice.get(s.plan_slug || "") ?? 0;

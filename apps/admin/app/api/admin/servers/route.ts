@@ -73,9 +73,12 @@ export async function GET(request: Request) {
     if (PROVIDERS.includes(provider)) query = query.eq("provider", provider);
     if (region) query = query.eq("location", region);
 
-    const { data, error, count } = await query
-      .order("created_at", { ascending: false })
-      .range(from, to);
+    const [{ data, error, count }, { data: hosts }, { data: linodeRegions }] =
+      await Promise.all([
+        query.order("created_at", { ascending: false }).range(from, to),
+        supabase.from("proxmox_hosts").select("id, name, region, display_region"),
+        supabase.from("linode_regions").select("id, label"),
+      ]);
 
     if (error) {
       console.error("[Admin Servers] list failed:", error.message);
@@ -85,8 +88,27 @@ export async function GET(request: Request) {
       );
     }
 
+    // location is a proxmox host id or a Linode region id — attach a label.
+    const hostLabel = new Map(
+      (hosts ?? []).map((h) => [
+        h.id,
+        h.display_region || h.region || h.name || h.id,
+      ]),
+    );
+    const linodeRegionLabel = new Map(
+      (linodeRegions ?? []).map((r) => [r.id, r.label || r.id]),
+    );
+    const rows = (data ?? []).map((s) => ({
+      ...s,
+      region_label: !s.location
+        ? null
+        : s.provider === "linode"
+          ? linodeRegionLabel.get(s.location) || s.location
+          : hostLabel.get(s.location) || s.location,
+    }));
+
     return NextResponse.json({
-      data: data ?? [],
+      data: rows,
       pagination: {
         page,
         limit,

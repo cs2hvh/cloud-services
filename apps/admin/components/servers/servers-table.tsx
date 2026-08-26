@@ -251,7 +251,7 @@ export function ServersTable({ onChanged }: { onChanged?: () => void }) {
                     <span className="text-xs text-muted-foreground"> vm {s.vmid}</span>
                   ) : null}
                 </TableCell>
-                <TableCell className="text-sm">{s.location ?? "—"}</TableCell>
+                <TableCell className="text-sm">{s.region_label ?? s.location ?? "—"}</TableCell>
                 <TableCell className="text-xs text-muted-foreground">{specs(s) || "—"}</TableCell>
                 <TableCell>
                   <StatusBadge status={s.status} />

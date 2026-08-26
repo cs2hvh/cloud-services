@@ -13,6 +13,7 @@ export type ServerRow = {
   memory_mb: number | null;
   disk_gb: number | null;
   status: string;
+  region_label?: string | null;
   owner_id: string | null;
   owner_email: string | null;
   hourly_cost: number | null;
