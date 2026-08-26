@@ -133,7 +133,14 @@ export interface DensityClaim {
 
 export interface PricingClaim {
   nodeType: string;
-  usableClaimGb: number;
+  /**
+   * The doc's claim about usable memory, in bytes.
+   *
+   * Bytes rather than a number plus a unit, because the doc has written this
+   * as both "60 GB" and "55.8 GiB" and the difference is 7%. Resolving the unit
+   * at the parse boundary means no caller can pick the wrong one later.
+   */
+  usableClaimBytes: number;
   rows: DensityClaim[];
 }
 
@@ -157,13 +164,18 @@ export interface PricingClaim {
  */
 export function parseDensityTable(markdown: string): PricingClaim | null {
   // The heading line carries the shape and the usable claim together:
-  // | Pod RAM | On `g6-standard-16` (60 GB usable) | $/pod/mo |
-  const header = /\|\s*Pod RAM\s*\|\s*On\s*`([^`]+)`\s*\(([\d.]+)\s*GB usable\)\s*\|/.exec(markdown);
+  // | Pod RAM | On `g6-standard-16` (55.8 GiB usable) | $/pod/mo |
+  //
+  // Both spellings are accepted because the doc has used both, and the unit is
+  // resolved here rather than carried forward — "60 GB" and "55.8 GiB" differ
+  // by 7%, which is more than the error this whole checker exists to find.
+  const header = /\|\s*Pod RAM\s*\|\s*On\s*`([^`]+)`\s*\(([\d.]+)\s*(GiB|GB) usable\)\s*\|/.exec(markdown);
   if (!header) return null;
 
   const nodeType = header[1];
-  const usableClaimGb = Number(header[2]);
-  if (!Number.isFinite(usableClaimGb)) return null;
+  const claimed = Number(header[2]);
+  if (!Number.isFinite(claimed)) return null;
+  const usableClaimBytes = claimed * (header[3] === "GiB" ? 1024 ** 3 : 1000 ** 3);
 
   const rows: DensityClaim[] = [];
   // Rows follow the header until the first blank line. Anything between that
@@ -201,7 +213,7 @@ export function parseDensityTable(markdown: string): PricingClaim | null {
     });
   }
 
-  return rows.length > 0 ? { nodeType, usableClaimGb, rows } : null;
+  return rows.length > 0 ? { nodeType, usableClaimBytes, rows } : null;
 }
 
 /**
