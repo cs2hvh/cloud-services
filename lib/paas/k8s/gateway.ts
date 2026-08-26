@@ -27,6 +27,27 @@ import { PAAS_NAMESPACE, ownerLabels } from "./manifests.ts";
 
 const NAME = "traefik";
 
+/** The middleware's name in Traefik's file provider. */
+export const TENANT_RATELIMIT_NAME = "tenant-ratelimit";
+
+/**
+ * Router reference for the per-tenant rate limit.
+ *
+ * The `@file` suffix is the PROVIDER QUALIFIER and is not optional. Without it
+ * Traefik looks in the Kubernetes CRD provider — which is not enabled here — and
+ * a router referencing a middleware that does not resolve simply has no
+ * middleware. No error, no limit, no difference visible on the object.
+ *
+ * A named constant because the manifest and its test must agree on the exact
+ * string. Two literals is a rename waiting to detach the limit from every route
+ * while both sides still look correct.
+ */
+export const TENANT_RATELIMIT_MIDDLEWARE = `${TENANT_RATELIMIT_NAME}@file`;
+
+/** Requests per second per client, and the burst allowed above it. */
+export const TENANT_RATELIMIT_AVERAGE = 50;
+export const TENANT_RATELIMIT_BURST = 100;
+
 export function gatewayServiceAccount() {
   return {
     apiVersion: "v1",
@@ -107,7 +128,21 @@ export function gatewayTlsSecret(certPem: string, keyPem: string) {
   };
 }
 
-/** Traefik file-provider config declaring the default certificate. */
+/**
+ * Traefik file-provider config: the default certificate AND the tenant rate
+ * limit.
+ *
+ * BOTH KEYS BELONG HERE. The rate limit was first applied by editing this
+ * ConfigMap in the cluster by hand, which works exactly once — the next
+ * `install-gateway.ts --apply` regenerates the object from this function and
+ * would have removed the middleware from every route on the platform. Nothing
+ * would have failed: the routers keep their annotation, the reference stops
+ * resolving, and an unresolved middleware is silently no middleware.
+ *
+ * That is the same defect shape as everything else on this project, arriving
+ * through the installer rather than through the code: an object that is correct
+ * until something regenerates it from a source that never knew about the change.
+ */
 export function gatewayTlsConfigMap() {
   return {
     apiVersion: "v1",
@@ -121,6 +156,33 @@ export function gatewayTlsConfigMap() {
         "      defaultCertificate:",
         "        certFile: /certs/tls.crt",
         "        keyFile: /certs/tls.key",
+        "",
+      ].join("\n"),
+      "middlewares.yml": [
+        "# Per-tenant inbound rate limit. Generated — edit gateway.ts, not the cluster.",
+        "#",
+        "# SOURCE IDENTIFICATION IS THE PART THAT MATTERS. Behind Cloudflare the",
+        "# socket peer is always a Cloudflare edge address, so limiting on it would",
+        "# put every visitor of every tenant in ONE bucket and let a single busy app",
+        "# throttle the whole platform — a rate limiter causing the outage it exists",
+        "# to prevent. CF-Connecting-IP is the real client.",
+        "#",
+        "# Bypass, stated rather than hidden: a request arriving DIRECTLY at the",
+        "# origin IP carries no CF-Connecting-IP and shares one bucket with every",
+        "# other such request. The complementary control is restricting the origin",
+        "# to Cloudflare's ranges. Not done yet.",
+        "#",
+        "# This bounds traffic INTO an app. It does nothing about a tenant running a",
+        "# miner or a spam relay, which is outbound and never passes through here.",
+        "http:",
+        "  middlewares:",
+        `    ${TENANT_RATELIMIT_NAME}:`,
+        "      rateLimit:",
+        `        average: ${TENANT_RATELIMIT_AVERAGE}`,
+        `        burst: ${TENANT_RATELIMIT_BURST}`,
+        "        period: 1s",
+        "        sourceCriterion:",
+        "          requestHeaderName: CF-Connecting-IP",
         "",
       ].join("\n"),
     },
@@ -330,14 +392,37 @@ export function appIngress(i: {
       //
       // A stale wake target is not harmless either: it is what the activator
       // would act on if a request ever reached it again.
-      ...(i.wakeTarget
-        ? {
-            annotations: {
+      annotations: {
+        // Per-tenant inbound rate limit, defined in the traefik-tls ConfigMap
+        // and served by Traefik's FILE provider — `@file` is the provider
+        // qualifier and the reference does not resolve without it.
+        //
+        // Applied to EVERY tenant route rather than opted into. One app being
+        // flooded otherwise burns shared node CPU and Linode transfer that its
+        // neighbours paid for, and an opt-in control protects only the tenants
+        // who did not need protecting.
+        //
+        // Verified by making the limit absurd (average 1, burst 1, period 10s)
+        // and watching 19 of 20 requests return 429 while a second hostname
+        // returned 20 of 20 as 200. At the real limit nothing trips from one
+        // client, which is indistinguishable from the middleware not being
+        // attached at all — so the absurd-limit probe is the only thing that
+        // told those two apart.
+        "traefik.ingress.kubernetes.io/router.middlewares": TENANT_RATELIMIT_MIDDLEWARE,
+        // OMITTED when awake, not set to null. Under Server-Side Apply, dropping
+        // a field this manager owns removes it — whereas a null serialises into
+        // an empty-string annotation, and an empty string is a value that looks
+        // like data. Same smell as the '0000000' git sha.
+        //
+        // A stale wake target is not harmless either: it is what the activator
+        // would act on if a request ever reached it again.
+        ...(i.wakeTarget
+          ? {
               "ahura.cloud/wake-target": i.wakeTarget,
               ...(i.wakePort != null ? { "ahura.cloud/wake-port": String(i.wakePort) } : {}),
-            },
-          }
-        : {}),
+            }
+          : {}),
+      },
     },
     spec: {
       ingressClassName: "ahura",
