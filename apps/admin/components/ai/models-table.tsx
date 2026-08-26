@@ -44,7 +44,16 @@ type ModelRow = {
   upstream_pricing: Pricing;
   is_active: boolean;
   is_featured: boolean;
+  upstream_available: boolean | null;
   margin: { input: number | null; output: number | null };
+};
+
+type CatalogSummary = {
+  total: number;
+  active: number;
+  orphaned: number;
+  upstreamChecked: boolean;
+  upstreamCount: number | null;
 };
 
 const perMtok = (cents?: number) =>
@@ -68,8 +77,10 @@ function MarginBadge({ value }: { value: number | null }) {
 
 export function AiModelsTable() {
   const [rows, setRows] = useState<ModelRow[]>([]);
+  const [summary, setSummary] = useState<CatalogSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("active");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [editing, setEditing] = useState<ModelRow | null>(null);
   const [draft, setDraft] = useState({ input: "", output: "", cached: "" });
@@ -79,6 +90,7 @@ export function AiModelsTable() {
     try {
       const res = await api.get("/admin/ai/models");
       setRows(res.data.data ?? []);
+      setSummary(res.data.summary ?? null);
     } catch {
       /* toasted by interceptor */
     } finally {
@@ -92,14 +104,19 @@ export function AiModelsTable() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter(
-      (m) =>
+    return rows.filter((m) => {
+      if (filter === "active" && !m.is_active) return false;
+      if (filter === "inactive" && m.is_active) return false;
+      if (filter === "orphaned" && !(m.is_active && m.upstream_available === false))
+        return false;
+      if (!q) return true;
+      return (
         m.model_id.toLowerCase().includes(q) ||
         (m.display_name ?? "").toLowerCase().includes(q) ||
-        m.modality.toLowerCase().includes(q),
-    );
-  }, [rows, search]);
+        m.modality.toLowerCase().includes(q)
+      );
+    });
+  }, [rows, search, filter]);
 
   const patch = async (
     model: ModelRow,
@@ -185,9 +202,31 @@ export function AiModelsTable() {
               className="w-72 pl-8"
             />
           </div>
+          <Select value={filter} onValueChange={setFilter}>
+            <SelectTrigger className="w-44">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="active">Active only</SelectItem>
+              <SelectItem value="all">All models</SelectItem>
+              <SelectItem value="inactive">Inactive</SelectItem>
+              <SelectItem value="orphaned">Active, not on Wokey</SelectItem>
+            </SelectContent>
+          </Select>
+          {summary?.upstreamChecked && summary.orphaned > 0 && (
+            <button
+              type="button"
+              onClick={() => setFilter("orphaned")}
+              className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-xs text-amber-300"
+            >
+              {summary.orphaned} active without upstream
+            </button>
+          )}
           <div className="ml-auto flex items-center gap-2">
             <span className="text-xs text-muted-foreground">
               {filtered.length} of {rows.length} models
+              {summary?.upstreamCount != null &&
+                ` · Wokey serves ${summary.upstreamCount}`}
             </span>
             <Button variant="ghost" size="sm" onClick={load} disabled={loading}>
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
@@ -229,6 +268,11 @@ export function AiModelsTable() {
                       {m.org_id && (
                         <span className="rounded-full border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">
                           org-private
+                        </span>
+                      )}
+                      {m.is_active && m.upstream_available === false && (
+                        <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-300">
+                          not on Wokey
                         </span>
                       )}
                     </div>
