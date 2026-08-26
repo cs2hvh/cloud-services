@@ -36,9 +36,21 @@ anything interactive. See **Scheduling it** below.
 Both env files are required: Supabase credentials live in `.env`, the `V2_*`
 ones in `.env.local`.
 
-Exit codes are meant for schedulers. `fleet-drift` exits 1 on drift.
-`dns-drift` exits 1 on drift and **2 on a claimable hostname**, which is a
-different severity and deserves a different page.
+Exit codes are meant for schedulers, and the contract lives in
+[`exit-codes.ts`](../../lib/paas/telemetry/exit-codes.ts):
+
+| | |
+|---|---|
+| `0` | ran, nothing to report |
+| `1` | **could not run** — nothing was measured; alert |
+| `2` | the instrument is wrong — self-check failed or input refused |
+| `10` | ran and **found** something — the tool working, not failing |
+| `11` | **urgent** — currently only a claimable hostname |
+
+Codes under 10 are about the *run*; codes from 10 up are about the *world*.
+That split exists because `1` used to mean both "found drift" and "could not
+run", which is unalertable: those need opposite responses and arrived as the
+same number.
 
 ## Scheduling it — the premise, not the last mile
 
@@ -416,7 +428,7 @@ one needs a runner, and those are different asks. See the scheduling section.)*
   chunks periodically — a change in the build lane. Fetch, sanitise and
   paginate are done, which covers the stated acceptance criterion.
 - **Anything that runs on a schedule.** Every sweep is scheduler-ready — exit 0
-  clean, exit 1 drift, exit 2 for a claimable hostname — and nothing schedules
+  clean, 1 could-not-run, 10 findings, 11 for a claimable hostname — and nothing schedules
   them. `drift-sweep.ts --record` is the one intended for cron, at roughly two
   minutes per run. This is a standing configuration decision rather than code.
 - **A `rpc()` helper in `lib/paas/db.ts`.** `drift-sweep.ts` inlines one

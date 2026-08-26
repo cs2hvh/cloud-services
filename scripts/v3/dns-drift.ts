@@ -5,11 +5,11 @@
  *   node --env-file=.env --env-file=.env.local scripts/v3/dns-drift.ts
  *   node --env-file=.env --env-file=.env.local scripts/v3/dns-drift.ts --json
  *
- * Exits 1 when something needs a human, 2 when a hostname is CLAIMABLE — a
- * record resolving to our gateway that no Ingress routes. That is not
- * housekeeping: the next Ingress to name it, in any tenant namespace, receives
- * its traffic. It gets its own exit code so a scheduler can page on it
- * differently from ordinary drift.
+ * Exit codes follow the contract in lib/paas/telemetry/exit-codes.ts: 0 clean,
+ * 1 could-not-run, 10 findings, and 11 when a hostname is CLAIMABLE — a record
+ * resolving to our gateway that no Ingress routes. That is not housekeeping:
+ * the next Ingress to name it, in any tenant namespace, receives its traffic,
+ * so it gets a severity of its own that a scheduler can page on separately.
  *
  * READ-ONLY. Reports; never creates or deletes a record. Deleting DNS on the
  * strength of a classification is how a working app goes dark.
