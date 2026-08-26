@@ -18,6 +18,7 @@ node --env-file=.env --env-file=.env.local scripts/v3/operator-view.ts       # e
 node --env-file=.env --env-file=.env.local scripts/v3/fleet-drift.ts --prove
 node --env-file=.env --env-file=.env.local scripts/v3/dns-drift.ts
 node --env-file=.env --env-file=.env.local scripts/v3/r2-drift.ts
+node --env-file=.env --env-file=.env.local scripts/v3/workload-drift.ts
 node --env-file=.env --env-file=.env.local scripts/v3/usage-sample.ts --samples 20 --interval 30
 node --env-file=.env --env-file=.env.local scripts/v3/pod-logs.ts <ns> <pod>
 node --env-file=.env --env-file=.env.local scripts/v3/telemetry-probe.ts
@@ -49,6 +50,7 @@ different severity and deserves a different page.
 | `telemetry/usage.ts` | Warm-seconds, pod-seconds, build-minutes | 23 |
 | `telemetry/dns-drift.ts` | Cloudflare vs Ingress vs `paas.aliases` | 17 |
 | `telemetry/r2-drift.ts` | R2 objects vs `paas.deployments` | 20 |
+| `telemetry/workload-drift.ts` | K8s Deployments vs `paas.deployments` | 17 |
 | `telemetry/signals.ts` | Abuse and quota signals — detection only | 17 |
 | `telemetry/drift-history.ts` | Findings → `paas.drift_observations` | 13 |
 | `telemetry/operator.ts` | Composition for the API and dashboard | — |
@@ -75,6 +77,34 @@ Read on 2026-08-26 against LKE `647920`:
   a scale-up. The pair observed here predate that fix.
 - **486.3 MB reclaimable in R2 — 70% of the bucket**, and nothing prunes it.
   Independently measured at the same figure by the infrastructure lane.
+- **Two apps are DOWN** with `ready` rows, so the control plane and any alias
+  pointing at them believe they are live. One is Pending on
+  `CreateContainerConfigError`; the other restarts repeatedly after starting
+  gunicorn cleanly and being SIGTERM'd — a readiness probe or port mismatch,
+  not an app fault.
+- **4 unaccounted pods**, and `clusters.pod_allocated` says 0 against 5 actually
+  running. Placement currently believes the cluster is empty. Since LKE enforces
+  the pod cap hard, a number that drifts low means scheduling onto a cluster
+  that is fuller than the record admits.
+
+### The defect fleet reconciliation cannot see
+
+`fleet-drift.ts` compares Linode to the control plane, so it sees clusters,
+nodes and build VMs. It cannot see a workload: a Deployment with no
+`paas.deployments` row lives entirely inside Kubernetes, on a node that *is*
+recorded, in a cluster that *is* recorded. Fleet drift reports clean while the
+pod rides along.
+
+`workload-drift.ts` closes that, and its currency is **pods rather than
+dollars** — LKE caps pods per cluster, and the plan is explicit that this cap,
+not CPU or RAM, is what forces a multi-cluster fleet.
+
+Its `down` status exists because the live run exposed a gap in the first
+version: it compared only *existence* — is there a workload for this row, is
+there a row for this workload — so two apps with a row, a workload, and zero
+ready pods were classified healthy. Comparing existence and not state is the
+same class of defect this whole document is about. `down` now sorts above
+everything else, because it is the only status a customer can see.
 
 ### The R2 finding, and one thing it nearly got wrong
 
