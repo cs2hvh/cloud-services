@@ -22,6 +22,8 @@ import { EnvEditor, type EnvVarSummary } from "@/components/v2/env-editor";
 import { DomainManager, type DomainSummary } from "@/components/v2/domain-manager";
 import { PromoteControl } from "@/components/v2/promote-control";
 import { SleepSettings } from "@/components/v2/sleep-settings";
+import { SizingPicker } from "@/components/v2/sizing-picker";
+import { TIERS, MIN_INSTANCES, MAX_INSTANCES } from "@/lib/paas/tiers.ts";
 import { replicaStates, type ReplicaState } from "@/lib/paas/replicas.ts";
 import {
   StateBadge,
@@ -58,7 +60,7 @@ export default async function ProjectPage({ params }: Params) {
     .from("projects")
     .select(
       "id, ref, name, repo_full_name, production_branch, framework, " +
-        "installation_id, scale_to_zero, idle_seconds"
+        "installation_id, scale_to_zero, idle_seconds, tier, instance_count"
     )
     .eq("ref", ref)
     .is("deleted_at", null)
@@ -78,6 +80,9 @@ export default async function ProjectPage({ params }: Params) {
     installation_id: number | null;
     scale_to_zero: boolean;
     idle_seconds: number | null;
+    // Both NOT NULL in paas, with defaults and CHECK constraints.
+    tier: string;
+    instance_count: number;
   };
 
   const [
@@ -357,6 +362,40 @@ export default async function ProjectPage({ params }: Params) {
           projectRef={project.ref}
           variables={variables}
           canSave
+        />
+      </Section>
+
+      <Section title="Size">
+        {/*
+          TIERS is mapped to TierOption here, on the SERVER, and the map drops
+          costUsd. Passing the Tier objects straight through would serialise
+          our wholesale cost and margin into the page for anyone to read in
+          view-source — the bug the GPU deploy wizard shipped. The omission is
+          the whole point of this map, so it is spelled out rather than done
+          with a spread.
+
+          deployRequired is true: the reconciler reads tier and instance_count
+          when it builds the manifests, so a change lands on the next deploy
+          rather than live. That is the infrastructure lane's fact, passed in
+          rather than guessed at by the component.
+        */}
+        <SizingPicker
+          projectRef={project.ref}
+          tiers={TIERS.map((t) => ({
+            id: t.id,
+            label: t.label,
+            cls: t.cls,
+            memoryMib: t.memoryMib,
+            vcpu: t.vcpu,
+            transferGb: t.transferGb,
+            priceUsd: t.priceUsd,
+            priceInr: t.priceInr,
+          }))}
+          currentTier={project.tier}
+          currentInstances={project.instance_count}
+          minInstances={MIN_INSTANCES}
+          maxInstances={MAX_INSTANCES}
+          deployRequired
         />
       </Section>
 

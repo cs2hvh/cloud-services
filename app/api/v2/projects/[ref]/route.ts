@@ -7,6 +7,12 @@
  * takeover cannot be reintroduced through this route.
  */
 
+import {
+  TIERS,
+  tierById,
+  MIN_INSTANCES,
+  MAX_INSTANCES,
+} from "@/lib/paas/tiers.ts";
 import { getCaller } from "../../_lib/auth";
 import {
   json,
@@ -60,6 +66,8 @@ interface PatchBody {
   framework?: unknown;
   scaleToZero?: unknown;
   idleSeconds?: unknown;
+  tier?: unknown;
+  instanceCount?: unknown;
 }
 
 /**
@@ -121,6 +129,38 @@ export async function PATCH(request: Request, { params }: Params) {
 
   if (typeof body.scaleToZero === "boolean") {
     patch.scale_to_zero = body.scaleToZero;
+  }
+
+  // ── sizing ───────────────────────────────────────────────────────
+  // Validated against lib/paas/tiers, NOT against a list restated here.
+  // paas.projects already CHECKs both (projects_tier_known,
+  // projects_instance_count_bounded), so a bad value cannot reach the table
+  // either way — but a CHECK violation surfaces as a 422 with a constraint
+  // name in it, and the customer deserves to be told which of the six tiers
+  // they may pick. Two statements of the same rule is how they drift, so the
+  // list comes from the module the deploy path uses.
+  if (typeof body.tier === "string") {
+    if (!tierById(body.tier)) {
+      return invalid(
+        `Unknown tier. Choose one of: ${TIERS.map((t) => t.id).join(", ")}.`,
+        { tier: "unknown" }
+      );
+    }
+    patch.tier = body.tier;
+  }
+
+  if (typeof body.instanceCount === "number") {
+    if (
+      !Number.isInteger(body.instanceCount) ||
+      body.instanceCount < MIN_INSTANCES ||
+      body.instanceCount > MAX_INSTANCES
+    ) {
+      return invalid(
+        `Instance count must be a whole number between ${MIN_INSTANCES} and ${MAX_INSTANCES}.`,
+        { instanceCount: "out_of_range" }
+      );
+    }
+    patch.instance_count = body.instanceCount;
   }
 
   if (body.idleSeconds === null) {
