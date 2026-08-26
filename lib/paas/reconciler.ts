@@ -343,19 +343,64 @@ export async function reconcileProject(
     }
   }
 
-  // ── 4. every alias hostname routes ────────────────────────────────────────
+  // ── 3b. a Service per targeted deployment ─────────────────────────────────
+  //
+  // The project-level Service above is production's. It is not enough on its
+  // own: every alias's Ingress pointed at it, so two hostnames on one project
+  // both resolved to whatever production selected. A branch preview served
+  // production's build while paas.aliases recorded that it served its own —
+  // the control plane believing something untrue, and a pod running for a
+  // hostname that could never reach it.
+  for (const id of targeted) {
+    const d = byId.get(id)!;
+    if (!d.image_repo || !d.image_digest) continue;
+    if (!dry) {
+      await k.apply(
+        `/api/v1/namespaces/${ns}/services/${d.ref}`,
+        appService({
+          name: d.ref,
+          deploymentRef: d.ref,
+          projectRef: project.ref,
+          namespace: ns,
+          port: d.container_port ?? 3000,
+        }),
+      );
+    }
+  }
+
+  // ── 4. every alias hostname routes to ITS OWN deployment ──────────────────
   for (const a of projectAliases) {
     if (!a.deployment_id || !byId.has(a.deployment_id)) continue;
-    const existing = await k.get(
-      `/apis/networking.k8s.io/v1/namespaces/${ns}/ingresses/${a.ref}`,
-      true,
-    );
-    if (existing) continue;
-    actions.push({ kind: "route", target: a.hostname, detail: `creating Ingress ${a.ref}` });
+    const target = byId.get(a.deployment_id)!;
+
+    const existing = await k.get<{
+      spec?: { rules?: Array<{ http?: { paths?: Array<{ backend?: { service?: { name?: string } } }> } }> };
+    }>(`/apis/networking.k8s.io/v1/namespaces/${ns}/ingresses/${a.ref}`, true);
+    const currentBackend = existing?.spec?.rules?.[0]?.http?.paths?.[0]?.backend?.service?.name;
+
+    // ALWAYS apply. This read used to be `if (existing) continue` — the fourth
+    // instance of the same bug: an Ingress that needed to change its backend
+    // never converged, because it already existed. Server-Side Apply is
+    // idempotent; the read is only here to describe what changed.
+    if (!existing) {
+      actions.push({ kind: "route", target: a.hostname, detail: `creating Ingress ${a.ref}` });
+    } else if (currentBackend !== target.ref) {
+      actions.push({
+        kind: "repoint",
+        target: a.hostname,
+        detail: `ingress backend ${currentBackend ?? "(none)"} -> ${target.ref}`,
+      });
+    }
     if (!dry) {
       await k.apply(
         `/apis/networking.k8s.io/v1/namespaces/${ns}/ingresses/${a.ref}`,
-        appIngress({ aliasRef: a.ref, projectRef: project.ref, namespace: ns, hostname: a.hostname }),
+        appIngress({
+          aliasRef: a.ref,
+          projectRef: project.ref,
+          namespace: ns,
+          hostname: a.hostname,
+          serviceName: target.ref,
+        }),
       );
     }
   }

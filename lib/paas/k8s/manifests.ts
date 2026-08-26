@@ -360,12 +360,28 @@ export function appDeployment(i: AppDeploymentInput) {
   };
 }
 
-export function appService(i: { deploymentRef: string; projectRef: string; namespace: string; port: number }) {
+export function appService(i: {
+  deploymentRef: string;
+  projectRef: string;
+  namespace: string;
+  port: number;
+  /**
+   * Service name. Defaults to the project ref — one Service per project, whose
+   * selector production moves.
+   *
+   * Pass the deployment ref to get a Service per DEPLOYMENT, which is what lets
+   * two hostnames on one project serve two different builds. With only the
+   * project-level Service, every alias resolves to whatever production points
+   * at, so a branch preview silently serves production's build while the
+   * database records that it serves its own.
+   */
+  name?: string;
+}) {
   return {
     apiVersion: "v1",
     kind: "Service",
     metadata: {
-      name: i.projectRef,
+      name: i.name ?? i.projectRef,
       namespace: i.namespace,
       labels: ownerLabels({ "ahura.cloud/project": i.projectRef }),
     },

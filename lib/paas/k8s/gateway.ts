@@ -268,6 +268,12 @@ export function appIngress(i: {
   projectRef: string;
   namespace: string;
   hostname: string;
+  /**
+   * Backend Service. Defaults to the project ref for compatibility; pass the
+   * alias's own deployment Service so this hostname serves the build the
+   * database says it serves, rather than whatever production points at.
+   */
+  serviceName?: string;
 }) {
   return {
     apiVersion: "networking.k8s.io/v1",
@@ -296,7 +302,7 @@ export function appIngress(i: {
               {
                 path: "/",
                 pathType: "Prefix",
-                backend: { service: { name: i.projectRef, port: { number: 80 } } },
+                backend: { service: { name: i.serviceName ?? i.projectRef, port: { number: 80 } } },
               },
             ],
           },
