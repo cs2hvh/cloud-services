@@ -243,6 +243,19 @@ export interface ProjectRow {
    */
   scale_to_zero: boolean;
   idle_seconds: number | null;
+  /**
+   * Instance sizing. Both NOT NULL with defaults in the schema, so a row always
+   * carries them — the reconciler reads these to build the pod's resources, and
+   * before they existed every app got the same 100m/256Mi regardless of what it
+   * was sold.
+   *
+   * `tier` is a closed set constrained in the database and mirrored in
+   * `lib/paas/tiers.ts`; `tiers.test.ts` asserts that mirror against the priced
+   * document, and `db.schema.test.ts` asserts this interface against the live
+   * columns. Adding a tier means touching all three deliberately.
+   */
+  tier: string;
+  instance_count: number;
 }
 export interface EnvironmentRow { id: string; ref: string; project_id: string; kind: string; name: string }
 /**

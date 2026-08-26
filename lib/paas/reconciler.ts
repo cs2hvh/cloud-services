@@ -40,6 +40,7 @@ import {
 import { ACTIVATOR_NAME, activatorAliasService } from "./k8s/activator.ts";
 import { appIngress } from "./k8s/gateway.ts";
 import { projects, deployments, aliases, envVars, type ProjectRow, type DeploymentRow, type AliasRow } from "./db.ts";
+import { requireTier, clampInstances, resourcesFor, DEFAULT_TIER } from "./tiers.ts";
 import { decryptEnvValue, pgHexToBytes } from "./secrets.ts";
 import { createHash } from "node:crypto";
 
@@ -68,6 +69,21 @@ interface LiveDeployment {
   image: string | null;
   envSecret: string | null;
   envHash: string | null;
+  /**
+   * The pod's actual resources, so a TIER CHANGE is visible as drift.
+   *
+   * Without these the loop compared only image, env secret and env hash — so
+   * resizing an app from Starter to Plus applied correctly (the apply is
+   * unconditional) while reporting "converged", and an operator watching a
+   * resize had no way to tell whether it had taken effect. Applying the right
+   * thing and describing it wrongly is the same dishonest reporting this file
+   * exists to stop; it is only less obvious because the outcome happens to be
+   * correct.
+   */
+  cpuRequest: string | null;
+  cpuLimit: string | null;
+  memRequest: string | null;
+  memLimit: string | null;
 }
 
 /**
@@ -86,7 +102,16 @@ async function liveDeployment(
       replicas?: number;
       template?: {
         metadata?: { annotations?: Record<string, string> };
-        spec?: { containers?: Array<{ image?: string; envFrom?: Array<{ secretRef?: { name?: string } }> }> };
+        spec?: {
+          containers?: Array<{
+            image?: string;
+            envFrom?: Array<{ secretRef?: { name?: string } }>;
+            resources?: {
+              requests?: { cpu?: string; memory?: string };
+              limits?: { cpu?: string; memory?: string };
+            };
+          }>;
+        };
       };
     };
   }>(`/apis/apps/v1/namespaces/${ns}/deployments/${name}`, true);
@@ -97,7 +122,54 @@ async function liveDeployment(
     image: c?.image ?? null,
     envSecret: c?.envFrom?.[0]?.secretRef?.name ?? null,
     envHash: dep.spec?.template?.metadata?.annotations?.["ahura.cloud/env-hash"] ?? null,
+    cpuRequest: c?.resources?.requests?.cpu ?? null,
+    cpuLimit: c?.resources?.limits?.cpu ?? null,
+    memRequest: c?.resources?.requests?.memory ?? null,
+    memLimit: c?.resources?.limits?.memory ?? null,
   };
+}
+
+/**
+ * Compare Kubernetes quantities by VALUE, not by string.
+ *
+ * The API server canonicalises what it stores: `1000m` comes back as `1`, and
+ * `1024Mi` may come back as `1Gi`. Comparing the strings therefore reports drift
+ * between a spec and itself — and because the reconciler rolls pods on drift,
+ * that is not a cosmetic bug: every run would restart every pod, forever, and
+ * the symptom would be an unexplained perpetual rollout rather than an error.
+ *
+ * Observed exactly that way — `sizing changed: 50m/512Mi -> 50m/512Mi` — which
+ * is the kind of nonsense a value comparison makes impossible to write.
+ */
+export function cpuMillis(q: string | null): number | null {
+  if (!q) return null;
+  const m = /^(\d+(?:\.\d+)?)(m?)$/.exec(q.trim());
+  if (!m) return null;
+  return m[2] === "m" ? Number(m[1]) : Math.round(Number(m[1]) * 1000);
+}
+
+const MEM_UNITS: Record<string, number> = {
+  "": 1, Ki: 1024, Mi: 1024 ** 2, Gi: 1024 ** 3, Ti: 1024 ** 4,
+  K: 1e3, M: 1e6, G: 1e9, T: 1e12,
+};
+
+export function memBytes(q: string | null): number | null {
+  if (!q) return null;
+  const m = /^(\d+(?:\.\d+)?)([KMGT]i?)?$/.exec(q.trim());
+  if (!m) return null;
+  const unit = MEM_UNITS[m[2] ?? ""];
+  return unit === undefined ? null : Number(m[1]) * unit;
+}
+
+/** Null on either side means "could not read it", which is never equality. */
+export function sameCpu(a: string | null, b: string | null): boolean {
+  const x = cpuMillis(a), y = cpuMillis(b);
+  return x !== null && y !== null && x === y;
+}
+
+export function sameMem(a: string | null, b: string | null): boolean {
+  const x = memBytes(a), y = memBytes(b);
+  return x !== null && y !== null && x === y;
 }
 
 async function deploymentAnnotation(
@@ -241,13 +313,32 @@ export async function reconcileProject(
       continue;
     }
 
+    // Resolve the sizing once per deployment. Throws on an unknown tier rather
+    // than substituting a default — see the note at the apply below.
+    const tier = requireTier(project.tier ?? DEFAULT_TIER);
+    const instances = clampInstances(project.instance_count ?? 1);
+    const tierResources = resourcesFor(tier);
+
     const live = await liveDeployment(k, ns, name);
     const replicas = live?.replicas ?? null;
+    // Sizing counts as drift. It is applied either way — the apply below is
+    // unconditional — but a resize that reports "converged" leaves an operator
+    // unable to tell whether it took effect, which is the same failure as not
+    // applying it, one layer removed.
+    const sizeDrifted =
+      live !== null &&
+      (!sameCpu(live.cpuRequest, tierResources.requests.cpu) ||
+        !sameCpu(live.cpuLimit, tierResources.limits.cpu) ||
+        !sameMem(live.memRequest, tierResources.requests.memory) ||
+        !sameMem(live.memLimit, tierResources.limits.memory) ||
+        (live.replicas > 0 && live.replicas !== instances));
+
     const specDrifted =
       live !== null &&
       (live.image !== image ||
         live.envSecret !== (envSecretRef ?? null) ||
-        live.envHash !== (envHash ?? null));
+        live.envHash !== (envHash ?? null) ||
+        sizeDrifted);
 
     // ALWAYS apply the full spec, not only on first creation.
     //
@@ -320,7 +411,9 @@ export async function reconcileProject(
                     ? `config changed: envFrom ${live!.envSecret ?? "(none)"} -> ${envSecretRef ?? "(none)"} — pods will roll`
                     : live!.envHash !== (envHash ?? null)
                       ? `env values changed (${live!.envHash ?? "none"} -> ${envHash ?? "none"}) — pods will roll`
-                    : `image changed: ${String(live!.image).slice(-19)} -> ${image.slice(-19)}`,
+                    : sizeDrifted
+                      ? `sizing changed: ${live!.cpuRequest ?? "?"}/${live!.memRequest ?? "?"} -> ${tierResources.requests.cpu}/${tierResources.requests.memory} (${tier.label} x${instances}) — pods will roll`
+                      : `image changed: ${String(live!.image).slice(-19)} -> ${image.slice(-19)}`,
               }
             : { kind: "noop" as const, target: name, detail: `converged (${replicas} replica(s))` },
     );
@@ -336,7 +429,20 @@ export async function reconcileProject(
           // restore the port and uid that build actually ran with.
           port: d.container_port ?? 3000,
           runAsUser: d.run_as_user ?? undefined,
-          replicas: 1,
+          // From the PROJECT's tier, not a constant. Until this line, every app
+          // got replicas:1 and the 100m/256Mi defaults regardless of what it was
+          // sold — a customer paying $39 for 4 GB received the same resources as
+          // one paying $5 for 512 MB, and nothing anywhere reported it.
+          //
+          // requireTier throws on an unknown id rather than falling back to the
+          // cheapest: substituting would run a paid tier on another tier's
+          // resources and report success, surfacing days later as an OOM with
+          // nothing linking it to the cause.
+          replicas: instances,
+          cpuRequest: tierResources.requests.cpu,
+          cpuLimit: tierResources.limits.cpu,
+          memRequest: tierResources.requests.memory,
+          memLimit: tierResources.limits.memory,
           envSecretName: envSecretRef,
           envHash,
         }),
