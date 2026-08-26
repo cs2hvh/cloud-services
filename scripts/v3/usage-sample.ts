@@ -34,6 +34,14 @@ import {
   type PodLike,
   type UsageBucket,
 } from "../../lib/paas/telemetry/usage.ts";
+import {
+  aggregatePeriod,
+  fleetWarmSummary,
+  periodWarmFraction,
+  sampleDelta,
+  toSampleRows,
+  type StoredSample,
+} from "../../lib/paas/telemetry/usage-store.ts";
 
 const KUBECONFIG = process.env.V2_KUBECONFIG ?? "C:/ahura-secrets/kubeconfig-v2-dev.yaml";
 const JSON_OUT = process.argv.includes("--json");
@@ -48,8 +56,76 @@ function arg(name: string, fallback: number): number {
 const SAMPLES = Math.min(arg("samples", 2), 200);
 const INTERVAL_S = Math.min(arg("interval", 15), 300);
 
+/**
+ * --record writes one row per app per interval to paas.usage_samples.
+ *
+ * The only write this script makes, and it is append-only. Off by default so
+ * the sampler can be run to look at something without leaving a trail, but ON
+ * is the intended production mode: warm fraction is a property of a DAY, and
+ * without persistence it exists only for the lifetime of one process.
+ */
+const RECORD = process.argv.includes("--record");
+
+/** --period <hours> reads a stored period back instead of sampling. */
+const PERIOD_HOURS = arg("period", 0);
+
 /** Namespaces the platform runs for itself, never a tenant's. */
 const PLATFORM_NS = new Set(["default", "kube-system", "kube-public", "kube-node-lease", "ahura-system", "platform"]);
+
+// ── --period: read a stored period back, no sampling ────────────────────────
+//
+// The whole point of persisting. A few minutes of live sampling proves the
+// meter works; only stored samples can answer what the warm fraction was
+// yesterday, which is the number the plan's economics turn on.
+
+if (PERIOD_HOURS > 0) {
+  const end = new Date();
+  const start = new Date(end.getTime() - PERIOD_HOURS * 3600 * 1000);
+  const seconds = PERIOD_HOURS * 3600;
+
+  let rows: StoredSample[];
+  try {
+    rows = await db.select<StoredSample>(
+      "usage_samples",
+      `select=*&sampled_at=gte.${start.toISOString()}&order=sampled_at&limit=100000`,
+    );
+  } catch {
+    console.error(
+      `\npaas.usage_samples is not reachable, so there is no stored period to read.\n` +
+        `The migration has not been applied yet. Until it is, warm fraction exists\n` +
+        `only for the lifetime of one sampler process — run without --period.\n`,
+    );
+    process.exit(1);
+  }
+  const usage = aggregatePeriod(rows, start, end);
+  const fleet = fleetWarmSummary(usage, seconds);
+
+  const bar = "─".repeat(96);
+  console.log(`\nStored usage over the last ${PERIOD_HOURS}h (${rows.length} sample rows)`);
+  console.log(bar);
+  for (const u of usage) {
+    const w = periodWarmFraction(u, seconds);
+    console.log(
+      `  ${u.deploymentRef.padEnd(22)} ${u.podSeconds.toFixed(0).padStart(9)} pod-s  ` +
+        `${(w.fraction * 100).toFixed(1).padStart(6)}% warm  peak ${String(u.peakPods).padStart(3)}  ` +
+        `${u.samples} sample(s)` +
+        (w.degraded ? "  DEGRADED — gaps in observation" : "") +
+        (w.alwaysWarm ? "  ALWAYS WARM" : ""),
+    );
+  }
+  if (usage.length === 0) console.log(`  no samples in this window — has the sampler been running?`);
+  console.log(bar);
+  console.log(
+    `  ${fleet.apps} app(s)   mean warm ${(fleet.meanFraction * 100).toFixed(1)}%   ` +
+      `${fleet.alwaysWarm} always-warm   ${fleet.degraded} degraded`,
+  );
+  console.log(
+    `\n  The plan prices on this number: ~$52k/month always-on ($5.20/app) against\n` +
+      `  $18-20k idle-to-zero ($2.30-$3.62/app), at a $5 price. Weighted per APP,\n` +
+      `  because the model is a distribution over apps rather than over compute.\n`,
+  );
+  process.exit(0);
+}
 
 const ctx = loadKubeconfig(KUBECONFIG);
 const k = kube(ctx);
@@ -57,6 +133,28 @@ const k = kube(ctx);
 if (!(await k.healthz())) {
   console.error("cluster unreachable");
   process.exit(1);
+}
+
+/** Project refs → ids, so stored samples can be attributed to a bill. */
+const projectIdOf = new Map(
+  (await db.select<{ id: string; ref: string }>("projects", "select=id,ref")).map((p) => [p.ref, p.id]),
+);
+
+// Fail before sampling, not after. Discovering the table is missing on the
+// second interval means the first interval's measurement is already lost, and
+// a scheduler would silently drop a sample every run while looking like it
+// worked — which is v1's meter-that-never-ran wearing a different hat.
+if (RECORD) {
+  try {
+    await db.select("usage_samples", "select=id&limit=1");
+  } catch {
+    console.error(
+      `\npaas.usage_samples is not reachable, so --record cannot store anything.\n` +
+        `The migration has not been applied yet. Run without --record to sample\n` +
+        `and report live, which needs no table.\n`,
+    );
+    process.exit(1);
+  }
 }
 
 async function takeSample(): Promise<AppObservation[]> {
@@ -79,17 +177,40 @@ let buckets = new Map<string, UsageBucket>();
 let previousAt: Date | null = null;
 const startedAt = new Date();
 
+let written = 0;
+
 for (let i = 0; i < SAMPLES; i += 1) {
   const observations = await takeSample();
   const now = new Date();
+
+  // Two folds of the same observation, and the difference matters.
+  //
+  // `buckets` carries totals forward for this process's own report.
+  // `sampleDelta` starts from an empty Map, so the row written below contains
+  // ONLY this interval. Persisting the running total instead would make every
+  // row include everything since startup, and summing a period would count the
+  // first interval N times — an app warm for an hour billing thirty.
   buckets = accumulate(buckets, observations, { now, previousAt });
+
+  if (RECORD) {
+    const rows = toSampleRows(sampleDelta(observations, { now, previousAt }), now, (b) =>
+      projectIdOf.get(b.projectRef) ?? null,
+    );
+    if (rows.length) {
+      await db.insert("usage_samples", rows);
+      written += rows.length;
+    }
+  }
+
   previousAt = now;
 
   if (!JSON_OUT) {
     const running = observations.reduce((n, o) => n + o.pods.length, 0);
     process.stdout.write(
       `  sample ${String(i + 1).padStart(3)}/${SAMPLES}  ` +
-        `${observations.length} app(s), ${running} running pod(s)\n`,
+        `${observations.length} app(s), ${running} running pod(s)` +
+        (RECORD ? `, ${written} row(s) written` : "") +
+        `\n`,
     );
   }
   if (i < SAMPLES - 1) await new Promise((r) => setTimeout(r, INTERVAL_S * 1000));
