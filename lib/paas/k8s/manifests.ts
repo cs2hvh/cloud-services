@@ -271,8 +271,12 @@ export interface AppDeploymentInput {
   cpuLimit?: string;
   memRequest?: string;
   memLimit?: string;
-  /** Set once gVisor is installed; until then workloads run without a sandbox. */
-  runtimeClassName?: string;
+  /**
+   * Sandbox. Defaults to gVisor: tenant code is untrusted, and three runC
+   * escape CVEs in November 2025 mean a plain container is a resource
+   * boundary, not a security boundary. Pass null ONLY to deliberately opt out.
+   */
+  runtimeClassName?: string | null;
   /** Numeric UID the image runs as. Required: Kubernetes cannot verify a named user. */
   runAsUser?: number;
 }
@@ -295,7 +299,9 @@ export function appDeployment(i: AppDeploymentInput) {
       template: {
         metadata: { labels },
         spec: {
-          ...(i.runtimeClassName ? { runtimeClassName: i.runtimeClassName } : {}),
+          // Sandboxed by default. Opting out requires passing null explicitly,
+          // so an omission fails safe rather than silently unsandboxing a tenant.
+          ...(i.runtimeClassName === null ? {} : { runtimeClassName: i.runtimeClassName ?? "gvisor" }),
           // Tenant workloads only ever land on the tainted runtime pool.
           nodeSelector: { "ahura.cloud/pool": "runtime" },
           tolerations: [
