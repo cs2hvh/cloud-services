@@ -199,3 +199,29 @@ export function deleteCustomHostname(id: string): Promise<unknown> {
     method: "DELETE",
   });
 }
+
+/**
+ * The fallback origin — where a customer's domain lands before anything else.
+ *
+ * Cloudflare for SaaS REFUSES to add any custom hostname until this is set, and
+ * refuses to complete verification until it is active. It must be a PROXIED
+ * record inside our own zone, because it is the origin Cloudflare connects to
+ * after terminating TLS for the customer's domain.
+ *
+ * It does not decide which app a request reaches. The Ingress does that, off the
+ * Host header, exactly as it does for an `*.ahurasense.com` hostname — the
+ * fallback origin only gets the request into the cluster. So one fallback origin
+ * serves every customer domain, and adding a customer does not change it.
+ */
+export function getFallbackOrigin(): Promise<{ origin?: string; status?: string }> {
+  return cf<{ origin?: string; status?: string }>(
+    `/zones/${paasConfig.cloudflare.zoneId()}/custom_hostnames/fallback_origin`,
+  );
+}
+
+export function setFallbackOrigin(origin: string): Promise<{ origin?: string; status?: string }> {
+  return cf<{ origin?: string; status?: string }>(
+    `/zones/${paasConfig.cloudflare.zoneId()}/custom_hostnames/fallback_origin`,
+    { method: "PUT", body: JSON.stringify({ origin }) },
+  );
+}

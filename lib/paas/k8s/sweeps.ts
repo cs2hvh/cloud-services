@@ -108,6 +108,23 @@ export const SWEEP_JOBS: SweepJob[] = [
     needs: ["db", "k8s"],
     why: "Previews are free and expire 48h after their last push. Nothing else bounds them, and an unreaped preview is a container running for nobody. REPORTS ONLY — there is no --apply, deliberately: this sweep deletes running environments if it is ever wrong, so the licence to delete stays with a person who has read the plan.",
   },
+  {
+    name: "netpolicy-drift",
+    script: "scripts/v3/netpolicy-drift.ts",
+    schedule: "51 * * * *",
+    // No database at all — the whole transitive closure is the cluster.
+    //
+    // Reads networkpolicies and endpoints, NEITHER of which the shared reader
+    // role granted before this. Both added narrowly, both read-only.
+    //
+    // NOT VERIFIED UNDER DENIAL. The script is written to void rather than
+    // report clean when it cannot read, but I added the grants instead of first
+    // running it without them — so that path rests on e6's tests, not on
+    // observation here. Worth closing, because a sweep that reports an
+    // unprotected fleet as protected is worse than no sweep at all.
+    needs: ["k8s"],
+    why: "The tenant egress policy denies the control plane's CURRENT address, read from Endpoints at reconcile time. That address moves on an upgrade, rebuild or failover, and every deployed policy then silently stops covering it — nothing fails, the hole just reopens. Indexed by NAMESPACE rather than by policy, so a tenant with no policy at all is visible; walking policies asks whether the policies are correct, walking namespaces asks whether each tenant is protected, and only the second notices an absence.",
+  },
 ];
 
 /** Environment variables each credential set requires. Sourced from the operator's own env. */
@@ -176,7 +193,12 @@ export function sweepClusterRole() {
     rules: [
       { apiGroups: [""], resources: ["pods", "services", "namespaces", "nodes"], verbs: ["get", "list"] },
       { apiGroups: ["apps"], resources: ["deployments", "replicasets"], verbs: ["get", "list"] },
-      { apiGroups: ["networking.k8s.io"], resources: ["ingresses"], verbs: ["get", "list"] },
+      // `endpoints` and `networkpolicies` are read by netpolicy-drift, which
+      // checks that every tenant still denies the control plane's CURRENT
+      // address. Both read-only: this role must never gain a write verb, and
+      // sweep-rbac.test.ts fails if it does.
+      { apiGroups: [""], resources: ["endpoints"], verbs: ["get", "list"] },
+      { apiGroups: ["networking.k8s.io"], resources: ["ingresses", "networkpolicies"], verbs: ["get", "list"] },
       { apiGroups: ["metrics.k8s.io"], resources: ["pods", "nodes"], verbs: ["get", "list"] },
     ],
   };
