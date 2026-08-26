@@ -201,6 +201,81 @@ async function scale(
 }
 
 /**
+ * Delete Ingresses in this project's namespace whose alias row no longer exists.
+ *
+ * The only deletion this reconciler performs, and it is deliberately the
+ * narrowest one that closes the hole. Three independent gates, each of which
+ * alone would prevent the catastrophic version of this bug:
+ *
+ *   1. Only the project's OWN namespace is listed. Nothing outside it is
+ *      reachable from here even if the label check were wrong.
+ *   2. Only objects carrying `app.kubernetes.io/managed-by: ahura-paas` are
+ *      considered. Anything a human or another controller put in the namespace
+ *      is left alone.
+ *   3. Only objects whose `ahura.cloud/alias` label names a ref absent from the
+ *      alias list are deleted. An Ingress with no alias label is never touched —
+ *      we cannot say what it belongs to, and "unlabelled" is not "orphaned".
+ *
+ * Deployments and Services are NOT collected here. A superseded deployment
+ * scales to zero and is kept, because that object is what makes rollback a
+ * scale-up rather than a rebuild. Zero replicas is where the cost stops, which
+ * is the part that matters; the object costs nothing to keep.
+ */
+export interface RouteObject {
+  metadata?: { name?: string; labels?: Record<string, string> };
+}
+
+/**
+ * Which of these routes no longer have an alias — the decision, separated from
+ * the deletion so it can be tested without a cluster.
+ *
+ * Deliberately returns nothing for an object with no `ahura.cloud/alias` label.
+ * We cannot say what such an object belongs to, and UNLABELLED IS NOT ORPHANED —
+ * treating "I don't know whose this is" as "nobody's" is the same collapse that
+ * runs through every other bug in this codebase, arriving here with a delete
+ * attached.
+ */
+export function orphanedRoutes(items: RouteObject[], knownAliasRefs: Set<string>): Array<{ name: string; aliasRef: string }> {
+  const out: Array<{ name: string; aliasRef: string }> = [];
+  for (const item of items) {
+    const name = item.metadata?.name;
+    const aliasRef = item.metadata?.labels?.["ahura.cloud/alias"];
+    if (!name || !aliasRef) continue;
+    if (knownAliasRefs.has(aliasRef)) continue;
+    out.push({ name, aliasRef });
+  }
+  return out;
+}
+
+async function collectOrphanedRoutes(
+  k: ReturnType<typeof kube>,
+  ns: string,
+  project: ProjectRow,
+  projectAliases: AliasRow[],
+  actions: ReconcileAction[],
+  dry: boolean,
+): Promise<void> {
+  const live = await k.get<{ items?: RouteObject[] }>(
+    `/apis/networking.k8s.io/v1/namespaces/${ns}/ingresses?labelSelector=${encodeURIComponent("app.kubernetes.io/managed-by=ahura-paas")}`,
+    true,
+  );
+  // A namespace that does not exist yet reads as null, which is not an empty
+  // namespace — but for this purpose both mean "nothing of ours to remove".
+  if (!live?.items?.length) return;
+
+  for (const { name, aliasRef } of orphanedRoutes(live.items, new Set(projectAliases.map((a) => a.ref)))) {
+    actions.push({
+      kind: "route",
+      target: name,
+      detail: `alias ${aliasRef} no longer exists — removing route so the hostname stops serving${dry ? " (dry run)" : ""}`,
+    });
+    if (!dry) {
+      await k.raw({ method: "DELETE", path: `/apis/networking.k8s.io/v1/namespaces/${ns}/ingresses/${name}` });
+    }
+  }
+}
+
+/**
  * Converge one project.
  *
  * `dryRun` reports what would change without touching the cluster, so the loop
@@ -231,6 +306,29 @@ export async function reconcileProject(
   // app OOMs. Losing a little money beats breaking a customer, so the discount
   // applies only where the preview is established, never where it is assumed.
   const previewEnvIds = new Set(projectEnvs.filter((e) => e.kind === "preview").map((e) => e.id));
+
+  // ── 0. routes whose alias is gone stop routing ────────────────────────────
+  //
+  // Until reaping existed this loop only ever ADDED routes, which was fine
+  // because nothing was ever removed. It stops being fine the moment a preview
+  // can be deleted: removing the alias row without removing its Ingress leaves
+  // the hostname serving, so a "reaped" preview is still reachable and the
+  // control plane records something untrue. Same shape as the dedupe key —
+  // correct until a feature existed that it predated.
+  //
+  // Runs BEFORE the early returns below. A project whose only alias was just
+  // reaped has nothing ready and nothing targeted, which is exactly the project
+  // whose orphaned route most needs removing.
+  //
+  // WHY AN EMPTY ALIAS LIST IS SAFE TO ACT ON HERE, which is not usually true in
+  // this codebase: `aliases.forProject` THROWS on any database failure rather
+  // than returning []. Reaching this line means the list was genuinely read, so
+  // empty means "this project has no aliases" and not "we could not ask". If
+  // that ever changes to return [] on error, this becomes a loop that deletes
+  // every route on the platform during a database outage — a total outage
+  // caused by the repair loop. Guarded below by ownership and namespace, but
+  // the real guard is that the read fails loudly.
+  await collectOrphanedRoutes(k, ns, project, projectAliases, actions, dry);
 
   if (!ready.length) {
     actions.push({ kind: "noop", target: project.ref, detail: "no ready deployment yet" });
