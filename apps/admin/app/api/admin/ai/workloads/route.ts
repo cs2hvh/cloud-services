@@ -62,9 +62,9 @@ export async function GET() {
       );
     }
 
-    const orgName = new Map(
+    const orgName = new Map<string, string>(
       (orgsRes.data ?? []).map(
-        (o: { id: string; slug: string; name: string | null }) => [
+        (o: { id: string; slug: string; name: string | null }): [string, string] => [
           o.id,
           o.name || o.slug,
         ],
@@ -72,8 +72,11 @@ export async function GET() {
     );
     const now = Date.now();
 
+    // The return annotation keeps the index signature: without it the object
+    // spread narrows to { org_id, org_label } and every column access below
+    // stops type-checking.
     type Row = Record<string, unknown> & { org_id: string };
-    const withOrg = (rows: Row[]) =>
+    const withOrg = (rows: Row[]): (Row & { org_label: string })[] =>
       rows.map((r) => ({ ...r, org_label: orgName.get(r.org_id) ?? r.org_id }));
 
     const finetunes = withOrg(ftRes.data ?? []);
@@ -95,7 +98,7 @@ export async function GET() {
         new Date(b.expires_at as string).getTime() < now,
     }));
 
-    const count = (rows: { status?: unknown }[], statuses: string[]) =>
+    const count = (rows: Array<Record<string, unknown>>, statuses: string[]) =>
       rows.filter((r) => statuses.includes(String(r.status))).length;
 
     return NextResponse.json({

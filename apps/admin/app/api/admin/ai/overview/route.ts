@@ -66,15 +66,17 @@ export async function GET(request: Request) {
       created_at: string;
     };
     const rows = (usageRes.data ?? []) as UsageRow[];
-    const orgName = new Map(
-      (orgsRes.data ?? []).map((o: { id: string; slug: string; name: string | null }) => [
-        o.id,
-        o.name || o.slug,
-      ]),
+    const orgName = new Map<string, string>(
+      (orgsRes.data ?? []).map(
+        (o: { id: string; slug: string; name: string | null }): [string, string] => [
+          o.id,
+          o.name || o.slug,
+        ],
+      ),
     );
-    const modelName = new Map(
+    const modelName = new Map<string, string>(
       (modelsRes.data ?? []).map(
-        (m: { model_id: string; display_name: string | null }) => [
+        (m: { model_id: string; display_name: string | null }): [string, string] => [
           m.model_id,
           m.display_name || m.model_id,
         ],

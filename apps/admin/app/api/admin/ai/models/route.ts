@@ -62,8 +62,8 @@ export async function GET() {
 
   try {
     const supabase = await createServiceClient();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [{ data, error }, upstreamIds] = await Promise.all([
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (supabase as any)
         .schema("inference")
         .from("models")
@@ -128,8 +128,8 @@ export async function GET() {
       };
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const orphaned = rows.filter(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (m: any) => m.is_active && m.upstream_available === false,
     ).length;
 

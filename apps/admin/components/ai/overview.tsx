@@ -5,7 +5,6 @@ import Link from "next/link";
 import {
   Activity,
   ArrowRight,
-  Coins,
   DollarSign,
   Building2,
   AlertTriangle,
