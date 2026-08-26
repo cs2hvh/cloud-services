@@ -112,26 +112,37 @@ export function parsePushEvent(payload: unknown): PushEvent | null {
 }
 
 export type PushDecision =
-  | { deploy: true; branch: string }
+  /**
+   * `kind` decides everything downstream that differs between the two: which
+   * hostname is minted, which tier's resources the pod gets, and whether the
+   * result is ever reaped. Carrying it here rather than re-deriving it later
+   * means one comparison against the production branch, in one place — the
+   * alternative is three places that can disagree about what a push was.
+   */
+  | { deploy: true; kind: "production" | "preview"; branch: string }
   | { deploy: false; reason: string };
 
 /**
- * Decide whether a push should produce a deployment.
+ * Decide whether a push should produce a deployment, and of what kind.
  *
  * Separated from parsing so the policy is inspectable on its own, and so
  * "we received it but chose not to build" is a distinct, loggable outcome from
  * "we could not understand it".
+ *
+ * A branch DELETION is still not a deploy, and deliberately does not reap the
+ * preview either. Reaping is time-based — 48 hours from the last push — because
+ * a deletion webhook is a message that can be missed, and a preview whose only
+ * cleanup path is an event nobody received runs free forever. The sweep does not
+ * need to have seen anything to do its job.
  */
 export function shouldDeploy(event: PushEvent, productionBranch: string): PushDecision {
   if (event.deleted) return { deploy: false, reason: "branch deleted" };
   if (event.branch === null) return { deploy: false, reason: `ref is not a branch` };
-  if (event.branch !== productionBranch) {
-    // Preview deployments for non-production branches are a deliberate later
-    // step: per-alias routing now supports them, but nothing yet decides their
-    // hostname, their lifetime, or who pays for them.
-    return { deploy: false, reason: `branch ${event.branch} is not the production branch ${productionBranch}` };
-  }
-  return { deploy: true, branch: event.branch };
+  return {
+    deploy: true,
+    kind: event.branch === productionBranch ? "production" : "preview",
+    branch: event.branch,
+  };
 }
 
 /**
