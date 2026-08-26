@@ -95,14 +95,31 @@ than one that reads as unfinished.
   routing supports them; policy for hostname, lifetime and payer does not
   exist), and build logs surfaced to users.
 
-### The most expensive thing not done
+### Scale to zero — built, proven, opt-in
 
-- **Scale to zero is not implemented, and warm fraction is measured at 1.0.**
-  Every app is warm 100% of the time, so the fleet is paying the always-on cost
-  model — roughly $52k/month at 10k apps against a $5 price, rather than the
-  $18–20k the plan assumes. The three live apps sit at 2–3 millicores each: they
-  are not merely idle-ish, they are doing essentially nothing while holding full
-  pods. This is the difference between two cost models, not an optimisation.
+The item that decides whether the unit economics work. Warm fraction was
+measured at 1.0 — every app holding a pod all day at 2–3 millicores, which is
+the always-on cost model (~$52k/month at 10k apps against a $5 price) rather
+than the ~$18–20k the plan assumes.
+
+**Proven live:** `v2-docker` at zero pods, a cold request served 200 with real
+content in 7.6s, the next request in 24ms.
+
+- Idleness is **measured, not timed** — Traefik exports a request counter per
+  router, and a router is per hostname. Two readings that did not move, never
+  elapsed time alone, never a single reading.
+- An **unreadable counter is not idle**, a **single reading is never enough**,
+  and a **counter that went backwards re-baselines** rather than reading as
+  idle. That last one matters most: a gateway restart zeroes every counter at
+  once, and the naive reading would sleep the whole fleet in one pass.
+- **The activator** holds the first request to a sleeping app, wakes it, and
+  proxies. It is in the path only for cold apps; a warm app's Ingress points
+  straight at its own Service.
+- **Opt-in per project**, default off (`paas.projects.scale_to_zero`).
+
+**Not yet done here:** the sweep is a script, not a schedule — nothing runs it
+on an interval yet, so nothing sleeps on its own. Enabling it fleet-wide is a
+deliberate decision, not a default.
 
 ### Deferred by decision
 
