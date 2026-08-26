@@ -76,9 +76,15 @@ function closure(entry: string): Map<string, string> {
   return seen;
 }
 
+// Each sweep's own closure is kept as well as the union. The union is what
+// ships; the per-sweep view is what decides whether THAT sweep's exit codes may
+// be translated, which is not a fleet-wide fact.
+const closureOf = new Map<string, Map<string, string>>();
 const files = new Map<string, string>();
 for (const job of SWEEP_JOBS) {
-  for (const [path, contents] of closure(job.script)) files.set(path, contents);
+  const own = closure(job.script);
+  closureOf.set(job.name, own);
+  for (const [path, contents] of own) files.set(path, contents);
 }
 const fileList = [...files].map(([path, contents]) => ({ path, contents })).sort((a, b) => a.path.localeCompare(b.path));
 const totalBytes = fileList.reduce((n, f) => n + Buffer.byteLength(f.contents), 0);
@@ -87,21 +93,36 @@ const srcHash = createHash("sha256").update(fileList.map((f) => f.path + f.conte
 console.log(`source closure: ${fileList.length} files, ${(totalBytes / 1024).toFixed(1)} KB, hash ${srcHash}`);
 
 /**
- * Does the shipped source carry the observability lane's exit-code contract?
+ * Does a sweep's own source carry the observability lane's exit-code contract?
  *
  * OBSERVED, never assumed. Under the old contract exit 1 meant "found drift";
  * under the new one it means "could not run". Translating findings-codes to
  * success against the WRONG contract turns the alert-worthy case into a green
  * tick, which is strictly worse than the noise it would remove.
+ *
+ * ASKED PER SWEEP, not once for the fleet. This used to test the UNION of every
+ * closure, so one contract-aware script granted the translation to all five.
+ * That happens to be harmless today — the translation only maps 10 and 11, and
+ * a script without the contract never emits them — but it reported a fleet-wide
+ * fact that was not true of every member, and the next script to adopt a code
+ * in that range would have inherited a mapping nobody chose for it.
  */
 const CONTRACT_PATH = "lib/paas/telemetry/exit-codes.ts";
-const contractPresent = files.has(CONTRACT_PATH);
+const contractOf = (jobName: string) => closureOf.get(jobName)?.has(CONTRACT_PATH) ?? false;
+
+const withContract = SWEEP_JOBS.filter((j) => contractOf(j.name));
+const without = SWEEP_JOBS.filter((j) => !contractOf(j.name));
 console.log(
-  contractPresent
-    ? `exit-code contract: present — 10/11 (ran and found something) will report success`
-    : `exit-code contract: ABSENT (${CONTRACT_PATH} not in closure) — no translation; ` +
-        `a sweep that FINDS something will show as a failed Job until the contract ships`,
+  `exit-code contract: ${withContract.length}/${SWEEP_JOBS.length} sweep(s) carry it — ` +
+    `10/11 (ran and found something) will report success for those`,
 );
+if (without.length) {
+  console.log(
+    `  without it: ${without.map((j) => j.name).join(", ")} — no translation, so a FINDING\n` +
+      `  from any of them shows as a failed Job. Correct for a sweep that only ever\n` +
+      `  reports could-not-run; a defect for one that reports findings.`,
+  );
+}
 
 // The cap is 1 MiB for the whole object. Refuse near it rather than letting the
 // API server reject a manifest we assembled without checking.
@@ -141,7 +162,7 @@ for (const job of SWEEP_JOBS) {
   }
   manifests.push({ kind: "Secret", name: secret.metadata.name, ns: PAAS_NAMESPACE, path: `/api/v1/namespaces/${PAAS_NAMESPACE}/secrets/${secret.metadata.name}`, body: secret });
 
-  const cj = sweepCronJob(job, fileList, srcHash, contractPresent);
+  const cj = sweepCronJob(job, fileList, srcHash, contractOf(job.name));
   manifests.push({ kind: "CronJob", name: cj.metadata.name, ns: PAAS_NAMESPACE, path: `/apis/batch/v1/namespaces/${PAAS_NAMESPACE}/cronjobs/${cj.metadata.name}`, body: cj });
 
   console.log(`  ${job.name.padEnd(16)} ${job.schedule.padEnd(16)} creds=[${keys.join(", ") || "none"}]`);
