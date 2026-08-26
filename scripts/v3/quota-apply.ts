@@ -30,6 +30,8 @@ import {
   canEnforce,
   limitRangeManifest,
   measureNamespace,
+  quotaDrift,
+  type LiveQuota,
   resourceQuotaManifest,
   type PodSpecLike,
 } from "../../lib/paas/telemetry/quota.ts";
@@ -80,14 +82,31 @@ for (const ns of namespaces) {
   const usage = measureNamespace(pods);
   const verdict = canEnforce(usage, DEFAULT_QUOTA);
 
-  const existing = await k.get(`/api/v1/namespaces/${ns}/resourcequotas/tenant`, true);
-  const state = existing ? "already bounded" : "unbounded";
+  const existing = await k.get<LiveQuota>(`/api/v1/namespaces/${ns}/resourcequotas/tenant`, true);
+
+  // Enforcing a control creates a second failure mode: it can be deleted or
+  // loosened afterwards, and then everyone believes a bound is in place that
+  // is not. An unenforced control that is trusted is worse than no control,
+  // because it removes the reason anyone would look.
+  const drift = existing ? quotaDrift(existing, DEFAULT_QUOTA) : null;
+  const state = !existing ? "unbounded" : drift?.drifted ? "DRIFTED" : "bounded";
 
   console.log(
     `  ${ns.padEnd(34)} ${String(usage.pods).padStart(2)} pod(s)  ` +
       `cpu ${usage.requestsCpu.toFixed(2)}  mem ${(usage.requestsMemory / 1024 ** 2).toFixed(0)}Mi  ` +
       `${verdict.safe ? "SAFE" : "REFUSED"}  ${state}`,
   );
+
+  if (drift?.loosened.length) {
+    console.log(
+      `      LOOSENED since it was applied: ${drift.loosened.join(", ")}. The bound is ` +
+        `weaker than policy and nobody was told.`,
+    );
+  }
+  for (const c of drift?.changed ?? []) {
+    console.log(`      ${c.key}: policy ${c.policy}, live ${c.live}`);
+  }
+  if (drift?.absent.length) console.log(`      missing bounds: ${drift.absent.join(", ")}`);
 
   for (const b of verdict.blockers) console.log(`      ${b}`);
 

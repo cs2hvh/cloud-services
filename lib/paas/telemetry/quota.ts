@@ -259,6 +259,86 @@ export function canEnforce(usage: NamespaceUsage, policy: QuotaPolicy = DEFAULT_
   };
 }
 
+// ── has an applied bound been changed? ──────────────────────────────────────
+
+export interface LiveQuota {
+  spec?: { hard?: Record<string, string> };
+}
+
+export interface QuotaDrift {
+  /** No ResourceQuota object at all. */
+  missing: boolean;
+  /** Bounds present but not what the policy says. */
+  changed: Array<{ key: string; policy: string; live: string }>;
+  /** Bounds the policy names that the live object does not carry. */
+  absent: string[];
+  /** A live bound LOOSER than policy. The direction that matters. */
+  loosened: string[];
+  drifted: boolean;
+}
+
+/**
+ * Compare an applied quota against the policy it was applied from.
+ *
+ * Enforcing a control creates a new failure mode: it can be deleted or
+ * loosened, and afterwards everyone believes a bound is in place that is not.
+ * An unenforced control that is trusted is worse than no control, because it
+ * removes the reason anyone would look.
+ *
+ * `loosened` is called out separately because the direction is the whole
+ * point. A bound TIGHTER than policy is someone being careful; a bound looser
+ * than policy is the protection quietly gone, and the two should never sort
+ * together in a report.
+ */
+export function quotaDrift(live: LiveQuota | null, policy: QuotaPolicy = DEFAULT_QUOTA): QuotaDrift {
+  if (!live) {
+    return { missing: true, changed: [], absent: [], loosened: [], drifted: true };
+  }
+
+  const hard = live.spec?.hard ?? {};
+  const expected: Record<string, string> = {
+    pods: String(policy.pods),
+    "requests.cpu": policy.requestsCpu,
+    "requests.memory": policy.requestsMemory,
+    "limits.cpu": policy.limitsCpu,
+    "limits.memory": policy.limitsMemory,
+  };
+
+  const changed: QuotaDrift["changed"] = [];
+  const absent: string[] = [];
+  const loosened: string[] = [];
+
+  for (const [key, want] of Object.entries(expected)) {
+    const got = hard[key];
+    if (got === undefined) {
+      absent.push(key);
+      continue;
+    }
+    if (got === want) continue;
+
+    changed.push({ key, policy: want, live: got });
+
+    // Compare as quantities, not strings: "1" and "1000m" are the same bound
+    // written two ways, and reporting that as drift would train people to
+    // ignore this.
+    const parse = key.includes("memory") ? memoryBytes : key === "pods" ? Number : cpuCores;
+    const w = parse(want as never);
+    const g = parse(got as never);
+    if (typeof w === "number" && typeof g === "number" && Number.isFinite(w) && Number.isFinite(g)) {
+      if (g === w) changed.pop(); // same bound, different spelling
+      else if (g > w) loosened.push(key);
+    }
+  }
+
+  return {
+    missing: false,
+    changed,
+    absent,
+    loosened,
+    drifted: changed.length > 0 || absent.length > 0,
+  };
+}
+
 // ── the objects ─────────────────────────────────────────────────────────────
 
 const ownerLabels = { "ahura.cloud/owner": "paas-v2", "ahura.cloud/component": "quota" };

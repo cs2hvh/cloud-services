@@ -17,6 +17,7 @@ import {
   cpuCores,
   limitRangeManifest,
   measureNamespace,
+  quotaDrift,
   memoryBytes,
   resourceQuotaManifest,
   type PodSpecLike,
@@ -151,6 +152,62 @@ test("an empty namespace is safe and reports full headroom", () => {
 
   assert.equal(v.safe, true);
   assert.equal(v.headroom.pods, DEFAULT_QUOTA.pods);
+});
+
+// ── drift in an applied bound ───────────────────────────────────────────────
+
+const applied = { spec: { hard: resourceQuotaManifest("ns").spec.hard } };
+
+test("a quota matching the policy has not drifted", () => {
+  const d = quotaDrift(applied);
+  assert.equal(d.drifted, false);
+  assert.deepEqual(d.changed, []);
+  assert.deepEqual(d.loosened, []);
+});
+
+test("a DELETED quota is drift — the control is gone and everyone still believes in it", () => {
+  const d = quotaDrift(null);
+  assert.equal(d.missing, true);
+  assert.equal(d.drifted, true);
+});
+
+test("a LOOSENED bound is called out separately, because the direction is the point", () => {
+  const d = quotaDrift({ spec: { hard: { ...applied.spec.hard, pods: "500" } } });
+
+  assert.equal(d.drifted, true);
+  assert.deepEqual(d.loosened, ["pods"]);
+  assert.equal(d.changed[0].live, "500");
+});
+
+test("a TIGHTENED bound is drift but not loosened — that is someone being careful", () => {
+  const d = quotaDrift({ spec: { hard: { ...applied.spec.hard, pods: "2" } } });
+
+  assert.equal(d.drifted, true);
+  assert.deepEqual(d.loosened, [], "tighter than policy is not the protection going away");
+});
+
+test("the same bound spelled differently is NOT drift", () => {
+  // "1" and "1000m" are one CPU written two ways. Reporting that as drift
+  // would train people to ignore this check.
+  const d = quotaDrift({ spec: { hard: { ...applied.spec.hard, "requests.cpu": "1000m" } } });
+
+  assert.equal(d.drifted, false);
+  assert.deepEqual(d.changed, []);
+});
+
+test("a bound the policy names but the live object omits is drift", () => {
+  const hard = { ...applied.spec.hard };
+  delete (hard as Record<string, string>)["limits.memory"];
+
+  const d = quotaDrift({ spec: { hard } });
+  assert.deepEqual(d.absent, ["limits.memory"]);
+  assert.equal(d.drifted, true);
+});
+
+test("an empty quota is drift on every dimension, not silently fine", () => {
+  const d = quotaDrift({ spec: { hard: {} } });
+  assert.equal(d.absent.length, 5);
+  assert.equal(d.drifted, true);
 });
 
 // ── the manifests ───────────────────────────────────────────────────────────
