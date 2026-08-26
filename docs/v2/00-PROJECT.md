@@ -79,8 +79,8 @@ no manual step:
 **Database** (`paas` schema, live in `xafjjpgazdxhktpfeuri`)
 
 ```
-projects 3 · deployments 8 · aliases 6 · usage_samples 24
-installations 0 · open drift 15 · pod_allocated 25 · scale_to_zero on 1
+projects 3 · deployments 8 · aliases 6 · usage_samples 27
+installations 1 · open drift 15 · pod_allocated 25 · scale_to_zero on 1
 ```
 
 **Capabilities that work**
@@ -116,14 +116,24 @@ behavioural tests replaying confirmed v1 criticals.
   23 single-label records, none previously protected.
 
 ### Blocks a real customer
-- **GitHub App installed on zero accounts** (`installations = 0`). Every deploy so
-  far used our own signed payloads. **User action.**
-- **Nothing has RENDERED.** `npm install` is done and the repo typechecks (2
-  errors left, both owned by lanes fixing them), but no route has served a
-  request and no component has mounted. `next build` needs real env in the UI
-  worktree — a user decision.
-- **No preview deployments** for non-production branches. Per-alias routing
-  supports them; the policy — hostname scheme, lifetime, who pays — does not exist.
+- ~~GitHub App installed on zero accounts~~ — **INSTALLED** (`156779383`, `cs2hvh`,
+  1 repo, 1-hour `contents:read` tokens) and recorded. Reconciled by
+  `scripts/v2/installations-sync.ts`, which treats the GitHub API as truth
+  because both recording paths are lossy by nature: a webhook retries a few
+  times and stops, and a browser callback fires once. Neither has a reconciler
+  in it.
+- **Nothing has RENDERED.** The repo typechecks and lints, but no route has
+  served a request and no component has mounted. The reduced env is now in the
+  UI worktree; the render attempt is the UI lane's next step.
+- **Custom domains: verified, not yet certified.** Challenge-response ownership
+  and proxy-aware routing are built and tested — including the case that breaks
+  the naive check, where a Cloudflare-proxied domain resolves to Cloudflare
+  rather than to us. **Certificates are blocked**: Cloudflare for SaaS returns
+  `code 1404: No quota has been allocated for this zone`. *User action —*
+  SSL/TLS → Custom Hostnames.
+- **Preview deployments: policy decided, half built.** Free, 48h from last push,
+  Starter-sized, always 1 instance. Hostname minting is done (`previewLabel`);
+  `shouldDeploy` still refuses non-production branches, and nothing reaps at 48h.
 - **Build logs are not surfaced to users.**
 
 ### Economics
@@ -131,6 +141,13 @@ behavioural tests replaying confirmed v1 criticals.
   holds a pod all day at 2–3 millicores with zero requests. That is the ~$52k/mo
   model at 10k apps, not the ~$18–20k the plan assumes. Scale-to-zero is built and
   proven but **opt-in, default off** (1 project enabled).
+- **Pricing is decided and measured.** Static per-instance, DigitalOcean shape:
+  six tiers, $7–$69, margins 25–36%. See [`05-pricing.md`](05-pricing.md). Two
+  corrections got it there — the kubelet reserves 24.5% of a node *before any pod
+  schedules*, and the gVisor sandbox charge was 128Mi declared against 42 MiB
+  measured, now cut to 64Mi, taking density from 89 to 99 pods/node.
+  **Prices did not move with the second correction**; the margin sits as buffer,
+  because repricing twice against one number spends confidence in the list.
 - **R2 tarballs no longer accumulate.** Every build wrote a full OCI archive
   and nothing deleted it: 592 MB across 8 deployments, 65% of the bucket. The
   deploy path now deletes the tar once it has read the registry's own storage

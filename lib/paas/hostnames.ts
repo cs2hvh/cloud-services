@@ -32,6 +32,8 @@
  * that depends on a network call fails open when the network is down, which is
  * precisely when a mistake is least likely to be noticed.
  */
+import { createHash } from "node:crypto";
+
 export const LIVE_ZONE_LABELS = [
   "api",
   "cpanel",
@@ -91,6 +93,44 @@ export const RESERVED_LABELS: ReadonlySet<string> = new Set<string>([
   ...PLATFORM,
   ...PROTOCOL,
 ]);
+
+/**
+ * Mint the hostname label for a branch preview.
+ *
+ * THREE CONSTRAINTS, none of them stylistic:
+ *
+ *   ONE LABEL. The zone certificate covers `*.ahurasense.com`, and a wildcard
+ *   covers exactly one label deep. `myapp-featurex.ahurasense.com` is covered;
+ *   `featurex.myapp.ahurasense.com` is not, and the customer gets a TLS error
+ *   rather than a 404 — a failure that looks like the platform is broken.
+ *
+ *   63 CHARACTERS. A DNS label's hard limit. Project slugs are capped at 40, so
+ *   the branch portion and a disambiguator have to fit in what remains.
+ *
+ *   [a-z0-9-] ONLY. Branch names routinely contain `/`, `_`, `.` and uppercase —
+ *   `feature/JIRA-123_fix` is entirely ordinary and none of it is legal here.
+ *
+ * The hash is what makes truncation safe. Sanitising and truncating alone maps
+ * many branches onto one label: `feature/user-authentication-v1` and
+ * `feature/user-authentication-v2` both truncate to the same 15 characters, and
+ * the second push would silently take over the first branch's preview URL. The
+ * suffix is derived from the FULL original branch name, so distinct branches
+ * cannot collide however similar their prefixes.
+ */
+export function previewLabel(projectSlug: string, branch: string): string {
+  const BRANCH_CHARS = 15;
+  const hash = createHash("sha256").update(branch).digest("hex").slice(0, 6);
+
+  const cleaned = branch
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, BRANCH_CHARS)
+    .replace(/-+$/g, ""); // a trailing hyphen from truncation would double up
+
+  const parts = [projectSlug.slice(0, 40), cleaned, hash].filter(Boolean);
+  return parts.join("-");
+}
 
 export interface LabelVerdict {
   ok: boolean;
