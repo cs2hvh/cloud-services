@@ -44,14 +44,13 @@ export function PromoteControl({
   currentDeploymentRef: string | null;
   candidates: PromotableDeployment[];
   /**
-   * True only when something RUNS the reconciler automatically — not merely
-   * when it exists.
+   * True only when something RUNS the reconciler — not merely when it exists.
    *
-   * As of 636a8225 reconcileProject() is written and proven live, but the only
-   * caller in the tree is scripts/v2/promote-rollback-proof.ts. No worker,
-   * cron or route invokes it, so an alias write moves the pointer and nothing
-   * else happens until someone runs it by hand. Saying "now serving" here
-   * would be the same overclaim as v1's dashboard.
+   * It was false from 636a8225 until acd101ab, during which reconcileProject()
+   * was written and proven but its only caller was a proof script, so a UI
+   * promote moved the pointer and nothing reached the cluster. acd101ab added
+   * both triggers: PATCH /aliases converges inline, and a level-triggered loop
+   * repairs anything the inline call misses. Now true.
    */
   routingLive: boolean;
 }) {

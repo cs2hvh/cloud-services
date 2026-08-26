@@ -9,12 +9,26 @@
  * image that gets served; only the pointer moves. That is why rollback cannot
  * fail the way a rebuild can.
  *
- * It is not instant, though. The reconciler scales the superseded pod back
- * from 0 replicas to 1, so the hostname answers seconds after this write
- * returns — and only once something actually runs the reconciler, which as of
- * 636a8225 nothing schedules.
+ * It is not instant, though. Rolling back scales a stopped pod from 0 replicas
+ * to 1, so the hostname answers seconds after this write returns.
+ *
+ * ON THE ELEVATED CALL AT THE END OF PATCH:
+ *
+ * The authorization decision and the tenant write both go through RLS, as
+ * everywhere else in this directory. Only the cluster convergence is elevated,
+ * and it uses reconcileProjectByRef() rather than promoteAndConverge() on
+ * purpose — the latter would also perform the alias write with the service
+ * role, moving a tenant-scoped write outside RLS, which is exactly the v1
+ * pattern this codebase exists to avoid.
+ *
+ * Converging one project's Kubernetes objects to match rows already written
+ * has no tenant boundary to enforce: it reads desired state this caller was
+ * just authorized to set and touches no other tenant's rows. If that seam ever
+ * gains tenant-scoped reads, this call must move behind an endpoint owned by
+ * the infrastructure lane.
  */
 
+import { reconcileProjectByRef } from "@/lib/paas/reconciler.ts";
 import { getCaller } from "../../../_lib/auth";
 import {
   json,
@@ -190,14 +204,25 @@ export async function PATCH(request: Request, { params }: Params) {
   }
   if (!data) return notFound("Alias");
 
+  // The alias write above is the source of truth and is durable. Convergence
+  // is attempted now so the change shows up in seconds rather than at the next
+  // loop interval, but failing here is NOT a failed promote: the
+  // level-triggered loop re-derives desired state and repairs it.
+  let convergeError: string | null = null;
+  try {
+    await reconcileProjectByRef(project.ref);
+  } catch (e) {
+    convergeError = (e as Error).message.slice(0, 300);
+    console.error("[v2/aliases] converge after promote failed:", e);
+  }
+
   return json({
     alias: toAliasDto(data as AliasRow),
-    // Deliberately not "promoted" or "live". The DB pointer has moved; the
-    // reconciler in the infrastructure lane is what makes traffic follow it.
-    // Until that lands, this call changes intent, not routing.
-    status: "alias_updated",
-    note:
-      "The alias now records this deployment. Traffic follows once the routing " +
-      "reconciler applies it.",
+    status: convergeError ? "promoted_converging" : "promoted",
+    note: convergeError
+      ? "The alias is updated and durable. Applying it to the cluster did not " +
+        "succeed on this attempt; the reconciliation loop will finish the job."
+      : "Rolling back scales a stopped pod up, so the hostname answers within " +
+        "a few seconds rather than immediately.",
   });
 }

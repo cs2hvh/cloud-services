@@ -210,7 +210,7 @@ export default async function ProjectPage({ params }: Params) {
                       hostname={alias.hostname}
                       currentDeploymentRef={alias.deployments?.ref ?? null}
                       candidates={promotable}
-                      routingLive={false}
+                      routingLive
                     />
                   </div>
                 )}
