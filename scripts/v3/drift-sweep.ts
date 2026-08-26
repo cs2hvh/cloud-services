@@ -18,8 +18,20 @@
  * Intended for a scheduler. record_drift does not reset observed_at on
  * something already open, so running this every five minutes measures how long
  * drift lasted rather than restarting the clock each time.
+ *
+ * Exit codes follow lib/paas/telemetry/exit-codes.ts. Two cases are worth
+ * naming because both used to exit 0:
+ *
+ *   A SKIPPED SCOPE NEVER EXITS CLEAN. If the gateway has no address the
+ *   hostname sweep cannot run, and `0` would tell a scheduler that a domain
+ *   nobody looked at is fine. Partial coverage is a finding.
+ *
+ *   FINDINGS EXIT 10. This script is the one the docs recommend scheduling,
+ *   and it used to exit 0 whether it found nothing or recorded twenty
+ *   observations — so nothing downstream could ever have reacted to it.
  */
 
+import { EXIT_CLEAN, EXIT_FINDINGS } from "../../lib/paas/telemetry/exit-codes.ts";
 import { db } from "../../lib/paas/db.ts";
 import { paasConfig } from "../../lib/paas/config.ts";
 import { listObjects } from "../../lib/paas/build/r2.ts";
@@ -203,9 +215,14 @@ if (UNMAPPED.length) {
   );
 }
 
+// A skipped scope is a finding in its own right: exiting clean here would tell
+// a scheduler that a domain nobody looked at is fine.
+const partial = !gatewayIp;
+const outcome = total > 0 || partial ? EXIT_FINDINGS : EXIT_CLEAN;
+
 if (!RECORD) {
   console.log(`\n  Report only. Re-run with --record to write history.\n`);
-  process.exit(0);
+  process.exit(outcome);
 }
 
 // ── write ───────────────────────────────────────────────────────────────────
@@ -242,3 +259,4 @@ for (const s of sweeps) {
 }
 
 console.log(`\n  recorded ${recorded} open observation(s), resolved ${resolved} that cleared\n`);
+process.exit(outcome);
