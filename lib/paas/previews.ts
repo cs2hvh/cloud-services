@@ -94,3 +94,22 @@ export function planReap(aliases: PreviewAlias[], now: Date = new Date()): ReapP
   }
   return plan;
 }
+
+/**
+ * May this alias be deleted by the reaper?
+ *
+ * The last gate before a DELETE, and deliberately the dumbest one: it asks only
+ * what the row says it is, not what the plan believed. The plan is built from
+ * preview environments, so a production alias reaching here should be
+ * impossible — which is exactly why it is checked. The cost of "impossible"
+ * happening once is a customer's production hostname, and an assertion costs
+ * nothing.
+ *
+ * Missing is refused, not skipped: a row that vanished between plan and apply is
+ * a race, and racing a delete is how the wrong thing gets deleted.
+ */
+export function mayReap(row: { kind: string } | null | undefined): { ok: boolean; reason: string } {
+  if (!row) return { ok: false, reason: "alias row vanished between plan and apply" };
+  if (row.kind !== "branch") return { ok: false, reason: `kind is ${row.kind}, NOT branch` };
+  return { ok: true, reason: "branch alias" };
+}
