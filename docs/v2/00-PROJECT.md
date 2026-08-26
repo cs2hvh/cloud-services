@@ -145,6 +145,18 @@ behavioural tests replaying confirmed v1 criticals.
     never created** — silently, since 200 is what a successful retry looks like.
     Now keyed on `(environment, sha)`. `scripts/v2/preview-proof.ts` shows the
     two keys disagreeing against the live database.
+  - Wiring the *build* path found the serious one. `deployFromRepo` pointed
+    **every** alias of the project at whatever built last — right while a
+    project's hostnames all served one build, a production outage once previews
+    exist: **pushing any feature branch would have replaced production with that
+    branch.** Latent (no preview has ever been built) but made reachable by the
+    webhook change an hour earlier. `aliasesToPoint` now scopes by environment;
+    six tests, all verified to fail against the old behaviour.
+  - The reconciler gained its **only deletion**: routes whose alias row is gone.
+    Until reaping existed it only ever *added* routes, so removing an alias left
+    the hostname serving. Three gates, and **unlabelled is not orphaned** —
+    proven live, an unlabelled Ingress survived a pass that removed the orphan
+    beside it.
   - **Still not wired:** no scheduled sweep calls the reaper. The decision logic
     (`shouldReap`/`planReap`) and the outside check on its plans
     (`reap-safety.ts`, e6) both exist; nothing runs them on a timer yet.
