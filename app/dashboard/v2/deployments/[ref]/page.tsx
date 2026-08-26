@@ -10,6 +10,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { getObject, r2Keys } from "@/lib/paas/build/r2.ts";
+import { redactBuildLog } from "@/app/api/v2/_lib/redact";
 import { getCaller } from "@/app/api/v2/_lib/auth";
 import {
   DEPLOYMENT_COLUMNS_EXPANDED,
@@ -54,7 +55,9 @@ export default async function DeploymentPage({ params }: Params) {
   try {
     const bytes = await getObject(r2Keys.buildLog(d.ref));
     if (bytes) {
-      const text = bytes.toString("utf8");
+      // Redact before truncating so a credential straddling the cut is still
+      // caught. Same helper the API route uses — one set of rules.
+      const { text } = redactBuildLog(bytes.toString("utf8"));
       // Tail, not head — a build fails at the end.
       log = bytes.byteLength > MAX_LOG_BYTES ? text.slice(-MAX_LOG_BYTES) : text;
     }

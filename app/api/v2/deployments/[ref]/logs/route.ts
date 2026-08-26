@@ -16,6 +16,7 @@
  */
 
 import { getObject, r2Keys } from "@/lib/paas/build/r2.ts";
+import { redactBuildLog } from "../../../_lib/redact";
 import { getCaller } from "../../../_lib/auth";
 import {
   json,
@@ -81,11 +82,13 @@ export async function GET(request: Request, { params }: Params) {
     });
   }
 
-  const full = body.toString("utf8");
+  // Redact BEFORE truncating, so a credential split across the cut is still
+  // caught. See _lib/redact.ts — the clone URL carries a live token.
+  const { text: safe, redacted } = redactBuildLog(body.toString("utf8"));
   const truncated = body.byteLength > MAX_BYTES;
   // Keep the TAIL when truncating: the failure is at the end of a build log,
   // not the beginning.
-  const text = truncated ? full.slice(-MAX_BYTES) : full;
+  const text = truncated ? safe.slice(-MAX_BYTES) : safe;
 
   const asText = new URL(request.url).searchParams.get("format") === "text";
   if (asText) {
@@ -104,6 +107,7 @@ export async function GET(request: Request, { params }: Params) {
     log: text,
     bytes: body.byteLength,
     truncated,
+    redacted,
     ...(truncated
       ? { note: `Showing the last ${MAX_BYTES} bytes of ${body.byteLength}.` }
       : {}),
