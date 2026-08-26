@@ -46,6 +46,7 @@ import { byDeployment, podUsage, type PodMetricsLike } from "../../lib/paas/tele
 import { parseRouterCounts, requestsForHostname } from "../../lib/paas/idle.ts";
 import { classifyTraffic, warmthJustified, type TrafficReading } from "../../lib/paas/telemetry/traffic.ts";
 import { IDLE_CORES } from "../../lib/paas/telemetry/signals.ts";
+import { checkCadence } from "../../lib/paas/telemetry/cadence.ts";
 
 const KUBECONFIG = process.env.V2_KUBECONFIG ?? "C:/ahura-secrets/kubeconfig-v2-dev.yaml";
 const JSON_OUT = process.argv.includes("--json");
@@ -78,6 +79,21 @@ const PLATFORM_NS = new Set(["default", "kube-system", "kube-public", "kube-node
 
 /** Where the gateway runs, for reading its router counters. */
 const PAAS_NAMESPACE = process.env.V2_PAAS_NAMESPACE ?? "ahura-system";
+
+// Say up front what this cadence can and cannot produce.
+//
+// A 15-minute schedule of mine ran --samples 2, which is one interval against
+// the four traffic shape requires. It wrote usage rows forever while the
+// traffic half was structurally impossible, and the only symptom would have
+// been a permanently blank column — which reads exactly like an app with no
+// traffic. The classifier refusing was correct; the collector collecting for a
+// measurement it could not produce, silently, was not.
+if (PERIOD_HOURS === 0) {
+  const cadence = checkCadence({ samples: SAMPLES, intervalSeconds: INTERVAL_S });
+  for (const w of cadence.warnings) {
+    (cadence.degraded ? console.error : console.log)(`  note: ${w}`);
+  }
+}
 
 // ── --period: read a stored period back, no sampling ────────────────────────
 //
