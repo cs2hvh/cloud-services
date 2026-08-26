@@ -270,6 +270,31 @@ test("the notice says what class of thing was removed, never what was found", ()
   assert.equal(/ghs_|token|credential value/i.test(notice.replace(/credentials? redacted/, "")), false);
 });
 
+test("sanitising an already-sanitised log reports nothing altered", () => {
+  // Master found this shape in their redactor: the flag counted pattern
+  // MATCHES rather than actual changes, so text already containing
+  // "[redacted]" re-matched and the flag lied. `altered` goes out in the API
+  // response and tells a reader their output was modified — a sanitiser that
+  // cries wolf gets ignored, and an ignored sanitiser is not a defence.
+  const first = sanitizeBuildLog(log());
+  const second = sanitizeBuildLog(first.text);
+
+  assert.equal(second.text, first.text, "sanitising is idempotent");
+  assert.equal(
+    Object.keys(second.redactions).length,
+    0,
+    "a second pass must not count re-matches on its own placeholder",
+  );
+});
+
+test("a pattern that matches without changing anything is not counted", () => {
+  const already = ["=== ahura build dpl_1 ===", "--- build ---", "url https://x-access-token:[redacted]@github.com/a/b.git"].join("\n");
+  const r = sanitizeBuildLog(already);
+
+  assert.equal(r.text.includes("[redacted]"), true, "the placeholder survives untouched");
+  assert.deepEqual(r.redactions, {}, "matching its own output is not a redaction");
+});
+
 test("a log with nothing removed reports no notice", () => {
   const raw = ["=== ahura build dpl_1 ===", "--- build ---", "ok", "=== finishing: status=success ==="].join("\n");
   const r = sanitizeBuildLog(raw);

@@ -269,13 +269,31 @@ export function sanitizeBuildLog(raw: string): SanitizedLog {
   }
 
   let text = kept.join("\n");
+
+  // Count replacements that CHANGE something, not matches.
+  //
+  // Four of these patterns can match their own output — `[^@\s]+` and `\S+`
+  // happily match "[redacted]" — so a log that has already been sanitised
+  // would re-match and report credentials it did not remove. `redactions`
+  // feeds alterationNotice and the API response, so that is not a cosmetic
+  // miscount: it tells a reader their build output was modified when it was
+  // not, and a sanitiser that cries wolf gets ignored.
+  //
+  // Adding a negative lookahead per pattern would also work, and would fail
+  // the day someone adds a fifth pattern and forgets. Deriving the count from
+  // the actual change holds however the patterns are written or reordered.
   for (const { name, re, replace } of PATTERNS) {
     re.lastIndex = 0;
-    const matches = text.match(re);
-    if (matches?.length) {
-      redactions[name] = (redactions[name] ?? 0) + matches.length;
-      re.lastIndex = 0;
-      text = text.replace(re, replace);
+    const single = new RegExp(re.source, re.flags.replace("g", ""));
+    let changed = 0;
+    const next = text.replace(re, (match: string) => {
+      const out = match.replace(single, replace);
+      if (out !== match) changed += 1;
+      return out;
+    });
+    if (changed > 0) {
+      redactions[name] = (redactions[name] ?? 0) + changed;
+      text = next;
     }
   }
 

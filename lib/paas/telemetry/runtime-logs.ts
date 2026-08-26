@@ -23,6 +23,22 @@
  * and the validation is an allowlist of the character set Kubernetes itself
  * permits — not a denylist of `..` and `/`.
  *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * RULE FOR ANY TENANT-FACING CALLER. Read this before wiring a customer log
+ * view to this module.
+ *
+ * A TENANT PATH MUST NEVER TAKE A NAMESPACE FROM THE CALLER. Resolve the
+ * deployment ref through the RLS-scoped client, and derive the namespace from
+ * the row you got back. Validation here proves a string is a legal Kubernetes
+ * name; it cannot prove the caller is entitled to that name, and
+ * `app-prj-someone-else` is a perfectly legal one.
+ *
+ * `app/api/v2/admin/pods/[namespace]/[pod]/logs` does accept a namespace, and
+ * that is only safe because it is operator-scoped: it reaches every namespace
+ * by design and sits behind the admin gate. Copying its shape into a tenant
+ * route reproduces v1's confirmed IDOR with better input validation.
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
  * Pure. No network. The caller does the fetching; this decides what to ask for.
  */
 

@@ -32,6 +32,29 @@
  * data a compromised account could plausibly reach. Fleet data is not
  * catastrophic to leak — costs, cluster ids, tenant names — but it is a map of
  * the platform, so prefer the allowlist.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * THE LINE THAT KEEPS THIS STRUCTURAL, AND HOW TO BREAK IT.
+ *
+ * What makes the arrangement above safe is that NOTHING under this directory
+ * is tenant-scoped. Every read is fleet-wide by construction, so there is no
+ * RLS being bypassed and no ownership check that could be forgotten.
+ *
+ * That property is destroyed the moment an operator route grows a `projectRef`
+ * or `teamRef` filter that reads a tenant table. At that point elevated
+ * credentials are answering a per-tenant question, the correctness of the
+ * answer depends on a hand-written filter, and that is v1's confirmed IDOR
+ * rebuilt with better input validation. The rule stops being structural and
+ * becomes a convention somebody eventually forgets.
+ *
+ * If an operator genuinely needs a per-tenant view, build it on the RLS-scoped
+ * client like every other route in app/api/v2, or give the operator a way to
+ * act as the tenant. Do not filter fleet reads by tenant.
+ *
+ * Stated by the infrastructure lane, and it is the right line:
+ * elevate the operation, never the authorization decision, and never a
+ * tenant-scoped read or write.
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 
 import { requireAdmin } from "@/lib/supabase/auth";
