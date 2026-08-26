@@ -33,6 +33,7 @@
  * untouchable. No flag reaches them.
  */
 
+import { EXIT_CLEAN, EXIT_FINDINGS } from "../../lib/paas/telemetry/exit-codes.ts";
 import { db } from "../../lib/paas/db.ts";
 import { deleteObject, listObjects } from "../../lib/paas/build/r2.ts";
 import { reconcileR2, formatBytes, type DeploymentLike } from "../../lib/paas/telemetry/r2-drift.ts";
@@ -121,7 +122,7 @@ if (alarming.length) {
 
 if (!APPLY) {
   console.log(`\n  Plan only. Re-run with --apply to delete the RECLAIM objects above.\n`);
-  process.exit(alarming.length ? 1 : 0);
+  process.exit(alarming.length ? EXIT_FINDINGS : EXIT_CLEAN);
 }
 
 // ── delete ──────────────────────────────────────────────────────────────────
@@ -158,4 +159,4 @@ console.log(
     `\n`,
 );
 
-process.exit(alarming.length ? 1 : 0);
+process.exit(alarming.length ? EXIT_FINDINGS : EXIT_CLEAN);

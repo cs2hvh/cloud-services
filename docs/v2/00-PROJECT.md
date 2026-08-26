@@ -86,7 +86,8 @@ installations 0 · open drift 15 · pod_allocated 25 · scale_to_zero on 1
 - Image scan gate — pass / fail / **could-not-determine blocks**
 - Drift detection across Linode, DNS, workloads, R2, with history
 - Usage metering: warm-seconds, pod-seconds, build-minutes
-- Traffic shape per hostname: organic vs keep-alive-shaped vs none
+- Traffic shape per hostname: organic vs keep-alive-shaped vs none, sampled on
+  the same tick as pod usage so warmth and traffic describe one window
 
 **Tests:** ~530 (deploy) + 326 (observability) + 46 (UI). Plus 11 database
 behavioural tests replaying confirmed v1 criticals.
@@ -128,7 +129,23 @@ behavioural tests replaying confirmed v1 criticals.
   for the reaper and a human, deliberately.
 - **~360 MB of that is permanently unreclaimable** — builds that published
   nothing, so there is no durable copy to justify deleting them.
-  "65% reclaimable" overstates what the reaper can recover.
+- **Warmth and traffic are measured over the same window**, so an always-warm app
+  is separable into "a customer using the pod they hold" and "the platform paying
+  the always-on price for nobody". Live, from one run:
+
+  ```
+  dpl-e2404975a02e   99.9% warm   ALWAYS WARM; ORGANIC
+  dpl-e2215252040c   99.9% warm   ALWAYS WARM; NO-TRAFFIC; warmth NOT justified
+  ```
+
+  Identical warm fraction, identical cost, opposite answers — warm fraction alone
+  cannot tell them apart, and neither can CPU.
+
+  **What this measurement is FOR changed after it was built.** It was the input to
+  the warm-time pricing decision; pricing is now flat, so that decision is closed.
+  It is now an ABUSE AND MARGIN signal instead: under a flat rate the second row is
+  a customer paying us the same as the first while costing us the same as the
+  first, for nobody. Still worth having — it just answers a different question.
 
 ---
 

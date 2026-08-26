@@ -18,6 +18,7 @@
  *   node --test lib/paas/telemetry/reconcile.test.ts
  */
 
+import { EXIT_CLEAN, EXIT_FINDINGS, EXIT_CANNOT_RUN, EXIT_UNTRUSTWORTHY } from "../../lib/paas/telemetry/exit-codes.ts";
 import { MONTH_HOURS, reconcile, type Finding } from "../../lib/paas/telemetry/reconcile.ts";
 import {
   assertControlPlaneReachable,
@@ -91,7 +92,7 @@ if (JSON_OUT) {
       2,
     ),
   );
-  process.exit(report.clean ? 0 : 1);
+  process.exit(report.clean ? EXIT_CLEAN : EXIT_FINDINGS);
 }
 
 console.log(`\nFleet drift — Linode reality vs paas.clusters / paas.build_vms`);
@@ -200,7 +201,7 @@ if (process.argv.includes("--prove")) {
 
   // A reconciler that cannot detect drift is itself the defect, regardless of
   // what the live report said.
-  if (asIfUnrecorded.clean) process.exit(2);
+  if (asIfUnrecorded.clean) process.exit(EXIT_UNTRUSTWORTHY);
 }
 
-process.exit(report.clean ? 0 : 1);
+process.exit(report.clean ? EXIT_CLEAN : EXIT_FINDINGS);

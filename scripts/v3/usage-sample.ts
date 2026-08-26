@@ -43,7 +43,10 @@ import {
   type StoredSample,
 } from "../../lib/paas/telemetry/usage-store.ts";
 import { byDeployment, podUsage, type PodMetricsLike } from "../../lib/paas/telemetry/metrics.ts";
+import { parseRouterCounts, requestsForHostname } from "../../lib/paas/idle.ts";
+import { classifyTraffic, warmthJustified, type TrafficReading } from "../../lib/paas/telemetry/traffic.ts";
 import { IDLE_CORES } from "../../lib/paas/telemetry/signals.ts";
+import { checkCadence } from "../../lib/paas/telemetry/cadence.ts";
 
 const KUBECONFIG = process.env.V2_KUBECONFIG ?? "C:/ahura-secrets/kubeconfig-v2-dev.yaml";
 const JSON_OUT = process.argv.includes("--json");
@@ -73,6 +76,24 @@ const PERIOD_HOURS = arg("period", 0);
 
 /** Namespaces the platform runs for itself, never a tenant's. */
 const PLATFORM_NS = new Set(["default", "kube-system", "kube-public", "kube-node-lease", "ahura-system", "platform"]);
+
+/** Where the gateway runs, for reading its router counters. */
+const PAAS_NAMESPACE = process.env.V2_PAAS_NAMESPACE ?? "ahura-system";
+
+// Say up front what this cadence can and cannot produce.
+//
+// A 15-minute schedule of mine ran --samples 2, which is one interval against
+// the four traffic shape requires. It wrote usage rows forever while the
+// traffic half was structurally impossible, and the only symptom would have
+// been a permanently blank column — which reads exactly like an app with no
+// traffic. The classifier refusing was correct; the collector collecting for a
+// measurement it could not produce, silently, was not.
+if (PERIOD_HOURS === 0) {
+  const cadence = checkCadence({ samples: SAMPLES, intervalSeconds: INTERVAL_S });
+  for (const w of cadence.warnings) {
+    (cadence.degraded ? console.error : console.log)(`  note: ${w}`);
+  }
+}
 
 // ── --period: read a stored period back, no sampling ────────────────────────
 //
@@ -202,6 +223,56 @@ async function takeSample(): Promise<AppObservation[]> {
   return out;
 }
 
+/**
+ * Hostname → the deployment currently serving it, from paas.aliases.
+ *
+ * Lets a hostname's request shape be joined to the pod that request keeps
+ * warm, which is the join the whole economics question turns on. A hostname
+ * with no alias row is skipped rather than guessed at.
+ */
+const hostnameToDeployment = new Map<string, string>();
+{
+  const refOfId = new Map(
+    (await db.select<{ id: string; ref: string }>("deployments", "select=id,ref")).map((d) => [d.id, d.ref]),
+  );
+  for (const a of await db.select<{ hostname: string; deployment_id: string | null }>(
+    "aliases",
+    "select=hostname,deployment_id",
+  )) {
+    const ref = a.deployment_id ? refOfId.get(a.deployment_id) : undefined;
+    if (ref) hostnameToDeployment.set(a.hostname.toLowerCase(), ref);
+  }
+}
+
+/**
+ * Router counters, sampled on the SAME schedule as pod usage.
+ *
+ * Traffic and warmth measured over one window rather than two is what makes
+ * the join honest. The alternative — a period warm fraction beside an
+ * instantaneous CPU reading — compares a day to a second and quietly invites
+ * the reader to treat them as the same measurement.
+ *
+ * Null on any failure, never an empty map: an empty map reads as "every
+ * hostname had zero requests", which would make a busy fleet look abandoned.
+ */
+async function routerCounts(): Promise<Map<string, number> | null> {
+  try {
+    const pods = await k.listPods(PAAS_NAMESPACE);
+    const pod = pods.find((p) => p.metadata.name.startsWith("traefik-"));
+    if (!pod) return null;
+    const body = await k.raw<string>({
+      method: "GET",
+      path: `/api/v1/namespaces/${PAAS_NAMESPACE}/pods/${pod.metadata.name}:8080/proxy/metrics`,
+      raw: true,
+    });
+    return parseRouterCounts(String(body));
+  } catch {
+    return null;
+  }
+}
+
+const trafficReadings = new Map<string, TrafficReading[]>();
+
 let buckets = new Map<string, UsageBucket>();
 let previousAt: Date | null = null;
 const startedAt = new Date();
@@ -211,6 +282,21 @@ let written = 0;
 for (let i = 0; i < SAMPLES; i += 1) {
   const observations = await takeSample();
   const now = new Date();
+
+  // Same instant as the pod observation above, so warmth and traffic describe
+  // the same window rather than two that merely overlap.
+  const counts = await routerCounts();
+  if (counts !== null) {
+    for (const [hostname, ref] of hostnameToDeployment) {
+      const n = requestsForHostname(counts, hostname);
+      // No router for this hostname is not zero requests for it. Skip rather
+      // than record a zero that would read as measured quiet.
+      if (n === null) continue;
+      const list = trafficReadings.get(ref) ?? [];
+      list.push({ at: now.getTime(), cumulative: n });
+      trafficReadings.set(ref, list);
+    }
+  }
 
   // Two folds of the same observation, and the difference matters.
   //
@@ -291,6 +377,16 @@ console.log(line);
 for (const { bucket, warm } of rows) {
   const notes: string[] = [];
   if (warm.alwaysWarm) notes.push("ALWAYS WARM");
+
+  // The join: warmth costs money, and only traffic says whether the money is
+  // buying anything. Both measured over this same window.
+  const shape = classifyTraffic(trafficReadings.get(bucket.appKey) ?? []);
+  if (shape.shape !== "undetermined") {
+    notes.push(shape.shape.toUpperCase());
+    const w = warmthJustified(shape.shape);
+    if (warm.alwaysWarm && w.justified === false) notes.push("warmth NOT justified");
+  }
+
   if (warm.degraded) notes.push("degraded — gaps in observation");
   if (bucket.restarts > 0) notes.push(`${bucket.restarts} restart(s)`);
 

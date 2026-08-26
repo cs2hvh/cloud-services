@@ -73,7 +73,17 @@ for (const n of tenantNs) {
     `  ${n.metadata.name.padEnd(30)} pods=${pods.length} running=${running} restarts=${restarts}`,
   );
   for (const p of pods) {
-    const cs = p.status?.containerStatuses ?? [];
+    // KubePod in lib/paas/k8s/client.ts does not declare `state` on a
+    // container status, though the API always returns it — that client is the
+    // deploy lane's and this is the only reader that needs the field, so it is
+    // narrowed here rather than widened there.
+    //
+    // Found by the first typecheck this file has ever had. It ran correctly
+    // every time because the DATA was always present; only the type was
+    // missing, which is precisely the class of thing "reviewed by inspection"
+    // cannot catch.
+    type WithState = { ready: boolean; restartCount: number; state?: { waiting?: { reason?: string } } };
+    const cs = (p.status?.containerStatuses ?? []) as WithState[];
     const rc = cs.reduce((s, c) => s + (c.restartCount ?? 0), 0);
     const waiting = cs.find((c) => !c.ready)?.state?.waiting?.reason;
     console.log(
