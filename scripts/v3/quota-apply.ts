@@ -24,6 +24,7 @@
  * argument to earn.
  */
 
+import { EXIT_CLEAN, EXIT_FINDINGS, EXIT_CANNOT_RUN } from "../../lib/paas/telemetry/exit-codes.ts";
 import { loadKubeconfig, kube } from "../../lib/paas/k8s/client.ts";
 import {
   DEFAULT_QUOTA,
@@ -45,7 +46,7 @@ const PLATFORM_NS = new Set(["default", "kube-system", "kube-public", "kube-node
 const k = kube(loadKubeconfig(KUBECONFIG));
 if (!(await k.healthz())) {
   console.error("cluster unreachable");
-  process.exit(1);
+  process.exit(EXIT_CANNOT_RUN);
 }
 
 interface RawPod {
@@ -172,4 +173,4 @@ if (APPLY) {
 }
 console.log("");
 
-process.exit(refused > 0 ? 1 : 0);
+process.exit(refused > 0 ? EXIT_FINDINGS : EXIT_CLEAN);

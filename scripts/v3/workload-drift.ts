@@ -15,6 +15,7 @@
  * READ-ONLY. Nothing here scales, patches or deletes a workload.
  */
 
+import { EXIT_CLEAN, EXIT_FINDINGS, EXIT_CANNOT_RUN } from "../../lib/paas/telemetry/exit-codes.ts";
 import { db } from "../../lib/paas/db.ts";
 import { loadKubeconfig, kube } from "../../lib/paas/k8s/client.ts";
 import {
@@ -34,7 +35,7 @@ const PLATFORM_NS = new Set(["default", "kube-system", "kube-public", "kube-node
 const k = kube(loadKubeconfig(KUBECONFIG));
 if (!(await k.healthz())) {
   console.error("cluster unreachable");
-  process.exit(1);
+  process.exit(EXIT_CANNOT_RUN);
 }
 
 const deploymentList = await k.get<{
@@ -88,7 +89,7 @@ const capacity = capacityDrift(recordedPods, runningPods);
 
 if (JSON_OUT) {
   console.log(JSON.stringify({ ...report, capacity, clusters }, null, 2));
-  process.exit(report.clean && !capacity.significant ? 0 : 1);
+  process.exit(report.clean && !capacity.significant ? EXIT_CLEAN : EXIT_FINDINGS);
 }
 
 const line = "─".repeat(96);
@@ -127,4 +128,4 @@ console.log(
     : `\n  ${report.findings.filter((f) => f.actionable).length} finding(s) need a human. Nothing was changed.\n`,
 );
 
-process.exit(report.clean && !capacity.significant ? 0 : 1);
+process.exit(report.clean && !capacity.significant ? EXIT_CLEAN : EXIT_FINDINGS);
