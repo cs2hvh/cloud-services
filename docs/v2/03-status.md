@@ -172,19 +172,56 @@ The platform's TLS private key lives only in the platform namespace. Origin IPs
 are never exposed: DNS is proxied through Cloudflare, unlike v1's explicitly
 unproxied records pointing at a hardcoded node IP.
 
-**The missing piece is the sandbox.** Until gVisor is installed, containment
-rests on the container boundary alone, which is not sufficient for hostile code.
+**gVisor is now installed and proven** — a tenant pod reports
+`Linux version 4.19.0-gvisor`. Containment no longer rests on the container
+boundary alone.
 
 ---
 
+## Shipped since that list was written
+
+1. **gVisor RuntimeClass** — installed, pinned to release `20260817`, verified
+   from inside a running tenant pod.
+2. **Alias-driven routing** — promote and rollback are one `UPDATE` of
+   `aliases.deployment_id`, and each alias now routes to ITS OWN deployment via
+   a Service per targeted deployment. Verified live with two hostnames on one
+   project serving two different builds simultaneously.
+3. **Webhook → deploy** — `POST /api/v2/webhooks/github` verifies the signature
+   over raw bytes, resolves the project, and records a queued deployment;
+   `scripts/v2/build-worker.ts` builds it. Proven end to end: a signed push
+   built the exact recorded commit and served it publicly.
+4. **Env vars** — encrypted with AES-256-GCM and injected via `envFrom`,
+   decrypt-or-throw with no placeholder path.
+5. **metrics-server** — pinned, with the LKE kubelet TLS flag, and verified by
+   readings rather than by pod readiness.
+6. **Placement accounting** — `pod_allocated` and `pod_capacity` derived from
+   the cluster each sweep rather than counted.
+
 ## Next, in order
 
-1. **gVisor RuntimeClass** — required before any untrusted workload. Needs a
-   privileged installer DaemonSet; do it deliberately.
-2. **Alias-driven routing** — read the `aliases` table, create Ingress objects,
-   and make promote/rollback the single write the schema already supports.
-3. **Webhook → deploy** — the GitHub App is ready; wire push events.
-4. **Trivy gate in the publisher** — the seam exists, the check does not.
-5. **ResourceQuota + LimitRange** per tenant namespace.
-6. **Env vars** — decrypt and inject as a Secret via `envFrom`.
-7. **Control plane API + dashboard.**
+1. **Scale to zero.** The one item that decides whether the business works.
+   Warm fraction is measured at 1.0 and the three live apps sit at 2–3
+   millicores each — the fleet is paying the always-on cost model (~$52k/mo at
+   10k apps against a $5 price) for apps doing nothing. Everything else on this
+   list is a feature; this is the difference between two cost models.
+2. **Trivy gate in the publisher** — the seam exists, the check does not.
+3. **ResourceQuota + LimitRange** per tenant namespace. Nothing currently bounds
+   what one tenant can request.
+4. **Preview deployments for non-production branches.** Per-alias routing now
+   supports them; what is missing is policy — hostname, lifetime, and who pays.
+5. **Build concurrency with a budget cap.** The worker is deliberately
+   sequential: a queue that fans out is a queue that can spend without bound.
+6. **R2 image.tar reaping.** 782 MB and growing with every deploy, because each
+   build writes a tar nothing deletes.
+
+## Known gaps, stated plainly
+
+- **`npm install` has not been run**, so the ~29 dashboard files in Master's
+  lane have never been typechecked, linted, or executed. They are inspected
+  code, not working code, and should be described that way.
+- **The GitHub App is installed on no accounts**, so no real push has ever
+  reached the webhook. The path is proven with genuine signatures against the
+  live database, which is not the same as proven in production.
+- **Six historical deployments carry a `0000000` git sha** and always will —
+  the immutability trigger correctly refuses to rewrite recorded provenance.
+  Any UI showing a sha must treat both null and all-zero as absent, permanently.
