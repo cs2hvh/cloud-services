@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, statSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, relative, sep } from "node:path";
 
 /**
@@ -47,24 +48,6 @@ const SERVICE_ROLE_ALLOWED: Array<{ path: string; why: string }> = [
 ];
 
 /**
- * The predicates, defined ONCE and used by both the real check and its proof.
- *
- * Master shipped a namespace check whose regex had been mangled by a heredoc
- * into something matching nothing — a check that had been passing vacuously
- * since the moment it was written, in the file whose entire purpose is that
- * checks must be able to fail. It survived because the same pattern was inlined
- * twice and only one copy rotted.
- *
- * I proved this file catches a real violation by hand: I added a route
- * importing both forbidden things, watched both assertions fail and name it,
- * then deleted it. That proof was real and it was also TEMPORARY — nothing
- * committed would notice if these regexes stopped matching tomorrow.
- *
- * So the proof is permanent now, and it runs against the same function the scan
- * does. If a predicate is ever broken, the proof fails rather than the scan
- * quietly passing.
- */
-/**
  * Strip comments before matching.
  *
  * WITHOUT THIS THE TEST PUNISHES DOCUMENTATION. Master's aliases route mentions
@@ -94,6 +77,18 @@ export function isTestFile(path: string): boolean {
   return /\.test\.tsx?$/.test(path);
 }
 
+/**
+ * The predicates, defined ONCE and used by both the real checks and their proofs.
+ *
+ * Master shipped a namespace check whose regex had been mangled by a heredoc
+ * into something matching nothing — passing vacuously from the moment it was
+ * written, in the file whose entire purpose is that checks must be able to
+ * fail. It survived because the same pattern was inlined twice and only one
+ * copy rotted.
+ *
+ * Each carries its own violating and innocent example, so the proof cannot
+ * drift from the thing it proves.
+ */
 export const FORBIDDEN = {
   serviceRoleDb: {
     name: "service-role db client",
@@ -135,16 +130,38 @@ function rel(f: string): string {
   return relative(REPO, f).split(sep).join("/");
 }
 
+/**
+ * The whole pipeline — walk, filter, strip, match — as one function, so it can
+ * be proved END TO END rather than a piece at a time.
+ *
+ * Master's second bug is why this exists. Their guard's walker collected only
+ * `.ts` while the call site was a `.tsx` page, so the check examined ZERO files
+ * and passed. Every predicate was correct in isolation; the WALK and the FILTER
+ * were broken together, and testing the string matching said nothing about it.
+ *
+ * Proving each predicate separately is not proving the pipeline. I proved mine
+ * end to end once, by hand, with a probe file I then deleted — so that proof
+ * protected exactly nothing after the day it ran.
+ */
+export function scanTree(
+  root: string,
+  predicate: (src: string) => boolean,
+  opts: { allowed?: Set<string>; base?: string } = {},
+): string[] {
+  const base = opts.base ?? root;
+  const offenders: string[] = [];
+  for (const f of walk(root)) {
+    const r = relative(base, f).split(sep).join("/");
+    if (opts.allowed?.has(r) || isTestFile(r)) continue;
+    if (predicate(stripComments(readFileSync(f, "utf8")))) offenders.push(r);
+  }
+  return offenders;
+}
+
 test("no request handler imports the service-role database client", () => {
   const allowed = new Set(SERVICE_ROLE_ALLOWED.map((a) => a.path));
-  const offenders: string[] = [];
-
-  for (const f of appFiles()) {
-    const r = rel(f);
-    if (allowed.has(r) || isTestFile(r)) continue;
-    const src = stripComments(readFileSync(f, "utf8"));
-    if (FORBIDDEN.serviceRoleDb.test(src)) offenders.push(r);
-  }
+  // base: REPO so offenders come back as `app/...`, matching the allowlist.
+  const offenders = scanTree(join(REPO, "app"), FORBIDDEN.serviceRoleDb.test, { allowed, base: REPO });
 
   assert.deepEqual(
     offenders,
@@ -162,12 +179,7 @@ test("no request handler performs a tenant-scoped write through the reconciler",
   // refused it from their route for exactly this reason and chose
   // reconcileProjectByRef instead — elevate the convergence, keep the tenant
   // write under RLS. This is what keeps that a property rather than a habit.
-  const offenders: string[] = [];
-  for (const f of appFiles()) {
-    if (isTestFile(rel(f))) continue;
-    const src = stripComments(readFileSync(f, "utf8"));
-    if (FORBIDDEN.tenantWriteViaReconciler.test(src)) offenders.push(rel(f));
-  }
+  const offenders = scanTree(join(REPO, "app"), FORBIDDEN.tenantWriteViaReconciler.test, { base: REPO });
   assert.deepEqual(
     offenders,
     [],
@@ -274,4 +286,43 @@ test("a test file cannot silence this suite", () => {
   // silence it by getting it excluded.
   assert.equal(isTestFile("app/api/v2/_lib/boundary.test.ts"), true);
   assert.equal(isTestFile("app/api/v2/projects/[ref]/aliases/route.ts"), false);
+});
+
+test("THE WHOLE PIPELINE CATCHES A VIOLATION, walk and filter included", () => {
+  // Master's second bug: their walker collected only .ts while the call site
+  // was a .tsx page, so the check examined ZERO files and passed. Every
+  // predicate was right in isolation; the walk and the filter were broken
+  // TOGETHER, and testing the string matching said nothing about it.
+  //
+  // I proved this pipeline once by hand with a probe file I then deleted, so
+  // that proof stopped protecting anything the moment it finished. This one is
+  // permanent and runs the same scanTree the real checks use.
+  const root = mkdtempSync(join(tmpdir(), "boundary-proof-"));
+  try {
+    mkdirSync(join(root, "api", "deep"), { recursive: true });
+
+    // .tsx specifically — the extension Master's walker dropped.
+    writeFileSync(join(root, "api", "deep", "page.tsx"),
+      'import { projects } from "@/lib/paas/db";\nexport default function P() { return null; }\n');
+    // nested, to prove recursion
+    writeFileSync(join(root, "api", "deep", "route.ts"),
+      "export async function POST() { await promoteAndConverge(a, b); }\n");
+    // innocent, to prove it does not flag everything
+    writeFileSync(join(root, "api", "ok.ts"),
+      'import { operatorView } from "@/lib/paas/telemetry/operator";\n');
+    // a comment mentioning it, to prove stripping runs inside the pipeline
+    writeFileSync(join(root, "api", "documented.ts"),
+      "// deliberately NOT promoteAndConverge — see the elevation rule\nexport const x = 1;\n");
+    // a test file, to prove it cannot silence the suite
+    writeFileSync(join(root, "api", "sneaky.test.ts"),
+      'import { projects } from "@/lib/paas/db";\n');
+
+    const dbHits = scanTree(root, FORBIDDEN.serviceRoleDb.test);
+    assert.deepEqual(dbHits, ["api/deep/page.tsx"], "must catch a .tsx, recursively, and nothing else");
+
+    const writeHits = scanTree(root, FORBIDDEN.tenantWriteViaReconciler.test);
+    assert.deepEqual(writeHits, ["api/deep/route.ts"], "must catch real code and skip the comment");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
