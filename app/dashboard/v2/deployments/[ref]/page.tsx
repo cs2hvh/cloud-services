@@ -70,7 +70,7 @@ export default async function DeploymentPage({ params }: Params) {
     <Shell project={d.project}>
       <div className="mb-8 flex flex-wrap items-center gap-3">
         <h1 className="m-0 font-mono text-[24px] font-normal tracking-tight text-white">
-          {d.commit.shortSha}
+          {d.label}
         </h1>
         <StateBadge state={d.state} />
       </div>
@@ -86,7 +86,13 @@ export default async function DeploymentPage({ params }: Params) {
       )}
 
       <dl className="mb-8 grid gap-px border border-white/[0.09] bg-white/[0.07] sm:grid-cols-2 lg:grid-cols-4">
-        <Fact label="Commit" value={d.commit.message ?? d.commit.ref} />
+        <Fact
+          label="Commit"
+          value={
+            d.commit.message ??
+            (d.commit.isPlaceholder ? "Not recorded" : d.commit.ref)
+          }
+        />
         <Fact label="Author" value={d.commit.author ?? "—"} />
         <Fact label="Branch" value={d.commit.ref} />
         <Fact label="Trigger" value={d.trigger.replace("_", " ")} />

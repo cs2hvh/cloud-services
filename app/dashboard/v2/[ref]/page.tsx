@@ -145,7 +145,10 @@ export default async function ProjectPage({ params }: Params) {
     .filter((d) => d.state === "ready")
     .map((d) => ({
       ref: d.ref,
-      shortSha: d.commit.shortSha,
+      // d.label, not shortSha: every deployment currently carries the
+      // placeholder sha "0000000", so a picker keyed on it lists identical
+      // options and nobody can tell which one they are promoting.
+      shortSha: d.label,
       message: d.commit.message,
       readyAt: d.timing.readyAt,
     }));
@@ -254,10 +257,13 @@ export default async function ProjectPage({ params }: Params) {
                         href={`/dashboard/v2/deployments/${d.ref}`}
                         className="font-mono text-[13px] text-white hover:text-sky-300"
                       >
-                        {d.commit.shortSha}
+                        {d.label}
                       </Link>
                       <p className="m-0 mt-0.5 max-w-[280px] truncate text-[12px] text-white/40">
-                        {d.commit.message ?? d.commit.ref}
+                        {d.commit.message ??
+                          (d.commit.isPlaceholder
+                            ? `${d.commit.ref} · commit not recorded`
+                            : d.commit.ref)}
                       </p>
                     </td>
                     <td className="px-4 py-3">

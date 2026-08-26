@@ -61,7 +61,17 @@ export interface DeploymentDto {
     ref: string;
     message: string | null;
     author: string | null;
+    /**
+     * True when git_sha carries no information — the deploy path writes
+     * "0000000" for anything not triggered by a real push. Every deployment in
+     * production currently has it, so a UI keyed on the sha shows a list of
+     * identical rows and a promote picker nobody can choose from. Callers must
+     * fall back to the deployment ref when this is set.
+     */
+    isPlaceholder: boolean;
   };
+  /** Ref when the sha is a placeholder, short sha otherwise. Safe to display. */
+  label: string;
   image: { repo: string; digest: string } | null;
   error: { code: string | null; message: string } | null;
   timing: {
@@ -86,7 +96,17 @@ function durationMs(row: DeploymentRow): number | null {
   return Number.isFinite(ms) && ms >= 0 ? ms : null;
 }
 
+/**
+ * A sha that identifies nothing. Real values are 40 hex characters; the deploy
+ * path writes "0000000" when it has no commit, and all-zero shas of any length
+ * are the git convention for "none".
+ */
+export function isPlaceholderSha(sha: string): boolean {
+  return !/^[0-9a-f]{7,40}$/i.test(sha) || /^0+$/.test(sha);
+}
+
 export function toDeploymentDto(row: DeploymentRow): DeploymentDto {
+  const placeholder = isPlaceholderSha(row.git_sha);
   return {
     ref: row.ref,
     state: row.state,
@@ -98,7 +118,11 @@ export function toDeploymentDto(row: DeploymentRow): DeploymentDto {
       ref: row.git_ref,
       message: row.git_message,
       author: row.git_author,
+      isPlaceholder: placeholder,
     },
+    // Never a row of identical zeros: the ref is unique per deployment even
+    // when the commit is not recorded.
+    label: placeholder ? row.ref : row.git_sha.slice(0, 7),
     image:
       row.image_repo && row.image_digest
         ? { repo: row.image_repo, digest: row.image_digest }

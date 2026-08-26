@@ -21,7 +21,11 @@ import { slugify } from "./serialize.ts";
 import { redactBuildLog } from "./redact.ts";
 import { checkCustomDomain } from "./domains.ts";
 import { fromPostgrestError } from "./http.ts";
-import { toDeploymentDto, type DeploymentRow } from "./deployments.ts";
+import {
+  toDeploymentDto,
+  isPlaceholderSha,
+  type DeploymentRow,
+} from "./deployments.ts";
 
 // ── slugify ──────────────────────────────────────────────────────────
 // The result becomes a single DNS label in {app}.apps.ahurasense.com.
@@ -215,4 +219,38 @@ test("image is null unless both repo and digest are present", () => {
   assert.equal(toDeploymentDto(row({ image_digest: null })).image, null);
   assert.equal(toDeploymentDto(row({ image_repo: null })).image, null);
   assert.ok(toDeploymentDto(row()).image);
+});
+
+// ── placeholder shas ─────────────────────────────────────────────────
+// Every deployment in production currently has git_sha "0000000". A UI keyed
+// on the sha shows a list of identical rows, and the promote picker becomes
+// unusable — you cannot choose between six entries that read the same.
+
+test("a zero sha is recognised as carrying no information", () => {
+  assert.equal(isPlaceholderSha("0000000"), true);
+  assert.equal(isPlaceholderSha("0000000000000000000000000000000000000000"), true);
+  assert.equal(isPlaceholderSha(""), true);
+  assert.equal(isPlaceholderSha("nope"), true);
+});
+
+test("a real sha is not treated as a placeholder", () => {
+  assert.equal(isPlaceholderSha("0123456789abcdef0123456789abcdef01234567"), false);
+  assert.equal(isPlaceholderSha("a1b2c3d"), false);
+});
+
+test("label falls back to the deployment ref when the sha is a placeholder", () => {
+  const withPlaceholder = toDeploymentDto(row({ git_sha: "0000000", ref: "dpl-abc123" }));
+  assert.equal(withPlaceholder.label, "dpl-abc123");
+  assert.equal(withPlaceholder.commit.isPlaceholder, true);
+
+  const real = toDeploymentDto(row({ git_sha: "0123456789abcdef0123456789abcdef01234567" }));
+  assert.equal(real.label, "0123456");
+  assert.equal(real.commit.isPlaceholder, false);
+});
+
+test("two placeholder deployments produce distinguishable labels", () => {
+  // The actual failure this prevents: six rows that all read "0000000".
+  const a = toDeploymentDto(row({ ref: "dpl-aaa", git_sha: "0000000" }));
+  const b = toDeploymentDto(row({ ref: "dpl-bbb", git_sha: "0000000" }));
+  assert.notEqual(a.label, b.label);
 });
