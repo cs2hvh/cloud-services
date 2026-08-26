@@ -20,7 +20,13 @@ import { Notice, Empty } from "@/components/v2/notice";
 import { EnvEditor, type EnvVarSummary } from "@/components/v2/env-editor";
 import { DomainManager, type DomainSummary } from "@/components/v2/domain-manager";
 import { PromoteControl } from "@/components/v2/promote-control";
-import { StateBadge, Timestamp, Duration } from "@/components/v2/state-badge";
+import { replicaStates, type ReplicaState } from "@/lib/paas/replicas.ts";
+import {
+  StateBadge,
+  ReplicaBadge,
+  Timestamp,
+  Duration,
+} from "@/components/v2/state-badge";
 
 export const dynamic = "force-dynamic";
 
@@ -140,9 +146,42 @@ export default async function ProjectPage({ params }: Params) {
     lastError: row.last_error,
   }));
 
+  // Runtime status per deployment. replicaStates reads the CLUSTER, which
+  // genuinely needs elevation — there is no tenant credential for Kubernetes.
+  // It reads no database: it is handed the rows RLS already allowed, so it
+  // cannot see another team's deployments because it is never told about them.
+  //
+  // A cluster failure must not blank the page. Every row falls back to
+  // "unknown" with a null replica count, which renders as "Can't tell" and
+  // never as zero — telling someone their app is off when we could not look is
+  // the specific lie this avoids.
+  const servingRef =
+    aliases.find((a) => a.kind === "production")?.deployments?.ref ?? undefined;
+  let replicas = new Map<string, ReplicaState>();
+  try {
+    const states = await replicaStates(
+      project.ref,
+      deployments.map((d) => ({
+        ref: d.ref,
+        state: d.state,
+        image_digest: d.image?.digest ?? null,
+      })),
+      { servingRef }
+    );
+    replicas = new Map(states.map((r) => [r.ref, r]));
+  } catch (err) {
+    console.error("[dashboard/v2] replica read failed:", err);
+  }
+
   // Only a deployment that built can serve traffic; the API refuses the rest.
   const promotable = deployments
-    .filter((d) => d.state === "ready")
+    // rollable is a BELIEF: the build succeeded and recorded an image. It does
+    // NOT verify the image still exists in the registry — that would be a
+    // round trip per deployment per page load. So the control says "rollback
+    // available", never "guaranteed". When the cluster is unreadable the flag
+    // is still meaningful, because it is a fact about the build, not the
+    // cluster.
+    .filter((d) => replicas.get(d.ref)?.rollable ?? d.state === "ready")
     .map((d) => ({
       ref: d.ref,
       // d.label, not shortSha: every deployment currently carries the
@@ -234,7 +273,7 @@ export default async function ProjectPage({ params }: Params) {
             <table className="w-full min-w-[620px] border-collapse text-left">
               <thead>
                 <tr className="bg-[linear-gradient(90deg,rgba(0,149,255,0.10),rgba(255,255,255,0.04)_22%,rgba(255,255,255,0.03)_100%)]">
-                  {["Commit", "State", "Trigger", "Queued", "Duration"].map((h) => (
+                  {["Commit", "State", "Runtime", "Trigger", "Queued", "Duration"].map((h) => (
                     <th
                       key={h}
                       className="border-b border-white/[0.08] px-4 py-3 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-white/45"
@@ -268,6 +307,12 @@ export default async function ProjectPage({ params }: Params) {
                     </td>
                     <td className="px-4 py-3">
                       <StateBadge state={d.state} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <ReplicaBadge
+                        status={replicas.get(d.ref)?.status ?? "unknown"}
+                        replicas={replicas.get(d.ref)?.replicas ?? null}
+                      />
                     </td>
                     <td className="px-4 py-3 text-[12.5px] text-white/50">
                       {d.trigger.replace("_", " ")}

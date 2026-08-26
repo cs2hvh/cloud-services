@@ -17,6 +17,12 @@ import { useRouter } from "next/navigation";
  * pod from 0 to 1, which takes seconds — the reconciler's own docs say so.
  * Nothing here may use that word.
  *
+ * "Rollback available", never "guaranteed". The candidate list comes from
+ * replicaStates().rollable, which means the build succeeded and recorded an
+ * image — NOT that the image still exists in the registry. Verifying that
+ * would be a registry round trip per deployment per page load. The weaker
+ * claim is the true one.
+ *
  * The button text says what actually happens. Until the routing reconciler
  * lands, this changes which deployment the alias records; traffic follows
  * afterwards. Saying "Promoted" would be the same class of claim as v1's
@@ -109,7 +115,7 @@ export function PromoteControl({
         disabled={busy}
         className="border border-white/[0.12] bg-black/30 px-2.5 py-1.5 text-[12.5px] text-white outline-none focus:border-[#0095FF]/60 disabled:opacity-40"
       >
-        <option value="">Switch to…</option>
+        <option value="">Rollback available…</option>
         {options.map((c) => (
           <option key={c.ref} value={c.ref}>
             {c.shortSha}

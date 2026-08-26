@@ -76,3 +76,68 @@ export function Duration({ ms }: { ms: number | null }) {
     </span>
   );
 }
+
+/**
+ * Runtime status of a deployment in the cluster.
+ *
+ * Two rules from lib/paas/replicas, and both are about not lying:
+ *
+ * - replicas NULL means the cluster could not be read. It must never render as
+ *   "0" or "scaled to zero" — that would tell someone their app is
+ *   deliberately off when the truth is we could not look.
+ * - "running-unrouted" is ready replicas no hostname reaches. It costs money
+ *   and serves nothing, and it is the state a promote leaves behind, so it
+ *   gets its own colour rather than being folded into "running".
+ */
+const REPLICA_TONE: Record<string, string> = {
+  serving: "bg-emerald-400/10 text-emerald-300 border-emerald-400/30",
+  "running-unrouted": "bg-amber-400/10 text-amber-300 border-amber-400/30",
+  "scaled-to-zero": "bg-white/[0.05] text-white/45 border-white/[0.12]",
+  "not-ready": "bg-sky-400/10 text-sky-300 border-sky-400/30",
+  "not-applied": "bg-white/[0.05] text-white/45 border-white/[0.12]",
+  "no-image": "bg-rose-400/10 text-rose-300 border-rose-400/30",
+  unknown: "bg-white/[0.04] text-white/35 border-white/[0.1]",
+};
+
+const REPLICA_LABEL: Record<string, string> = {
+  serving: "Serving",
+  "running-unrouted": "Running, unrouted",
+  "scaled-to-zero": "Scaled to zero",
+  "not-ready": "Not ready",
+  "not-applied": "Not applied",
+  "no-image": "No image",
+  // Never "scaled to zero" and never a replica count — we could not look.
+  unknown: "Can't tell",
+};
+
+export function ReplicaBadge({
+  status,
+  replicas,
+}: {
+  status: string;
+  replicas: number | null;
+}) {
+  const tone = REPLICA_TONE[status] ?? REPLICA_TONE.unknown;
+  const label = REPLICA_LABEL[status] ?? "Can't tell";
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 border px-2 py-0.5 text-[11.5px] font-medium",
+        tone
+      )}
+      title={
+        status === "running-unrouted"
+          ? "Ready replicas that no hostname reaches — costs money, serves nothing."
+          : status === "unknown"
+            ? "The cluster could not be read. This is not the same as zero."
+            : undefined
+      }
+    >
+      {label}
+      {/* Only ever a real reading. null prints nothing rather than 0. */}
+      {replicas !== null && replicas > 0 && (
+        <span className="tabular-nums opacity-60">&times;{replicas}</span>
+      )}
+    </span>
+  );
+}
