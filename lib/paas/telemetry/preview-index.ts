@@ -55,6 +55,31 @@ export interface IndexedPreview {
   lastPushAt: string | null;
 }
 
+/**
+ * What an unindexed preview is actually doing, which decides whether it is a
+ * finding at all.
+ *
+ * WHY THIS EXISTS — a false-positive generator, caught before it ran. The
+ * reaper deletes the DNS record and the alias row, converges, and DELIBERATELY
+ * LEAVES THE ENVIRONMENT ROW: environments are reused per branch, so the row is
+ * the branch's identity and re-pushing reuses it. Correct.
+ *
+ * But it means every successfully reaped preview becomes an environment with no
+ * alias — indistinguishable, structurally, from one whose alias was never
+ * minted. Reporting "no alias" as the finding would have produced one permanent
+ * entry per reaped preview, accumulating forever, and drowning the case that
+ * actually matters underneath its own successes.
+ *
+ * So the finding is not "no alias". It is "no alias AND something is running".
+ */
+export type InvisibleDisposition =
+  /** A pod with no alias. Real cost, and no TTL reaches it. */
+  | "running"
+  /** Nothing running. Either already reaped, or a build that never routed. */
+  | "idle"
+  /** The cluster could not be read, so this cannot be called either way. */
+  | "unknown";
+
 /** A preview the reaper cannot see: no alias, so no TTL reaches it. */
 export interface InvisiblePreview {
   environmentRef: string;
@@ -65,12 +90,18 @@ export interface InvisiblePreview {
   deployments: number;
   /** True, false, or NULL when the cluster could not be read. */
   running: boolean | null;
+  disposition: InvisibleDisposition;
   /**
    * A running pod with no alias. Routing precedes the converge step, so a pod
    * normally arrives AFTER its alias — one without means something ran between
    * those two points and did not finish, and no sweep will ever reach it.
    */
   urgent: boolean;
+  /**
+   * Whether a person should look. False for `idle`, which is the expected
+   * resting state of a reaped preview and costs nothing.
+   */
+  actionable: boolean;
 }
 
 export interface PreviewIndex {
@@ -136,6 +167,8 @@ export function indexPreviews(input: IndexInput): PreviewIndex {
         ? null
         : false;
 
+    const disposition: InvisibleDisposition = running === true ? "running" : running === null ? "unknown" : "idle";
+
     invisible.push({
       environmentRef: env.ref,
       projectRef: env.projectRef,
@@ -143,7 +176,13 @@ export function indexPreviews(input: IndexInput): PreviewIndex {
       ageHours: ageHours(lastPushAt ?? env.createdAt, now),
       deployments: deps.length,
       running,
+      disposition,
       urgent: running === true,
+      // `unknown` is actionable because it cannot be shown to be safe — not
+      // because it is known to be unsafe. `idle` is not, because a reaped
+      // preview rests here and one permanent entry per success is how a report
+      // stops being read.
+      actionable: disposition !== "idle",
     });
   }
 

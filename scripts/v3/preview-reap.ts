@@ -145,13 +145,22 @@ const findings = findingsFrom(asPlan);
 
 const invisible = index.invisible;
 const urgent = invisible.filter((x) => x.urgent);
+
+// NOT every unindexed environment. The reaper deletes the alias and leaves the
+// environment row — environments are reused per branch, so that is correct —
+// which makes a successfully reaped preview structurally identical to one whose
+// alias was never minted. Counting all of them would produce one permanent
+// finding per reap, accumulating forever, and bury the running ones under the
+// reaper's own successes.
+const actionable = invisible.filter((x) => x.actionable);
+const resting = invisible.filter((x) => !x.actionable);
 const proven = plan.examined > 0;
 
 const code = !safety.safeToReview
   ? EXIT_UNTRUSTWORTHY
   : urgent.length > 0
     ? EXIT_URGENT
-    : findings.length > 0 || invisible.length > 0 || (!proven && capabilityUsed)
+    : findings.length > 0 || actionable.length > 0 || (!proven && capabilityUsed)
       ? EXIT_FINDINGS
       : EXIT_CLEAN;
 
@@ -197,11 +206,11 @@ if (JSON_OUT) {
     for (const k of asPlan.keep) console.log(`    ${k.ref.padEnd(22)} ${k.reason}`);
   }
 
-  if (invisible.length) {
+  if (actionable.length) {
     console.log(`\n${line}`);
-    console.log(`\n  ${invisible.length} preview environment(s) THE REAPER CANNOT SEE:\n`);
-    for (const i of invisible) {
-      const pods = i.running === null ? "pods unknown" : i.running ? "RUNNING POD" : "no pod";
+    console.log(`\n  ${actionable.length} preview environment(s) THE REAPER CANNOT SEE:\n`);
+    for (const i of actionable) {
+      const pods = i.running === null ? "pods UNKNOWN" : "RUNNING POD";
       console.log(
         `    ${i.environmentRef.padEnd(20)} ${i.name.slice(0, 16).padEnd(16)} ${age(i.ageHours).padStart(12)}  ` +
           `${i.deployments} deployment(s)  ${pods}${i.urgent ? "   <-- URGENT" : ""}`,
@@ -221,6 +230,18 @@ if (JSON_OUT) {
       );
     }
     console.log("");
+  }
+
+  // Counted, never listed. These are the resting state of a reaped preview:
+  // the reaper removes the alias and keeps the environment row, because
+  // environments are reused per branch. Listing them would put one permanent
+  // entry per successful reap in front of a reader, which is how a report
+  // stops being read.
+  if (resting.length) {
+    console.log(
+      `\n  ${resting.length} environment(s) unindexed and idle — reaped already, or a build that\n` +
+        `  never routed. Nothing running, so nothing to do; not listed.`,
+    );
   }
 
   console.log(`\n${line}`);

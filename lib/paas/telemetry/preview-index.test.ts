@@ -71,13 +71,23 @@ test("an invisible preview with a running pod is urgent", () => {
   // a container no sweep will ever reach.
   const r = indexPreviews(input({ aliases: [], hasPod: () => true }));
   assert.equal(r.invisible[0].running, true);
+  assert.equal(r.invisible[0].disposition, "running");
   assert.equal(r.invisible[0].urgent, true);
+  assert.equal(r.invisible[0].actionable, true);
 });
 
-test("an invisible preview with no pod is a finding but not urgent", () => {
-  const r = indexPreviews(input({ aliases: [] }));
+test("a REAPED preview is not a finding, or every success becomes one", () => {
+  // The reaper deletes the DNS record and the alias and deliberately leaves the
+  // environment row — environments are reused per branch, so the row is the
+  // branch's identity. That makes a reaped preview structurally identical to
+  // one whose alias was never minted. Reporting "no alias" would have produced
+  // one permanent entry per reaped preview, accumulating forever and drowning
+  // the case that matters underneath its own successes.
+  const r = indexPreviews(input({ aliases: [], hasPod: () => false }));
   assert.equal(r.invisible[0].running, false);
+  assert.equal(r.invisible[0].disposition, "idle");
   assert.equal(r.invisible[0].urgent, false);
+  assert.equal(r.invisible[0].actionable, false, "nothing is running, so nothing needs doing");
 });
 
 test("an unreadable cluster reports unknown, never 'no pod'", () => {
@@ -85,7 +95,18 @@ test("an unreadable cluster reports unknown, never 'no pod'", () => {
   // the strength of a failed API call.
   const r = indexPreviews(input({ aliases: [], hasPod: () => null }));
   assert.equal(r.invisible[0].running, null);
-  assert.equal(r.invisible[0].urgent, false, "unknown is not urgent, but it is not safe either");
+  assert.equal(r.invisible[0].disposition, "unknown");
+  assert.equal(r.invisible[0].urgent, false, "unknown is not urgent");
+  assert.equal(r.invisible[0].actionable, true, "but it cannot be SHOWN safe, so it is still worth looking at");
+});
+
+test("unknown and idle are different answers, not two spellings of quiet", () => {
+  // The whole distinction in one assertion: one of these can be dismissed and
+  // the other cannot, and they arrive from the same empty pod list.
+  const idle = indexPreviews(input({ aliases: [], hasPod: () => false })).invisible[0];
+  const unknown = indexPreviews(input({ aliases: [], hasPod: () => null })).invisible[0];
+  assert.notEqual(idle.disposition, unknown.disposition);
+  assert.notEqual(idle.actionable, unknown.actionable);
 });
 
 test("one unreadable deployment makes the whole environment unknown", () => {
@@ -159,3 +180,4 @@ test("an environment with no deployments at all is still indexed as invisible", 
   assert.equal(r.invisible[0].deployments, 0);
   assert.ok(Math.abs((r.invisible[0].ageHours ?? 0) - 10) < 0.01);
 });
+
