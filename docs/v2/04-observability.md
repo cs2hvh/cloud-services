@@ -29,9 +29,9 @@ node --env-file=.env --env-file=.env.local scripts/v3/drift-sweep.ts --record # 
 node --env-file=.env --env-file=.env.local scripts/v3/drift-sweep.ts --history
 ```
 
-`drift-sweep --record` is the one thing intended for a scheduler. It takes
-around two minutes, since it reads Linode, Cloudflare, R2 and the cluster in
-one pass — fine on a five-minute cron, too slow for anything interactive.
+`drift-sweep --record` takes around two minutes, since it reads Linode,
+Cloudflare, R2 and the cluster in one pass — fine on a schedule, too slow for
+anything interactive. See **Scheduling it** below.
 
 Both env files are required: Supabase credentials live in `.env`, the `V2_*`
 ones in `.env.local`.
