@@ -73,10 +73,30 @@ and what the overwhelming majority of apps actually need.
 
 | Tier | RAM | vCPU | Bundled transfer | Our cost | **Price** | ₹ | Margin |
 |---|---|---|---|---|---|---|---|
-| **Starter** | 512 MB | 1 shared | 200 GB | $4.01 | **$5** | ₹449 | 20% |
-| **Basic** | 1 GB | 1 shared | 300 GB | $7.89 | **$9** | ₹799 | 12% |
-| **Standard** | 2 GB | 2 shared | 500 GB | $15.77 | **$19** | ₹1,699 | 17% |
-| **Plus** | 4 GB | 2 shared | 750 GB | $31.54 | **$39** | ₹3,499 | 19% |
+| **Starter** | 512 MB | 1 shared | 200 GB | $4.96 | **$7** | ₹649 | 29% |
+| **Basic** | 1 GB | 1 shared | 300 GB | $9.01 | **$12** | ₹1,099 | 25% |
+| **Standard** | 2 GB | 2 shared | 500 GB | $16.98 | **$23** | ₹2,099 | 26% |
+| **Plus** | 4 GB | 2 shared | 750 GB | $33.97 | **$45** | ₹3,999 | 25% |
+
+**These prices are the second version.** The first was built on densities I
+derived rather than measured, and it was wrong in the expensive direction —
+**Basic sold below cost at −0.1%, Starter cleared 0.8%.** Two compounding
+errors, both caught by measuring against the live cluster:
+
+- **The kubelet reserves before any pod schedules.** 1.90 GiB of a 7.76 GiB node
+  — 24.5% — measured on both live nodes. The old table's "4 GB for system
+  overhead" described system *pods* (really 0.81 GiB) and omitted the
+  reservation entirely.
+- **The sandbox charge is 128Mi, not 30 MB.** It is declared in our own
+  `RuntimeClass` and is what the *scheduler bills*, regardless of what the
+  sentry actually uses. `01-discovery.md:974` warned in as many words that this
+  figure had no primary source and had to be measured before entering a pricing
+  model. It entered unmeasured anyway.
+
+Density went from a claimed 110 pods/node to a measured **89**. The error is
+largest at the smallest tier because a fixed per-pod charge is proportionally
+biggest on the smallest pod — 128Mi is a fifth of a 512 MB pod and a thirtieth
+of a 4 GB one.
 
 ### Dedicated CPU — for workloads that need guaranteed cycles
 
@@ -85,8 +105,14 @@ overhead, so a 1-vCPU tier fits 15 per node regardless of how little memory it a
 
 | Tier | RAM | vCPU | Bundled transfer | Our cost | **Price** | ₹ | Margin |
 |---|---|---|---|---|---|---|---|
-| **Pro** | 2 GB | 1 dedicated | 500 GB | $22.08 | **$29** | ₹2,599 | 24% |
-| **Pro Plus** | 4 GB | 2 dedicated | 1 TB | $47.31 | **$59** | ₹5,299 | 20% |
+| **Pro** | 2 GB | 1 dedicated | 500 GB | $25.48 | **$35** | ₹3,199 | 27% |
+| **Pro Plus** | 4 GB | 2 dedicated | 1 TB | $50.95 | **$69** | ₹6,199 | 26% |
+
+Recomputed on the same measured overheads, and the host shape changed with them:
+**`g6-dedicated-32` beats `g6-dedicated-16`** at $25.48 vs $27.60 per Pro pod.
+Note also that memory binds before CPU on both — 26 pods by RAM against 15 by
+vCPU — so a "dedicated vCPU" tier is in practice sold out of memory, and adding
+vCPU to these tiers is nearly free while adding RAM is not.
 
 ### How instance count is priced
 
@@ -107,22 +133,38 @@ to consume a cluster's headroom from a dropdown.
 
 | | Us | DigitalOcean App Platform | Render |
 |---|---|---|---|
-| 512 MB shared | **$5** | $5 (50 GB transfer) | $7 (Starter, 0.5 CPU) |
-| 1 GB shared | **$9** | $10–12 (100–150 GB) | — |
-| 2 GB | **$19** shared | $25 (200 GB) | $25 (Standard, 1 CPU) |
-| 4 GB | **$39** shared | $50 (2 vCPU, 250 GB) | $85 (Pro, 2 CPU) |
+| 512 MB shared | **$7** | **$5** (50 GB transfer) | $7 (Starter, 0.5 CPU) |
+| 1 GB shared | **$12** | $10–12 (100–150 GB) | — |
+| 2 GB | **$23** shared | $25 (200 GB) | $25 (Standard, 1 CPU) |
+| 4 GB | **$45** shared | $50 (2 vCPU, 250 GB) | $85 (Pro, 2 CPU) |
 | Bandwidth overage | **$0.01/GB** | $0.02/GiB | metered per workspace plan |
 | Workspace fee | **none** | none | **$25/mo** on Pro |
 
-We match at entry and undercut from 1 GB upward, with **2–4× the bundled transfer at
-every tier** — which is the Linode shared-node transfer bundle passed through rather
-than a loss leader. Render additionally charges a workspace fee before any compute;
-we do not.
+**We no longer match DigitalOcean at entry, and that is worth stating plainly
+rather than burying.** At 512 MB they are $5 and we are $7. We match Render there,
+and we still undercut both from 2 GB upward — with 2–4× the bundled transfer at
+every tier, and no workspace fee where Render charges $25 before any compute.
 
-The honest caveat: our margins are **12–24%**, which is thin for infrastructure. That
-is the true cost of gVisor isolation and generous transfer, and it is the number to
-revisit first if the business needs more room — most cheaply by raising Basic, which
-is the thinnest tier and the least price-sensitive gap against DO's $10–12.
+The entry gap is where gVisor costs the most. A fixed 128Mi sandbox charge is a
+fifth of a 512 MB pod, so the smallest tier carries the largest proportional
+overhead — and DigitalOcean's shared tier is not sandboxed the way ours is. We are
+charging $2 more for an isolation boundary their $5 tier does not have. Whether
+that is a feature to sell or a gap to close is a positioning decision.
+
+Margins are now **25–29%**, against 12–24% claimed before the densities were
+measured — and the earlier figures were not merely optimistic, two of them were
+negative or near zero in reality.
+
+### The lever that would bring entry pricing back down
+
+`podFixed: {memory: "128Mi"}` in the gVisor `RuntimeClass` is **declared, not
+measured**. It is what the scheduler bills per pod regardless of what the sentry
+actually consumes. If the real footprint is materially lower, reducing the
+declaration lifts density at every tier and lifts it *most* at Starter.
+
+It must be measured first. Under-declaring overhead does not produce a warning —
+it produces nodes that accept more pods than they can hold, and the symptom is an
+OOM kill on whichever pod allocates next, which may belong to a different tenant.
 
 ---
 
