@@ -48,6 +48,16 @@ const PATTERNS: Array<{ re: RegExp; replace: string }> = [
   },
   // AWS/R2 style keys, since the publisher step touches object storage.
   { re: /\bAKIA[0-9A-Z]{16}\b/g, replace: PLACEHOLDER },
+  // Presigned R2 URLs. Found by app-deploy-3, and the worst thing in this
+  // list: presign() in lib/paas/build/r2.ts puts X-Amz-Credential and
+  // X-Amz-Signature in the QUERY STRING, and vm.ts passes the result to curl
+  // on the command line. That signature grants write to the image tar for an
+  // hour — whoever holds it can replace the artefact that gets deployed,
+  // which is exactly the capability the throwaway-build-VM design exists to
+  // withhold. It is not userinfo, so the URL pattern above does not catch it.
+  { re: /([?&]X-Amz-Signature=)[^&\s'"]+/gi, replace: `$1${PLACEHOLDER}` },
+  { re: /([?&]X-Amz-Credential=)[^&\s'"]+/gi, replace: `$1${PLACEHOLDER}` },
+  { re: /([?&]X-Amz-Security-Token=)[^&\s'"]+/gi, replace: `$1${PLACEHOLDER}` },
 ];
 
 /**
