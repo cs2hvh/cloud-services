@@ -69,9 +69,8 @@ Two things are worth scheduling, and they are different jobs:
 */15 * * * *  cd /srv/app && node --env-file=.env --env-file=.env.local \
               scripts/v3/drift-sweep.ts --record
 
-# Usage, every 5 minutes. Needs paas.usage_samples, which does not exist yet.
-# The interval IS the resolution of the warm fraction: 5 minutes bounds the
-# attribution error at 5 minutes per app per gap.
+# Usage, every 5 minutes. The interval IS the resolution of the warm fraction:
+# 5 minutes bounds the attribution error at 5 minutes per app per gap.
 */5 * * * *   cd /srv/app && node --env-file=.env --env-file=.env.local \
               scripts/v3/usage-sample.ts --samples 1 --record
 ```
@@ -357,13 +356,9 @@ so no RLS is being bypassed. The gate fails closed on every path and returns
   the mapping note in `drift-history.ts`. Both are still reported by their own
   tools and exit codes; only duration is missing.
 
-- **`paas.usage_samples`.** The writer and the period reader are built and
-  tested (`usage-store.ts`, 19 tests); only the table is missing.
-  `usage-sample.ts --record` and `--period` both fail with a plain sentence
-  until it exists. Requested shape is in the ask to the infrastructure lane;
-  the three things that matter are `unobserved_seconds` stored,
-  `project_id` nullable, and no unique constraint on
-  `(deployment_ref, sampled_at)` — samples are a time series, not state.
+*(`paas.usage_samples` was listed here as a missing table. It was applied
+while this was being written — a missing table needs a migration, an empty
+one needs a runner, and those are different asks. See the scheduling section.)*
 
 **Not started:**
 
