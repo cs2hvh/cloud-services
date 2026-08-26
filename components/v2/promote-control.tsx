@@ -7,10 +7,15 @@ import { useRouter } from "next/navigation";
  * Promote / rollback.
  *
  * Both directions are one update of aliases.deployment_id — no rebuild, no
- * retag, no new image. That is why rollback is instant and why the control
- * offers any ready deployment rather than only the previous one: "roll back"
- * and "promote" are the same operation, and the UI should not pretend
- * otherwise by hiding forward moves behind a different button.
+ * retag, no new image. That is why the control offers any ready deployment
+ * rather than only the previous one: "roll back" and "promote" are the same
+ * operation, and the UI should not pretend otherwise by hiding forward moves
+ * behind a different button. Superseded deployments are scaled to zero, not
+ * deleted, so every ready deployment really is a candidate.
+ *
+ * It is NOT instant, despite being one write. Rolling back scales a stopped
+ * pod from 0 to 1, which takes seconds — the reconciler's own docs say so.
+ * Nothing here may use that word.
  *
  * The button text says what actually happens. Until the routing reconciler
  * lands, this changes which deployment the alias records; traffic follows
