@@ -1,0 +1,307 @@
+/**
+ * The edge gateway: Traefik v3, driven by plain Kubernetes Ingress.
+ *
+ * WHY TRAEFIK AND NOT THE OBVIOUS ALTERNATIVES
+ *
+ *   - ingress-nginx is RETIRED. Its repository was archived read-only on
+ *     2026-03-24 and receives no further security patches. Building on it now
+ *     would be adopting an unmaintained component on day one.
+ *   - Envoy Gateway is the architecture's long-term choice, but it is driven by
+ *     Gateway API CRDs. Traefik reads the built-in `networking.k8s.io/v1`
+ *     Ingress type, so the whole gateway installs as ordinary JSON objects with
+ *     no CRDs and no Helm — which matters because this control plane speaks to
+ *     the API directly and never shells out to kubectl.
+ *
+ * Traefik also reads Gateway API when the CRDs are present, so moving to
+ * Gateway API later is a configuration change rather than a replacement.
+ *
+ * TLS: Cloudflare terminates public TLS at its edge, and the zone is on Full
+ * (Strict) — verified empirically, a self-signed origin returned HTTP 526. The
+ * origin therefore serves a Cloudflare Origin CA certificate covering
+ * ahurasense.com and *.ahurasense.com — ONE cert for every app and preview.
+ * Deliberately NOT doing per-app ACME here: issuing one certificate per app on a
+ * shared apex is exactly what capped v1 at roughly 50 new apps a week.
+ */
+
+import { PAAS_NAMESPACE, ownerLabels } from "./manifests.ts";
+
+const NAME = "traefik";
+
+export function gatewayServiceAccount() {
+  return {
+    apiVersion: "v1",
+    kind: "ServiceAccount",
+    metadata: { name: NAME, namespace: PAAS_NAMESPACE, labels: ownerLabels() },
+  };
+}
+
+/** Read-only across the cluster: the gateway observes, it never mutates. */
+export function gatewayClusterRole() {
+  return {
+    apiVersion: "rbac.authorization.k8s.io/v1",
+    kind: "ClusterRole",
+    metadata: { name: "ahura-traefik", labels: ownerLabels() },
+    rules: [
+      {
+        apiGroups: [""],
+        // `nodes` and `namespaces` are not optional, despite the gateway never
+        // needing to act on them directly: Traefik starts informers for both,
+        // and a forbidden informer never syncs, which silently prevents it from
+        // processing ANY Ingress. The symptom is a healthy pod answering 404 for
+        // every host, with the real cause only visible in its logs.
+        resources: ["services", "endpoints", "secrets", "nodes", "namespaces"],
+        verbs: ["get", "list", "watch"],
+      },
+      {
+        apiGroups: ["discovery.k8s.io"],
+        resources: ["endpointslices"],
+        verbs: ["get", "list", "watch"],
+      },
+      {
+        apiGroups: ["networking.k8s.io"],
+        resources: ["ingresses", "ingressclasses"],
+        verbs: ["get", "list", "watch"],
+      },
+      {
+        apiGroups: ["networking.k8s.io"],
+        resources: ["ingresses/status"],
+        verbs: ["update"],
+      },
+    ],
+  };
+}
+
+export function gatewayClusterRoleBinding() {
+  return {
+    apiVersion: "rbac.authorization.k8s.io/v1",
+    kind: "ClusterRoleBinding",
+    metadata: { name: "ahura-traefik", labels: ownerLabels() },
+    roleRef: { apiGroup: "rbac.authorization.k8s.io", kind: "ClusterRole", name: "ahura-traefik" },
+    subjects: [{ kind: "ServiceAccount", name: NAME, namespace: PAAS_NAMESPACE }],
+  };
+}
+
+/**
+ * The platform's origin certificate — a Cloudflare Origin CA cert covering
+ * `ahurasense.com` and `*.ahurasense.com`.
+ *
+ * Cloudflare's zone is on Full (Strict), which rejects a self-signed origin
+ * with HTTP 526. An Origin CA certificate is trusted by Cloudflare
+ * specifically, is free, and lasts up to 15 years.
+ *
+ * ONE certificate serves every app and preview hostname. That is the whole
+ * point: v1 issued one Let's Encrypt certificate per app on a shared apex,
+ * which capped growth at roughly 50 new apps a week.
+ *
+ * It lives ONLY in the platform namespace. Copying a wildcard private key into
+ * every tenant namespace — which is what Ingress `spec.tls` would require —
+ * would put the platform's key one container escape away from a tenant.
+ */
+export function gatewayTlsSecret(certPem: string, keyPem: string) {
+  return {
+    apiVersion: "v1",
+    kind: "Secret",
+    metadata: { name: "origin-cert", namespace: PAAS_NAMESPACE, labels: ownerLabels() },
+    type: "kubernetes.io/tls",
+    stringData: { "tls.crt": certPem, "tls.key": keyPem },
+  };
+}
+
+/** Traefik file-provider config declaring the default certificate. */
+export function gatewayTlsConfigMap() {
+  return {
+    apiVersion: "v1",
+    kind: "ConfigMap",
+    metadata: { name: "traefik-tls", namespace: PAAS_NAMESPACE, labels: ownerLabels() },
+    data: {
+      "tls.yml": [
+        "tls:",
+        "  stores:",
+        "    default:",
+        "      defaultCertificate:",
+        "        certFile: /certs/tls.crt",
+        "        keyFile: /certs/tls.key",
+        "",
+      ].join("\n"),
+    },
+  };
+}
+
+export function gatewayIngressClass() {
+  return {
+    apiVersion: "networking.k8s.io/v1",
+    kind: "IngressClass",
+    metadata: {
+      name: "ahura",
+      labels: ownerLabels(),
+      annotations: { "ingressclass.kubernetes.io/is-default-class": "true" },
+    },
+    spec: { controller: "traefik.io/ingress-controller" },
+  };
+}
+
+export function gatewayDeployment(replicas = 1) {
+  return {
+    apiVersion: "apps/v1",
+    kind: "Deployment",
+    metadata: {
+      name: NAME,
+      namespace: PAAS_NAMESPACE,
+      labels: ownerLabels({ "ahura.cloud/component": "gateway" }),
+    },
+    spec: {
+      replicas,
+      selector: { matchLabels: { "ahura.cloud/component": "gateway" } },
+      template: {
+        metadata: { labels: ownerLabels({ "ahura.cloud/component": "gateway" }) },
+        spec: {
+          serviceAccountName: NAME,
+          // Platform component: system pool only, never the tenant pool.
+          nodeSelector: { "ahura.cloud/pool": "system" },
+          securityContext: { runAsNonRoot: true, runAsUser: 65532, fsGroup: 65532 },
+          containers: [
+            {
+              name: NAME,
+              image: "traefik:v3.2",
+              args: [
+                "--global.checknewversion=false",
+                "--global.sendanonymoususage=false",
+                "--ping=true",
+                "--log.level=INFO",
+                "--accesslog=true",
+                "--entrypoints.web.address=:8000",
+                "--entrypoints.websecure.address=:8443",
+                // Terminate TLS on websecure using the default certificate store.
+                // Without it an Ingress carrying no spec.tls produces a router
+                // with no TLS config, so :443 connects and then 404s while :80
+                // serves correctly — which is exactly what happened here.
+                "--entrypoints.websecure.http.tls=true",
+                // Watch Ingress objects across every namespace, restricted to
+                // our own IngressClass so we never hijack another controller's.
+                "--providers.kubernetesingress=true",
+                "--providers.kubernetesingress.ingressclass=ahura",
+                "--providers.kubernetesingress.allowemptyservices=true",
+                // Declares the default certificate. Without it Traefik serves a
+                // self-signed cert and Cloudflare Full (Strict) returns 526.
+                "--providers.file.directory=/config",
+                "--providers.file.watch=true",
+              ],
+              ports: [
+                { name: "web", containerPort: 8000 },
+                { name: "websecure", containerPort: 8443 },
+                { name: "ping", containerPort: 8080 },
+              ],
+              readinessProbe: { httpGet: { path: "/ping", port: 8080 }, initialDelaySeconds: 3, periodSeconds: 5 },
+              livenessProbe: { httpGet: { path: "/ping", port: 8080 }, initialDelaySeconds: 10, periodSeconds: 20 },
+              resources: { requests: { cpu: "100m", memory: "128Mi" }, limits: { cpu: "1", memory: "512Mi" } },
+              securityContext: {
+                allowPrivilegeEscalation: false,
+                readOnlyRootFilesystem: true,
+                capabilities: { drop: ["ALL"] },
+              },
+              volumeMounts: [
+                { name: "tmp", mountPath: "/tmp" },
+                { name: "certs", mountPath: "/certs", readOnly: true },
+                { name: "config", mountPath: "/config", readOnly: true },
+              ],
+            },
+          ],
+          volumes: [
+            { name: "tmp", emptyDir: {} },
+            { name: "certs", secret: { secretName: "origin-cert" } },
+            { name: "config", configMap: { name: "traefik-tls" } },
+          ],
+        },
+      },
+    },
+  };
+}
+
+/**
+ * LoadBalancer Service. Linode's cloud controller turns this into a
+ * NodeBalancer with a public IP, which is what wildcard DNS eventually points
+ * at — and crucially it is a stable address that survives node replacement.
+ * v1 pointed customer DNS at one hardcoded node IP, so it could never move,
+ * scale or fail over.
+ */
+export function gatewayService() {
+  return {
+    apiVersion: "v1",
+    kind: "Service",
+    metadata: {
+      name: NAME,
+      namespace: PAAS_NAMESPACE,
+      labels: ownerLabels({ "ahura.cloud/component": "gateway" }),
+      annotations: {
+        "service.beta.kubernetes.io/linode-loadbalancer-throttle": "0",
+        // TCP passthrough on every port. Linode's cloud controller otherwise
+        // treats 443 as HTTPS and expects a certificate ON THE NODEBALANCER,
+        // which we do not want: TLS must terminate at Traefik so it can select
+        // the origin certificate and route by SNI/Host. Observed symptom
+        // without this: port 80 serves correctly while 443 refuses the
+        // connection outright and Cloudflare reports HTTP 525.
+        "service.beta.kubernetes.io/linode-loadbalancer-default-protocol": "tcp",
+      },
+    },
+    spec: {
+      type: "LoadBalancer",
+      selector: { "ahura.cloud/component": "gateway" },
+      ports: [
+        { name: "http", port: 80, targetPort: 8000, protocol: "TCP" },
+        { name: "https", port: 443, targetPort: 8443, protocol: "TCP" },
+      ],
+      externalTrafficPolicy: "Cluster",
+    },
+  };
+}
+
+/**
+ * Route one hostname to one project's Service.
+ *
+ * The Ingress is named for the ALIAS, not the deployment: promotion and
+ * rollback move `aliases.deployment_id` and repoint the Service selector, so
+ * the routing object itself never changes. That is what makes both operations
+ * a single write with no rebuild.
+ */
+export function appIngress(i: {
+  aliasRef: string;
+  projectRef: string;
+  namespace: string;
+  hostname: string;
+}) {
+  return {
+    apiVersion: "networking.k8s.io/v1",
+    kind: "Ingress",
+    metadata: {
+      name: i.aliasRef,
+      namespace: i.namespace,
+      labels: ownerLabels({ "ahura.cloud/project": i.projectRef, "ahura.cloud/alias": i.aliasRef }),
+    },
+    spec: {
+      ingressClassName: "ahura",
+      // An empty TLS entry means "serve this over TLS using the DEFAULT
+      // certificate store". Naming a secret here would instead require the
+      // platform's wildcard private key to be copied into every tenant
+      // namespace, putting it one container escape away from a tenant.
+      //
+      // Without any tls block the router is created without TLS, so :443
+      // connects and then 404s while :80 serves correctly — observed exactly
+      // that before adding this.
+      tls: [{}],
+      rules: [
+        {
+          host: i.hostname,
+          http: {
+            paths: [
+              {
+                path: "/",
+                pathType: "Prefix",
+                backend: { service: { name: i.projectRef, port: { number: 80 } } },
+              },
+            ],
+          },
+        },
+      ],
+    },
+  };
+}
