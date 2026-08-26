@@ -29,6 +29,7 @@
  */
 
 import { reconcileProjectByRef } from "@/lib/paas/reconciler.ts";
+import { isPlaceholderSha } from "../../../_lib/deployments";
 import { getCaller } from "../../../_lib/auth";
 import {
   json,
@@ -52,7 +53,18 @@ interface AliasRow {
   deployments?: {
     ref: string;
     state: string;
-    git_sha: string;
+    /**
+     * NULLABLE, and this route used to type it `string`.
+     *
+     * The trigger route inserts git_sha: null deliberately — the build
+     * resolves the real commit and a placeholder would put another
+     * indistinguishable row in the list. So every redeploy has a null sha
+     * between being queued and being built, and an alias pointed at one made
+     * toAliasDto throw "Cannot read properties of null (reading 'slice')".
+     * That is the same crash that took down the deployment list, in a second
+     * serializer, reached by a different path.
+     */
+    git_sha: string | null;
     git_ref: string;
     ready_at: string | null;
   } | null;
@@ -62,21 +74,35 @@ const ALIAS_COLUMNS =
   "ref, hostname, kind, updated_at, " +
   "deployments:deployment_id (ref, state, git_sha, git_ref, ready_at)";
 
+/**
+ * The placeholder rule is IMPORTED, not restated.
+ *
+ * This route reimplemented `git_sha.slice(0, 7)` beside a copy of the row
+ * shape, and the copy was wrong. deployments.ts already owns what a
+ * meaningless sha is — null, all zeroes, or not hex — and already decides
+ * what to show instead. A second implementation of that is how the two drift,
+ * which is exactly what happened here.
+ */
 function toAliasDto(row: AliasRow) {
+  const d = row.deployments;
+  const placeholder = d ? isPlaceholderSha(d.git_sha) : true;
   return {
     ref: row.ref,
     hostname: row.hostname,
     url: `https://${row.hostname}`,
     kind: row.kind,
     updatedAt: row.updated_at,
-    serving: row.deployments
+    serving: d
       ? {
-          ref: row.deployments.ref,
-          state: row.deployments.state,
-          sha: row.deployments.git_sha,
-          shortSha: row.deployments.git_sha.slice(0, 7),
-          gitRef: row.deployments.git_ref,
-          readyAt: row.deployments.ready_at,
+          ref: d.ref,
+          state: d.state,
+          sha: d.git_sha,
+          shortSha: d.git_sha === null ? "" : d.git_sha.slice(0, 7),
+          /** Safe to render. Falls back to the ref, never to an empty cell. */
+          label: placeholder || d.git_sha === null ? d.ref : d.git_sha.slice(0, 7),
+          isPlaceholder: placeholder,
+          gitRef: d.git_ref,
+          readyAt: d.ready_at,
         }
       : null,
   };

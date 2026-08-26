@@ -14,6 +14,7 @@ import { getCaller } from "@/app/api/v2/_lib/auth";
 import {
   DEPLOYMENT_COLUMNS,
   toDeploymentDto,
+  isPlaceholderSha,
   type DeploymentRow,
 } from "@/app/api/v2/_lib/deployments";
 import { Notice, Empty } from "@/components/v2/notice";
@@ -37,7 +38,8 @@ interface AliasRow {
   ref: string;
   hostname: string;
   kind: string;
-  deployments: { ref: string; git_sha: string; state: string } | null;
+  // git_sha is NULLABLE. Typed `string` here, this compiled and crashed.
+  deployments: { ref: string; git_sha: string | null; state: string } | null;
 }
 
 export default async function ProjectPage({ params }: Params) {
@@ -247,7 +249,16 @@ export default async function ProjectPage({ params }: Params) {
                       href={`/dashboard/v2/deployments/${alias.deployments.ref}`}
                       className="font-mono text-white/70 hover:text-white"
                     >
-                      {alias.deployments.git_sha.slice(0, 7)}
+                      {/*
+                        git_sha is null for any redeploy that has not built
+                        yet. Rendering it unguarded here crashed the WHOLE
+                        project page, not one cell — this is a server
+                        component, so the throw escapes the row. Falls back to
+                        the ref, which is always present and always clickable.
+                      */}
+                      {isPlaceholderSha(alias.deployments.git_sha)
+                        ? alias.deployments.ref
+                        : alias.deployments.git_sha!.slice(0, 7)}
                     </Link>
                   ) : (
                     <span className="text-white/30">nothing assigned</span>
