@@ -131,9 +131,11 @@ behavioural tests replaying confirmed v1 criticals.
   rather than to us. **Certificates are blocked**: Cloudflare for SaaS returns
   `code 1404: No quota has been allocated for this zone`. *User action —*
   SSL/TLS → Custom Hostnames.
-- **Preview deployments: policy decided, half built.** Free, 48h from last push,
-  Starter-sized, always 1 instance. Hostname minting is done (`previewLabel`);
-  `shouldDeploy` still refuses non-production branches, and nothing reaps at 48h.
+- **Preview deployments: decided and mostly built.** Free, 48h from last push,
+  Starter-sized, always 1 instance. Hostnames mint (`previewLabel`),
+  `shouldDeploy` returns a `kind`, and `shouldReap`/`planReap` decide lifetime.
+  **Not yet wired:** the build worker does not act on `kind` — a preview push
+  still builds as production — and no scheduled sweep calls the reaper.
 - **Build logs are not surfaced to users.**
 
 ### Economics
