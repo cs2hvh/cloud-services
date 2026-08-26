@@ -157,6 +157,27 @@ This is where the design lives or dies, and where all three proposals were weake
 
 **Always-on, one pod per app** (what v1's model implies):
 
+> ⚠️ **SUPERSEDED. The numbers in this section were estimated, and measurement
+> corrected them by ~19% in the expensive direction.
+> [`05-pricing.md`](05-pricing.md) §2 is authoritative; this is kept for the
+> reasoning, not the figures.**
+>
+> What was wrong, specifically: **"~65 tenant pods/node" on the 32 GB dedicated
+> shape is really 42.** The kubelet's own reservation — 24.5% of a node,
+> measured — was never counted, and the gVisor sandbox charge was assumed at
+> 30 MB when the RuntimeClass declares 128Mi.
+>
+> The shape preference below is also void. "The 32 GB shape beats the 64 GB by
+> ~15%/pod because RAM binds before the 110-pod cap" stops being true once the
+> sandbox charge is counted: RAM binds on *every* shape, so that reasoning
+> selects nothing, and the proportionally larger kubelet reservation makes the
+> smaller node worse. `g6-standard-16` is cheapest per pod.
+>
+> The lesson, from `cloud-app-v2-e6`: **the sentences that go stale are the ones
+> asserting a STATE rather than a RULE.** "65 pods/node" is a state and rotted in
+> a day. "The transitive closure is the credential surface" is a rule and has
+> not.
+
 - Linode Dedicated 32GB/16vCPU (Mumbai): **$288/mo**, ~65 tenant pods/node after
   system overhead. (The 32GB shape beats the 64GB by ~15%/pod: on it RAM binds before
   kubelet's 110-pod cap.)
