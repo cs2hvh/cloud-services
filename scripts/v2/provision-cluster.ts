@@ -4,8 +4,8 @@
  * IDEMPOTENT: if a cluster tagged `ahura-v2` already exists in the target
  * region it is reused, never duplicated. Safe to re-run.
  *
- *   node --env-file=.env.local scripts/v2/provision-cluster.ts          # plan only
- *   node --env-file=.env.local scripts/v2/provision-cluster.ts --apply  # create
+ *   node --env-file=.env --env-file=.env.local scripts/v2/provision-cluster.ts          # plan only
+ *   node --env-file=.env --env-file=.env.local scripts/v2/provision-cluster.ts --apply  # create
  *
  * Two node pools, because the isolation model depends on separating them:
  *
@@ -26,6 +26,7 @@
 
 import { lke, regions, instances, LinodeError } from "../../lib/paas/linode/client.ts";
 import { paasConfig } from "../../lib/paas/config.ts";
+import { clusters, db } from "../../lib/paas/db.ts";
 
 const APPLY = process.argv.includes("--apply");
 const TAG = "ahura-v2";
@@ -66,6 +67,17 @@ const MONTHLY = 48 * PLAN.node_pools.reduce((n, p) => n + p.count, 0);
 async function main() {
   console.log("\nv2 cluster provisioning\n" + "─".repeat(72));
 
+  // Refuse to create billable infrastructure we cannot record. Provisioning
+  // that cannot write its own row is how a cluster ends up running with nothing
+  // tracking it.
+  if (!(await db.reachable())) {
+    throw new Error(
+      "paas schema is not reachable — refusing to provision. " +
+        "Infrastructure must be recorded before it is created.",
+    );
+  }
+  console.log("database    paas schema reachable");
+
   // Refuse to build on a region that cannot do what the architecture needs.
   await regions.assertCapable(REGION, ["Kubernetes", "VPCs", "NodeBalancers"]);
   console.log(`region        ${REGION} — Kubernetes, VPCs, NodeBalancers all present`);
@@ -86,6 +98,20 @@ async function main() {
     for (const p of pools) {
       console.log(`  pool ${p.id}  ${p.type} x${p.count}  labels=${JSON.stringify(p.labels ?? {})}`);
     }
+
+    // Backfill. This cluster was created before provisioning recorded anything,
+    // so the row is missing and the control plane does not know it exists.
+    // Reconcile rather than leaving the gap open.
+    const row = await clusters.byLkeId(c.id).catch(() => null);
+    if (!row) {
+      const reserved = await clusters.reserve({ name: c.label, region: c.region, podCapacity: 1000 });
+      await clusters.attach(reserved.ref, c.id, c.k8s_version);
+      await clusters.markReady(reserved.ref);
+      console.log(`  BACKFILLED paas.clusters row ${reserved.ref} for existing cluster ${c.id}`);
+    } else {
+      console.log(`  recorded as ${row.ref} (state=${row.state})`);
+    }
+
     // The kubeconfig appears minutes after the cluster row does, so a re-run
     // has to be able to pick it up rather than assuming provisioning failed.
     await waitForKubeconfig(c.id);
@@ -108,11 +134,30 @@ async function main() {
     return;
   }
 
-  console.log("\nCreating…");
-  const cluster = await lke.createCluster(PLAN);
-  console.log(`Created cluster id=${cluster.id} label=${cluster.label}`);
+  // RECORD BEFORE CREATE. A row with no lke_cluster_id is visible and harmless;
+  // a cluster with no row is ~$116/month that nothing is tracking. The first
+  // version of this script created the cluster and recorded nothing, and a peer
+  // session had to catch it.
+  const reserved = await clusters.reserve({
+    name: PLAN.label,
+    region: PLAN.region,
+    podCapacity: 1000,
+  });
+  console.log(`\nReserved paas.clusters row ${reserved.ref}`);
+
+  console.log("Creating…");
+  let cluster;
+  try {
+    cluster = await lke.createCluster(PLAN);
+  } catch (e) {
+    await clusters.markRetired(reserved.ref).catch(() => {});
+    throw e;
+  }
+  await clusters.attach(reserved.ref, cluster.id, cluster.k8s_version).catch(() => {});
+  console.log(`Created cluster id=${cluster.id} label=${cluster.label}, recorded as ${reserved.ref}`);
 
   await waitForKubeconfig(cluster.id);
+  await clusters.markReady(reserved.ref).catch(() => {});
 }
 
 /**

@@ -1,7 +1,7 @@
 /**
  * Install the platform layer into the v2 cluster.
  *
- *   node --env-file=.env.local scripts/v2/bootstrap-cluster.ts [--apply]
+ *   node --env-file=.env --env-file=.env.local scripts/v2/bootstrap-cluster.ts [--apply]
  *
  * Idempotent: everything is applied with Server-Side Apply, so re-running
  * converges rather than duplicating.

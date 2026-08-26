@@ -1,7 +1,7 @@
 /**
  * Install the edge gateway and report the public address it lands on.
  *
- *   node --env-file=.env.local scripts/v2/install-gateway.ts [--apply]
+ *   node --env-file=.env --env-file=.env.local scripts/v2/install-gateway.ts [--apply]
  *
  * Creates a Linode NodeBalancer (~$10/month) via a LoadBalancer Service.
  */

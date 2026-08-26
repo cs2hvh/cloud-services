@@ -33,6 +33,7 @@ import { randomBytes } from "node:crypto";
 import { instances, type Instance } from "../linode/client.ts";
 import { presign, r2Keys, getObject } from "./r2.ts";
 import { paasConfig } from "../config.ts";
+import { buildVms } from "../db.ts";
 
 /** Tag on every build VM, so orphans are findable even with no DB record. */
 export const BUILD_VM_TAG = "ahura-v2-build";
@@ -227,6 +228,8 @@ export interface LeasedVm {
   linodeId: number;
   label: string;
   expiresAt: Date;
+  /** Row in paas.build_vms. Present unless recording was explicitly skipped. */
+  ref?: string;
 }
 
 /**
@@ -234,7 +237,25 @@ export interface LeasedVm {
  * the control plane forgets it exists — which is exactly the failure that
  * leaked an instance during credential verification.
  */
-export async function leaseBuildVm(req: BuildRequest): Promise<LeasedVm> {
+export async function leaseBuildVm(req: BuildRequest, opts: { record?: boolean } = {}): Promise<LeasedVm> {
+  const record = opts.record !== false;
+  const expiresAt = new Date(Date.now() + BUILD_TIMEOUT_MS);
+
+  // RECORD BEFORE CREATE. A row with no linode_id is harmless and reapable; a
+  // Linode with no row is money nobody knows about. The first version of this
+  // function created instances and recorded nothing, which is exactly the
+  // failure mode that left five orphaned billing meters in v1.
+  let vmRef: string | undefined;
+  if (record) {
+    const row = await buildVms.reserve({
+      region: paasConfig.linode.region(),
+      instanceType: BUILD_VM_TYPE,
+      expiresAt,
+      deploymentId: null,
+    });
+    vmRef = row.ref;
+  }
+
   const urls = {
     imagePut: presign("PUT", r2Keys.imageTar(req.deploymentRef), 3600),
     logPut: presign("PUT", r2Keys.buildLog(req.deploymentRef), 3600),
@@ -244,24 +265,39 @@ export async function leaseBuildVm(req: BuildRequest): Promise<LeasedVm> {
   const userData = Buffer.from(renderCloudInit(req, urls), "utf8").toString("base64");
   const label = `bld-${req.deploymentRef.replace(/[^a-zA-Z0-9-]/g, "").slice(0, 24)}`;
 
-  const instance: Instance = await instances.create({
-    region: paasConfig.linode.region(),
-    type: BUILD_VM_TYPE,
-    label,
-    image: "linode/ubuntu24.04",
-    // Long random password, never used: no SSH key is installed and the VM is
-    // destroyed within minutes.
-    root_pass: `${randomBytes(24).toString("base64url")}Aa1!`,
-    booted: true,
-    tags: [BUILD_VM_TAG, `dpl:${req.deploymentRef}`],
-    metadata: { user_data: userData },
-    private_ip: false,
-  });
+  let instance: Instance;
+  try {
+    instance = await instances.create({
+      region: paasConfig.linode.region(),
+      type: BUILD_VM_TYPE,
+      label,
+      image: "linode/ubuntu24.04",
+      // Long random password, never used: no SSH key is installed and the VM is
+      // destroyed within minutes.
+      root_pass: `${randomBytes(24).toString("base64url")}Aa1!`,
+      booted: true,
+      // The tag is the reaper's index. It must be here even though the row
+      // exists, because the reaper has to work when the database is unreachable.
+      tags: [BUILD_VM_TAG, `dpl:${req.deploymentRef}`],
+      metadata: { user_data: userData },
+      private_ip: false,
+    });
+  } catch (e) {
+    if (vmRef) await buildVms.setState(vmRef, "leaked", (e as Error).message).catch(() => {});
+    throw e;
+  }
+
+  if (vmRef) {
+    // If this write fails the instance still carries BUILD_VM_TAG, so the
+    // tag-driven reaper catches it regardless. Two independent safety nets.
+    await buildVms.attach(vmRef, instance.id).catch(() => {});
+  }
 
   return {
     linodeId: instance.id,
     label: instance.label,
-    expiresAt: new Date(Date.now() + BUILD_TIMEOUT_MS),
+    expiresAt,
+    ref: vmRef,
   };
 }
 
@@ -290,8 +326,12 @@ export async function pollBuildResult(
   return null;
 }
 
-export async function destroyBuildVm(linodeId: number): Promise<void> {
+export async function destroyBuildVm(linodeId: number, ref?: string): Promise<void> {
   await instances.delete(linodeId);
+  // Closing the row is best-effort: the instance is already gone, so a failure
+  // here costs nothing but an inaccurate record, and throwing would make a
+  // successful teardown look like a failure.
+  if (ref) await buildVms.setState(ref, "destroyed").catch(() => {});
 }
 
 /**
@@ -303,20 +343,47 @@ export async function destroyBuildVm(linodeId: number): Promise<void> {
  */
 export async function reapExpiredBuildVms(
   maxAgeMs = BUILD_TIMEOUT_MS,
-): Promise<Array<{ linodeId: number; label: string; ageMs: number }>> {
+): Promise<Array<{ linodeId: number; label: string; ageMs: number; hadRow: boolean }>> {
   const all = await instances.listByTag(BUILD_VM_TAG);
   const now = Date.now();
-  const reaped: Array<{ linodeId: number; label: string; ageMs: number }> = [];
+  const reaped: Array<{ linodeId: number; label: string; ageMs: number; hadRow: boolean }> = [];
+
+  // Best-effort: the reap must still work when the database is unreachable,
+  // which is the whole reason it keys on the Linode tag rather than on rows.
+  let rowsByLinodeId = new Map<number, string>();
+  try {
+    const live = await buildVms.live();
+    rowsByLinodeId = new Map(live.filter((r) => r.linode_id != null).map((r) => [r.linode_id!, r.ref]));
+  } catch {
+    // Carry on tag-only.
+  }
 
   for (const vm of all) {
     const age = now - new Date(vm.created).getTime();
     if (age <= maxAgeMs) continue;
+    const ref = rowsByLinodeId.get(vm.id);
     try {
       await instances.delete(vm.id);
-      reaped.push({ linodeId: vm.id, label: vm.label, ageMs: age });
+      if (ref) await buildVms.setState(ref, "destroyed").catch(() => {});
+      reaped.push({ linodeId: vm.id, label: vm.label, ageMs: age, hadRow: Boolean(ref) });
     } catch {
       // Leave it for the next sweep rather than aborting the whole reap.
     }
   }
+
+  // Rows past their deadline whose instance is already gone are closed out, so
+  // an abandoned reservation does not look like a live VM forever.
+  try {
+    const liveIds = new Set(all.map((i) => i.id));
+    for (const row of await buildVms.expired()) {
+      if (row.linode_id != null && liveIds.has(row.linode_id)) continue;
+      await buildVms
+        .setState(row.ref, "destroyed", "expired with no matching instance")
+        .catch(() => {});
+    }
+  } catch {
+    // Non-fatal.
+  }
+
   return reaped;
 }

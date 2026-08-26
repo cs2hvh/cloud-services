@@ -1,7 +1,7 @@
 /**
  * End-to-end build proof, against a real public repository.
  *
- *   node --env-file=.env.local scripts/v2/build-e2e.ts <owner/repo> [--apply]
+ *   node --env-file=.env --env-file=.env.local scripts/v2/build-e2e.ts <owner/repo> [--apply]
  *
  * Without --apply it prints the plan and the rendered cloud-init and spends
  * nothing. With --apply it leases a real Linode, builds, uploads an OCI tarball
@@ -155,7 +155,7 @@ try {
   // The VM is destroyed whether the build succeeded, failed or timed out.
   // Nothing is left running on any path out of this block.
   console.log(`\n── destroying VM ${vm.linodeId} ──`);
-  await destroyBuildVm(vm.linodeId).catch((e) => console.log(`  destroy failed: ${(e as Error).message}`));
+  await destroyBuildVm(vm.linodeId, vm.ref).catch((e) => console.log(`  destroy failed: ${(e as Error).message}`));
 }
 
 // ── 6. report ───────────────────────────────────────────────────────────────

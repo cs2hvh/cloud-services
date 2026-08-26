@@ -1,10 +1,10 @@
 /**
  * Full pipeline proof: repository -> build -> publish -> run in Kubernetes.
  *
- *   node --env-file=.env.local scripts/v2/deploy-e2e.ts <owner/repo> [--apply] [--skip-build]
+ *   node --env-file=.env --env-file=.env.local scripts/v2/deploy-e2e.ts <owner/repo> [--apply] [--skip-build]
  *
  * --skip-build reuses an already-uploaded artifact by deployment ref:
- *   node --env-file=.env.local scripts/v2/deploy-e2e.ts <repo> --apply --ref dpl_xxx
+ *   node --env-file=.env --env-file=.env.local scripts/v2/deploy-e2e.ts <repo> --apply --ref dpl_xxx
  */
 
 import { detectFramework, detectPackageManager, DETECTION_FILES, type RepoFiles } from "../../lib/paas/build/detect.ts";
@@ -100,7 +100,7 @@ if (!reuseRef) {
     });
     console.log("");
   } finally {
-    await destroyBuildVm(vm.linodeId).catch(() => {});
+    await destroyBuildVm(vm.linodeId, vm.ref).catch(() => {});
     console.log(`      linode ${vm.linodeId} destroyed`);
   }
   if (!result || result.status !== "success") {

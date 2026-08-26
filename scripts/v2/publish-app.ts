@@ -1,7 +1,7 @@
 /**
  * Give a running app a public hostname: create the Ingress and the DNS record.
  *
- *   node --env-file=.env.local scripts/v2/publish-app.ts <projectRef> <label> [--apply]
+ *   node --env-file=.env --env-file=.env.local scripts/v2/publish-app.ts <projectRef> <label> [--apply]
  *
  * e.g.  publish-app.ts prj-node-js-getting-started v2-express --apply
  *       -> https://v2-express.ahurasense.com

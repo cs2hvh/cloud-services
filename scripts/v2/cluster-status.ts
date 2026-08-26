@@ -1,7 +1,7 @@
 /**
  * Report the live state of the v2 cluster, straight from the Kubernetes API.
  *
- *   node --env-file=.env.local scripts/v2/cluster-status.ts
+ *   node --env-file=.env --env-file=.env.local scripts/v2/cluster-status.ts
  */
 
 import { loadKubeconfig, kube, nodeIsReady } from "../../lib/paas/k8s/client.ts";

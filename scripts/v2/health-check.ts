@@ -5,7 +5,7 @@
  * deletes. Run it before any deploy work to prove the platform's credentials
  * and assumptions still hold:
  *
- *   node --env-file=.env.local scripts/v2/health-check.ts
+ *   node --env-file=.env --env-file=.env.local scripts/v2/health-check.ts
  */
 
 import { getAppMetadata, listInstallations } from "../../lib/paas/github/app.ts";

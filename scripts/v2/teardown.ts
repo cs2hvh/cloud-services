@@ -2,8 +2,8 @@
  * Destroy everything v2 created on Linode, and report the exact hourly cost
  * of whatever is still running.
  *
- *   node --env-file=.env.local scripts/v2/teardown.ts            # report only
- *   node --env-file=.env.local scripts/v2/teardown.ts --apply    # destroy
+ *   node --env-file=.env --env-file=.env.local scripts/v2/teardown.ts            # report only
+ *   node --env-file=.env --env-file=.env.local scripts/v2/teardown.ts --apply    # destroy
  *
  * Deliberately keys on the Linode API rather than on the paas tables. A
  * teardown that trusts the database cannot clean up what the database never

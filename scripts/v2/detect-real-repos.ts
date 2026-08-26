@@ -4,7 +4,7 @@
  * Fixture tests prove the logic; this proves it survives contact with real
  * repository layouts. Uses the anonymous public API (no credentials).
  *
- *   node --env-file=.env.local scripts/v2/detect-real-repos.ts
+ *   node --env-file=.env --env-file=.env.local scripts/v2/detect-real-repos.ts
  */
 
 import { detectFramework, detectPackageManager, DETECTION_FILES, type RepoFiles } from "../../lib/paas/build/detect.ts";
