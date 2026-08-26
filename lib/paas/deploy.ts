@@ -27,6 +27,7 @@ import { PAAS_NAMESPACE, REGISTRY_PUSH, publisherJob } from "./k8s/manifests.ts"
 import { reconcileProject, kubeContextFromEnv } from "./reconciler.ts";
 import { teams, projects, environments, deployments, aliases, type DeploymentRow, type ProjectRow } from "./db.ts";
 import { appHostname } from "./config.ts";
+import { assertLabelAvailable } from "./hostnames.ts";
 import { upsertDnsRecord, listDnsRecords } from "./edge/cloudflare.ts";
 
 const UA = "ahuracloud-deploy-v2";
@@ -343,6 +344,15 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
 
   // ── 4. route ──────────────────────────────────────────────────────────────
   const label = (opts.hostnameLabel ?? `v2-${project.slug}`).slice(0, 40);
+
+  // Refuse names the business already uses. The alias check below only asks
+  // "does another PROJECT hold this?" — it cannot see that `api` and `www` are
+  // live production records in the same zone, because they have no paas.aliases
+  // row. Without this, a tenant could claim the company's own hostname: not a
+  // naming collision but a takeover, and reachable by anyone who can create a
+  // project.
+  assertLabelAvailable(label);
+
   const hostname = appHostname(label);
 
   // Refuse to claim a hostname another project already holds. The unique index
