@@ -46,7 +46,18 @@ export const BUILD_TIMEOUT_MS = 20 * 60_000;
 
 export interface BuildRequest {
   deploymentRef: string;
+  /**
+   * CLEAN clone URL — no embedded credentials. Anything of the form
+   * `https://user:token@host/...` must not appear here: git echoes the remote
+   * URL in its own error output, and this VM tees all output into a log that is
+   * uploaded and served to team members.
+   */
   cloneUrl: string;
+  /**
+   * Private repositories only. Delivered to git through a credential file, not
+   * the URL, so git never has a secret to print.
+   */
+  gitToken?: string | null;
   gitRef: string;
   gitSha: string;
   /** null when the repository supplies its own Dockerfile. */
@@ -85,6 +96,16 @@ const CLOUD_INIT_LINES: string[] = [
   "finish() {",
   "  date -u +%FT%TZ",
   '  echo "=== finishing: status=$STATUS ==="',
+  "  # Belt and braces. The credential-helper approach means git has no secret to",
+  "  # print, but this log is published to team members, so anything that even",
+  "  # LOOKS like a credential is scrubbed before it leaves the VM. Defence in",
+  "  # depth: the source fix is what matters, this is what catches the case we",
+  "  # did not think of.",
+  "  sed -E -i \\",
+  "    -e 's#(https?://)[^/@[:space:]]+:[^/@[:space:]]+@#\\1[REDACTED]@#g' \\",
+  "    -e 's#(x-access-token|ghs_|ghp_|github_pat_)[A-Za-z0-9_]+#\\1[REDACTED]#g' \\",
+  "    -e 's#([?&](X-Amz-Signature|X-Amz-Credential|X-Amz-Security-Token)=)[^&[:space:]]+#\\1[REDACTED]#g' \\",
+  "    /var/log/ahura-build.log 2>/dev/null || true",
   "  # Upload the log first so a failure is always explainable.",
   "  curl -sS -X PUT --data-binary @/var/log/ahura-build.log \\",
   "    -H 'Content-Type: text/plain' '@@LOG_PUT@@' || true",
@@ -118,10 +139,20 @@ const CLOUD_INIT_LINES: string[] = [
   "useradd -m -s /bin/bash builder || true",
   "mkdir -p /home/builder/src && chown -R builder:builder /home/builder",
   "",
-  "# Clone. The URL carries a 1-hour, single-repo, read-only installation token",
-  "# for private repositories, and nothing at all for public ones.",
+  "# Clone.",
+  "#",
+  "# The token goes in a credential FILE, never in the URL. Git echoes the remote",
+  "# URL in its own error output on a failed clone, and this script tees all",
+  "# output into a log that is uploaded to R2 and served to team members — so a",
+  "# token embedded in the URL would be published to everyone on the team by any",
+  "# clone failure. With a credential helper the remote stays clean and git has",
+  "# nothing secret to print.",
   "echo '--- clone ---'",
+  "@@CREDENTIAL_BLOCK@@",
   "sudo -u builder git -c protocol.version=2 clone --depth=1 --branch '@@GIT_REF@@' '@@CLONE_URL@@' /home/builder/src || fail 'git clone failed'",
+  "# The credential is not needed past this point.",
+  "rm -f /home/builder/.git-credentials",
+  "sudo -u builder git config --global --unset credential.helper 2>/dev/null || true",
   "",
   "cd '/home/builder/src@@ROOT_DIR@@' || fail 'root directory not found in repository'",
   "sudo -u builder git rev-parse HEAD",
@@ -192,6 +223,27 @@ export function renderCloudInit(
 
   const rootDir = req.rootDirectory ? `/${req.rootDirectory.replace(/^\/+|\/+$/g, "")}` : "";
 
+  // Refuse to render a URL carrying credentials. This is the class of mistake
+  // that publishes a token to every team member via the build log, so it fails
+  // loudly at render time rather than being cleaned up downstream.
+  if (/^https?:\/\/[^/@\s]+:[^/@\s]+@/.test(req.cloneUrl)) {
+    throw new Error(
+      "[build/vm] cloneUrl contains embedded credentials. Pass a clean URL and use gitToken instead — " +
+        "git echoes the remote URL on failure and the build log is served to team members.",
+    );
+  }
+
+  // The token reaches git via a 0600 credential file. Base64 so it is never a
+  // shell token, and removed immediately after the clone.
+  const credentialBlock = req.gitToken
+    ? [
+        `echo '${b64(`https://x-access-token:${req.gitToken}@github.com\n`)}' | base64 -d > /home/builder/.git-credentials`,
+        "chmod 600 /home/builder/.git-credentials",
+        "chown builder:builder /home/builder/.git-credentials",
+        "sudo -u builder git config --global credential.helper store",
+      ].join("\n")
+    : "# public repository — no credential needed";
+
   const subs: Record<string, string> = {
     "@@REF@@": req.deploymentRef,
     "@@LOG_PUT@@": urls.logPut,
@@ -199,6 +251,7 @@ export function renderCloudInit(
     "@@IMAGE_PUT@@": urls.imagePut,
     "@@GIT_REF@@": req.gitRef,
     "@@CLONE_URL@@": req.cloneUrl,
+    "@@CREDENTIAL_BLOCK@@": credentialBlock,
     "@@ROOT_DIR@@": rootDir,
     "@@DOCKERFILE_BLOCK@@": dockerfileBlock,
     "@@BUILD_ARGS_B64@@": buildArgsB64,
@@ -210,7 +263,7 @@ export function renderCloudInit(
   // fields are already charset-constrained at the database layer, so a quote
   // here means something upstream is wrong.
   for (const [token, value] of Object.entries(subs)) {
-    if (token === "@@DOCKERFILE_BLOCK@@" || token === "@@BUILD_ARGS_B64@@") continue;
+    if (token === "@@DOCKERFILE_BLOCK@@" || token === "@@BUILD_ARGS_B64@@" || token === "@@CREDENTIAL_BLOCK@@") continue;
     if (value.includes("'")) {
       throw new Error(`[build/vm] refusing to render: ${token} contains a single quote`);
     }

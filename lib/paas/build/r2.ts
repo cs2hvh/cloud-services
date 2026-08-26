@@ -98,6 +98,7 @@ function signedHeaders(
   key: string,
   payload: Buffer | string,
   now = new Date(),
+  canonicalQuery = "",
 ): Record<string, string> {
   const c = ctx();
   const { amz, date } = amzDate(now);
@@ -105,7 +106,10 @@ function signedHeaders(
   const path = `/${c.bucket}${key ? `/${encodeKey(key)}` : ""}`;
   const canonicalHeaders = `host:${c.host}\nx-amz-content-sha256:${hash}\nx-amz-date:${amz}\n`;
   const signed = "host;x-amz-content-sha256;x-amz-date";
-  const canonical = [method, path, "", canonicalHeaders, signed, hash].join("\n");
+  // The canonical query is part of what gets signed. Sending a query that was
+  // not signed produces a well-formed request that always 403s — which is how
+  // headBucket failed before, and would break every paginated list.
+  const canonical = [method, path, canonicalQuery, canonicalHeaders, signed, hash].join("\n");
   const scope = `${date}/${REGION}/${SERVICE}/aws4_request`;
   const toSign = [ALGO, amz, scope, sha256Hex(canonical)].join("\n");
   const signature = createHmac("sha256", signingKey(c.secretAccessKey, date)).update(toSign).digest("hex");
@@ -171,3 +175,77 @@ export const r2Keys = {
   buildMeta: (deploymentRef: string) => `builds/${deploymentRef}/meta.json`,
   cachePrefix: (teamRef: string, projectRef: string) => `cache/${teamRef}/${projectRef}`,
 };
+
+/**
+ * List objects under a prefix, following pagination to completion.
+ *
+ * Exists because nothing prunes build artifacts. `r2Keys` writes
+ * `builds/{deploymentRef}/{build.log,image.tar,meta.json}` per deployment, and
+ * image.tar is the whole OCI archive — every deployment ever made is still in
+ * the bucket, billed for, whether or not anything can still reach it. At a
+ * 10k-app target that stops being a rounding error.
+ *
+ * Pagination is NOT optional here: S3 caps a page at 1000 keys, and a truncated
+ * listing under-reports the leak, which is the same class of defect as pricing
+ * an unknown instance type at zero — a number that reads as reassuring exactly
+ * when it is wrong.
+ */
+export async function listObjects(
+  prefix = "",
+  opts: { maxKeys?: number; hardLimit?: number } = {},
+): Promise<Array<{ key: string; size: number; lastModified: string }>> {
+  const c = ctx();
+  const perPage = Math.min(opts.maxKeys ?? 1000, 1000);
+  const hardLimit = opts.hardLimit ?? 100_000;
+  const out: Array<{ key: string; size: number; lastModified: string }> = [];
+  let token: string | undefined;
+
+  do {
+    // SigV4 signs the canonical query string, so the query must be built once
+    // and used for BOTH the signature and the request. Signing a different
+    // query than you send produces a valid-looking request that always 403s.
+    const params = new URLSearchParams({ "list-type": "2", "max-keys": String(perPage) });
+    if (prefix) params.set("prefix", prefix);
+    if (token) params.set("continuation-token", token);
+    const query = [...params.entries()]
+      .map(([k, v]) => [rfc3986(k), rfc3986(v)] as const)
+      .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+      .map(([k, v]) => `${k}=${v}`)
+      .join("&");
+
+    const res = await fetch(`${c.endpoint}/${c.bucket}?${query}`, {
+      headers: signedHeaders("GET", "", "", new Date(), query),
+    });
+    if (!res.ok) {
+      throw new Error(`[r2] list ${prefix} -> ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    }
+    const xml = await res.text();
+
+    for (const m of xml.matchAll(/<Contents>([\s\S]*?)<\/Contents>/g)) {
+      const block = m[1];
+      const key = block.match(/<Key>([\s\S]*?)<\/Key>/)?.[1];
+      if (!key) continue;
+      out.push({
+        key,
+        size: Number(block.match(/<Size>(\d+)<\/Size>/)?.[1] ?? 0),
+        lastModified: block.match(/<LastModified>([\s\S]*?)<\/LastModified>/)?.[1] ?? "",
+      });
+    }
+
+    const truncated = /<IsTruncated>true<\/IsTruncated>/.test(xml);
+    token = truncated
+      ? xml.match(/<NextContinuationToken>([\s\S]*?)<\/NextContinuationToken>/)?.[1]
+      : undefined;
+
+    // Refuse to loop forever on a bucket that keeps growing under us, and say
+    // so rather than returning a silently partial list.
+    if (out.length >= hardLimit && token) {
+      throw new Error(
+        `[r2] listing "${prefix}" exceeded ${hardLimit} objects and is still truncated — ` +
+          `narrow the prefix rather than trusting a partial result`,
+      );
+    }
+  } while (token);
+
+  return out;
+}

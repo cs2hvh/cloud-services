@@ -77,7 +77,11 @@ export async function buildCloneUrl(
     readContentsOnly: true,
   });
   return {
-    cloneUrl: `https://x-access-token:${token}@github.com/${repo.full_name}.git`,
+    // CLEAN url. The token is returned separately and delivered to git via a
+    // credential file — embedding it here would publish it to every team member
+    // the first time a clone fails, because git echoes the remote URL and the
+    // build log is uploaded and served.
+    cloneUrl: `https://github.com/${repo.full_name}.git`,
     token,
     expiresAt: expires_at,
   };
