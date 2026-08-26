@@ -181,6 +181,16 @@ export function gatewayDeployment(replicas = 1) {
                 "--providers.kubernetesingress=true",
                 "--providers.kubernetesingress.ingressclass=ahura",
                 "--providers.kubernetesingress.allowemptyservices=true",
+                // Required so a sleeping app's Ingress can reach the activator,
+                // which lives in the platform namespace while the Ingress lives
+                // in the tenant's. An Ingress backend is namespace-local, so the
+                // tenant namespace gets an ExternalName Service pointing at it.
+                //
+                // Off by default because an ExternalName aimed somewhere hostile
+                // is an SSRF primitive. Safe here because tenants cannot create
+                // Services or Ingresses — every one is written by the reconciler
+                // and every ExternalName target is one hardcoded in-cluster name.
+                "--providers.kubernetesingress.allowexternalnameservices=true",
                 // Declares the default certificate. Without it Traefik serves a
                 // self-signed cert and Cloudflare Full (Strict) returns 526.
                 "--providers.file.directory=/config",
@@ -294,6 +304,17 @@ export function appIngress(i: {
    * database says it serves, rather than whatever production points at.
    */
   serviceName?: string;
+  /**
+   * Set while the app is ASLEEP: names the deployment the activator should wake
+   * when a request arrives for this hostname.
+   *
+   * It lives on the Ingress because that is the only object the activator can
+   * reach from a bare Host header — it has no database credential, and giving
+   * the most externally-reachable component in the platform one would be a poor
+   * trade for saving an annotation.
+   */
+  wakeTarget?: string;
+  wakePort?: number;
 }) {
   return {
     apiVersion: "networking.k8s.io/v1",
@@ -302,6 +323,21 @@ export function appIngress(i: {
       name: i.aliasRef,
       namespace: i.namespace,
       labels: ownerLabels({ "ahura.cloud/project": i.projectRef, "ahura.cloud/alias": i.aliasRef }),
+      // OMITTED when awake, not set to null. Under Server-Side Apply, dropping
+      // a field this manager owns removes it — whereas a null serialises into
+      // an empty-string annotation, and an empty string is a value that looks
+      // like data. Same smell as the '0000000' git sha.
+      //
+      // A stale wake target is not harmless either: it is what the activator
+      // would act on if a request ever reached it again.
+      ...(i.wakeTarget
+        ? {
+            annotations: {
+              "ahura.cloud/wake-target": i.wakeTarget,
+              ...(i.wakePort != null ? { "ahura.cloud/wake-port": String(i.wakePort) } : {}),
+            },
+          }
+        : {}),
     },
     spec: {
       ingressClassName: "ahura",

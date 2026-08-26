@@ -247,6 +247,8 @@ export interface DeploymentRow {
   error_code: string | null; error_message: string | null;
   container_port: number | null; run_as_user: number | null;
   queued_at: string; started_at: string | null; ready_at: string | null;
+  /** Non-null means asleep ON PURPOSE — the reconciler must not scale it up. */
+  scaled_to_zero_at: string | null;
 }
 export interface AliasRow {
   id: string; ref: string; project_id: string; hostname: string;
@@ -339,6 +341,14 @@ export const deployments = {
       ...(facts.containerPort != null ? { container_port: facts.containerPort } : {}),
       ...(facts.runAsUser != null ? { run_as_user: facts.runAsUser } : {}),
     }))[0],
+
+  /**
+   * Clear the sleep flag. Called when the reconciler observes that the
+   * activator woke this deployment — the activator itself has no database
+   * credential, by design.
+   */
+  clearSleep: async (ref: string) =>
+    (await db.update<DeploymentRow>("deployments", `ref=eq.${ref}`, { scaled_to_zero_at: null }))[0],
 
   /** Queued deployments oldest first — the build worker's work list. */
   queued: (limit = 10) =>

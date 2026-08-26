@@ -37,6 +37,7 @@ import {
   envSecret,
   envSecretName,
 } from "./k8s/manifests.ts";
+import { ACTIVATOR_NAME, activatorAliasService } from "./k8s/activator.ts";
 import { appIngress } from "./k8s/gateway.ts";
 import { projects, deployments, aliases, envVars, type ProjectRow, type DeploymentRow, type AliasRow } from "./db.ts";
 import { decryptEnvValue, pgHexToBytes } from "./secrets.ts";
@@ -97,6 +98,19 @@ async function liveDeployment(
     envSecret: c?.envFrom?.[0]?.secretRef?.name ?? null,
     envHash: dep.spec?.template?.metadata?.annotations?.["ahura.cloud/env-hash"] ?? null,
   };
+}
+
+async function deploymentAnnotation(
+  k: ReturnType<typeof kube>,
+  ns: string,
+  name: string,
+  key: string,
+): Promise<string | null> {
+  const d = await k.get<{ metadata?: { annotations?: Record<string, string> } }>(
+    `/apis/apps/v1/namespaces/${ns}/deployments/${name}`,
+    true,
+  );
+  return d?.metadata?.annotations?.[key] ?? null;
 }
 
 async function scale(
@@ -250,6 +264,48 @@ export async function reconcileProject(
     // desired state. Splitting them was what let a running deployment keep a
     // stale spec: the scale-up path never re-applied the manifest, so an app
     // resurrected by a rollback came back with whatever envFrom it had before.
+    // ASLEEP ON PURPOSE. A deployment an alias points at would normally be
+    // scaled to 1 — that is what "targeted" means. But an app the idle sweep
+    // put to sleep is at zero DELIBERATELY, and the activator wakes it when a
+    // request arrives.
+    //
+    // Without this the reconciler and the sweep disagree about desired state:
+    // the sweep scales to zero, the next pass sees a targeted deployment with
+    // no replicas and "corrects" it, and the saving lasts until the interval
+    // fires. The symptom would read as flapping rather than as two components
+    // holding different opinions.
+    // Did the activator wake this since we put it to sleep? It has no database
+    // credential, so it stamps the Deployment and the control plane reads the
+    // stamp back. Comparing TIMESTAMPS rather than just checking replicas
+    // avoids the race in the other direction: the sweep sets the flag and then
+    // scales down, and a pass landing between those two steps would otherwise
+    // see "asleep with replicas" and wrongly conclude a wake.
+    let asleep = d.scaled_to_zero_at != null;
+    if (asleep) {
+      const wokenAt = await deploymentAnnotation(k, ns, name, "ahura.cloud/woken-at");
+      if (wokenAt && Date.parse(wokenAt) > Date.parse(d.scaled_to_zero_at!)) {
+        actions.push({ kind: "repoint", target: name, detail: `woken by a request at ${wokenAt} — clearing sleep` });
+        if (!dry) await deployments.clearSleep(d.ref);
+        asleep = false;
+        // Update the ROW IN MEMORY too. The alias loop below reads
+        // scaled_to_zero_at off this same object, and without this it sees the
+        // stale value, concludes the app is still asleep, and repoints the
+        // hostname back at the activator in the very pass that woke it —
+        // leaving the activator in the hot path for a warm app, which is
+        // exactly what it must never be. Observed live.
+        d.scaled_to_zero_at = null;
+      }
+    }
+
+    if (asleep) {
+      actions.push({
+        kind: "noop",
+        target: name,
+        detail: `asleep since ${d.scaled_to_zero_at} — activator wakes it on request`,
+      });
+      continue;
+    }
+
     actions.push(
       replicas === null
         ? { kind: "create", target: name, detail: `creating from ${d.image_digest.slice(0, 19)}…` }
@@ -377,6 +433,39 @@ export async function reconcileProject(
       spec?: { rules?: Array<{ http?: { paths?: Array<{ backend?: { service?: { name?: string } } }> } }> };
     }>(`/apis/networking.k8s.io/v1/namespaces/${ns}/ingresses/${a.ref}`, true);
     const currentBackend = existing?.spec?.rules?.[0]?.http?.paths?.[0]?.backend?.service?.name;
+
+    // A sleeping app routes to the ACTIVATOR, which holds the first request,
+    // scales the app up, points this Ingress back at it, and forwards. Routing
+    // a sleeping hostname at its own Service would serve a 503 from a Service
+    // with no endpoints — scale-to-zero without a wake path is just downtime.
+    if (target.scaled_to_zero_at != null) {
+      if (currentBackend !== ACTIVATOR_NAME) {
+        actions.push({
+          kind: "repoint",
+          target: a.hostname,
+          detail: `asleep — ingress backend ${currentBackend ?? "(none)"} -> ${ACTIVATOR_NAME}`,
+        });
+      }
+      if (!dry) {
+        // A namespace-local name for the shared activator. An Ingress backend
+        // cannot cross namespaces, and a backend that does not resolve is a 404
+        // rather than an error.
+        await k.apply(`/api/v1/namespaces/${ns}/services/${ACTIVATOR_NAME}`, activatorAliasService(ns));
+        await k.apply(
+          `/apis/networking.k8s.io/v1/namespaces/${ns}/ingresses/${a.ref}`,
+          appIngress({
+            aliasRef: a.ref,
+            projectRef: project.ref,
+            namespace: ns,
+            hostname: a.hostname,
+            serviceName: ACTIVATOR_NAME,
+            wakeTarget: target.ref,
+            wakePort: target.container_port ?? 3000,
+          }),
+        );
+      }
+      continue;
+    }
 
     // ALWAYS apply. This read used to be `if (existing) continue` — the fourth
     // instance of the same bug: an Ingress that needed to change its backend
