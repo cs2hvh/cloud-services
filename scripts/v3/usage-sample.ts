@@ -42,6 +42,8 @@ import {
   toSampleRows,
   type StoredSample,
 } from "../../lib/paas/telemetry/usage-store.ts";
+import { byDeployment, podUsage, type PodMetricsLike } from "../../lib/paas/telemetry/metrics.ts";
+import { IDLE_CORES } from "../../lib/paas/telemetry/signals.ts";
 
 const KUBECONFIG = process.env.V2_KUBECONFIG ?? "C:/ahura-secrets/kubeconfig-v2-dev.yaml";
 const JSON_OUT = process.argv.includes("--json");
@@ -100,24 +102,51 @@ if (PERIOD_HOURS > 0) {
   const usage = aggregatePeriod(rows, start, end);
   const fleet = fleetWarmSummary(usage, seconds);
 
+  // CPU is read NOW, while warmth is measured over the period. Labelled as
+  // such below rather than implied: an app can be idle this second and have
+  // been busy an hour ago. It is a strong enough indicator to separate
+  // warm-and-serving from warm-and-idle, which is the distinction the price
+  // turns on — but it is not a period measurement and must not read as one.
+  const cpuNow = new Map<string, number | null>();
+  try {
+    const k = kube(loadKubeconfig(KUBECONFIG));
+    const list = await k.get<{ items: PodMetricsLike[] }>("/apis/metrics.k8s.io/v1beta1/pods", true);
+    for (const d of byDeployment((list?.items ?? []).map(podUsage), (n) =>
+      n.split("-").slice(0, -2).join("-") || n,
+    )) {
+      cpuNow.set(d.deploymentRef, d.cpuCores);
+    }
+  } catch {
+    // metrics-server unreachable. Warm fraction still stands on its own.
+  }
+
   const bar = "─".repeat(96);
   console.log(`\nStored usage over the last ${PERIOD_HOURS}h (${rows.length} sample rows)`);
   console.log(bar);
+  let warmAndIdle = 0;
   for (const u of usage) {
     const w = periodWarmFraction(u, seconds);
+    const cpu = cpuNow.get(u.deploymentRef);
+    const idle = typeof cpu === "number" && cpu < IDLE_CORES;
+    if (w.alwaysWarm && idle) warmAndIdle += 1;
+
     console.log(
       `  ${u.deploymentRef.padEnd(22)} ${u.podSeconds.toFixed(0).padStart(9)} pod-s  ` +
-        `${(w.fraction * 100).toFixed(1).padStart(6)}% warm  peak ${String(u.peakPods).padStart(3)}  ` +
-        `${u.samples} sample(s)` +
+        `${(w.fraction * 100).toFixed(1).padStart(6)}% warm  ` +
+        `${(typeof cpu === "number" ? `${(cpu * 1000).toFixed(0)}m` : "—").padStart(6)} cpu  ` +
+        `peak ${String(u.peakPods).padStart(3)}  ${u.samples} sample(s)` +
         (w.degraded ? "  DEGRADED — gaps in observation" : "") +
-        (w.alwaysWarm ? "  ALWAYS WARM" : ""),
+        (w.alwaysWarm && idle ? "  WARM AND IDLE" : w.alwaysWarm ? "  ALWAYS WARM" : ""),
     );
   }
   if (usage.length === 0) console.log(`  no samples in this window — has the sampler been running?`);
   console.log(bar);
   console.log(
     `  ${fleet.apps} app(s)   mean warm ${(fleet.meanFraction * 100).toFixed(1)}%   ` +
-      `${fleet.alwaysWarm} always-warm   ${fleet.degraded} degraded`,
+      `${fleet.alwaysWarm} always-warm   ${warmAndIdle} warm AND idle   ${fleet.degraded} degraded`,
+  );
+  console.log(
+    `  (warm is measured over the period; CPU is read now — see the note in the source)`,
   );
   console.log(
     `\n  The plan prices on this number: ~$52k/month always-on ($5.20/app) against\n` +

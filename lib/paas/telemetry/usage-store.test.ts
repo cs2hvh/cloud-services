@@ -15,6 +15,7 @@ import { accumulate, type AppObservation, type UsageBucket } from "./usage.ts";
 import {
   aggregatePeriod,
   fleetWarmSummary,
+  coverage,
   periodWarmFraction,
   sampleDelta,
   toSampleRows,
@@ -260,6 +261,60 @@ test("an empty period aggregates to nothing", () => {
 // ── the number the economics turn on ────────────────────────────────────────
 
 const DAY = 86_400;
+
+test("a sampler that watched 2 minutes of an hour does not report the fleet as idle", () => {
+  // The real defect, found by running --period against a table the sampler
+  // had only briefly written to: three apps warm 100% of the time reported
+  // 4.3% warm and NOT degraded, because unobserved_seconds only records gaps
+  // BETWEEN samples and never the stretch where nothing sampled at all.
+  //
+  // An unmonitored fleet looking idle-to-zero flatters the cost model in
+  // exactly the direction the plan warns about.
+  const HOUR = 3600;
+  const [u] = aggregatePeriod(
+    [
+      stored({ pod_seconds: 60, warm_seconds: 60, period_seconds: 60 } as never),
+      stored({ sampled_at: at(60).toISOString(), pod_seconds: 60, warm_seconds: 60, period_seconds: 60 } as never),
+    ],
+    T0,
+    at(HOUR),
+  );
+
+  assert.equal(u.coveredSeconds, 120, "two minutes watched");
+
+  const w = periodWarmFraction(u, HOUR);
+  assert.equal(w.fraction, 1, "warm for all of the two minutes we saw");
+  assert.equal(w.degraded, true, "and the hour was barely watched, so do not bill from it");
+  assert.equal(w.periodSeconds, HOUR, "the nominal window is still reported");
+  assert.ok(Math.abs(coverage(u, HOUR) - 120 / HOUR) < 1e-9);
+});
+
+test("full coverage is not degraded", () => {
+  const HOUR = 3600;
+  const rows = Array.from({ length: 12 }, (_, i) =>
+    stored({
+      sampled_at: at(i * 300).toISOString(),
+      pod_seconds: 300,
+      warm_seconds: 300,
+      period_seconds: 300,
+    } as never),
+  );
+  const [u] = aggregatePeriod(rows, T0, at(HOUR));
+
+  assert.equal(u.coveredSeconds, HOUR);
+  const w = periodWarmFraction(u, HOUR);
+  assert.equal(w.fraction, 1);
+  assert.equal(w.degraded, false, "a fully observed hour is safe to act on");
+  assert.equal(coverage(u, HOUR), 1);
+});
+
+test("rows written before period_seconds existed fall back to the nominal window", () => {
+  const [u] = aggregatePeriod([stored({ pod_seconds: 1728, warm_seconds: 1728 })], T0, at(86_400));
+  assert.equal(u.coveredSeconds, 0, "no coverage recorded");
+
+  const w = periodWarmFraction(u, 86_400);
+  assert.ok(Math.abs(w.fraction - 0.02) < 1e-9, "still readable, using the old semantics");
+});
 
 test("warm fraction over a stored period uses the same arithmetic as the live one", () => {
   const [u] = aggregatePeriod([stored({ pod_seconds: 1728, warm_seconds: 1728 })], T0, at(DAY));

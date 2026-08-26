@@ -36,6 +36,50 @@ const kinds = (s: ReturnType<typeof detectSignals>) => s.map((x) => x.kind);
 
 // ── the economics signal ────────────────────────────────────────────────────
 
+test("warm AND idle is its own signal — the clearest scale-to-zero case", () => {
+  // Measured live once metrics-server landed: three apps holding a full pod
+  // slot each at 2-3 millicores. Warm fraction 1.0 says they cost the
+  // always-on model; CPU says they are doing essentially nothing while
+  // costing it. Those are different arguments and the second is stronger.
+  const s = detectSignals({
+    apps: [app({ warmFraction: 1, cpuCores: 0.003 })],
+    windowSeconds: DAY,
+  });
+
+  assert.deepEqual(kinds(s), ["warm-and-idle"]);
+  assert.match(s[0].detail, /3m CPU/);
+  assert.match(s[0].action, /clearest scale-to-zero case/);
+});
+
+test("warm and BUSY is not the same finding and does not raise the idle one", () => {
+  // A busy always-warm app is a customer getting value from the pod they hold.
+  // Scaling it to zero would be wrong; pricing for it is the answer.
+  const s = detectSignals({
+    apps: [app({ warmFraction: 1, cpuCores: 0.4 })],
+    windowSeconds: DAY,
+  });
+
+  assert.deepEqual(kinds(s), ["always-warm"]);
+  assert.match(s[0].action, /customer getting value/);
+});
+
+test("without metrics the two are not distinguished, and the action says so", () => {
+  const s = detectSignals({ apps: [app({ warmFraction: 1 })], windowSeconds: DAY });
+
+  assert.deepEqual(kinds(s), ["always-warm"]);
+  assert.match(s[0].action, /cannot be told apart/);
+});
+
+test("an idle app that is NOT warm raises nothing — idle is the expected state", () => {
+  // 80% of apps should be near-idle under the plan's model. Idle alone
+  // describes a healthy fleet; it is only a finding alongside warmth.
+  const s = detectSignals({
+    apps: [app({ warmFraction: 0.02, cpuCores: 0.001 })],
+    windowSeconds: DAY,
+  });
+  assert.equal(summarise(s).quiet, true);
+});
+
 test("an app warm all day raises always-warm", () => {
   const s = detectSignals({ apps: [app({ warmFraction: 1 })], windowSeconds: DAY });
 

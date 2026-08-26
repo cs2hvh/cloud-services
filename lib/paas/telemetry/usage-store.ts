@@ -153,6 +153,21 @@ export interface PeriodUsage {
   samples: number;
   firstSeen: string;
   lastSeen: string;
+  /**
+   * Wall-clock seconds the sampler actually watched, summed from
+   * `period_seconds`.
+   *
+   * THIS IS WHY THAT COLUMN MATTERS, and it caught a real defect. Warm
+   * fraction was dividing by the nominal window, so a sampler that ran for
+   * two minutes of an hour reported apps that are warm 100% of the time as
+   * 4.3% warm — and not degraded, because `unobserved_seconds` only records
+   * gaps BETWEEN samples, never the stretch where nothing sampled at all.
+   *
+   * An unmonitored fleet therefore looked idle-to-zero, which flatters the
+   * cost model in precisely the direction the plan warns about. Dividing by
+   * what was watched reports the truth and lets coverage be stated separately.
+   */
+  coveredSeconds: number;
 }
 
 /**
@@ -187,11 +202,13 @@ export function aggregatePeriod(
       samples: 0,
       firstSeen: r.sampled_at,
       lastSeen: r.sampled_at,
+      coveredSeconds: 0,
     };
 
     current.podSeconds += num(r.pod_seconds);
     current.warmSeconds += num(r.warm_seconds);
     current.unobservedSeconds += num(r.unobserved_seconds);
+    current.coveredSeconds += num((r as { period_seconds?: number | string }).period_seconds ?? 0);
     current.restarts += r.restarts ?? 0;
     current.peakPods = Math.max(current.peakPods, r.peak_pods ?? 0);
     current.samples += 1;
@@ -214,7 +231,19 @@ export function aggregatePeriod(
  * model rests on rather than two that can drift apart.
  */
 export function periodWarmFraction(usage: PeriodUsage, periodSeconds: number): WarmFraction {
-  return warmFraction(
+  // Divide by what was WATCHED, not by the nominal window.
+  //
+  // `coveredSeconds` is the sum of every sample's own window, so a sampler
+  // that ran for two minutes of an hour reports what those two minutes showed
+  // — and `degraded` below says the hour was barely watched. Dividing by the
+  // hour instead would report a fleet that is warm 100% of the time as 4.3%
+  // warm, and report it confidently.
+  //
+  // Falls back to the nominal window when coverage is unknown, which is what
+  // rows written before `period_seconds` existed look like.
+  const observed = usage.coveredSeconds > 0 ? usage.coveredSeconds : periodSeconds;
+
+  const result = warmFraction(
     {
       appKey: usage.deploymentRef,
       projectRef: usage.projectId ?? "",
@@ -228,8 +257,23 @@ export function periodWarmFraction(usage: PeriodUsage, periodSeconds: number): W
       lastSeen: usage.lastSeen,
       unobservedSeconds: usage.unobservedSeconds,
     },
-    periodSeconds,
+    observed,
   );
+
+  // Report the NOMINAL period the caller asked about, and degrade whenever
+  // coverage falls short of it — a figure derived from 3% of an hour is real
+  // but must not be billed from.
+  return {
+    ...result,
+    periodSeconds,
+    degraded: result.degraded || usage.coveredSeconds < periodSeconds * 0.95,
+  };
+}
+
+/** Share of the requested window the sampler actually watched. */
+export function coverage(usage: PeriodUsage, periodSeconds: number): number {
+  if (periodSeconds <= 0) return 0;
+  return Math.min(1, usage.coveredSeconds / periodSeconds);
 }
 
 export interface FleetWarmSummary {
