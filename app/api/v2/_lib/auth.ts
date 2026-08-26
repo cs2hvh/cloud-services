@@ -40,6 +40,11 @@ export interface Caller {
  * generated types cannot describe `paas`. Casting once here keeps the cast out
  * of every route rather than scattering it.
  */
+/* eslint-disable @typescript-eslint/no-explicit-any --
+   PostgREST query builders are chainable and generic over the row type.
+   Hand-writing that signature would be less accurate than any and would drift
+   from the library; the generated Database type cannot describe paas at all.
+   The cast is confined to this one function so no route repeats it. */
 function paasSchema(client: Awaited<ReturnType<typeof createClient>>) {
   return (client as unknown as {
     schema: (name: string) => {

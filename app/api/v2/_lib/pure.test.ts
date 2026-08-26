@@ -138,6 +138,7 @@ function row(over: Partial<DeploymentRow> = {}): DeploymentRow {
     image_digest: "sha256:aaa",
     error_code: null,
     error_message: null,
+    scaled_to_zero_at: null,
     container_port: 3000,
     run_as_user: 1000,
     queued_at: "2026-08-26T10:00:00.000Z",
