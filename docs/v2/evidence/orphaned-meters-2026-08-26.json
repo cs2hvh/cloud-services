@@ -1,0 +1,52 @@
+[
+  {
+    "id": "83e3a9de-ddc2-4583-8616-109772a13820",
+    "user_id": "ab6bf954-1f16-4d41-94a9-c2410d55a0e4",
+    "service_id": "e40d351e-ac10-4f7c-99c4-9d442766db8b",
+    "hourly_rate": 0.01,
+    "status": "active",
+    "last_billed_at": "2026-08-24T10:50:00.451+00:00",
+    "created_at": "2026-05-25T15:37:55.955646+00:00",
+    "updated_at": "2026-05-25T15:37:55.955646+00:00"
+  },
+  {
+    "id": "3570f887-eec6-4bb5-89ec-52ac75a9f0e6",
+    "user_id": "ccf391ef-271b-45e7-9799-3b1be3422363",
+    "service_id": "ead4c322-681a-492b-8723-0c4970621cd8",
+    "hourly_rate": 0.006944,
+    "status": "active",
+    "last_billed_at": "2026-08-24T10:50:00.621+00:00",
+    "created_at": "2026-06-12T10:42:22.626677+00:00",
+    "updated_at": "2026-06-12T10:42:22.626677+00:00"
+  },
+  {
+    "id": "da971cc4-8f50-4b8a-b3d9-a8af603895b0",
+    "user_id": "ccf391ef-271b-45e7-9799-3b1be3422363",
+    "service_id": "f03bcb00-a0ef-4cb4-8842-8205a864a5e8",
+    "hourly_rate": 0.02,
+    "status": "active",
+    "last_billed_at": "2026-08-24T10:50:01.652+00:00",
+    "created_at": "2026-05-25T06:07:51.62115+00:00",
+    "updated_at": "2026-05-25T06:07:51.62115+00:00"
+  },
+  {
+    "id": "5451b689-b159-4520-8d48-58210692b4b2",
+    "user_id": "ccf391ef-271b-45e7-9799-3b1be3422363",
+    "service_id": "b593dd6c-78df-4bc1-a0b2-cbb8791a344c",
+    "hourly_rate": 0.02,
+    "status": "active",
+    "last_billed_at": "2026-08-24T10:50:01.895+00:00",
+    "created_at": "2026-05-25T05:25:56.117505+00:00",
+    "updated_at": "2026-05-25T05:25:56.117505+00:00"
+  },
+  {
+    "id": "acac0191-46ac-4694-b398-ce231a328581",
+    "user_id": "fa9e8802-f59b-45d1-b9ee-2d83ce40d955",
+    "service_id": "4c9871c8-35d8-422b-b720-45d02802b23e",
+    "hourly_rate": 0.277778,
+    "status": "active",
+    "last_billed_at": "2026-08-24T10:50:02.003+00:00",
+    "created_at": "2026-03-16T17:49:21.404913+00:00",
+    "updated_at": "2026-03-16T17:49:21.404913+00:00"
+  }
+]
