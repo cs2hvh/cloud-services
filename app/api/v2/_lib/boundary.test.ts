@@ -4,44 +4,29 @@
  * _lib/auth.ts states the rule: nothing in app/api/v2 may reach for a
  * service-role client, because v1 enabled RLS on every table and then bypassed
  * it on 100% of queries, leaving authorization to hand-written per-route
- * checks — and one omission was a confirmed IDOR. My aliases route states a
- * second rule: elevate the operation, never the authorization decision, never
- * a tenant-scoped write.
+ * checks — and one omission was a confirmed IDOR. The aliases route states a
+ * second: elevate the operation, never the authorization decision, never a
+ * tenant-scoped write. runtime-logs states a third: derive a namespace from a
+ * row, never accept one from the caller.
  *
- * Both were prose in headers, in files people will keep editing. That is the
- * same shape as the traversal bug app-deploy-3 found in their own lane —
- * safety that depends on the next person remembering.
+ * All three were prose in headers, in files people keep editing.
  *
- * ── HOW THIS PROVES IT CAN FAIL ──────────────────────────────────────
+ * ── EVERY PREDICATE IS DEFINED ONCE ──────────────────────────────────
  *
- * A boundary test that cannot detect a violation sits green forever and is
- * read as proof, which makes it worse than no test.
+ * The checks below and the proofs at the bottom call the SAME functions. An
+ * earlier version of this file inlined the regexes in both places and a
+ * patching mistake stripped the backslashes from one copy — leaving
+ * /searchParams.get(s*["']namespace["']s*)/, which matches nothing and had
+ * been passing vacuously. A check that cannot fail is read as proof and is
+ * worse than no check, which is the whole reason this file exists.
  *
- * I first proved this by injecting real violations into real route files,
- * confirming failure, and reverting. That verifies the whole machinery, but
- * only for whoever ran it that day — and app-deploy-3 reported the same
- * technique being refused by a safety classifier when they tried it, which is
- * reason enough not to build a practice on it. A verification step that
- * sometimes needs an exception quietly stops being performed.
- *
- * So the violations now live in a FIXTURE TREE written to a temp directory and
- * discovered by the same walk(), stripped by the same code(), and judged by
- * the same checker functions as the real run. One implementation of each
- * checker across both paths: two would let the fixture pass while the real
- * check rotted, the same failure as testing a copy of logic owned elsewhere.
- * This runs on every invocation, including for whoever changes the traversal
- * months from now. Adopted from app-deploy-3, whose version of this idea was
- * better than mine.
- *
- * TWO SUBTREES ARE EXCLUDED, for different reasons, and neither is silencing.
+ * ── TWO SUBTREES ARE EXCLUDED, NEITHER SILENCED ──────────────────────
  *
  * app/api/v2/admin/** belongs to the observability lane, is fleet-scoped by
- * construction, and has its own boundary suite. Asserting here about files
- * owned there reports green while the two diverge.
+ * construction, and has its own boundary suite.
  *
  * app/api/v2/webhooks/** has no user session by nature — GitHub is the caller.
- * It cannot resolve a caller and its writes are legitimately elevated, so the
- * tenant checks below would flag correct code. The guarantee that DOES apply
+ * The tenant checks would flag correct code, so the guarantee that DOES apply
  * is asserted instead: the signature is verified before anything is written.
  * Excluding a file without replacing its guarantee is how an exclusion list
  * becomes a way to pass.
@@ -55,10 +40,10 @@ import { tmpdir } from "node:os";
 
 const ROOT = "app/api/v2";
 
-// ── the machinery, used by both the real run and the fixture ─────────
+// ── predicates: one definition, used by the real checks and the proofs ──
 
 /** Source with comments removed. */
-function code(source: string): string {
+export function code(source: string): string {
   return source
     .replace(/\/\*[\s\S]*?\*\//g, " ")
     .replace(/(^|[^:])\/\/[^\n]*/g, "$1 ");
@@ -76,25 +61,42 @@ function walk(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-/** Reaches past RLS: the service-role client, the PostgREST module, or the key. */
+/** Like walk(), but without exclusions — for checking an excluded subtree. */
+function walkAll(dir: string, out: string[] = []): string[] {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) walkAll(path, out);
+    else if (entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts")) out.push(path);
+  }
+  return out;
+}
+
 const reachesPastRls = (src: string) =>
   /createServiceClient|paas\/db|SUPABASE_SERVICE_ROLE_KEY|SERVICE_ROLE/.test(src);
 
-/** Writes the alias as the platform rather than as the caller. */
 const callsPromoteAndConverge = (src: string) => /promoteAndConverge/.test(src);
 
-/** 403 confirms a row exists and lets someone enumerate another team's refs. */
 const answers403 = (src: string) => /\b403\b/.test(src);
 
-/** Ciphertext must never reach a response. */
 const selectsCiphertext = (src: string) => /select\([^)]*value_ct/.test(src);
 
 /**
- * Handlers that can return before resolving a caller.
+ * A namespace taken from the request rather than derived from a row.
  *
- * Scans only inside an exported handler body. A `return` in a module-level
- * helper is not an early exit from the request — reviewing app-deploy-3's
- * guard.ts, my first version flagged exactly that and was wrong.
+ * These values go into a Kubernetes API path. Validation proves a string is a
+ * legal namespace; it cannot prove the caller is entitled to it, and
+ * "app-prj-someone-else" is perfectly legal.
+ */
+const NS_FROM_PARAMS = /params[^;]*\bnamespace\b/;
+const NS_FROM_QUERY = /searchParams\s*\.\s*get\(\s*['"`]namespace['"`]\s*\)/;
+const takesNamespaceFromRequest = (src: string) =>
+  NS_FROM_PARAMS.test(src) || NS_FROM_QUERY.test(src);
+const pathDeclaresNamespace = (file: string) => file.includes("[namespace]");
+
+/**
+ * Handlers that can return before resolving a caller. Scans only inside an
+ * exported handler body — a `return` in a module-level helper is not an early
+ * exit, and a naive version flags it.
  */
 function gateViolations(src: string): string[] {
   const bad: string[] = [];
@@ -126,17 +128,11 @@ test("no tenant route reaches past RLS", () => {
 });
 
 test("no handler writes the alias as the platform", () => {
-  // promoteAndConverge performs the alias write with the service role — a
-  // tenant-scoped write outside RLS. Scripts and workers may call it; a
-  // request handler resolves and writes through RLS and elevates only the
-  // cluster convergence.
   assert.deepEqual(REAL.filter((f) => callsPromoteAndConverge(read(f))), []);
 });
 
 test("every handler resolves a caller before it can return", () => {
-  const bad = REAL_ROUTES.flatMap((f) =>
-    gateViolations(read(f)).map((v) => `${f} ${v}`)
-  );
+  const bad = REAL_ROUTES.flatMap((f) => gateViolations(read(f)).map((v) => `${f} ${v}`));
   assert.deepEqual(bad, []);
 });
 
@@ -148,25 +144,25 @@ test("no read path selects ciphertext", () => {
   assert.deepEqual(REAL.filter((f) => selectsCiphertext(read(f))), []);
 });
 
-test("auth.ts still states the rules these tests enforce", () => {
-  // Rewriting the header should force a decision about whether these tests
-  // still describe the boundary, rather than leaving assertions enforcing a
-  // rule nobody has written down any more.
-  const header = readFileSync(join(ROOT, "_lib", "auth.ts"), "utf8");
-  assert.match(header, /createServiceClient/);
-  assert.match(header, /RLS/);
+test("no tenant route accepts a namespace from the caller", () => {
+  const offenders: string[] = [];
+  for (const file of REAL_ROUTES) {
+    if (pathDeclaresNamespace(file)) offenders.push(`${file}: namespace in the path`);
+    else if (takesNamespaceFromRequest(read(file)))
+      offenders.push(`${file}: namespace taken from the request`);
+  }
+  assert.deepEqual(offenders, [], "a namespace must be derived, never accepted");
 });
 
 test("every webhook verifies its signature before it writes anything", () => {
-  // A webhook's authentication is the HMAC, not a session. That check must
-  // come before the first database call, not merely be present: verifying
-  // afterwards means an unsigned request has already had an effect.
-  const dir = join(ROOT, "webhooks");
+  // A webhook's authentication is the HMAC, not a session. The check must come
+  // BEFORE the first write — verifying afterwards means an unsigned request
+  // has already had an effect.
   let hooks: string[] = [];
   try {
-    hooks = walkAll(dir).filter((f) => f.endsWith("route.ts"));
+    hooks = walkAll(join(ROOT, "webhooks")).filter((f) => f.endsWith("route.ts"));
   } catch {
-    return; // no webhooks yet
+    return; // no webhook subtree yet
   }
   assert.ok(hooks.length > 0, "the webhook subtree exists but has no routes");
 
@@ -177,7 +173,6 @@ test("every webhook verifies its signature before it writes anything", () => {
     const body = src.slice(at);
     const verify = body.indexOf("verifyWebhookSignature");
     assert.ok(verify >= 0, `${file} never verifies a signature`);
-    // First write of any kind.
     const write = Math.min(
       ...[".insert(", ".update(", ".upsert(", ".delete(", "create("]
         .map((m) => body.indexOf(m))
@@ -188,33 +183,27 @@ test("every webhook verifies its signature before it writes anything", () => {
   }
 });
 
-/** Like walk(), but without the exclusions — for checking an excluded subtree. */
-function walkAll(dir: string, out: string[] = []): string[] {
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const path = join(dir, entry.name);
-    if (entry.isDirectory()) walkAll(path, out);
-    else if (entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts")) out.push(path);
-  }
-  return out;
-}
+test("auth.ts still states the rules these tests enforce", () => {
+  const header = readFileSync(join(ROOT, "_lib", "auth.ts"), "utf8");
+  assert.match(header, /createServiceClient/);
+  assert.match(header, /RLS/);
+});
 
-// ── the same machinery against a fixture tree ────────────────────────
-// Proves the checkers, the traversal, the comment stripping and the exclusion
-// rules all still work — every run, not once.
+// ── the same predicates against a fixture tree ───────────────────────
+// Every check above must be able to fail. These exercise the SAME functions,
+// on every run, rather than being a proof someone performed once.
 
 function buildFixture(): string {
   const root = mkdtempSync(join(tmpdir(), "v2-boundary-"));
   const nested = join(root, "projects", "[ref]");
   mkdirSync(nested, { recursive: true });
 
-  // Violates all four properties at once, and is nested so the walk has to
-  // find it rather than reading one flat directory.
   writeFileSync(
     join(nested, "route.ts"),
     [
       `import { createServiceClient } from "@/lib/supabase/server";`,
       `import { promoteAndConverge } from "@/lib/paas/reconciler.ts";`,
-      `export async function GET() {`,
+      `export async function GET(_r: Request, { params }: { params: Promise<{ namespace: string }> }) {`,
       `  if (x) return apiError("no", "no", 403);`,
       `  const caller = await getCaller();`,
       `  await db.from("env_vars").select("key, value_ct");`,
@@ -223,55 +212,67 @@ function buildFixture(): string {
     "utf8"
   );
 
-  // Clean, but NAMES the forbidden things in comments only. This is the case
-  // that actually matters: auth.ts's header names createServiceClient in the
-  // sentence forbidding it, and a raw-source check fails on its own warning.
+  // Names every forbidden thing, in comments only. auth.ts's own header does
+  // this, so a raw-source check fails on its own warning — and the cheapest
+  // way to make it pass is deleting the warning.
   writeFileSync(
     join(root, "clean.ts"),
     [
-      `// Nothing here may import createServiceClient or use promoteAndConverge.`,
-      `/* Nor answer 403, nor select value_ct. */`,
+      `// Nothing may import createServiceClient or call promoteAndConverge.`,
+      `/* Nor answer 403, select value_ct, or take a namespace from params. */`,
+      `const namespace = "app-" + row.projects.ref;`,
       `export const fine = true;`,
     ].join("\n"),
     "utf8"
   );
 
-  // A .test.ts inside the tree must be ignored, so nobody can silence the
-  // suite by adding one.
   writeFileSync(join(root, "route.test.ts"), `createServiceClient(); // 403`, "utf8");
-
-  // An admin/ directory must be skipped — it is the other lane's.
   mkdirSync(join(root, "admin"), { recursive: true });
   writeFileSync(join(root, "admin", "route.ts"), `createServiceClient();`, "utf8");
+  mkdirSync(join(root, "webhooks"), { recursive: true });
+  writeFileSync(join(root, "webhooks", "route.ts"), `createServiceClient();`, "utf8");
 
   return root;
 }
 
-test("the checkers detect a real violation in a discovered file", () => {
+test("every predicate fires on a real violation in a discovered file", () => {
   const root = buildFixture();
   const found = walk(root);
+  const bad = found.filter((f) => f.endsWith("route.ts"));
+  assert.equal(bad.length, 1, "the walk must find the nested violating route only");
 
-  const bad = found.filter((f) => f.endsWith("route.ts") && !f.includes("admin"));
-  assert.equal(bad.length, 1, "the walk must find the nested violating route");
-
-  const src = read(bad[0]);
-  assert.ok(reachesPastRls(src), "service-role import must be detected");
-  assert.ok(callsPromoteAndConverge(src), "platform write must be detected");
-  assert.ok(answers403(src), "403 must be detected");
-  assert.ok(selectsCiphertext(src), "value_ct select must be detected");
+  const file = bad[0];
+  const src = read(file);
+  assert.ok(reachesPastRls(src), "service-role import");
+  assert.ok(callsPromoteAndConverge(src), "platform write");
+  assert.ok(answers403(src), "403");
+  assert.ok(selectsCiphertext(src), "value_ct select");
+  assert.ok(takesNamespaceFromRequest(src), "namespace from params");
   assert.deepEqual(gateViolations(src), ["GET: returns before the gate"]);
+});
+
+test("the namespace-from-query form is detected too", () => {
+  // The params form and the query form are different regexes; a fixture that
+  // only exercises one leaves the other unproven. This is the one that was
+  // silently broken before.
+  const src = code(`const ns = new URL(r.url).searchParams.get("namespace");`);
+  assert.ok(takesNamespaceFromRequest(src), "query form must be detected");
+  assert.ok(pathDeclaresNamespace("app/api/v2/pods/[namespace]/logs/route.ts"));
 });
 
 test("a file naming the forbidden things only in comments reads clean", () => {
   const src = read(join(buildFixture(), "clean.ts"));
-  assert.ok(!reachesPastRls(src), "a warning must not count as a violation");
+  assert.ok(!reachesPastRls(src));
   assert.ok(!callsPromoteAndConverge(src));
   assert.ok(!answers403(src));
   assert.ok(!selectsCiphertext(src));
+  // Deriving a namespace is not accepting one.
+  assert.ok(!takesNamespaceFromRequest(src), "derivation must not be flagged");
 });
 
-test("the suite cannot be silenced by adding a .test.ts or an admin dir", () => {
+test("the suite cannot be silenced by adding a .test.ts, admin or webhooks dir", () => {
   const found = walk(buildFixture());
-  assert.ok(!found.some((f) => f.endsWith(".test.ts")), "tests are not the surface");
-  assert.ok(!found.some((f) => f.includes("admin")), "admin belongs to the other lane");
+  assert.ok(!found.some((f) => f.endsWith(".test.ts")));
+  assert.ok(!found.some((f) => f.includes("admin")));
+  assert.ok(!found.some((f) => f.includes("webhooks")));
 });
