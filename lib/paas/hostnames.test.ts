@@ -16,6 +16,7 @@ import {
   RESERVED_LABELS,
   assertLabelAvailable,
   checkLabel,
+  previewLabel,
 } from "./hostnames.ts";
 
 // ── the anti-vacuity tests ──────────────────────────────────────────────────
@@ -138,4 +139,45 @@ test("mixed-case ordinary names are folded and accepted, not rejected", () => {
   const v = checkLabel("MyApp");
   assert.equal(v.ok, true);
   assert.equal(v.label, "myapp");
+});
+
+// ── preview hostnames ───────────────────────────────────────────────────────
+
+test("a preview label is a single legal DNS label", () => {
+  // The constraint that is not stylistic: the wildcard covers ONE label deep,
+  // so a nested preview host produces a TLS error rather than a 404.
+  for (const branch of ["feature/JIRA-123_fix", "main", "release/v2.0.1", "WIP--messy..name"]) {
+    const label = previewLabel("my-app", branch);
+    const v = checkLabel(label);
+    assert.equal(v.ok, true, `${branch} -> ${label} is not a usable label: ${v.reason}`);
+    assert.ok(!label.includes("."), `${branch} -> ${label} must not contain a dot`);
+  }
+});
+
+test("branches that truncate to the same prefix do NOT collide", () => {
+  // Sanitise-and-truncate alone maps these to one label, and the second push
+  // would silently take over the first branch's preview URL.
+  const a = previewLabel("my-app", "feature/user-authentication-v1");
+  const b = previewLabel("my-app", "feature/user-authentication-v2");
+  assert.notEqual(a, b, "distinct branches must not share a preview hostname");
+});
+
+test("the same branch always mints the same label", () => {
+  // A preview is per-branch and MOVES with new pushes, so the second push must
+  // land on the hostname the customer already opened.
+  assert.equal(previewLabel("my-app", "feature/x"), previewLabel("my-app", "feature/x"));
+});
+
+test("a very long project slug and branch still fit in 63 characters", () => {
+  const label = previewLabel("a".repeat(40), "b".repeat(200));
+  assert.ok(label.length <= 63, `label is ${label.length} chars`);
+  assert.equal(checkLabel(label).ok, true);
+});
+
+test("a branch of only punctuation still yields a valid label", () => {
+  // "///" sanitises to empty; without the hash the label would end in a hyphen
+  // or be the bare slug, either of which collides with production.
+  const label = previewLabel("my-app", "///");
+  assert.equal(checkLabel(label).ok, true, `${label} is not usable`);
+  assert.notEqual(label, "my-app", "a preview must never mint the production label");
 });
