@@ -13,7 +13,7 @@ change anything, run by a person who has read a report first.
 ## Running it
 
 ```bash
-node --test "lib/paas/telemetry/*.test.ts"                                   # 218 tests, no deps
+node --test "lib/paas/telemetry/*.test.ts"                                   # 225 tests, no deps
 node --env-file=.env --env-file=.env.local scripts/v3/operator-view.ts       # everything, once
 node --env-file=.env --env-file=.env.local scripts/v3/fleet-drift.ts --prove
 node --env-file=.env --env-file=.env.local scripts/v3/dns-drift.ts
@@ -57,6 +57,7 @@ different severity and deserves a different page.
 | `telemetry/metrics.ts` | metrics.k8s.io quantities → cores and bytes | 18 |
 | `telemetry/operator.ts` | Composition for the API and dashboard | — |
 | `telemetry/fleet-source.ts` | The I/O half. Every call is a GET | — |
+| `telemetry/admin-boundary.test.ts` | Test-only: enforces the admin security boundary | 7 |
 
 Surfaces: `GET /api/v2/admin/{fleet,hostnames,workloads,storage,metrics,usage}`,
 `GET /api/v2/admin/pods/{namespace}/{pod}/logs`, and `/dashboard/v2/admin`.
@@ -105,6 +106,26 @@ on everything below that is marked fixed.
   different argument at 10,000 apps than it looks like at four.
 - **Warm fraction is 1.0.** There is no scale-to-zero, so the fleet costs the
   always-on model in the plan rather than the idle-to-zero one.
+
+### Rules that enforce themselves
+
+Three constraints in this lane are tests that read real source, not comments:
+
+- `build-log.test.ts` reads `lib/paas/build/vm.ts` and fails if the build
+  script emits a stage marker the sanitiser does not classify.
+- `admin-boundary.test.ts` reads every file under `app/api/v2/admin` and fails
+  if one becomes tenant-scoped, imports a service-role client, can return
+  before authorising, or answers 403.
+- `metrics.test.ts` pins that binary suffixes are matched before decimal ones,
+  so `Mi` can never be read as `M`.
+
+Each replaced a comment. The pattern came from a review point that landed
+hard: a rule written against "safety that depends on the next person
+remembering" is itself safety that depends on the next person remembering, if
+it lives in a docblock. Both boundary suites also prove they can *fail* —
+`tenantScopeIn` is tested against synthetic violations, and the suite refuses
+to run against an empty directory. A check that cannot detect a violation sits
+green forever, which is the failure `fleet-drift --prove` exists to rule out.
 
 ### The defect fleet reconciliation cannot see
 
