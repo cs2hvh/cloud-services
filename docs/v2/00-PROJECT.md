@@ -215,9 +215,32 @@ Engineering is blocked on these, not the reverse.
 3. **Cloudflare plan tier.** Per-tenant WAF and >1 rate-limit rule are Enterprise.
    *Blocks abuse response.*
 4. **Free tier — is there one?** *Blocks quota and abuse design.*
-5. **Preview deployment policy** — hostname scheme, lifetime, who pays.
+5. **Preview deployments — lifetime and who pays.** The HOSTNAME SCHEME is no
+   longer open (see below); these two are, and they should be decided together:
+   a preview that never expires and is free is the abuse vector.
 6. **ACM ($10/mo)** — deferred. Apps currently sit at `<app>.ahurasense.com` under
    the free wildcard instead of `<app>.apps.ahurasense.com`.
+
+---
+
+## 7b. Preview hostnames — settled, build to this
+
+Fixed by constraint rather than preference, so it is not open to taste:
+
+- **One DNS label, flattened.** The zone certificate covers exactly
+  `["ahurasense.com", "*.ahurasense.com"]`, and a wildcard covers ONE label
+  deep. `preview.myapp.ahurasense.com` gets a **TLS error**, not a 404. It must
+  be `myapp-a1b2c3d4e5f6.ahurasense.com`.
+- **Charset `[a-z0-9-]`.** Deployment refs are `dpl_…` with an UNDERSCORE, which
+  is illegal in a hostname label — a preview label must transform a ref, never
+  embed it.
+- **Length fits with room:** slug is capped at 40 by `projects_slug_shape`, the
+  ref hex is 12, so `slug-hex` = 53 against the 63-char limit.
+- **Must pass `checkLabel()`** from `lib/paas/hostnames.ts`.
+- **The schema already models both flavours.** `paas.alias_kind` is
+  `production | branch | deployment | custom` — `deployment` is the permanent
+  per-build URL, `branch` the moving per-branch one. Per-alias routing is live
+  and proven, so previews need rows, not new routing.
 
 ---
 
