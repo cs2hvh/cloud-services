@@ -185,3 +185,114 @@ export function densityAtOverhead(usableBytes: number, podBytes: number, overhea
   const per = podBytes + overheadBytes;
   return per > 0 ? Math.min(maxPods, Math.floor(usableBytes / per)) : 0;
 }
+
+// ── is the reservation still big enough ─────────────────────────────────────
+
+/**
+ * How close a pod is to the memory the scheduler set aside for it.
+ *
+ * WHY THIS IS THE SAFETY MONITOR FOR LOWERING podFixed. A load test measured
+ * the sentry at 42-45 MiB against a 128Mi declaration, which argues for cutting
+ * it — but a declaration has to hold for the worst moment of the worst tenant,
+ * and one workload shape on an idle node cannot establish that. Under-declaring
+ * produces no warning: the scheduler simply accepts more pods than the node can
+ * hold and the kernel OOM-kills whichever allocates next, which may belong to a
+ * different tenant than the one that caused it.
+ *
+ * So this watches the only thing observable in production — the whole pod
+ * against its whole reservation — continuously, on real tenant workloads. It is
+ * what makes a reduction reversible: if pods start running hot after one, this
+ * says so before a node does.
+ *
+ * The sentry's share still is not separable. That does not matter here: if the
+ * total fits, the split between app and sandbox is an accounting question, and
+ * if it does not, the pod is at risk regardless of which half grew.
+ */
+export interface Headroom {
+  namespace: string;
+  pod: string;
+  /** Sum of container memory requests. */
+  requestedBytes: number;
+  /** The sandbox charge the scheduler adds on top. */
+  overheadBytes: number;
+  /** What the scheduler set aside in total. */
+  reservedBytes: number;
+  /** What the pod actually uses, sandbox included. Null when unread. */
+  wholePodBytes: number | null;
+  /** Fraction of the reservation in use. Null when unread. */
+  utilisation: number | null;
+  /**
+   * True when the pod is using more than was reserved for it. The node is then
+   * holding more than the scheduler believes, and its remaining capacity is
+   * overstated by the difference.
+   */
+  overReserved: boolean;
+  note: string;
+}
+
+/**
+ * Above this fraction of its reservation, a pod is worth naming. Not a failure
+ * threshold — it is the level at which a further cut to podFixed would start
+ * putting real pods at risk, which is the decision this feeds.
+ */
+export const HEADROOM_WARN = 0.85;
+
+export function headroom(f: PodFootprint, requestedBytes: number, overheadBytes: number): Headroom {
+  const reservedBytes = requestedBytes + overheadBytes;
+  const base = {
+    namespace: f.namespace,
+    pod: f.pod,
+    requestedBytes,
+    overheadBytes,
+    reservedBytes,
+    wholePodBytes: f.wholePodBytes,
+  };
+
+  if (f.wholePodBytes === null) {
+    // Unread, not idle. A pod reported at 0% utilisation would be the strongest
+    // possible argument for cutting the reservation, on no evidence at all.
+    return {
+      ...base,
+      utilisation: null,
+      overReserved: false,
+      note: "not read — contributes no evidence for or against the current reservation",
+    };
+  }
+
+  const utilisation = reservedBytes > 0 ? f.wholePodBytes / reservedBytes : null;
+  const over = f.wholePodBytes > reservedBytes;
+  return {
+    ...base,
+    utilisation,
+    overReserved: over,
+    note: over
+      ? "using more than was reserved — the node holds more than the scheduler accounted for"
+      : utilisation !== null && utilisation >= HEADROOM_WARN
+        ? "close to its reservation; a smaller sandbox charge would put this pod at risk"
+        : "within its reservation",
+  };
+}
+
+export interface HeadroomReport {
+  pods: Headroom[];
+  /** Highest utilisation actually observed. Null when nothing was read. */
+  peakUtilisation: number | null;
+  /** Pods at or above the warning level. */
+  hot: number;
+  /** Pods using more than was reserved for them. */
+  overReserved: number;
+  /** Pods that could not be read. Their absence is not evidence of headroom. */
+  unread: number;
+}
+
+export function headroomReport(pods: Headroom[]): HeadroomReport {
+  const read = pods.filter((p) => p.utilisation !== null);
+  return {
+    // Hottest first: the pod that constrains the decision is the one to see.
+    pods: [...pods].sort((a, b) => (b.utilisation ?? -1) - (a.utilisation ?? -1)),
+    peakUtilisation: read.length > 0 ? Math.max(...read.map((p) => p.utilisation!)) : null,
+    hot: read.filter((p) => p.utilisation! >= HEADROOM_WARN).length,
+    overReserved: pods.filter((p) => p.overReserved).length,
+    unread: pods.length - read.length,
+  };
+}

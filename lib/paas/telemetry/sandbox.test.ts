@@ -1,6 +1,15 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseWorkingSet, podFootprints, readOverhead, densityAtOverhead } from "./sandbox.ts";
+import {
+  parseWorkingSet,
+  podFootprints,
+  readOverhead,
+  densityAtOverhead,
+  headroom,
+  headroomReport,
+  HEADROOM_WARN,
+  type PodFootprint,
+} from "./sandbox.ts";
 
 const MIB = 1024 ** 2;
 const W = "container_memory_working_set_bytes";
@@ -96,4 +105,82 @@ test("density responds to the declaration, which is the point of measuring it", 
 test("density never exceeds the kubelet cap however small the charge", () => {
   const usable = 55.77 * 1024 * MIB;
   assert.equal(densityAtOverhead(usable, 8 * MIB, 0, 110), 110);
+});
+
+// ── headroom: the safety monitor for lowering podFixed ──────────────────────
+
+function fp(wholePodBytes: number | null): PodFootprint {
+  return {
+    namespace: "app-prj-1",
+    pod: "dpl-x",
+    wholePodBytes,
+    namedContainerBytes: 0,
+    namedContainers: 0,
+    opaque: wholePodBytes !== null,
+  };
+}
+
+test("a pod well inside its reservation is not flagged", () => {
+  // The live case: 512Mi requested + 128Mi overhead = 640Mi reserved, ~89 MiB used.
+  const h = headroom(fp(89 * MIB), 512 * MIB, 128 * MIB);
+  assert.equal(h.reservedBytes, 640 * MIB);
+  assert.equal(h.overReserved, false);
+  assert.ok(h.utilisation !== null && h.utilisation < 0.2);
+  assert.match(h.note, /within its reservation/);
+});
+
+test("a pod near its reservation is named, because it constrains the decision", () => {
+  const h = headroom(fp(Math.round(640 * MIB * 0.9)), 512 * MIB, 128 * MIB);
+  assert.ok(h.utilisation !== null && h.utilisation >= HEADROOM_WARN);
+  assert.equal(h.overReserved, false);
+  assert.match(h.note, /smaller sandbox charge would put this pod at risk/);
+});
+
+test("using more than was reserved is reported as such", () => {
+  // The node then holds more than the scheduler believes, and its remaining
+  // capacity is overstated by the difference.
+  const h = headroom(fp(700 * MIB), 512 * MIB, 128 * MIB);
+  assert.equal(h.overReserved, true);
+  assert.match(h.note, /more than the scheduler accounted for/);
+});
+
+test("cutting the reservation moves a safe pod toward the edge", () => {
+  // Why this monitor exists: the same pod, judged against two declarations.
+  const used = Math.round(540 * MIB);
+  assert.equal(headroom(fp(used), 512 * MIB, 128 * MIB).overReserved, false);
+  assert.equal(headroom(fp(used), 512 * MIB, 16 * MIB).overReserved, true);
+});
+
+test("an unread pod contributes no evidence, and never reads as 0% used", () => {
+  // A pod reported at zero utilisation is the strongest possible argument for
+  // cutting the reservation, on no evidence whatsoever.
+  const h = headroom(fp(null), 512 * MIB, 128 * MIB);
+  assert.equal(h.utilisation, null);
+  assert.equal(h.overReserved, false);
+  assert.match(h.note, /not read/);
+});
+
+test("peak utilisation ignores unread pods rather than counting them as zero", () => {
+  const r = headroomReport([
+    headroom(fp(null), 512 * MIB, 128 * MIB),
+    headroom(fp(320 * MIB), 512 * MIB, 128 * MIB),
+  ]);
+  assert.equal(r.unread, 1);
+  assert.ok(r.peakUtilisation !== null && r.peakUtilisation > 0.4);
+});
+
+test("a report with nothing read has no peak, rather than a peak of zero", () => {
+  const r = headroomReport([headroom(fp(null), 512 * MIB, 128 * MIB)]);
+  assert.equal(r.peakUtilisation, null);
+  assert.equal(r.hot, 0);
+});
+
+test("the hottest pod is reported first", () => {
+  const r = headroomReport([
+    headroom(fp(100 * MIB), 512 * MIB, 128 * MIB),
+    headroom(fp(600 * MIB), 512 * MIB, 128 * MIB),
+    headroom(fp(300 * MIB), 512 * MIB, 128 * MIB),
+  ]);
+  assert.equal(r.pods[0].wholePodBytes, 600 * MIB);
+  assert.equal(r.hot, 1);
 });

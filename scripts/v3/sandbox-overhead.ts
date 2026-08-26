@@ -28,7 +28,15 @@
 import { EXIT_CLEAN, EXIT_FINDINGS, EXIT_CANNOT_RUN, EXIT_UNTRUSTWORTHY } from "../../lib/paas/telemetry/exit-codes.ts";
 import { loadKubeconfig, kube } from "../../lib/paas/k8s/client.ts";
 import { parseQuantity } from "../../lib/paas/telemetry/metrics.ts";
-import { parseWorkingSet, podFootprints, readOverhead, densityAtOverhead } from "../../lib/paas/telemetry/sandbox.ts";
+import {
+  parseWorkingSet,
+  podFootprints,
+  readOverhead,
+  densityAtOverhead,
+  headroom,
+  headroomReport,
+  HEADROOM_WARN,
+} from "../../lib/paas/telemetry/sandbox.ts";
 
 const KUBECONFIG = process.env.V2_KUBECONFIG ?? "C:/ahura-secrets/kubeconfig-v2-dev.yaml";
 const JSON_OUT = process.argv.includes("--json");
@@ -112,10 +120,29 @@ const bounded = readings.filter((r) => r.verdict === "bounded");
 const over = bounded.filter((r) => r.declaredExceedsWholePod);
 const unobserved = readings.filter((r) => r.verdict === "unobserved");
 
+// Headroom against the reservation the scheduler actually made. This is the
+// half that survives a change to podFixed: the ceiling above argues the
+// declaration is too big, this says whether cutting it would hurt anyone.
+const heads = readings.map((r) =>
+  headroom(
+    footprints.get(`${r.namespace}/${r.pod}`) ?? {
+      namespace: r.namespace,
+      pod: r.pod,
+      wholePodBytes: null,
+      namedContainerBytes: 0,
+      namedContainers: 0,
+      opaque: false,
+    },
+    r.requestedBytes,
+    declared,
+  ),
+);
+const head = headroomReport(heads);
+
 if (JSON_OUT) {
   console.log(
     JSON.stringify(
-      { declaredBytes: declared, unreadableNodes: unreadable, readings, overDeclared: over.length },
+      { declaredBytes: declared, unreadableNodes: unreadable, readings, overDeclared: over.length, headroom: head },
       null,
       2,
     ),
@@ -181,8 +208,48 @@ for (const mibValue of [128, 96, 64, 32]) {
   );
 }
 console.log(
-  `\n  NOT a recommendation. Reserving too little kills pods under load, and the\n` +
-    `  safe figure comes from a load test, not a scrape. What this establishes is\n` +
-    `  that ${mib(declared)} is above the ceiling, so there is room worth measuring for.\n`,
+  `\n  NOT a recommendation from this script. Reserving too little kills pods under\n` +
+    `  load, and the safe figure comes from a load test — scripts/v2/sandbox-loadtest.ts\n` +
+    `  measures it at 42-45 MiB by A/B against runc. What THIS establishes is that\n` +
+    `  ${mib(declared)} is above the ceiling even on idle pods.\n`,
 );
+
+// ── would cutting it hurt anyone ────────────────────────────────────────────
+//
+// The ceiling says the declaration is too big. This says whether reducing it is
+// safe, which is a different question and the one that blocks the change.
+console.log(`${line}`);
+console.log(`\n  Headroom against what the scheduler reserved (requests + ${mib(declared)}):\n`);
+for (const h of head.pods) {
+  const pct = h.utilisation === null ? "—" : `${(h.utilisation * 100).toFixed(1)}%`;
+  console.log(
+    `    ${`${h.namespace}/${h.pod}`.slice(0, 56).padEnd(56)} ${mib(h.wholePodBytes).padStart(11)} of ${mib(h.reservedBytes).padStart(11)}  ${pct.padStart(7)}`,
+  );
+  if (h.utilisation === null || h.overReserved || (h.utilisation ?? 0) >= HEADROOM_WARN) {
+    console.log(`        ${h.note}`);
+  }
+}
+
+if (head.unread > 0) {
+  console.log(
+    `\n  ${head.unread} pod(s) unread — they contribute no evidence either way, and are not\n` +
+      `  counted as idle. A pod at 0% would be the strongest possible argument for\n` +
+      `  cutting the reservation, on no evidence at all.`,
+  );
+}
+
+if (head.peakUtilisation === null) {
+  console.log(`\n  Nothing was read, so there is no basis here for changing the reservation.\n`);
+} else {
+  console.log(
+    `\n  Peak observed: ${(head.peakUtilisation * 100).toFixed(1)}% of reservation` +
+      (head.overReserved > 0 ? `, and ${head.overReserved} pod(s) exceed theirs` : "") +
+      `.\n` +
+      `  These are the workloads we have, not the worst a tenant can produce. A\n` +
+      `  reservation has to hold for the worst moment of the worst tenant, so this\n` +
+      `  is the monitor that makes a reduction reversible rather than the evidence\n` +
+      `  that justifies one — under-declaring produces no warning, just a node that\n` +
+      `  accepts more pods than it can hold.\n`,
+  );
+}
 process.exit(EXIT_FINDINGS);
