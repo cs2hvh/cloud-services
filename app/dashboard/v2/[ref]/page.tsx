@@ -17,6 +17,9 @@ import {
   type DeploymentRow,
 } from "@/app/api/v2/_lib/deployments";
 import { Notice, Empty } from "@/components/v2/notice";
+import { EnvEditor, type EnvVarSummary } from "@/components/v2/env-editor";
+import { DomainManager, type DomainSummary } from "@/components/v2/domain-manager";
+import { PromoteControl } from "@/components/v2/promote-control";
 import { StateBadge, Timestamp, Duration } from "@/components/v2/state-badge";
 
 export const dynamic = "force-dynamic";
@@ -63,7 +66,12 @@ export default async function ProjectPage({ params }: Params) {
     installation_id: number | null;
   };
 
-  const [{ data: aliasRows }, { data: deploymentRows }] = await Promise.all([
+  const [
+    { data: aliasRows },
+    { data: deploymentRows },
+    { data: envRows },
+    { data: domainRows },
+  ] = await Promise.all([
     caller.db
       .from("aliases")
       .select("ref, hostname, kind, deployments:deployment_id (ref, git_sha, state)")
@@ -75,12 +83,72 @@ export default async function ProjectPage({ params }: Params) {
       .eq("project_id", project.id)
       .order("queued_at", { ascending: false })
       .limit(20),
+    // value_ct is deliberately not selected — see the env route.
+    caller.db
+      .from("env_vars")
+      .select("key, is_public, updated_at, environments:environment_id (ref, kind)")
+      .eq("project_id", project.id)
+      .order("key", { ascending: true }),
+    caller.db
+      .from("domains")
+      .select("ref, domain, state, verification_txt, last_error")
+      .eq("project_id", project.id)
+      .neq("state", "removed")
+      .order("created_at", { ascending: true }),
   ]);
 
   const aliases = (aliasRows ?? []) as AliasRow[];
   const deployments = ((deploymentRows ?? []) as DeploymentRow[]).map(
     toDeploymentDto
   );
+
+  const variables: EnvVarSummary[] = (
+    (envRows ?? []) as Array<{
+      key: string;
+      is_public: boolean;
+      updated_at: string;
+      environments: { ref: string; kind: string } | null;
+    }>
+  ).map((row) => ({
+    key: row.key,
+    isPublic: row.is_public,
+    scope: row.environments
+      ? { ref: row.environments.ref, kind: row.environments.kind }
+      : { ref: null, kind: "all" },
+    updatedAt: row.updated_at,
+  }));
+
+  const domains: DomainSummary[] = (
+    (domainRows ?? []) as Array<{
+      ref: string;
+      domain: string;
+      state: string;
+      verification_txt: string | null;
+      last_error: string | null;
+    }>
+  ).map((row) => ({
+    ref: row.ref,
+    domain: row.domain,
+    state: row.state,
+    verification: row.verification_txt
+      ? {
+          type: "TXT",
+          name: `_ahura-verify.${row.domain}`,
+          value: row.verification_txt,
+        }
+      : null,
+    lastError: row.last_error,
+  }));
+
+  // Only a deployment that built can serve traffic; the API refuses the rest.
+  const promotable = deployments
+    .filter((d) => d.state === "ready")
+    .map((d) => ({
+      ref: d.ref,
+      shortSha: d.commit.shortSha,
+      message: d.commit.message,
+      readyAt: d.timing.readyAt,
+    }));
 
   return (
     <Shell name={project.name} repo={project.repo_full_name}>
@@ -105,11 +173,10 @@ export default async function ProjectPage({ params }: Params) {
             {aliases.map((alias, i) => (
               <div
                 key={alias.ref}
-                className={`flex items-center justify-between gap-4 px-5 py-3.5 ${
-                  i > 0 ? "border-t border-white/[0.06]" : ""
-                }`}
+                className={i > 0 ? "border-t border-white/[0.06]" : ""}
               >
-                <div className="min-w-0">
+                <div className="flex items-center justify-between gap-4 px-5 py-3.5">
+                  <div className="min-w-0">
                   <a
                     href={`https://${alias.hostname}`}
                     target="_blank"
@@ -134,6 +201,19 @@ export default async function ProjectPage({ params }: Params) {
                     <span className="text-white/30">nothing assigned</span>
                   )}
                 </div>
+              </div>
+                {promotable.length > 0 && (
+                  <div className="border-t border-white/[0.05] px-5 py-2.5">
+                    <PromoteControl
+                      projectRef={project.ref}
+                      aliasRef={alias.ref}
+                      hostname={alias.hostname}
+                      currentDeploymentRef={alias.deployments?.ref ?? null}
+                      candidates={promotable}
+                      routingLive={false}
+                    />
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -198,6 +278,22 @@ export default async function ProjectPage({ params }: Params) {
             </table>
           </div>
         )}
+      </Section>
+
+      <Section title="Environment variables">
+        <EnvEditor
+          projectRef={project.ref}
+          variables={variables}
+          canSave={false}
+        />
+      </Section>
+
+      <Section title="Domains">
+        <DomainManager
+          projectRef={project.ref}
+          domains={domains}
+          customHostnamesEnabled={false}
+        />
       </Section>
     </Shell>
   );
