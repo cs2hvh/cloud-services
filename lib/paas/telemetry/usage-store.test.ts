@@ -70,7 +70,7 @@ test("stored deltas sum to exactly what in-memory accumulation reports", () => {
     live = accumulate(live, observations, { now, previousAt });
 
     const delta = sampleDelta(observations, { now, previousAt });
-    for (const r of toSampleRows(delta, now, () => "p1")) rows.push(r as StoredSample);
+    for (const r of toSampleRows(delta, now, { projectIdOf: () => "p1", periodSeconds: STEP })) rows.push(r as StoredSample);
 
     previousAt = now;
   }
@@ -125,12 +125,12 @@ test("a bucket with no measurable usage is not written", () => {
   // The first sample of any period attributes zero by design. Writing those
   // makes a sampling gap indistinguishable from an idle app.
   const first = sampleDelta([app()], { now: T0, previousAt: null });
-  assert.deepEqual(toSampleRows(first, T0), []);
+  assert.deepEqual(toSampleRows(first, T0, { periodSeconds: 0 }), []);
 });
 
 test("a bucket with only unobserved time IS written, because a gap is information", () => {
   const gapped = sampleDelta([app()], { now: at(3600), previousAt: T0 });
-  const rows = toSampleRows(gapped, at(3600));
+  const rows = toSampleRows(gapped, at(3600), { periodSeconds: 3600 });
 
   assert.equal(rows.length, 1);
   assert.ok(rows[0].unobserved_seconds > 0);
@@ -139,13 +139,48 @@ test("a bucket with only unobserved time IS written, because a gap is informatio
 test("project_id is nullable so unattributed usage is recorded rather than dropped", () => {
   const delta = sampleDelta([app()], { now: at(60), previousAt: T0 });
 
-  assert.equal(toSampleRows(delta, at(60))[0].project_id, null);
-  assert.equal(toSampleRows(delta, at(60), () => "p9")[0].project_id, "p9");
+  assert.equal(toSampleRows(delta, at(60), { periodSeconds: 60 })[0].project_id, null);
+  assert.equal(toSampleRows(delta, at(60), { projectIdOf: () => "p9", periodSeconds: 60 })[0].project_id, "p9");
+});
+
+test("period_seconds records the window, because pod-seconds alone is ambiguous", () => {
+  // 300 pod-seconds is one pod for five minutes or five pods for one, and
+  // those are indistinguishable the moment the interval changes or a restart
+  // produces a short period. Raised by the infrastructure lane when they
+  // applied the table.
+  const delta = sampleDelta([app("dpl_1", 1)], { now: at(300), previousAt: T0 });
+  const [row] = toSampleRows(delta, at(300), { periodSeconds: 300 });
+
+  assert.equal(row.pod_seconds, 300);
+  assert.equal(row.period_seconds, 300, "one pod for five minutes");
+
+  const five = sampleDelta([app("dpl_1", 5)], { now: at(60), previousAt: T0 });
+  const [busy] = toSampleRows(five, at(60), { periodSeconds: 60 });
+
+  assert.equal(busy.pod_seconds, 300, "same pod-seconds…");
+  assert.equal(busy.period_seconds, 60, "…different window, and now distinguishable");
+});
+
+test("a nonsensical window is stored as zero rather than propagated", () => {
+  const delta = sampleDelta([app()], { now: at(60), previousAt: T0 });
+  for (const bad of [0, -30, NaN, Infinity]) {
+    assert.equal(toSampleRows(delta, at(60), { periodSeconds: bad })[0].period_seconds, 0, `${bad}`);
+  }
+});
+
+test("project_ref is carried so attribution survives the project row being deleted", () => {
+  // project_id is `on delete set null` because these are financial records —
+  // the final invoice and any chargeback both arrive after deletion.
+  const delta = sampleDelta([app()], { now: at(60), previousAt: T0 });
+  const [row] = toSampleRows(delta, at(60), { periodSeconds: 60 });
+
+  assert.equal(row.project_ref, "prj_1");
+  assert.equal(row.project_id, null, "no uuid resolved, but the ref still bills to something");
 });
 
 test("rows carry the deployment ref and a rounded, storable number", () => {
   const delta = sampleDelta([app("dpl_x", 3)], { now: at(45), previousAt: T0 });
-  const [row] = toSampleRows(delta, at(45));
+  const [row] = toSampleRows(delta, at(45), { periodSeconds: 45 });
 
   assert.equal(row.deployment_ref, "dpl_x");
   assert.equal(row.pod_seconds, 135, "three pods for 45s");

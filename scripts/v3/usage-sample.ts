@@ -193,9 +193,12 @@ for (let i = 0; i < SAMPLES; i += 1) {
   buckets = accumulate(buckets, observations, { now, previousAt });
 
   if (RECORD) {
-    const rows = toSampleRows(sampleDelta(observations, { now, previousAt }), now, (b) =>
-      projectIdOf.get(b.projectRef) ?? null,
-    );
+    const rows = toSampleRows(sampleDelta(observations, { now, previousAt }), now, {
+      projectIdOf: (b) => projectIdOf.get(b.projectRef) ?? null,
+      // The window this row measures, not the configured interval — a slow
+      // sample makes the real period longer than --interval claims.
+      periodSeconds: previousAt === null ? 0 : (now.getTime() - previousAt.getTime()) / 1000,
+    });
     if (rows.length) {
       await db.insert("usage_samples", rows);
       written += rows.length;

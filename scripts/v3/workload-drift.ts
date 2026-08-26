@@ -76,8 +76,15 @@ const placements: PlacementLike[] = placementRows.map((p) => ({
 }));
 
 const report = reconcileWorkloads({ workloads, deployments: rows, placements });
+
+// EVERY pod, platform namespaces included. pod_allocated counts against the
+// LKE pod cap and that cap counts everything — comparing it to the tenant
+// count above reports a large false drift on a consistent cluster.
+const allPods = await k.get<{ items: Array<{ status?: { phase?: string } }> }>("/api/v1/pods", true);
+const runningPods = (allPods?.items ?? []).filter((p) => p.status?.phase === "Running").length;
+
 const recordedPods = clusters.reduce((n, c) => n + c.pod_allocated, 0);
-const capacity = capacityDrift(recordedPods, report.observedPods);
+const capacity = capacityDrift(recordedPods, runningPods);
 
 if (JSON_OUT) {
   console.log(JSON.stringify({ ...report, capacity, clusters }, null, 2));
@@ -109,8 +116,8 @@ console.log(
     (report.unaccountedPods > 0 ? `   ← capacity nobody is selling and nothing will reap` : ""),
 );
 console.log(
-  `  pod_allocated     ${capacity.recorded} recorded, ${capacity.observed} observed, ` +
-    `drift ${capacity.drift >= 0 ? "+" : ""}${capacity.drift}` +
+  `  pod_allocated     ${capacity.recorded} recorded, ${capacity.observed} running ` +
+    `cluster-wide (platform included), drift ${capacity.drift >= 0 ? "+" : ""}${capacity.drift}` +
     (capacity.significant ? `   ← placement is scheduling against fiction` : ""),
 );
 console.log(

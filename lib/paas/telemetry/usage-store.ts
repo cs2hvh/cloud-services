@@ -39,11 +39,30 @@ export interface UsageSampleRow {
   sampled_at: string;
   deployment_ref: string;
   project_id: string | null;
+  /**
+   * Attribution that survives the project row being deleted.
+   *
+   * `project_id` is `on delete set null` because these are financial records —
+   * a cascade would erase the usage the moment a project is deleted, and both
+   * the final invoice and any chargeback arrive after deletion. The ref is
+   * text, so it outlives the foreign key it mirrors.
+   */
+  project_ref: string | null;
   pod_seconds: number;
   warm_seconds: number;
   peak_pods: number;
   restarts: number;
   unobserved_seconds: number;
+  /**
+   * The wall-clock window this row measures.
+   *
+   * Without it, 300 pod-seconds is one pod for five minutes or five pods for
+   * one, and those are indistinguishable the moment the sampling interval
+   * changes or a restart produces a short period. With it, aggregation is
+   * arithmetic instead of an assumption about how the sampler was configured
+   * when the row was written.
+   */
+  period_seconds: number;
 }
 
 /**
@@ -68,10 +87,17 @@ export function sampleDelta(
  * full of zero rows makes a gap in sampling indistinguishable from an idle
  * app. `unobservedSeconds` is kept even so, because a gap is information.
  */
+export interface SampleRowOptions {
+  /** Resolves the project uuid, when the deployment has one. */
+  projectIdOf?: (bucket: UsageBucket) => string | null;
+  /** Wall-clock seconds this interval covers. See `period_seconds`. */
+  periodSeconds: number;
+}
+
 export function toSampleRows(
   buckets: Map<string, UsageBucket>,
   sampledAt: Date,
-  projectIdOf: (bucket: UsageBucket) => string | null = () => null,
+  opts: SampleRowOptions,
 ): UsageSampleRow[] {
   const rows: UsageSampleRow[] = [];
   for (const b of buckets.values()) {
@@ -79,15 +105,24 @@ export function toSampleRows(
     rows.push({
       sampled_at: sampledAt.toISOString(),
       deployment_ref: b.appKey,
-      project_id: projectIdOf(b),
+      project_id: opts.projectIdOf?.(b) ?? null,
+      // Carried from the bucket rather than resolved, so a deployment whose
+      // project row we never recorded still bills to something readable.
+      project_ref: b.projectRef || null,
       pod_seconds: Number(b.podSeconds.toFixed(3)),
       warm_seconds: Number(b.warmSeconds.toFixed(3)),
       peak_pods: b.peakPods,
       restarts: b.restarts,
       unobserved_seconds: Number(b.unobservedSeconds.toFixed(3)),
+      period_seconds: Number(periodOf(opts.periodSeconds).toFixed(3)),
     });
   }
   return rows;
+}
+
+/** A window must be positive; a zero or negative one describes nothing. */
+function periodOf(seconds: number): number {
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : 0;
 }
 
 /** A stored row as it comes back from PostgREST — numerics arrive as strings. */

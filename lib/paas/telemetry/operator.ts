@@ -291,12 +291,16 @@ export async function workloadView(): Promise<WorkloadView> {
   }));
 
   const drift = reconcileWorkloads({ workloads, deployments: rows, placements });
+
+  // EVERY pod, platform namespaces included — see capacityDrift's docblock.
+  // pod_allocated counts against the LKE pod cap and that cap counts
+  // everything, so comparing it to the tenant count reports a false drift.
+  const allPods = await k.get<{ items: Array<{ status?: { phase?: string } }> }>("/api/v1/pods", true);
+  const runningPods = (allPods?.items ?? []).filter((p) => p.status?.phase === "Running").length;
+
   return {
     drift,
-    capacity: capacityDrift(
-      clusters.reduce((n, c) => n + c.pod_allocated, 0),
-      drift.observedPods,
-    ),
+    capacity: capacityDrift(clusters.reduce((n, c) => n + c.pod_allocated, 0), runningPods),
   };
 }
 

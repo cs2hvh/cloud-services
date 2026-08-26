@@ -267,10 +267,25 @@ export interface CapacityDrift {
  * Placement reads `pod_allocated` to decide where the next app goes. When it
  * drifts low, the cluster is oversubscribed against a cap that LKE enforces
  * hard; when it drifts high, capacity that could be sold looks full.
+ *
+ * `observedAllPods` MUST BE EVERY POD ON THE CLUSTER, NOT ONLY TENANT PODS.
+ *
+ * This is the trap, and it caught me. The rest of this module is deliberately
+ * tenant-scoped — platform namespaces are filtered out, because a workload
+ * with no `paas.deployments` row is only a finding if it was supposed to have
+ * one. But `pod_allocated` counts against the LKE POD CAP, and that cap counts
+ * everything: kube-system, Traefik, the registry, the gVisor installer, the
+ * registry-proxy DaemonSet. Comparing a tenant count to it reported a drift of
+ * -20 on a cluster that was perfectly consistent, which is worse than no check
+ * — a reconciler crying wolf gets muted, and then it is not there when the
+ * number is genuinely wrong.
+ *
+ * Flagged by the infrastructure lane in the same message that fixed the
+ * column, before I had run it.
  */
-export function capacityDrift(recorded: number, observed: number): CapacityDrift {
-  const drift = observed - recorded;
-  return { recorded, observed, drift, significant: Math.abs(drift) > 2 };
+export function capacityDrift(recorded: number, observedAllPods: number): CapacityDrift {
+  const drift = observedAllPods - recorded;
+  return { recorded, observed: observedAllPods, drift, significant: Math.abs(drift) > 2 };
 }
 
 /** Extract what this module needs from a Kubernetes Deployment object. */

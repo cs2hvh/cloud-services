@@ -227,6 +227,24 @@ test("recorded pod allocation is compared against reality", () => {
   assert.equal(capacityDrift(40, 5).significant, true);
 });
 
+test("capacity is compared cluster-wide, not against the tenant count", () => {
+  // The real case: pod_allocated read 23 (every pod, because the LKE cap counts
+  // kube-system, Traefik, the registry and the DaemonSets) while tenant
+  // workloads were 3. Passing the tenant count reported drift -20 on a
+  // perfectly consistent cluster. A reconciler crying wolf gets muted, and
+  // then it is not there when the number is genuinely wrong.
+  const tenantPods = 3;
+  const allPodsIncludingPlatform = 23;
+
+  assert.equal(capacityDrift(23, tenantPods).significant, true, "the bug: false alarm");
+  assert.equal(
+    capacityDrift(23, allPodsIncludingPlatform).significant,
+    false,
+    "the fix: consistent cluster reads consistent",
+  );
+  assert.equal(capacityDrift(23, allPodsIncludingPlatform).drift, 0);
+});
+
 // ── parsing ─────────────────────────────────────────────────────────────────
 
 test("the deployment label is authoritative, the object name only a fallback", () => {
