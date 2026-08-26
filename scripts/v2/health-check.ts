@@ -70,14 +70,25 @@ await check("linode", "token authenticates", async () => {
 });
 
 await check("linode", "BLAST RADIUS: prod invisible", async () => {
-  const list = await instances.list();
-  const foreign = list.filter((i) => !i.tags.includes("ahura-v2"));
+  const [list, clusters] = await Promise.all([instances.list(), lke.listClusters()]);
+  const ourClusterIds = new Set(clusters.map((c) => String(c.id)));
+
+  // An instance is legitimately ours if we tagged it, or if it is a worker node
+  // of one of our LKE clusters. LKE node instances are labelled
+  // `lke<clusterId>-<poolId>-<suffix>` and do NOT inherit the cluster's tags,
+  // so a tag-only check reports our own nodes as foreign.
+  const foreign = list.filter((i) => {
+    if (i.tags.includes("ahura-v2") || i.tags.includes("ahura-v2-build")) return false;
+    const m = i.label.match(/^lke(\d+)-/);
+    return !(m && ourClusterIds.has(m[1]));
+  });
+
   if (foreign.length) {
     throw new Error(
       `token can see ${foreign.length} Linode(s) it did not create: ${foreign.map((i) => i.label).join(", ")}`,
     );
   }
-  return `${list.length} instance(s) visible, all v2-tagged — production is out of reach`;
+  return `${list.length} instance(s) visible, all ours — production is out of reach`;
 });
 
 await check("linode", "billing endpoint denied", async () => {
