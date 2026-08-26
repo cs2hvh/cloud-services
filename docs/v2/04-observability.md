@@ -13,7 +13,7 @@ change anything, run by a person who has read a report first.
 ## Running it
 
 ```bash
-node --test "lib/paas/telemetry/*.test.ts"                                   # 384 tests, no deps
+node --test "lib/paas/telemetry/*.test.ts"                                   # 404 tests, no deps
 node --env-file=.env --env-file=.env.local scripts/v3/operator-view.ts       # everything, once
 node --env-file=.env --env-file=.env.local scripts/v3/fleet-drift.ts --prove
 node --env-file=.env --env-file=.env.local scripts/v3/dns-drift.ts
@@ -24,6 +24,7 @@ node --env-file=.env --env-file=.env.local scripts/v3/traffic-watch.ts --samples
 node --env-file=.env --env-file=.env.local scripts/v3/density-check.ts        # pricing arithmetic
 node --env-file=.env --env-file=.env.local scripts/v3/sandbox-overhead.ts     # declared vs real
 node --env-file=.env --env-file=.env.local scripts/v3/sweep-health.ts         # are the sweeps running
+node --env-file=.env --env-file=.env.local scripts/v3/cost-attribution.ts     # per-app cost vs tier
 node --env-file=.env --env-file=.env.local scripts/v3/pod-logs.ts <ns> <pod>
 node --env-file=.env --env-file=.env.local scripts/v3/telemetry-probe.ts
 
@@ -210,7 +211,8 @@ Two things the episode is worth remembering for:
 | `telemetry/quota.ts` | Whether a ResourceQuota can be enforced without eviction | 25 |
 | `telemetry/trivy.ts` | Three verdicts — `undecided` blocks, it does not pass | 16 |
 | `telemetry/density.ts` | Pods per node: kubelet cut, sandbox charge, $/pod | 9 |
-| `telemetry/sandbox.ts` | Sandbox cost vs what we charge, and headroom against it | 17 |
+| `telemetry/sandbox.ts` | Sandbox cost vs what we charge, and headroom against it | 21 |
+| `telemetry/attribution.ts` | Per-app cost against tier, and whether it still fits | 16 |
 | `telemetry/sweep-health.ts` | Whether the sweeps ran, and whether findings survive | 13 |
 | `telemetry/cadence.ts` | Whether a schedule can produce what it claims to measure | 9 |
 | `telemetry/exit-codes.ts` | What a sweep's exit code means to a scheduler | — |
@@ -502,6 +504,49 @@ containers — how you would total any normal pod — returns **zero** for every
 sandboxed pod, which reads as a free sandbox and argues for cutting the
 reservation to nothing. Absence of container series on a sandboxed pod means
 unreadable, never empty. It is a test, not a comment.
+
+### Per-app attribution — what flat pricing made necessary
+
+Under warm-time pricing, consumption and revenue moved together: an app that
+ran hot paid more, so nobody had to watch. **Flat pricing severs that link on
+purpose** — the customer pays the same whether the app sleeps or pins its
+ceiling all month — which turns per-app consumption into something that must be
+measured rather than read off an invoice.
+
+`cost-attribution.ts` compares each project's tier against what it actually
+runs. Live: 3 apps, all Starter, **$21.00/mo revenue against $13.38 cost, 36%
+margin** — which matches the repriced Starter margin exactly, a cross-check
+worth having since the two are computed without sharing a constant.
+
+Three things go wrong and they are **not one finding**, because each carries a
+direction:
+
+| | | |
+|---|---|---|
+| `tier-drift` | deployed pods do not match the tier billed | either way |
+| `instance-drift` | running pods ≠ `instance_count` | either way |
+| `outgrown-tier` | sustained occupancy of the CPU ceiling | against the platform |
+
+"Pods do not match the tier" is a leak in one direction and a refund in the
+other. A report that says only *drift* makes someone read every row to find out
+which, so `against: "platform" | "customer"` is part of the finding.
+
+**Memory is not the abuse vector**, which matters because it is the axis the
+whole price is built on: request equals limit on every tier, so an app cannot
+consume more than it reserved — it OOMs instead. The exploitable axis is **CPU
+on the shared tiers**, where the request is 50m and the ceiling is 1000m. An app
+living at that ceiling consumes twenty times what it reserves, pays the shared
+price, and takes those cycles from its neighbours.
+
+And that is *not a fault*. Burst is what shared is sold as, so the threshold is
+deliberately high (80% sustained) and the finding is framed as a tier that no
+longer fits — a sales conversation before an abuse one.
+
+An unknown tier is skipped rather than defaulted: attributing a Pro customer
+against Starter economics would report a healthy margin on an app we might be
+losing money on. Unread usage is a finding, never a quiet app, and it is counted
+separately so "3 apps with findings" cannot come to mean "3 apps we failed to
+read".
 
 ### Warm fraction, and what flat pricing did to it
 
