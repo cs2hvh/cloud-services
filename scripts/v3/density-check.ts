@@ -106,7 +106,7 @@ const CLAIMED_NODE = {
   type: pricingClaim.nodeType,
   nominalBytes: Number(nominalMatch[1]) * GIB,
   monthlyUsd,
-  usableClaimGb: pricingClaim.usableClaimGb,
+  usableClaimBytes: pricingClaim.usableClaimBytes,
 };
 const CLAIMED_ROWS = pricingClaim.rows;
 
@@ -283,7 +283,7 @@ console.log(`\n  DERIVED — ${CLAIMED_NODE.type}, which this cluster does not r
 console.log(`      nominal ${gb(CLAIMED_NODE.nominalBytes)}  →  capacity ${gb(derivedCapacity)} (firmware takes ${((1 - firmwareRatio) * 100).toFixed(1)}%)`);
 console.log(`      kubelet reserves ${gb(formulaReserve + Math.max(0, anchorExcess))}  →  allocatable ${gb(derivedAllocatable)}`);
 console.log(`      system pods take ${gb(perNodeSystemBytes)}  →  usable ${gb(derivedAllocatable - perNodeSystemBytes)}`);
-console.log(`\n      The table claims ${CLAIMED_NODE.usableClaimGb} GB usable.`);
+console.log(`\n      The table claims ${gb(CLAIMED_NODE.usableClaimBytes)} usable.`);
 
 console.log(`\n${line}`);
 console.log(

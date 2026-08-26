@@ -285,6 +285,35 @@ export interface HeadroomReport {
   unread: number;
 }
 
+/**
+ * Is there anything to report about the sandbox charge?
+ *
+ * WRITTEN AFTER THE CHECK TURNED ITSELF OFF. The report had two halves — a
+ * ceiling saying the declaration was too big, and headroom saying whether pods
+ * were near it — and the script returned "clean" as soon as the ceiling half
+ * passed, skipping the other. That was harmless while the declaration was
+ * oversized. The moment it was cut to 64Mi the ceiling went quiet, and the one
+ * monitor standing between the smaller reservation and an OOM stopped printing
+ * at exactly the point it started mattering.
+ *
+ * The two halves fail in opposite directions and neither implies the other:
+ *
+ *   ceilingExceeded   the declaration is bigger than any pod's whole footprint.
+ *                     Costs money — density given away — and is recoverable
+ *                     whenever someone gets to it.
+ *   hot / overReserved
+ *                     pods are near or past what was set aside for them. Ends
+ *                     in the kernel OOM-killing whichever pod allocates next,
+ *                     possibly a different tenant's than the one at fault.
+ *
+ * So a clean ceiling never suppresses a hot pod. A safety check that goes
+ * silent once the risky change is made is worse than no check, because its
+ * silence reads as reassurance.
+ */
+export function sandboxHasFindings(ceilingExceeded: number, report: HeadroomReport): boolean {
+  return ceilingExceeded > 0 || report.hot > 0 || report.overReserved > 0;
+}
+
 export function headroomReport(pods: Headroom[]): HeadroomReport {
   const read = pods.filter((p) => p.utilisation !== null);
   return {

@@ -12,6 +12,7 @@
  * READ-ONLY. GETs against the Kubernetes API.
  */
 
+import { EXIT_CANNOT_RUN } from "../../lib/paas/telemetry/exit-codes.ts";
 import { db } from "../../lib/paas/db.ts";
 import { loadKubeconfig, kube } from "../../lib/paas/k8s/client.ts";
 
@@ -26,7 +27,7 @@ console.log(`\nTelemetry probe — ${ctx.server}\n${"─".repeat(84)}`);
 
 if (!(await k.healthz())) {
   console.log("cluster unreachable");
-  process.exit(1);
+  process.exit(EXIT_CANNOT_RUN);
 }
 
 // ── metrics.k8s.io: the precondition for T4 ─────────────────────────────────
@@ -146,3 +147,4 @@ console.log(`gvisor present                 ${ok(rcs.some((r) => r.metadata.name
 console.log(
   `\n${hasMetricsGroup ? "T4 (metrics) is unblocked." : "T4 (metrics) BLOCKED: metrics-server not installed."}\n`,
 );
+

@@ -32,6 +32,7 @@
  * not as the number.
  */
 
+import { EXIT_CLEAN, EXIT_CANNOT_RUN } from "../../lib/paas/telemetry/exit-codes.ts";
 import { paasConfig } from "../../lib/paas/config.ts";
 import { listDnsRecords } from "../../lib/paas/edge/cloudflare.ts";
 import { loadKubeconfig, kube } from "../../lib/paas/k8s/client.ts";
@@ -62,7 +63,7 @@ const INTERVAL_S = Math.min(arg("interval", 20), 600);
 const k = kube(loadKubeconfig(KUBECONFIG));
 if (!(await k.healthz())) {
   console.error("cluster unreachable");
-  process.exit(1);
+  process.exit(EXIT_CANNOT_RUN);
 }
 
 /**
@@ -104,7 +105,7 @@ const svc = await k.get<{ status?: { loadBalancer?: { ingress?: Array<{ ip?: str
 const gatewayIp = svc?.status?.loadBalancer?.ingress?.[0]?.ip;
 if (!gatewayIp) {
   console.error("gateway has no LoadBalancer address — cannot tell which hostnames are ours");
-  process.exit(1);
+  process.exit(EXIT_CANNOT_RUN);
 }
 
 const apex = paasConfig.appDomain();
@@ -155,7 +156,7 @@ if (JSON_OUT) {
       2,
     ),
   );
-  process.exit(0);
+  process.exit(EXIT_CLEAN);
 }
 
 const line = "─".repeat(100);

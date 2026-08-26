@@ -35,6 +35,7 @@ import {
   densityAtOverhead,
   headroom,
   headroomReport,
+  sandboxHasFindings,
   HEADROOM_WARN,
 } from "../../lib/paas/telemetry/sandbox.ts";
 
@@ -177,21 +178,32 @@ if (unobserved.length) {
   console.log(`  ${unobserved.length} sandboxed pod(s) unobserved — the sandbox was not read, not read as free.\n`);
 }
 
+// THE CEILING SECTION IS CONDITIONAL. THE HEADROOM SECTION BELOW IS NOT.
+//
+// This block used to end in `process.exit(EXIT_CLEAN)`, which was correct while
+// the only question was whether the declaration was too big. It stopped being
+// correct the moment the declaration was cut: with 64Mi now inside every pod's
+// footprint, the early exit skipped the headroom report entirely — so the one
+// monitor standing between the smaller reservation and an OOM went silent at
+// exactly the moment it started mattering.
+//
+// A safety check that switches itself off once the risky change is made is
+// worse than not having it, because its silence reads as reassurance.
 if (over.length === 0) {
   console.log(
     `  The declared charge is within every measured pod's footprint. This cannot\n` +
       `  confirm it is right — the sentry is not separable from the app inside the\n` +
-      `  sandbox — only that nothing here proves it wrong.\n`,
+      `  sandbox — only that nothing here proves it wrong. Headroom below is the\n` +
+      `  check that matters now.\n`,
   );
-  process.exit(EXIT_CLEAN);
+} else {
+  const worst = over.reduce((a, b) => ((a.wholePodBytes ?? 0) > (b.wholePodBytes ?? 0) ? a : b));
+  console.log(
+    `  ${over.length} of ${bounded.length} sandboxed pod(s) cost LESS IN TOTAL — sentry, gofer and\n` +
+      `  application together — than the sandbox charge alone. The heaviest uses ${mib(worst.wholePodBytes)}\n` +
+      `  against a ${mib(declared)} declaration, so the sentry's true cost is below that ceiling.\n`,
+  );
 }
-
-const worst = over.reduce((a, b) => ((a.wholePodBytes ?? 0) > (b.wholePodBytes ?? 0) ? a : b));
-console.log(
-  `  ${over.length} of ${bounded.length} sandboxed pod(s) cost LESS IN TOTAL — sentry, gofer and\n` +
-    `  application together — than the sandbox charge alone. The heaviest uses ${mib(worst.wholePodBytes)}\n` +
-    `  against a ${mib(declared)} declaration, so the sentry's true cost is below that ceiling.\n`,
-);
 
 // What the declaration is worth, in the only terms that matter here. Framed as
 // a sensitivity, not a recommendation: the ceiling does not name a safe value.
@@ -210,8 +222,12 @@ for (const mibValue of [128, 96, 64, 32]) {
 console.log(
   `\n  NOT a recommendation from this script. Reserving too little kills pods under\n` +
     `  load, and the safe figure comes from a load test — scripts/v2/sandbox-loadtest.ts\n` +
-    `  measures it at 42-45 MiB by A/B against runc. What THIS establishes is that\n` +
-    `  ${mib(declared)} is above the ceiling even on idle pods.\n`,
+    `  measures the sandbox at 42-45 MiB by A/B against runc.\n` +
+    (over.length > 0
+      ? `  What THIS establishes is that ${mib(declared)} exceeds the whole footprint of\n` +
+        `  every pod measured, so it is above the sentry's true cost.\n`
+      : `  ${mib(declared)} is now inside the pods' own footprints, so the ceiling check\n` +
+        `  can no longer bound it — headroom below is what watches this declaration.\n`),
 );
 
 // ── would cutting it hurt anyone ────────────────────────────────────────────
@@ -239,17 +255,31 @@ if (head.unread > 0) {
 }
 
 if (head.peakUtilisation === null) {
-  console.log(`\n  Nothing was read, so there is no basis here for changing the reservation.\n`);
-} else {
+  // Nothing measured. Not a clean bill of health — there is no evidence either
+  // way, and this is the check the current reservation is resting on.
   console.log(
-    `\n  Peak observed: ${(head.peakUtilisation * 100).toFixed(1)}% of reservation` +
-      (head.overReserved > 0 ? `, and ${head.overReserved} pod(s) exceed theirs` : "") +
-      `.\n` +
-      `  These are the workloads we have, not the worst a tenant can produce. A\n` +
-      `  reservation has to hold for the worst moment of the worst tenant, so this\n` +
-      `  is the monitor that makes a reduction reversible rather than the evidence\n` +
-      `  that justifies one — under-declaring produces no warning, just a node that\n` +
-      `  accepts more pods than it can hold.\n`,
+    `\n  Nothing was read, so this run says nothing about whether ${mib(declared)} is enough.\n`,
+  );
+  process.exit(EXIT_CANNOT_RUN);
+}
+
+console.log(
+  `\n  Peak observed: ${(head.peakUtilisation * 100).toFixed(1)}% of reservation` +
+    (head.overReserved > 0 ? `, and ${head.overReserved} pod(s) exceed theirs` : "") +
+    `.\n` +
+    `  These are the workloads we have, not the worst a tenant can produce. A\n` +
+    `  reservation has to hold for the worst moment of the worst tenant, so this\n` +
+    `  is the monitor that makes a reduction reversible rather than the evidence\n` +
+    `  that justifies one — under-declaring produces no warning, just a node that\n` +
+    `  accepts more pods than it can hold.\n`,
+);
+
+const findings = sandboxHasFindings(over.length, head);
+if (head.hot > 0 || head.overReserved > 0) {
+  console.log(
+    `  ${head.hot} pod(s) at or above ${(HEADROOM_WARN * 100).toFixed(0)}% of reservation` +
+      (head.overReserved > 0 ? `, ${head.overReserved} past it` : "") +
+      ` — raise podFixed rather than\n  waiting for a node to make the argument.\n`,
   );
 }
-process.exit(EXIT_FINDINGS);
+process.exit(findings ? EXIT_FINDINGS : EXIT_CLEAN);

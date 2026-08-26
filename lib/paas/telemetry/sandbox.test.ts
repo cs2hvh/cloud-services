@@ -7,6 +7,7 @@ import {
   densityAtOverhead,
   headroom,
   headroomReport,
+  sandboxHasFindings,
   HEADROOM_WARN,
   type PodFootprint,
 } from "./sandbox.ts";
@@ -183,4 +184,34 @@ test("the hottest pod is reported first", () => {
   ]);
   assert.equal(r.pods[0].wholePodBytes, 600 * MIB);
   assert.equal(r.hot, 1);
+});
+
+test("a clean ceiling does not suppress a hot pod", () => {
+  // THE REGRESSION. The report returned clean as soon as the ceiling check
+  // passed, skipping headroom entirely. Harmless while the declaration was
+  // oversized; the moment it was cut to 64Mi the ceiling went quiet and the
+  // monitor watching the cut stopped reporting at exactly the point it began
+  // to matter.
+  const hot = headroomReport([headroom(fp(Math.round(576 * MIB * 0.9)), 512 * MIB, 64 * MIB)]);
+  assert.equal(hot.hot, 1);
+  assert.equal(sandboxHasFindings(0, hot), true, "no ceiling breach, but a pod is near its reservation");
+});
+
+test("a pod past its reservation is a finding even with a clean ceiling", () => {
+  const past = headroomReport([headroom(fp(700 * MIB), 512 * MIB, 64 * MIB)]);
+  assert.equal(past.overReserved, 1);
+  assert.equal(sandboxHasFindings(0, past), true);
+});
+
+test("an oversized declaration is still a finding when every pod is cold", () => {
+  // The other direction: costs density rather than risking an OOM, but it is
+  // not nothing, and headroom being quiet must not suppress it either.
+  const cold = headroomReport([headroom(fp(89 * MIB), 512 * MIB, 128 * MIB)]);
+  assert.equal(cold.hot, 0);
+  assert.equal(sandboxHasFindings(3, cold), true);
+});
+
+test("clean is only when both halves are clean", () => {
+  const cold = headroomReport([headroom(fp(93 * MIB), 512 * MIB, 64 * MIB)]);
+  assert.equal(sandboxHasFindings(0, cold), false);
 });

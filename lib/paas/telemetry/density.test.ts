@@ -118,7 +118,7 @@ test("the real pricing doc parses — this is the check that it still can", () =
   assert.ok(claim !== null, "could not find the pod-density table in 05-pricing.md");
   assert.ok(claim.rows.length >= 4, `expected at least 4 tier rows, got ${claim.rows.length}`);
   assert.match(claim.nodeType, /^g6-/);
-  assert.ok(claim.usableClaimGb > 0);
+  assert.ok(claim.usableClaimBytes > 0);
 
   // Every row must carry all three facts. A row that parsed to a zero pod count
   // would compare clean against any density at all.

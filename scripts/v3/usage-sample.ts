@@ -21,6 +21,7 @@
  * READ-ONLY. GETs against the Kubernetes API and the paas schema.
  */
 
+import { EXIT_CLEAN, EXIT_CANNOT_RUN } from "../../lib/paas/telemetry/exit-codes.ts";
 import { db } from "../../lib/paas/db.ts";
 import { loadKubeconfig, kube } from "../../lib/paas/k8s/client.ts";
 import {
@@ -118,7 +119,7 @@ if (PERIOD_HOURS > 0) {
         `The migration has not been applied yet. Until it is, warm fraction exists\n` +
         `only for the lifetime of one sampler process — run without --period.\n`,
     );
-    process.exit(1);
+    process.exit(EXIT_CANNOT_RUN);
   }
   const usage = aggregatePeriod(rows, start, end);
   const fleet = fleetWarmSummary(usage, seconds);
@@ -174,7 +175,7 @@ if (PERIOD_HOURS > 0) {
       `  $18-20k idle-to-zero ($2.30-$3.62/app), at a $5 price. Weighted per APP,\n` +
       `  because the model is a distribution over apps rather than over compute.\n`,
   );
-  process.exit(0);
+  process.exit(EXIT_CLEAN);
 }
 
 const ctx = loadKubeconfig(KUBECONFIG);
@@ -182,7 +183,7 @@ const k = kube(ctx);
 
 if (!(await k.healthz())) {
   console.error("cluster unreachable");
-  process.exit(1);
+  process.exit(EXIT_CANNOT_RUN);
 }
 
 /** Project refs → ids, so stored samples can be attributed to a bill. */
@@ -203,7 +204,7 @@ if (RECORD) {
         `The migration has not been applied yet. Run without --record to sample\n` +
         `and report live, which needs no table.\n`,
     );
-    process.exit(1);
+    process.exit(EXIT_CANNOT_RUN);
   }
 }
 
@@ -361,7 +362,7 @@ if (JSON_OUT) {
       2,
     ),
   );
-  process.exit(0);
+  process.exit(EXIT_CLEAN);
 }
 
 const line = "─".repeat(96);
