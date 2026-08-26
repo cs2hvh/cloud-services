@@ -279,6 +279,16 @@ export interface AppDeploymentInput {
   runtimeClassName?: string | null;
   /** Numeric UID the image runs as. Required: Kubernetes cannot verify a named user. */
   runAsUser?: number;
+  /**
+   * Hash of the runtime env content, stamped onto the POD TEMPLATE.
+   *
+   * Kubernetes does NOT restart pods when a Secret referenced by envFrom
+   * changes — those values are read once at container start. So updating the
+   * Secret alone leaves the running container on its old configuration, and
+   * nothing reports a problem. Changing this annotation changes the pod
+   * template, which rolls the pods and actually applies the new values.
+   */
+  envHash?: string;
 }
 
 export function appDeployment(i: AppDeploymentInput) {
@@ -297,7 +307,16 @@ export function appDeployment(i: AppDeploymentInput) {
       selector: { matchLabels: { "ahura.cloud/deployment": i.deploymentRef } },
       strategy: { type: "RollingUpdate", rollingUpdate: { maxUnavailable: 0, maxSurge: 1 } },
       template: {
-        metadata: { labels },
+        metadata: {
+          labels,
+          // Kubernetes does NOT restart pods when a Secret referenced by
+          // envFrom changes — those values are read once at container start.
+          // Updating the Secret alone leaves the running container on its old
+          // configuration with nothing reporting a problem. Stamping the hash
+          // here changes the pod template, which rolls the pods and actually
+          // applies the new values.
+          ...(i.envHash ? { annotations: { "ahura.cloud/env-hash": i.envHash } } : {}),
+        },
         spec: {
           // Sandboxed by default. Opting out requires passing null explicitly,
           // so an omission fails safe rather than silently unsandboxing a tenant.
@@ -393,4 +412,44 @@ export function tenantNetworkPolicy(namespace: string) {
       ],
     },
   };
+}
+
+/**
+ * Runtime environment Secret for one deployment.
+ *
+ * Named for the DEPLOYMENT ref, not the project: each deployment gets its own
+ * immutable Secret, so rolling back to an older deployment restores the
+ * configuration it was built and tested against. A single project-wide Secret
+ * would mean a rollback silently ran old code against new config, which is a
+ * different app than the one that was known good.
+ *
+ * PUBLIC-prefixed variables are deliberately EXCLUDED. Those are baked into
+ * image layers as build args; injecting them again at runtime would let a
+ * runtime edit silently disagree with what the bundle already contains.
+ */
+export function envSecret(i: {
+  deploymentRef: string;
+  projectRef: string;
+  namespace: string;
+  values: Record<string, string>;
+}) {
+  return {
+    apiVersion: "v1",
+    kind: "Secret",
+    metadata: {
+      name: `${i.deploymentRef}-env`,
+      namespace: i.namespace,
+      labels: ownerLabels({
+        "ahura.cloud/deployment": i.deploymentRef,
+        "ahura.cloud/project": i.projectRef,
+      }),
+    },
+    type: "Opaque",
+    stringData: i.values,
+  };
+}
+
+/** The Secret name a deployment's pods mount via envFrom. */
+export function envSecretName(deploymentRef: string): string {
+  return `${deploymentRef}-env`;
 }

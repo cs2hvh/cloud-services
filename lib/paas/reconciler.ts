@@ -34,9 +34,13 @@ import {
   tenantNetworkPolicy,
   namespaceManifest,
   REGISTRY_PULL,
+  envSecret,
+  envSecretName,
 } from "./k8s/manifests.ts";
 import { appIngress } from "./k8s/gateway.ts";
-import { projects, deployments, aliases, type ProjectRow, type DeploymentRow, type AliasRow } from "./db.ts";
+import { projects, deployments, aliases, envVars, type ProjectRow, type DeploymentRow, type AliasRow } from "./db.ts";
+import { decryptEnvValue, pgHexToBytes } from "./secrets.ts";
+import { createHash } from "node:crypto";
 
 export interface ReconcileAction {
   kind: "create" | "scale-up" | "scale-down" | "repoint" | "route" | "noop" | "error";
@@ -58,16 +62,41 @@ function k8sName(d: DeploymentRow): string {
   return d.ref;
 }
 
-async function currentReplicas(
+interface LiveDeployment {
+  replicas: number;
+  image: string | null;
+  envSecret: string | null;
+  envHash: string | null;
+}
+
+/**
+ * Read enough of the live Deployment to tell whether applying would actually
+ * change anything. Server-Side Apply does not report that, and a loop that
+ * says "all converged" while quietly rewriting a spec is the same dishonest
+ * reporting this project exists to stop.
+ */
+async function liveDeployment(
   k: ReturnType<typeof kube>,
   ns: string,
   name: string,
-): Promise<number | null> {
-  const dep = await k.get<{ spec?: { replicas?: number } }>(
-    `/apis/apps/v1/namespaces/${ns}/deployments/${name}`,
-    true,
-  );
-  return dep ? (dep.spec?.replicas ?? 0) : null;
+): Promise<LiveDeployment | null> {
+  const dep = await k.get<{
+    spec?: {
+      replicas?: number;
+      template?: {
+        metadata?: { annotations?: Record<string, string> };
+        spec?: { containers?: Array<{ image?: string; envFrom?: Array<{ secretRef?: { name?: string } }> }> };
+      };
+    };
+  }>(`/apis/apps/v1/namespaces/${ns}/deployments/${name}`, true);
+  if (!dep) return null;
+  const c = dep.spec?.template?.spec?.containers?.[0];
+  return {
+    replicas: dep.spec?.replicas ?? 0,
+    image: c?.image ?? null,
+    envSecret: c?.envFrom?.[0]?.secretRef?.name ?? null,
+    envHash: dep.spec?.template?.metadata?.annotations?.["ahura.cloud/env-hash"] ?? null,
+  };
 }
 
 async function scale(
@@ -150,28 +179,109 @@ export async function reconcileProject(
     // Digest-pinned, always. A tag can be moved beneath us; a digest cannot,
     // which is what makes rollback to an old deployment mean what it says.
     const image = `${REGISTRY_PULL}/${project.ref}@${d.image_digest}`;
-    const replicas = await currentReplicas(k, ns, name);
 
-    if (replicas === null) {
-      actions.push({ kind: "create", target: name, detail: `creating from ${d.image_digest.slice(0, 19)}…` });
-      if (!dry) {
-        await k.apply(
-          `/apis/apps/v1/namespaces/${ns}/deployments/${name}`,
-          appDeployment({
-            deploymentRef: d.ref,
-            projectRef: project.ref,
-            namespace: ns,
-            image,
-            port: 3000,
-            replicas: 1,
-          }),
-        );
+    // Sync this deployment's runtime configuration before the pod that will
+    // consume it. A pod starting against a Secret that does not exist yet
+    // crash-loops on missing configuration and reads as an application bug.
+    let envSecretRef: string | undefined;
+    let envHash: string | undefined;
+    try {
+      const rows = await envVars.listForSync(project.id, d.environment_id);
+      // PUBLIC-prefixed values are already baked into the image as build args.
+      // Injecting them again at runtime would let a later edit silently
+      // disagree with what the bundle already contains.
+      const runtime = rows.filter((r) => !r.is_public);
+      if (runtime.length) {
+        const values: Record<string, string> = {};
+        for (const row of runtime) {
+          // Decryption throws on any failure and never substitutes a
+          // placeholder. v1 returned raw ciphertext as the value here, which
+          // was then written into the Secret and into the customer's .env
+          // download — the app started with garbage and nothing said why.
+          values[row.key] = decryptEnvValue(project.ref, row.key, pgHexToBytes(row.value_ct), row.dek_id);
+        }
+        // Hash the CONTENT, sorted so key order cannot make an identical
+        // config look changed. This is what rolls the pods when a value edits.
+        envHash = createHash("sha256")
+          .update(Object.keys(values).sort().map((kk) => kk + "=" + values[kk]).join(String.fromCharCode(30)))
+          .digest("hex")
+          .slice(0, 16);
+        envSecretRef = envSecretName(d.ref);
+        if (!dry) {
+          await k.apply(
+            `/api/v1/namespaces/${ns}/secrets/${envSecretRef}`,
+            envSecret({ deploymentRef: d.ref, projectRef: project.ref, namespace: ns, values }),
+          );
+        }
+        actions.push({ kind: "noop", target: envSecretRef, detail: `${runtime.length} runtime var(s) synced` });
       }
-    } else if (replicas === 0) {
-      actions.push({ kind: "scale-up", target: name, detail: "alias points here; scaling 0 -> 1" });
-      if (!dry) await scale(k, ns, name, 1);
-    } else {
-      actions.push({ kind: "noop", target: name, detail: `already running (${replicas})` });
+    } catch (e) {
+      // Refuse to run the pod rather than start it with configuration we could
+      // not decrypt. A container running against missing secrets fails in ways
+      // that look like application bugs and waste hours.
+      actions.push({
+        kind: "error",
+        target: name,
+        detail: `env sync failed, not starting: ${(e as Error).message.slice(0, 180)}`,
+      });
+      continue;
+    }
+
+    const live = await liveDeployment(k, ns, name);
+    const replicas = live?.replicas ?? null;
+    const specDrifted =
+      live !== null &&
+      (live.image !== image ||
+        live.envSecret !== (envSecretRef ?? null) ||
+        live.envHash !== (envHash ?? null));
+
+    // ALWAYS apply the full spec, not only on first creation.
+    //
+    // The earlier version applied the manifest only when the Deployment did
+    // not exist, so adding an env var to a RUNNING app changed nothing: the
+    // Secret was written and the pod kept `envFrom: null`. Observed live.
+    // Server-Side Apply is idempotent, so converging the whole spec every pass
+    // costs one PATCH and is what makes this a reconciler rather than a
+    // create-once script. A changed envFrom alters the pod template, which
+    // rolls the pods — correct, since configuration changes should restart the
+    // app rather than apply on some later unrelated deploy.
+    // One apply covers all three cases — create, converge an existing spec, and
+    // scale a stopped deployment back up — because `replicas: 1` is part of the
+    // desired state. Splitting them was what let a running deployment keep a
+    // stale spec: the scale-up path never re-applied the manifest, so an app
+    // resurrected by a rollback came back with whatever envFrom it had before.
+    actions.push(
+      replicas === null
+        ? { kind: "create", target: name, detail: `creating from ${d.image_digest.slice(0, 19)}…` }
+        : replicas === 0
+          ? { kind: "scale-up", target: name, detail: "alias points here; scaling 0 -> 1" }
+          : specDrifted
+            ? {
+                kind: "repoint" as const,
+                target: name,
+                detail:
+                  live!.envSecret !== (envSecretRef ?? null)
+                    ? `config changed: envFrom ${live!.envSecret ?? "(none)"} -> ${envSecretRef ?? "(none)"} — pods will roll`
+                    : live!.envHash !== (envHash ?? null)
+                      ? `env values changed (${live!.envHash ?? "none"} -> ${envHash ?? "none"}) — pods will roll`
+                    : `image changed: ${String(live!.image).slice(-19)} -> ${image.slice(-19)}`,
+              }
+            : { kind: "noop" as const, target: name, detail: `converged (${replicas} replica(s))` },
+    );
+    if (!dry) {
+      await k.apply(
+        `/apis/apps/v1/namespaces/${ns}/deployments/${name}`,
+        appDeployment({
+          deploymentRef: d.ref,
+          projectRef: project.ref,
+          namespace: ns,
+          image,
+          port: 3000,
+          replicas: 1,
+          envSecretName: envSecretRef,
+          envHash,
+        }),
+      );
     }
   }
 
@@ -181,8 +291,9 @@ export async function reconcileProject(
   for (const d of ready) {
     if (targeted.has(d.id)) continue;
     const name = k8sName(d);
-    const replicas = await currentReplicas(k, ns, name);
-    if (replicas === null || replicas === 0) continue;
+    const cur = await liveDeployment(k, ns, name);
+    if (cur === null || cur.replicas === 0) continue;
+    const replicas = cur.replicas;
     actions.push({
       kind: "scale-down",
       target: name,

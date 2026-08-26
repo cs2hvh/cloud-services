@@ -352,3 +352,56 @@ export const aliases = {
   point: async (ref: string, deploymentId: string) =>
     (await db.update<AliasRow>("aliases", `ref=eq.${ref}`, { deployment_id: deploymentId }))[0],
 };
+
+export interface EnvVarRow {
+  id: string;
+  project_id: string;
+  environment_id: string | null;
+  key: string;
+  value_ct: string;   // PostgREST renders bytea as \x<hex>
+  dek_id: string;
+  is_public: boolean;
+}
+
+export const envVars = {
+  /**
+   * Keys and metadata ONLY — never value_ct. This is what a listing endpoint
+   * should use. v1's public API returned every DECRYPTED value in one
+   * unaudited response, bypassing its own dashboard's per-key reveal controls.
+   */
+  listKeys: (projectId: string) =>
+    db.select<Omit<EnvVarRow, "value_ct" | "dek_id">>(
+      "env_vars",
+      `select=id,project_id,environment_id,key,is_public&project_id=eq.${projectId}&order=key`,
+    ),
+
+  /**
+   * WITH ciphertext. Only the reconciler should call this, to build the runtime
+   * Secret. It is not an endpoint and must never become one.
+   */
+  listForSync: (projectId: string, environmentId: string) =>
+    db.select<EnvVarRow>(
+      "env_vars",
+      `select=*&project_id=eq.${projectId}&or=(environment_id.eq.${environmentId},environment_id.is.null)&order=key`,
+    ),
+
+  upsert: async (input: {
+    projectId: string;
+    environmentId?: string | null;
+    key: string;
+    valueCtHex: string;
+    dekId: string;
+    isPublic: boolean;
+  }) =>
+    (await db.insert<EnvVarRow>("env_vars", {
+      project_id: input.projectId,
+      environment_id: input.environmentId ?? null,
+      key: input.key,
+      value_ct: input.valueCtHex,
+      dek_id: input.dekId,
+      is_public: input.isPublic,
+    }))[0],
+
+  remove: (projectId: string, key: string) =>
+    db.delete("env_vars", `project_id=eq.${projectId}&key=eq.${key}`),
+};
