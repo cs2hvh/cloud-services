@@ -226,6 +226,23 @@ export interface ProjectRow {
   provider: "github" | "gitlab" | "bitbucket";
   repo_id: string; repo_full_name: string; installation_id: number | null;
   production_branch: string; root_directory: string | null; framework: string | null;
+  /**
+   * Scale-to-zero settings. These columns were added by the scale-to-zero
+   * migration and this type was not updated with them, so `idle-sweep.ts` read
+   * both fields off a type that did not declare either — the reads worked at
+   * runtime because PostgREST returns the columns regardless, and the compiler
+   * had nothing to check them against.
+   *
+   * That is worse than it sounds for these two specifically: the sweep decides
+   * whether to put an app to sleep, and the whole unit-economics argument rests
+   * on it. A rename on either side would have surfaced as an app that silently
+   * stopped being eligible for sleep, with no error anywhere.
+   *
+   * `idle_seconds` is nullable in the schema — null means "use the platform
+   * default", not "zero".
+   */
+  scale_to_zero: boolean;
+  idle_seconds: number | null;
 }
 export interface EnvironmentRow { id: string; ref: string; project_id: string; kind: string; name: string }
 /**

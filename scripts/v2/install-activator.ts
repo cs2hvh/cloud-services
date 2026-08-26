@@ -67,7 +67,6 @@ for (let i = 0; i < 30; i++) {
     const body = await k.raw<string>({
       method: "GET",
       path: `/api/v1/namespaces/${PAAS_NAMESPACE}/pods/${pod.metadata.name}:${8080}/proxy/healthz`,
-      raw: true,
     });
     if (String(body).trim() === "ok") {
       console.log(`\n  ${pod.metadata.name} answered /healthz after ${(i + 1) * 3}s`);

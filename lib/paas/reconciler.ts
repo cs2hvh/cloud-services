@@ -365,10 +365,15 @@ export async function reconcileProject(
   const production = projectAliases.find((a) => a.kind === "production");
   if (production?.deployment_id && byId.has(production.deployment_id)) {
     const target = byId.get(production.deployment_id)!;
-    const svc = await k.get<{ spec?: { selector?: Record<string, string> } }>(
-      `/api/v1/namespaces/${ns}/services/${project.ref}`,
-      true,
-    );
+    // The annotation must declare `ports` as well as `selector`: the port is
+    // read two lines below, and an annotation narrower than the reads it feeds
+    // means the compiler checks nothing about the shape that actually matters.
+    const svc = await k.get<{
+      spec?: {
+        selector?: Record<string, string>;
+        ports?: Array<{ targetPort?: number | string; port?: number; name?: string }>;
+      };
+    }>(`/api/v1/namespaces/${ns}/services/${project.ref}`, true);
     const currently = svc?.spec?.selector?.["ahura.cloud/deployment"];
     const currentPort = svc?.spec?.ports?.[0]?.targetPort;
     const desiredPort = target.container_port ?? 3000;

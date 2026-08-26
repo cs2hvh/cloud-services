@@ -91,6 +91,23 @@ interface RequestOptions {
   allowMissing?: boolean;
 }
 
+/**
+ * A note on the response body, because two callers were passing a `raw: true`
+ * option that never existed on this interface and therefore did nothing.
+ *
+ * A body that does not parse as JSON is returned as a STRING rather than
+ * throwing. That is deliberate and load-bearing: the pod-proxy endpoints serve
+ * Prometheus text, and the idle sweep reads router counters through one of
+ * them. So `raw: true` was never needed — it was a no-op that read like a
+ * feature, which is why it survived in two files.
+ *
+ * The cost of the fallback, stated so nobody rediscovers it as a bug: a genuine
+ * JSON endpoint returning MALFORMED JSON also yields a string, so "this is
+ * text" and "this JSON is broken" are indistinguishable here. Callers that
+ * expect an object should check what they got rather than assume the parse
+ * succeeded.
+ */
+
 export function kube(ctx: KubeContext) {
   /**
    * Retry transient failures.

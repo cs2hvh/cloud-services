@@ -18,6 +18,22 @@ const pods = (...phases: Array<string | { phase: string; deleting: true }>) => (
   ),
 });
 
+/**
+ * A k-like stub whose get() satisfies the GENERIC signature syncPodAllocation
+ * demands: <T>(path, tolerateMissing?) => Promise<T | null>.
+ *
+ * A mock returning a concrete shape cannot satisfy a function that promises to
+ * return any T, so every inline { get: async () => ({...}) } here failed to
+ * typecheck while still running green. The cast belongs in exactly one named
+ * place rather than scattered across five call sites — and confining it here
+ * means the call sites stay readable about what they are simulating.
+ */
+type KubeLike = { get: <T>(path: string, tolerateMissing?: boolean) => Promise<T | null> };
+
+function stub(respond: (path: string) => unknown): KubeLike {
+  return { get: async <T,>(path: string) => respond(path) as T | null };
+}
+
 test("Pending counts — it has already claimed its slot against the pod cap", () => {
   // Counting only Running undercounts during a rollout, which is exactly when
   // placement gets asked. Undercount is the direction that overcommits.
@@ -42,7 +58,7 @@ test("a read failure writes NOTHING", async () => {
   let wrote = false;
   const out = await syncPodAllocation(
     cluster({ pod_allocated: 7 }),
-    { get: async () => { throw new Error("connection refused"); } },
+    stub(() => { throw new Error("connection refused"); }),
   );
   assert.equal(out.observed, null);
   assert.equal(out.changed, false);
@@ -54,7 +70,7 @@ test("a read failure writes NOTHING", async () => {
 test("an empty pod list is not the same as a failed read", async () => {
   const out = await syncPodAllocation(
     cluster({ pod_allocated: 5 }),
-    { get: async () => ({ items: [] }) },
+    stub(() => ({ items: [] })),
     { dryRun: true },
   );
   assert.equal(out.observed, 0);
@@ -65,7 +81,7 @@ test("an empty pod list is not the same as a failed read", async () => {
 test("over-capacity is reported, not clamped", async () => {
   const out = await syncPodAllocation(
     cluster({ pod_capacity: 2, pod_allocated: 0 }),
-    { get: async () => pods("Running", "Running", "Running") },
+    stub(() => pods("Running", "Running", "Running")),
     { dryRun: true },
   );
   assert.equal(out.observed, 3);
@@ -75,7 +91,7 @@ test("over-capacity is reported, not clamped", async () => {
 test("no change when the record already matches reality", async () => {
   const out = await syncPodAllocation(
     cluster({ pod_allocated: 2 }),
-    { get: async () => pods("Running", "Running") },
+    stub(() => pods("Running", "Running")),
     { dryRun: true },
   );
   assert.equal(out.changed, false);
@@ -99,7 +115,7 @@ test("effective capacity is bounded by what the nodes can hold", () => {
 test("an unreadable node list never shrinks capacity to zero", async () => {
   const out = await syncPodAllocation(
     cluster({ pod_capacity: 1000, pod_allocated: 5 }),
-    { get: async (p: string) => (p.includes("/nodes") ? null : pods("Running")) },
+    stub((p) => (p.includes("/nodes") ? null : pods("Running"))),
     { dryRun: true },
   );
   assert.equal(out.capacity, 1000, "no observation means no change, not a collapse to zero");
@@ -109,10 +125,11 @@ test("capacity is lowered to the node total when the nodes say less", async () =
   const out = await syncPodAllocation(
     cluster({ pod_capacity: 1000, pod_allocated: 1 }),
     {
-      get: async (p: string) =>
+      ...stub((p) =>
         p.includes("/nodes")
           ? { items: [{ status: { allocatable: { pods: "110" } } }] }
           : pods("Running"),
+      ),
     },
     { dryRun: true },
   );

@@ -129,7 +129,12 @@ export async function putObject(key: string, body: Buffer | string, contentType?
       ...signedHeaders("PUT", key, payload),
       ...(contentType ? { "Content-Type": contentType } : {}),
     },
-    body: payload,
+    // A Node Buffer works at runtime — undici accepts it — but it is not in
+    // TypeScript's BodyInit, so this went unchecked until the repo was first
+    // typechecked. The view is zero-copy and honest about the offset: a Buffer
+    // from the pool can start part-way into its ArrayBuffer, so passing
+    // `payload.buffer` alone would upload the whole pool slab.
+    body: new Uint8Array(payload.buffer as ArrayBuffer, payload.byteOffset, payload.byteLength),
   });
   if (!res.ok) throw new Error(`[r2] PUT ${key} -> ${res.status}: ${(await res.text()).slice(0, 200)}`);
 }
