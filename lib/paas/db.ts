@@ -333,6 +333,8 @@ export const projects = {
 export const environments = {
   forProject: (projectId: string) =>
     db.select<EnvironmentRow>("environments", `select=*&project_id=eq.${projectId}`),
+  byId: async (id: string) =>
+    (await db.select<EnvironmentRow>("environments", `select=*&id=eq.${id}`))[0] ?? null,
   production: async (projectId: string) =>
     (await db.select<EnvironmentRow>(
       "environments", `select=*&project_id=eq.${projectId}&kind=eq.production`,
@@ -414,6 +416,13 @@ export const deployments = {
    * Same commit, same environment is a retry. Same commit, different
    * environment is a different deployment.
    */
+  /** Every deployment recorded in one environment, newest first. */
+  forEnvironment: (environmentId: string) =>
+    db.select<DeploymentRow>(
+      "deployments",
+      `select=*&environment_id=eq.${environmentId}&order=queued_at.desc`,
+    ),
+
   byEnvironmentAndSha: async (environmentId: string, sha: string) =>
     (await db.select<DeploymentRow>(
       "deployments",

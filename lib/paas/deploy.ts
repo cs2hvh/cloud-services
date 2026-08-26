@@ -26,9 +26,9 @@ import { imageIsDurable } from "./build/registry.ts";
 import { kube } from "./k8s/client.ts";
 import { PAAS_NAMESPACE, REGISTRY_PUSH, publisherJob } from "./k8s/manifests.ts";
 import { reconcileProject, kubeContextFromEnv } from "./reconciler.ts";
-import { teams, projects, environments, deployments, aliases, type DeploymentRow, type ProjectRow } from "./db.ts";
+import { teams, projects, environments, deployments, aliases, type DeploymentRow, type ProjectRow, type AliasRow } from "./db.ts";
 import { appHostname } from "./config.ts";
-import { assertLabelAvailable } from "./hostnames.ts";
+import { assertLabelAvailable, previewLabel } from "./hostnames.ts";
 import { upsertDnsRecord, listDnsRecords } from "./edge/cloudflare.ts";
 
 const UA = "ahuracloud-deploy-v2";
@@ -149,6 +149,35 @@ export async function acceptQueuedDeployment(deploymentRef: string): Promise<Enq
     return { deploymentRef, accepted: false, reason: `deployment is ${d.state}, not queued` };
   }
   return { deploymentRef, accepted: true };
+}
+
+/**
+ * Which of a project's aliases this build is allowed to repoint.
+ *
+ * THE RULE: A PREVIEW NEVER MOVES A PRODUCTION HOSTNAME.
+ *
+ * Pointing every alias at the new deployment was correct while a project's
+ * hostnames all served the same build — production plus custom domains, where
+ * leaving one behind serves two different builds depending on which URL you
+ * used. It becomes a production outage the moment previews exist: a preview
+ * build would repoint the production alias at itself, so pushing any feature
+ * branch silently replaces production with that branch.
+ *
+ * A preview moves ONLY its own branch alias, matched on the exact hostname, so
+ * two previews of one project cannot move each other either. A production build
+ * moves production and custom domains and leaves every branch alias alone.
+ *
+ * Separated from the deploy path so it is testable without a build, because the
+ * failure it prevents is not one anybody wants to discover from production.
+ */
+export function aliasesToPoint(
+  allAliases: AliasRow[],
+  isPreview: boolean,
+  hostname: string,
+): AliasRow[] {
+  return isPreview
+    ? allAliases.filter((a) => a.kind === "branch" && a.hostname === hostname)
+    : allAliases.filter((a) => a.kind !== "branch");
 }
 
 export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult> {
@@ -377,7 +406,25 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
   }
 
   // ── 4. route ──────────────────────────────────────────────────────────────
-  const label = (opts.hostnameLabel ?? `v2-${project.slug}`).slice(0, 40);
+  //
+  // WHICH ENVIRONMENT IS THIS BUILD FOR? Everything below depends on it, and
+  // getting it wrong is not a routing inconvenience — it is production serving
+  // a feature branch.
+  //
+  // Derived from the recorded deployment's environment rather than passed in.
+  // The build worker calls this with only a deployment ref, so an option would
+  // have defaulted, and the default would have been "production" — which is
+  // exactly the bug: a preview build taking the production hostname because
+  // nobody told it otherwise.
+  const buildEnv = d.environment_id ? await environments.byId(d.environment_id) : null;
+  const isPreview = buildEnv?.kind === "preview";
+
+  // A preview's hostname is minted from the branch; production keeps the
+  // project label. `previewLabel` hashes the FULL branch name, so two branches
+  // whose labels truncate to the same prefix still get distinct hostnames.
+  const label = isPreview
+    ? previewLabel(project.slug, d.git_ref ?? buildEnv!.name)
+    : (opts.hostnameLabel ?? `v2-${project.slug}`).slice(0, 40);
 
   // Refuse names the business already uses. The alias check below only asks
   // "does another PROJECT hold this?" — it cannot see that `api` and `www` are
@@ -396,16 +443,35 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
     throw new Error(`hostname ${hostname} is already claimed by another project`);
   }
 
-  const existing = await aliases.forProject(project.id);
-  const production = existing.find((a) => a.kind === "production");
+  const allAliases = await aliases.forProject(project.id);
+  const production = allAliases.find((a) => a.kind === "production");
 
-  // Point EVERY alias of this project at the new deployment. A project can hold
-  // more than one hostname — production plus additional ones — and leaving the
-  // extras pointing at an older deployment would serve two different builds
-  // from the same app depending on which URL you used.
+  // WHICH ALIASES THIS BUILD IS ALLOWED TO MOVE.
+  //
+  // Pointing EVERY alias at the new deployment was right while a project's
+  // hostnames all served the same build: production plus custom domains, where
+  // leaving one behind serves two different builds depending on the URL used.
+  //
+  // It is catastrophically wrong once previews exist. A preview build would
+  // repoint the PRODUCTION alias at itself, so pushing any feature branch
+  // replaces production with that branch. Latent rather than live — no preview
+  // has ever been built — but reachable the moment the webhook started
+  // recording preview deployments, which it now does.
+  //
+  // So the rule is by environment, not by project: a preview moves only its own
+  // branch alias, and a production build moves production and custom domains
+  // while leaving every branch alias alone.
+  const existing = aliasesToPoint(allAliases, isPreview, hostname);
+
   const toPoint = [...existing];
 
-  if (!production) {
+  if (isPreview) {
+    if (!existing.length) {
+      const created = await aliases.create({ projectId: project.id, hostname, kind: "branch" });
+      say("route", `alias ${created.ref} -> ${hostname} (preview of ${d.git_ref ?? buildEnv!.name})`);
+      toPoint.push(created);
+    }
+  } else if (!production) {
     const created = await aliases.create({ projectId: project.id, hostname, kind: "production" });
     say("route", `alias ${created.ref} -> ${hostname} (production)`);
     toPoint.push(created);
