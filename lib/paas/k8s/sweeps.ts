@@ -197,7 +197,58 @@ export function sweepSecret(job: SweepJob, env: Record<string, string>) {
   };
 }
 
-export function sweepCronJob(job: SweepJob, files: Array<{ path: string }>, srcHash: string) {
+/**
+ * Exit codes that mean THE SWEEP WORKED, mapped to a zero pod exit.
+ *
+ * The observability lane's contract (lib/paas/telemetry/exit-codes.ts):
+ *
+ *   0   ran, nothing to report
+ *   1   COULD NOT RUN — nothing measured; alert
+ *   2   the instrument is wrong — self-check failed or input refused
+ *   10  ran and FOUND something — the tool working, not failing
+ *   11  ran and found something URGENT
+ *
+ * Kubernetes has one bit: zero or not. Without translation, r2-drift finding
+ * 592 MB of reclaimable tarballs — the tool doing exactly its job — registers
+ * as a failed Job, forever, and the noise buries a sweep that genuinely could
+ * not reach its dependency. That already happened: sweep-r2-drift-29795952
+ * exited non-zero having produced a complete, correct report.
+ */
+const FINDINGS_EXIT_CODES = [10, 11] as const;
+
+/**
+ * Build the container command, translating findings-exit-codes to success ONLY
+ * when the shipped source actually carries the contract.
+ *
+ * This is the part that must not be guessed. Under the OLD contract, exit 1
+ * meant "found drift"; under the new one it means "could not run". A mapping
+ * applied to the wrong contract does not merely mislabel — it converts the
+ * alert-worthy case into a green tick. So the caller passes what it OBSERVED
+ * in the source closure, and when the contract is absent no translation
+ * happens: every non-zero stays a failure, which is noisy and correct.
+ */
+export function sweepCommand(scriptPath: string, contractPresent: boolean): string[] {
+  const node = `node --experimental-strip-types /src/${scriptPath}`;
+  if (!contractPresent) {
+    // No contract: exit 1 is ambiguous, so nothing is translated. Findings will
+    // show as failed Jobs until the contract ships — visibly wrong beats
+    // silently wrong.
+    return ["sh", "-c", node];
+  }
+  const cases = FINDINGS_EXIT_CODES.join("|");
+  return [
+    "sh",
+    "-c",
+    `${node}; c=$?; case $c in ${cases}) echo "[sweep] exit $c = ran and found something; reporting success"; exit 0;; *) exit $c;; esac`,
+  ];
+}
+
+export function sweepCronJob(
+  job: SweepJob,
+  files: Array<{ path: string }>,
+  srcHash: string,
+  contractPresent: boolean,
+) {
   const labels = ownerLabels({ "ahura.cloud/component": `sweep-${job.name}` });
   return {
     apiVersion: "batch/v1",
@@ -250,7 +301,7 @@ export function sweepCronJob(job: SweepJob, files: Array<{ path: string }>, srcH
                 {
                   name: "sweep",
                   image: "node:24-alpine",
-                  command: ["node", "--experimental-strip-types", `/src/${job.script}`],
+                  command: sweepCommand(job.script, contractPresent),
                   workingDir: "/src",
                   envFrom: [{ secretRef: { name: `sweep-${job.name}` } }],
                   volumeMounts: [{ name: "src", mountPath: "/src", readOnly: true }],

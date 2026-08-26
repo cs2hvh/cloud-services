@@ -86,6 +86,23 @@ const srcHash = createHash("sha256").update(fileList.map((f) => f.path + f.conte
 
 console.log(`source closure: ${fileList.length} files, ${(totalBytes / 1024).toFixed(1)} KB, hash ${srcHash}`);
 
+/**
+ * Does the shipped source carry the observability lane's exit-code contract?
+ *
+ * OBSERVED, never assumed. Under the old contract exit 1 meant "found drift";
+ * under the new one it means "could not run". Translating findings-codes to
+ * success against the WRONG contract turns the alert-worthy case into a green
+ * tick, which is strictly worse than the noise it would remove.
+ */
+const CONTRACT_PATH = "lib/paas/telemetry/exit-codes.ts";
+const contractPresent = files.has(CONTRACT_PATH);
+console.log(
+  contractPresent
+    ? `exit-code contract: present — 10/11 (ran and found something) will report success`
+    : `exit-code contract: ABSENT (${CONTRACT_PATH} not in closure) — no translation; ` +
+        `a sweep that FINDS something will show as a failed Job until the contract ships`,
+);
+
 // The cap is 1 MiB for the whole object. Refuse near it rather than letting the
 // API server reject a manifest we assembled without checking.
 const CAP = 1048576;
@@ -124,7 +141,7 @@ for (const job of SWEEP_JOBS) {
   }
   manifests.push({ kind: "Secret", name: secret.metadata.name, ns: PAAS_NAMESPACE, path: `/api/v1/namespaces/${PAAS_NAMESPACE}/secrets/${secret.metadata.name}`, body: secret });
 
-  const cj = sweepCronJob(job, fileList, srcHash);
+  const cj = sweepCronJob(job, fileList, srcHash, contractPresent);
   manifests.push({ kind: "CronJob", name: cj.metadata.name, ns: PAAS_NAMESPACE, path: `/apis/batch/v1/namespaces/${PAAS_NAMESPACE}/cronjobs/${cj.metadata.name}`, body: cj });
 
   console.log(`  ${job.name.padEnd(16)} ${job.schedule.padEnd(16)} creds=[${keys.join(", ") || "none"}]`);
@@ -134,6 +151,38 @@ if (missing.length) {
   console.error("\nREFUSING — a sweep with no credentials would run and report nothing wrong:");
   for (const m of missing) console.error("  " + m);
   process.exit(1);
+}
+
+// ── is what is RUNNING the same as what is here? ─────────────────────────────
+//
+// The ConfigMap is a SNAPSHOT taken at install time, and nothing re-ships it.
+// The sweeps therefore keep running whatever source was current when they were
+// installed, forever, and the only symptom is behaviour that quietly predates
+// the fixes in the tree. That already happened: eleven commits landed —
+// including the exit-code contract — while the cluster ran the older copy, and
+// nothing anywhere said so.
+//
+// So the installer reports it. A differing hash is not an error here — a dry
+// run is allowed to observe drift — but it IS the answer to "why is the cluster
+// not doing what the code says".
+{
+  const probe = kube(loadKubeconfig(KUBECONFIG));
+  const first = SWEEP_JOBS[0].name;
+  const deployed = await probe
+    .get<{ spec?: { jobTemplate?: { spec?: { template?: { metadata?: { annotations?: Record<string, string> } } } } } }>(
+      `/apis/batch/v1/namespaces/${PAAS_NAMESPACE}/cronjobs/sweep-${first}`,
+      true,
+    )
+    .catch(() => null);
+  const running = deployed?.spec?.jobTemplate?.spec?.template?.metadata?.annotations?.["ahura.cloud/src-hash"];
+  if (!running) {
+    console.log("\nrunning source: nothing deployed yet");
+  } else if (running === srcHash) {
+    console.log(`\nrunning source: ${running} — matches this tree`);
+  } else {
+    console.log(`\nrunning source: ${running} — STALE; this tree is ${srcHash}`);
+    console.log("  the cluster is executing source that predates this checkout. Re-run with --apply.");
+  }
 }
 
 if (!APPLY) {
