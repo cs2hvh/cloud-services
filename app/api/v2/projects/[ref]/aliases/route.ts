@@ -6,8 +6,13 @@
  *
  * Promote and rollback are the same operation in opposite directions, and
  * neither rebuilds anything. The image that is already in the registry is the
- * image that gets served; only the pointer moves. That is why rollback is
- * instant and why it cannot fail the way a rebuild can.
+ * image that gets served; only the pointer moves. That is why rollback cannot
+ * fail the way a rebuild can.
+ *
+ * It is not instant, though. The reconciler scales the superseded pod back
+ * from 0 replicas to 1, so the hostname answers seconds after this write
+ * returns — and only once something actually runs the reconciler, which as of
+ * 636a8225 nothing schedules.
  */
 
 import { getCaller } from "../../../_lib/auth";
