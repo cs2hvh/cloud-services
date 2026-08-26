@@ -31,14 +31,25 @@ Background reading — do not re-derive what these already establish:
 Three sessions work in parallel on separate branches. **Do not edit files
 another lane owns.**
 
-| Lane | Session | Branch | Owns |
-|---|---|---|---|
-| **Deploy** | `cloud-app-v2-d8` | `feat/deploy-v2` | `lib/paas/*` (except `telemetry/`), `scripts/v2/**`, `supabase/migrations/**`, `app/api/v2/**` (except `admin/`) |
-| **Observability** | `cloud-app-v2-99` (titled `app-deploy-3`) | `feat/deploy-v2-obs` | `lib/paas/telemetry/**`, `scripts/v3/**`, `app/api/v2/admin/**`, `app/dashboard/v2/admin/**` |
-| **UI** | `cloud-services-2f` (titled `Master`) | `feat/deploy-v2-ui` | `app/dashboard/v2/**` (except `admin/`) |
+**Ownership is keyed to the BRANCH and the PATHS, not to a session name.** Session
+names change — this lane has been app-deploy-rework, cloud-services-73 and
+cloud-app-v2-d8; the observability lane has been app-deploy-3, cloud-app-v2-99 and
+cloud-app-v2-e6 — and a table keyed to names goes stale exactly the way a stale
+comment does. The branch and the paths have been stable all day.
 
-Branch topology as of now: `obs` contains all of `deploy` +6 commits. `ui` is
-+27/−1 against `deploy`. All three converge into `feat/deploy-v2` before merge to `dev`.
+| Lane | Branch | Owns |
+|---|---|---|
+| **Deploy** | `feat/deploy-v2` | `lib/paas/*` (except `telemetry/`), `scripts/v2/**`, `supabase/migrations/**`, `app/api/v2/**` (except `admin/` and `_lib/`) |
+| **Observability** | `feat/deploy-v2-obs` | `lib/paas/telemetry/**`, `scripts/v3/**`, `app/api/v2/admin/**`, `app/dashboard/v2/admin/**` |
+| **UI** | `feat/deploy-v2-ui` | `app/dashboard/v2/**` (except `admin/`), `app/api/v2/_lib/**`, `components/v2/**` |
+
+`app/api/v2/_lib/` is the shared API error contract. It is authored in the UI lane
+and **lives on `feat/deploy-v2`** because two lanes independently imported it —
+duplicating it would produce two contracts that drift, and the whole point of
+`_lib/http.ts` is that "invisible is 404, never 403" is decided in one place.
+
+The observability lane's work is **merged into `feat/deploy-v2`** as of `e557a65b`;
+it continues on its own branch. All three converge on `feat/deploy-v2` before `dev`.
 
 ---
 
