@@ -13,7 +13,7 @@ change anything, run by a person who has read a report first.
 ## Running it
 
 ```bash
-node --test "lib/paas/telemetry/*.test.ts"                                   # 225 tests, no deps
+node --test "lib/paas/telemetry/*.test.ts"                                   # 226 tests, no deps
 node --env-file=.env --env-file=.env.local scripts/v3/operator-view.ts       # everything, once
 node --env-file=.env --env-file=.env.local scripts/v3/fleet-drift.ts --prove
 node --env-file=.env --env-file=.env.local scripts/v3/dns-drift.ts
@@ -39,6 +39,45 @@ ones in `.env.local`.
 Exit codes are meant for schedulers. `fleet-drift` exits 1 on drift.
 `dns-drift` exits 1 on drift and **2 on a claimable hostname**, which is a
 different severity and deserves a different page.
+
+## Scheduling it — the last mile, and it is not done
+
+**Nothing runs any of this automatically.** That is a decision nobody has made
+yet, not an oversight, and it is the single thing standing between this lane
+and being useful. The argument the whole lane makes is that a reconciler nobody
+runs is the same as no reconciler — and right now, nobody runs these.
+
+Two things are worth scheduling, and they are different jobs:
+
+```bash
+# Drift, every 15 minutes. Records open findings and closes what cleared, so
+# "how long has this been broken" stays answerable. ~2 minutes per run.
+*/15 * * * *  cd /srv/app && node --env-file=.env --env-file=.env.local \
+              scripts/v3/drift-sweep.ts --record
+
+# Usage, every 5 minutes. Needs paas.usage_samples, which does not exist yet.
+# The interval IS the resolution of the warm fraction: 5 minutes bounds the
+# attribution error at 5 minutes per app per gap.
+*/5 * * * *   cd /srv/app && node --env-file=.env --env-file=.env.local \
+              scripts/v3/usage-sample.ts --samples 1 --record
+```
+
+Two properties make these safe to run unattended, and both were designed for
+it rather than discovered afterwards:
+
+- **`record_drift` does not reset `observed_at`** on something already open, so
+  sweeping every 15 minutes measures duration instead of restarting the clock.
+- **Usage rows are interval deltas**, so a missed run loses that interval and
+  nothing else. It cannot double-count, and `unobserved_seconds` records the
+  gap so the period stays honest about it.
+
+A run that cannot reach its dependency does **not** resolve its scope — an
+empty result from a failed Cloudflare read is indistinguishable from a clean
+one, and closing every open observation because a read failed would erase
+exactly the durations the table exists to measure.
+
+Alerting is a separate decision. The exit codes carry the severity; nothing
+consumes them.
 
 ## What exists
 
