@@ -97,22 +97,49 @@ for (const ns of namespaces) {
   }
   if (!APPLY) continue;
 
-  // Server-side apply so re-running converges rather than conflicting.
-  await k.raw({
-    method: "PUT",
-    path: `/api/v1/namespaces/${ns}/resourcequotas/tenant`,
-    body: resourceQuotaManifest(ns, DEFAULT_QUOTA),
-    allowMissing: true,
-  });
-  await k.raw({
-    method: "PUT",
-    path: `/api/v1/namespaces/${ns}/limitranges/tenant`,
-    body: limitRangeManifest(ns, DEFAULT_QUOTA),
-    allowMissing: true,
-  });
+  // POST to create, PUT to update, and NEVER allowMissing on a write.
+  //
+  // The first version PUT both with allowMissing:true and printed "enforced".
+  // allowMissing means "this may not exist, return null" — right for a read,
+  // catastrophic on a write, because every failure becomes a silent success.
+  // The ResourceQuota PUTs 404'd, were swallowed, and three namespaces were
+  // reported bounded while none of them were. A tool that claims a success it
+  // did not achieve is the exact defect this lane has a classifier for.
+  const objects = [
+    { kind: "resourcequotas", body: resourceQuotaManifest(ns, DEFAULT_QUOTA) },
+    { kind: "limitranges", body: limitRangeManifest(ns, DEFAULT_QUOTA) },
+  ];
 
-  enforced += 1;
-  console.log(`      enforced: ResourceQuota and LimitRange applied`);
+  let applied = 0;
+  for (const o of objects) {
+    const exists = await k.get(`/api/v1/namespaces/${ns}/${o.kind}/tenant`, true);
+    try {
+      if (exists) {
+        await k.raw({ method: "PUT", path: `/api/v1/namespaces/${ns}/${o.kind}/tenant`, body: o.body });
+      } else {
+        await k.raw({ method: "POST", path: `/api/v1/namespaces/${ns}/${o.kind}`, body: o.body });
+      }
+      applied += 1;
+    } catch (e) {
+      console.log(`      FAILED ${o.kind}: ${(e as Error).message.slice(0, 160)}`);
+    }
+  }
+
+  // Read back rather than trusting the write. Safe by observation, the same
+  // rule the R2 reaper and the quota precondition already run on.
+  const quota = await k.get(`/api/v1/namespaces/${ns}/resourcequotas/tenant`, true);
+  const limits = await k.get(`/api/v1/namespaces/${ns}/limitranges/tenant`, true);
+
+  if (quota && limits) {
+    enforced += 1;
+    console.log(`      enforced: ResourceQuota and LimitRange verified present`);
+  } else {
+    refused += 1;
+    console.log(
+      `      NOT ENFORCED: ${applied} write(s) accepted but read-back shows ` +
+        `quota=${quota ? "present" : "MISSING"} limitrange=${limits ? "present" : "MISSING"}`,
+    );
+  }
 }
 
 console.log(line);
