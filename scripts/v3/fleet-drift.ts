@@ -19,7 +19,11 @@
  */
 
 import { MONTH_HOURS, reconcile, type Finding } from "../../lib/paas/telemetry/reconcile.ts";
-import { loadCloudInventory, loadControlPlane } from "../../lib/paas/telemetry/fleet-source.ts";
+import {
+  assertControlPlaneReachable,
+  loadCloudInventory,
+  loadControlPlane,
+} from "../../lib/paas/telemetry/fleet-source.ts";
 
 const JSON_OUT = process.argv.includes("--json");
 const V2_TAG = "ahura-v2";
@@ -46,6 +50,8 @@ function renderFinding(f: Finding): string {
     (f.action ? `\n              → ${f.action}` : "")
   );
 }
+
+await assertControlPlaneReachable();
 
 const [cloud, plane] = await Promise.all([loadCloudInventory(), loadControlPlane()]);
 

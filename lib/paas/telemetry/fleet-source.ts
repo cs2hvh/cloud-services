@@ -12,6 +12,7 @@
  * `scripts/v2/teardown.ts --apply` is the only thing that destroys anything.
  */
 
+import { db } from "../db.ts";
 import { instances, linode, lke } from "../linode/client.ts";
 import type {
   BuildVmRecord,
@@ -112,60 +113,49 @@ export async function loadCloudInventory(): Promise<CloudInventory> {
 
 // ── control plane ───────────────────────────────────────────────────────────
 //
-// TEMPORARY SEAM. `lib/paas/db.ts` is the real accessor for these tables and
-// carries the RECORD-BEFORE-YOU-CREATE contract this module verifies, but it
-// is uncommitted work on another branch and does not exist on feat/deploy-v2.
-// Rather than block, this reads the same two tables with the same service-role
-// PostgREST call, restricted to GET. When db.ts lands, delete everything below
-// and call `clusters.list()` / `buildVms.live()` instead — the row shapes are
-// already identical, so nothing above this line changes.
-//
-// Service role is correct HERE and only here: paas.clusters and paas.build_vms
-// have RLS enabled with no policy, so they are reachable no other way, and
+// Reads go through lib/paas/db.ts, which is the accessor carrying the
+// RECORD-BEFORE-YOU-CREATE contract this module exists to verify. Service role
+// is correct HERE and only here: paas.clusters and paas.build_vms have RLS
+// enabled with no policy, so they are reachable no other way, and
 // reconciliation acts for the platform rather than for any user. Nothing that
-// acts on behalf of a user may use this path.
-
-const SCHEMA = "paas";
-
-function env(name: string): string {
-  const v = process.env[name];
-  if (!v || !v.trim()) throw new Error(`[paas/telemetry] Missing ${name}`);
-  return v.replace(/^"|"$/g, "");
-}
-
-async function selectAll<T>(table: string, query: string): Promise<T[]> {
-  const key = env("SUPABASE_SERVICE_ROLE_KEY");
-  const base = env("NEXT_PUBLIC_SUPABASE_URL").replace(/\/+$/, "");
-  const res = await fetch(`${base}/rest/v1/${table}?${query}`, {
-    method: "GET",
-    headers: {
-      apikey: key,
-      Authorization: `Bearer ${key}`,
-      "Accept-Profile": SCHEMA,
-    },
-  });
-  const text = await res.text();
-  if (!res.ok) {
-    throw new Error(`[paas/telemetry] GET ${table} -> ${res.status}: ${text.slice(0, 300)}`);
-  }
-  return (text ? JSON.parse(text) : []) as T[];
-}
+// acts on behalf of a user may take this path.
 
 export interface ControlPlaneFleet {
   clusterRows: ClusterRecord[];
   buildVmRows: BuildVmRecord[];
 }
 
+/**
+ * Refuse to report on a control plane that cannot be read.
+ *
+ * Borrowed from provision-cluster.ts, which will not provision if the schema
+ * is unreachable. The reasoning is the same in reverse: a reconciler that
+ * cannot see the records would report every live resource as unrecorded and
+ * every row as missing. Reporting catastrophic false drift is worse than
+ * reporting nothing, because someone might act on it.
+ */
+export async function assertControlPlaneReachable(): Promise<void> {
+  if (!(await db.reachable())) {
+    throw new Error(
+      "[paas/telemetry] paas schema unreachable — refusing to reconcile. " +
+        "Every resource would report as unrecorded and every row as missing.",
+    );
+  }
+}
+
 export async function loadControlPlane(): Promise<ControlPlaneFleet> {
   const [clusterRows, buildVmRows] = await Promise.all([
-    selectAll<ClusterRecord>(
+    db.select<ClusterRecord>(
       "clusters",
       "select=ref,name,region,lke_cluster_id,k8s_version,state,created_at&order=created_at",
     ),
-    // Every row, including destroyed ones: a row claiming 'destroyed' while
-    // the instance still runs is the most expensive finding this tool makes,
-    // and filtering to live states would hide exactly that case.
-    selectAll<BuildVmRecord>(
+    // EVERY row, including destroyed ones — deliberately not buildVms.live().
+    // A row saying 'destroyed' while the instance is still running is the most
+    // expensive finding this tool makes: the teardown path reported a success
+    // it did not achieve, and the money is still flowing. Filtering to live
+    // states hides exactly that case, and makes the instance look merely
+    // unrecorded rather than actively denied.
+    db.select<BuildVmRecord>(
       "build_vms",
       "select=ref,linode_id,region,instance_type,state,expires_at,destroyed_at,created_at&order=created_at",
     ),
