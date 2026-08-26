@@ -201,6 +201,31 @@ async function scale(
 }
 
 /**
+ * The API server's REAL addresses, for the tenant egress deny list.
+ *
+ * Read from the `kubernetes` Endpoints rather than hardcoded, because this is
+ * cluster-specific and changes when the control plane moves. Hardcoding it would
+ * produce a policy that is correct on this cluster and silently permissive on
+ * the next one — and the failure would be invisible, since the object applies
+ * cleanly either way.
+ *
+ * Returns EMPTY on a failed read, and the caller must treat that as "could not
+ * establish" rather than "there are none". An empty list here does not open
+ * anything that was not already open — the ClusterIP is reachable today — but it
+ * does mean the applied policy is weaker than the one we believe we applied, so
+ * it is reported rather than swallowed.
+ */
+export async function apiServerCidrs(k: ReturnType<typeof kube>): Promise<string[]> {
+  const ep = await k.get<{ subsets?: Array<{ addresses?: Array<{ ip?: string }> }> }>(
+    "/api/v1/namespaces/default/endpoints/kubernetes",
+    true,
+  );
+  const ips = (ep?.subsets ?? []).flatMap((s) => (s.addresses ?? []).map((a) => a.ip)).filter(Boolean) as string[];
+  // /32 so only the endpoint itself is denied, never a range around it.
+  return ips.map((ip) => `${ip}/32`);
+}
+
+/**
  * Delete Ingresses in this project's namespace whose alias row no longer exists.
  *
  * The only deletion this reconciler performs, and it is deliberately the
@@ -358,7 +383,7 @@ export async function reconcileProject(
     await k.apply(`/api/v1/namespaces/${ns}`, namespaceManifest(ns, { "ahura.cloud/project": project.ref }));
     await k.apply(
       `/apis/networking.k8s.io/v1/namespaces/${ns}/networkpolicies/tenant-isolation`,
-      tenantNetworkPolicy(ns),
+      tenantNetworkPolicy(ns, await apiServerCidrs(k)),
     );
   }
 
