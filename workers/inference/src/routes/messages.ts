@@ -2,14 +2,14 @@
  * POST /v1/messages — Anthropic Messages API compatibility shim.
  *
  * Accepts an Anthropic-shaped request, translates to OpenAI Chat Completions,
- * forwards to OpenRouter, and translates the response back to Anthropic shape.
+ * forwards to Wokey, and translates the response back to Anthropic shape.
  *
  * Phase 1 scope:
  *   • text content (string or array of {type:"text"} blocks)
  *   • image content (Anthropic image blocks → OpenAI image_url with data URI)
  *   • system prompt as either string or array of text blocks
  *   • streaming (OpenAI SSE → Anthropic event-named SSE)
- *   • tool calling — passed through (OpenRouter handles cross-format tool calls
+ *   • tool calling — passed through (the upstream handles cross-format tool calls
  *     for Anthropic-line models; for non-Anthropic backends behavior may vary)
  *
  * Out of scope until Phase 2:
@@ -18,14 +18,19 @@
  *   • Container/code-execution tools
  */
 import type { Handler } from "hono";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { z } from "zod";
 import type { AuthContext, Env, HonoVariables, UsageEvent } from "../types.ts";
 import {
+  clampCachedTokens,
   forwardJson,
+  readCachedTokens,
   resolveUpstreamKey,
+  sanitizeUpstreamError,
   streamPassthrough,
-} from "../lib/openrouter.ts";
+} from "../lib/wokey.ts";
 import { lookupCache, shouldCacheMessages, writeCache } from "../lib/cache.ts";
+import { lookupModelRouting } from "../lib/model-routing.ts";
 import {
   extractEmbeddableText,
   lookupSemanticCache,
@@ -322,17 +327,47 @@ export const messagesShim: Handler<{
     }
   }
 
-  // 6. Forward to OpenRouter
+  // 6. Forward to Wokey.
+  //
+  //    Same model-id translation as the chat/completions route. This endpoint
+  //    normalises bare ids up to namespaced ones (step 2) because that is what
+  //    our catalog is keyed on — but namespaced is precisely what Wokey does
+  //    NOT accept, so without this lookup every Anthropic-protocol call would
+  //    404 upstream. `normalizedModel` stays the id used for telemetry.
+  const messagesRouting = await lookupModelRouting(c.env, normalizedModel);
+  const upstreamBody =
+    messagesRouting?.upstream_model_id &&
+    messagesRouting.upstream_model_id !== normalizedModel
+      ? { ...openaiBody, model: messagesRouting.upstream_model_id }
+      : openaiBody;
+
   const upstream = await forwardJson({
     env: c.env,
-    body: openaiBody,
+    body: upstreamBody,
     upstreamKey,
     path: "/chat/completions",
     signal: c.req.raw.signal,
   });
 
   if (!upstream.ok) {
+    // Sanitised, not passed through — the upstream's own error prose names
+    // the provider and its console URL. Same reasoning as chat-completions;
+    // reshaped here into Anthropic's error envelope, since that is what a
+    // caller of /v1/messages parses.
     const text = await upstream.text();
+    const safe = sanitizeUpstreamError(upstream.status, text, requestId);
+    console.error(
+      JSON.stringify({
+        level: "error",
+        message: "upstream error",
+        requestId,
+        orgId: auth.orgId,
+        model: normalizedModel,
+        status: upstream.status,
+        upstreamBody: text.slice(0, 500),
+        route: "messages",
+      })
+    );
     c.executionCtx.waitUntil(
       sendUsage(c.env, {
         ...baseUsageEvent(auth, normalizedModel, requestId, startedAt),
@@ -340,10 +375,10 @@ export const messagesShim: Handler<{
         errorCode: `upstream_${upstream.status}`,
       })
     );
-    return new Response(text, {
-      status: upstream.status,
-      headers: { "content-type": "application/json", "X-Ahura-Request-Id": requestId },
-    });
+    return c.json(
+      anthropicError(safe.body.error.type, safe.body.error.message, requestId),
+      upstream.status as ContentfulStatusCode
+    );
   }
 
   // 7a. Streaming — convert OpenAI SSE → Anthropic SSE events
@@ -379,7 +414,7 @@ export const messagesShim: Handler<{
       ...baseUsageEvent(auth, normalizedModel, requestId, startedAt),
       inputTokens: oaiResp.usage?.prompt_tokens ?? null,
       outputTokens: oaiResp.usage?.completion_tokens ?? null,
-      cachedTokens: oaiResp.usage?.prompt_tokens_details?.cached_tokens ?? null,
+      cachedTokens: clampCachedTokens(readCachedTokens(oaiResp.usage), oaiResp.usage?.prompt_tokens ?? null),
       status: "success",
     })
   );
@@ -520,7 +555,7 @@ function openaiToAnthropic(resp: OpenAIChatResponse, model: string) {
     usage: {
       input_tokens: resp.usage?.prompt_tokens ?? 0,
       cache_creation_input_tokens: 0,
-      cache_read_input_tokens: resp.usage?.prompt_tokens_details?.cached_tokens ?? 0,
+      cache_read_input_tokens: readCachedTokens(resp.usage) ?? 0,
       output_tokens: resp.usage?.completion_tokens ?? 0,
     },
   };

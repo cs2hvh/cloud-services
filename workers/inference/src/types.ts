@@ -17,7 +17,12 @@ export interface Env {
   USAGE_EVENTS: Queue<UsageEvent>;
 
   // Public vars
-  OPENROUTER_BASE_URL: string;
+  WOKEY_BASE_URL: string;
+  // Optional embeddings upstream. Unset today: Wokey serves no embeddings
+  // endpoint, so the semantic cache and /v1/embeddings are both disabled.
+  // Setting this (plus EMBEDDINGS_API_KEY if the provider differs from the
+  // main upstream) is what re-enables them — see lib/semantic-cache.ts.
+  EMBEDDINGS_BASE_URL?: string;
   SUPABASE_URL: string;
   GATEWAY_VERSION: string;
   ENV: "production" | "preview" | "development";
@@ -28,7 +33,10 @@ export interface Env {
 
   // Secrets (populated via `wrangler secret put`)
   SUPABASE_SERVICE_ROLE_KEY: string;
-  OPENROUTER_PLATFORM_KEY: string;
+  WOKEY_PLATFORM_KEY: string;
+  /** Credential for EMBEDDINGS_BASE_URL, when that provider is not the main
+   *  upstream. Optional — see EMBEDDINGS_BASE_URL above. */
+  EMBEDDINGS_API_KEY?: string;
   BYOK_DEK: string;
   // For routing fine-tune + BYO models to their per-deployment serving
   // endpoints on the compute provider's serverless layer.
@@ -76,7 +84,7 @@ export interface AuthContext {
   // Caller's billing election — derived from X-Ahura-Billing header
   // (default: platform). BYOK requires a configured upstream key.
   billing: "platform" | "byok";
-  byokProvider?: "openrouter" | "openai" | "anthropic" | "google" | "mistral";
+  byokProvider?: "wokey" | "openai" | "anthropic" | "google" | "mistral";
 }
 
 export interface AuditEvent {

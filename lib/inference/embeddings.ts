@@ -2,16 +2,23 @@
  * Server-side embedding helper for the vector store auto-embed path.
  *
  * Used by /api/inference/vector/collections/[id]/upsert and /query when the
- * caller passes raw text instead of a pre-computed embedding. Forwards to
- * OpenRouter using the platform key (env OPENROUTER_PLATFORM_KEY) — same
- * upstream as the gateway's /v1/embeddings route.
+ * caller passes raw text instead of a pre-computed embedding.
  *
- * If OPENROUTER_PLATFORM_KEY isn't set, auto-embed is unavailable and
- * callers must pass pre-computed embeddings. We surface this with a clear
- * error so the caller knows what to do.
+ * AUTO-EMBED IS CURRENTLY UNAVAILABLE. The platform upstream moved from
+ * OpenRouter to Wokey, and Wokey serves no embeddings endpoint and no
+ * embedding model. Rather than call an endpoint that does not exist, this
+ * throws a directive error: existing vector collections keep working and
+ * remain queryable, because callers can still pass a pre-computed
+ * `embedding` array — only the convenience path of "send text, we'll embed
+ * it" is gone.
+ *
+ * To restore: set EMBEDDINGS_BASE_URL (and EMBEDDINGS_API_KEY if that
+ * provider differs from the main upstream) and the code below resumes. The
+ * same two variables re-enable the gateway's semantic cache — see
+ * workers/inference/src/lib/semantic-cache.ts.
  */
 
-const OPENROUTER_BASE = process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1";
+const EMBEDDINGS_BASE = process.env.EMBEDDINGS_BASE_URL;
 
 export interface EmbedResult {
   embedding: number[];
@@ -23,10 +30,18 @@ export async function embedText(
   modelId: string,
   dimensions?: number
 ): Promise<EmbedResult> {
-  const key = process.env.OPENROUTER_PLATFORM_KEY;
+  if (!EMBEDDINGS_BASE) {
+    throw new Error(
+      "Auto-embed is unavailable: this platform's inference upstream does not " +
+        "serve embedding models. Pass a pre-computed `embedding` array instead " +
+        "of `text`, or ask an operator to configure EMBEDDINGS_BASE_URL."
+    );
+  }
+  const key = process.env.EMBEDDINGS_API_KEY ?? process.env.WOKEY_PLATFORM_KEY;
   if (!key) {
     throw new Error(
-      "Auto-embed not configured: set OPENROUTER_PLATFORM_KEY in the Next.js env, or pass a pre-computed `embedding` array instead of `text`."
+      "Auto-embed not configured: set EMBEDDINGS_API_KEY, or pass a " +
+        "pre-computed `embedding` array instead of `text`."
     );
   }
 
@@ -36,13 +51,11 @@ export async function embedText(
   };
   if (dimensions) body.dimensions = dimensions;
 
-  const r = await fetch(`${OPENROUTER_BASE}/embeddings`, {
+  const r = await fetch(`${EMBEDDINGS_BASE}/embeddings`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${key}`,
       "Content-Type": "application/json",
-      "HTTP-Referer": "https://ahurasense.com",
-      "X-Title": "AhuraCloud Inference (vector autoembed)",
     },
     body: JSON.stringify(body),
   });

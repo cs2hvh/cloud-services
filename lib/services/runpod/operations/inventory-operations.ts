@@ -61,12 +61,28 @@ interface LatestSnapshotRow {
     observed_at: string;
 }
 
-async function getActiveCatalog(): Promise<CatalogRow[]> {
+/**
+ * Every catalog row, active or not.
+ *
+ * This deliberately does NOT filter on is_active. The result feeds the
+ * "do we already know this GPU?" lookup in syncSnapshots, and filtering it
+ * made deactivated rows invisible to that check — so auto-discover treated
+ * each one as new and upserted it straight back with is_active: true.
+ *
+ * The effect was that an admin could not deactivate a GPU at all: it returned
+ * within one sync cycle, which is 60 seconds. That silently undid the
+ * deactivation of three RTX PRO Blackwell SKUs the provider lists in its
+ * inventory but refuses to deploy, so customers kept being offered GPUs whose
+ * create call always fails.
+ *
+ * is_active still governs what customers see; it just no longer governs
+ * whether the sync believes the row exists.
+ */
+async function getKnownCatalog(): Promise<CatalogRow[]> {
     const supabase = await createServiceClient();
     const { data, error } = await supabase
         .from("gpu_catalog")
-        .select("id, runpod_gpu_id, display_name, memory_gb")
-        .eq("is_active", true);
+        .select("id, runpod_gpu_id, display_name, memory_gb");
     if (error) throw new Error(`gpu_catalog query failed: ${error.message}`);
     return (data || []) as CatalogRow[];
 }
@@ -86,7 +102,7 @@ export const inventoryOperations = {
         };
         try {
             const supabase = await createServiceClient();
-            const catalog = await getActiveCatalog();
+            const catalog = await getKnownCatalog();
             const runpodIdToCatalog = new Map(
                 catalog.map((c) => [c.runpod_gpu_id, c])
             );

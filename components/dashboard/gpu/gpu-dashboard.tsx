@@ -1,7 +1,7 @@
 "use client";
 
 // GPU Cloud — overview. Editorial canvas with hero, stats, featured
-// flagship GPU cards (with arch chip + spec grid), workload picker,
+// flagship GPU cards (with arch chip + spec grid),
 // 2-column operational view (recent activity + region availability),
 // and the user's active pods. Inventory is fetched once on mount to
 // enrich price + stock; the featured list itself is always rendered.
@@ -74,8 +74,12 @@ const FEATURED_PRESETS: readonly GpuPreset[] = [
         ],
         maxScale: 8,
         scaleHint: "NVLink fabric",
+        // We do sell B300 on demand, so it is NOT request-only. When RunPod
+        // has no B300 capacity the live inventory simply omits it, and the
+        // card renders as out of stock like any other GPU — which is the
+        // honest signal. It previously said "Contact sales", implying an
+        // enterprise-only SKU rather than a temporary supply gap.
         priceFallback: null,
-        requestOnly: true,
     },
     {
         gpuCatalogId: "b200",
@@ -178,36 +182,6 @@ const FEATURED_PRESETS: readonly GpuPreset[] = [
     },
 ] as const;
 
-const WORKLOADS = [
-    {
-        kind: "Training",
-        title: "LLM training",
-        desc: "Frontier model pretraining and large-scale fine-tunes. High memory and bandwidth are critical.",
-        recommended: "8× B200 or H200",
-        href: "/dashboard/services/gpu/deploy?workload=training",
-    },
-    {
-        kind: "Fine-tune",
-        title: "Fine-tuning",
-        desc: "LoRA, QLoRA, and full-parameter fine-tuning of 7B–70B models on your own data.",
-        recommended: "1–4× H100 SXM",
-        href: "/dashboard/services/gpu/deploy?workload=finetune",
-    },
-    {
-        kind: "Inference",
-        title: "Inference serving",
-        desc: "High-throughput LLM and embedding serving with vLLM, TGI, or TensorRT-LLM.",
-        recommended: "L40S or H200 NVL",
-        href: "/dashboard/services/gpu/deploy?workload=inference",
-    },
-    {
-        kind: "Diffusion",
-        title: "Diffusion & video",
-        desc: "Stable Diffusion XL, FLUX, SVD, and other generative image/video workloads.",
-        recommended: "L40S or A100",
-        href: "/dashboard/services/gpu/deploy?workload=diffusion",
-    },
-] as const;
 
 // ─── Component ────────────────────────────────────────────────────
 
@@ -302,9 +276,18 @@ export default function GpuDashboard() {
             const live = secure.find((i) =>
                 i.displayName.toLowerCase().includes(preset.matcher),
             );
+            // Three distinct states, previously collapsed into two:
+            //   inventory empty  → still loading, say nothing ("unknown")
+            //   loaded, present  → use the live status
+            //   loaded, absent   → genuinely out of stock ("none")
+            // The last case used to fall through to "unknown", which rendered
+            // as a green "Available" for a GPU the provider does not have.
+            const inventoryLoaded = inventory.length > 0;
+            const stockStatus = live?.stockStatus
+                ?? (preset.requestOnly ? "new" : inventoryLoaded ? "none" : "unknown");
             return {
                 ...preset,
-                stockStatus: live?.stockStatus ?? (preset.requestOnly ? "new" : "unknown"),
+                stockStatus,
                 onDemandPerHr:
                     live?.onDemandPerHr ?? preset.priceFallback ?? null,
                 availableCounts: live?.availableCounts ?? [],
@@ -443,20 +426,6 @@ export default function GpuDashboard() {
                     </div>
                 </section>
 
-                {/* ── Workload patterns ────────────────────────────── */}
-                <section>
-                    <SectionHead
-                        eyebrow="Not sure which to pick?"
-                        title="Choose by"
-                        accent="workload"
-                        link={{ label: "Read the guide", href: "/dashboard/services/gpu/deploy" }}
-                    />
-                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-                        {WORKLOADS.map((w, i) => (
-                            <WorkloadCard key={w.title} index={i + 1} {...w} />
-                        ))}
-                    </div>
-                </section>
             </div>
         </div>
     );
@@ -730,11 +699,20 @@ function FeaturedGpuCard({
                     <div
                         className={`${MONO} text-[11px] text-white/50 font-medium`}
                     >
-                        Contact sales
+                        {/* "Contact sales" is only right for a genuinely
+                            enterprise-only SKU. A GPU we DO sell on demand but
+                            that the provider currently has none of is out of
+                            stock, and saying "contact sales" sends the customer
+                            down a sales conversation for a supply gap that may
+                            clear within the hour. */}
+                        {row.requestOnly ? "Contact sales" : "Out of stock"}
                     </div>
                 )}
+                {/* A bright "Deploy" on a GPU with no capacity is a promise we
+                    cannot keep — the customer clicks through, picks it, and
+                    fails at create time. Dim it and say so instead. */}
                 <span
-                    className={`${MONO} inline-flex items-center gap-1 h-7 px-3 rounded-[5px] text-[10px] uppercase tracking-[0.12em] font-semibold transition-all ${row.requestOnly ? "" : "group-hover:!bg-white group-hover:!bg-none group-hover:!text-black group-hover:-translate-y-0.5"}`}
+                    className={`${MONO} inline-flex items-center gap-1 h-7 px-3 rounded-[5px] text-[10px] uppercase tracking-[0.12em] font-semibold transition-all ${row.requestOnly || !showPrice ? "" : "group-hover:!bg-white group-hover:!bg-none group-hover:!text-black group-hover:-translate-y-0.5"}`}
                     style={
                         row.requestOnly
                             ? {
@@ -742,70 +720,22 @@ function FeaturedGpuCard({
                                   background: "rgba(0,149,255,0.08)",
                                   color: ACCENT_BRIGHT,
                               }
-                            : {
-                                  background: `linear-gradient(135deg, ${ACCENT}, #0066B3)`,
-                                  color: "#fff",
-                                  boxShadow:
-                                      "0 4px 12px rgba(0,149,255,0.18), inset 0 1px 0 rgba(255,255,255,0.15)",
-                              }
+                            : !showPrice
+                              ? {
+                                    border: "1px solid rgba(255,255,255,0.08)",
+                                    background: "rgba(255,255,255,0.03)",
+                                    color: "rgba(255,255,255,0.35)",
+                                }
+                              : {
+                                    background: `linear-gradient(135deg, ${ACCENT}, #0066B3)`,
+                                    color: "#fff",
+                                    boxShadow:
+                                        "0 4px 12px rgba(0,149,255,0.18), inset 0 1px 0 rgba(255,255,255,0.15)",
+                                }
                     }
                 >
-                    {row.requestOnly ? "Request" : "Deploy"}
+                    {row.requestOnly ? "Request" : !showPrice ? "Unavailable" : "Deploy"}
                     <ChevronRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
-                </span>
-            </div>
-        </Link>
-    );
-}
-
-function WorkloadCard({
-    index,
-    kind,
-    title,
-    desc,
-    recommended,
-    href,
-}: {
-    index: number;
-    kind: string;
-    title: string;
-    desc: string;
-    recommended: string;
-    href: string;
-}) {
-    return (
-        <Link
-            href={href}
-            className="group border border-white/[0.06] bg-[#111216] hover:bg-[#16181d] hover:border-white/[0.14] rounded-[6px] p-5 transition-all flex flex-col gap-3 min-h-[190px]"
-        >
-            <div className="flex items-center justify-between">
-                <span
-                    className={`${MONO} inline-flex items-center gap-2 text-[10px] uppercase tracking-[0.14em] font-semibold`}
-                    style={{ color: ACCENT }}
-                >
-                    <span className="text-white/30 tabular-nums">
-                        {String(index).padStart(2, "0")}
-                    </span>
-                    {kind}
-                </span>
-                <ChevronRight className="h-3.5 w-3.5 text-white/25 group-hover:text-[#0095FF] group-hover:translate-x-0.5 transition-all" />
-            </div>
-            <div>
-                <h3 className="text-[15px] font-semibold tracking-[-0.01em] text-white mb-1">
-                    {title}
-                </h3>
-                <p className="text-[12px] text-white/55 leading-snug">{desc}</p>
-            </div>
-            <div className="mt-auto pt-3 border-t border-white/[0.05]">
-                <span
-                    className={`${MONO} block text-[9.5px] uppercase tracking-[0.12em] font-semibold text-white/40`}
-                >
-                    Recommended
-                </span>
-                <span
-                    className={`${MONO} mt-1 block text-[11.5px] text-white/85 font-semibold`}
-                >
-                    {recommended}
                 </span>
             </div>
         </Link>
@@ -818,7 +748,11 @@ function stockMeta(status: string): { label: string; color: string } {
         case "medium":  return { label: "Limited",       color: "#fbbf24" };
         case "low":     return { label: "Very limited",  color: "#fb923c" };
         case "new":     return { label: "New",           color: ACCENT };
-        case "unknown": return { label: "Available",     color: "#4ade80" };
+        // "unknown" means inventory has not loaded yet — NOT that the GPU is
+        // available. It used to render as a green "Available", so every card
+        // claimed stock it had not confirmed for the first second of page
+        // life, and any GPU missing from inventory claimed it permanently.
+        case "unknown": return { label: "Checking…",     color: "#52525b" };
         case "none":
         default:        return { label: "Out of stock",  color: "#52525b" };
     }

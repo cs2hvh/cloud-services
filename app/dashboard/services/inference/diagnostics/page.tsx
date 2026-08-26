@@ -42,7 +42,7 @@ const REQUIRED_NEXTJS_ENV = [
   "R2_ACCESS_KEY_ID",
   "R2_SECRET_ACCESS_KEY",
   "R2_ENDPOINT",
-  "OPENROUTER_PLATFORM_KEY",
+  "WOKEY_PLATFORM_KEY",
   "UPSTASH_REDIS_REST_URL",
   "UPSTASH_REDIS_REST_TOKEN",
   "FT_WEBHOOK_SECRET",
@@ -283,37 +283,41 @@ async function checkGateway(): Promise<DiagnosticCheck> {
   }
 }
 
-async function checkOpenRouterKey(): Promise<DiagnosticCheck> {
-  const key = process.env.OPENROUTER_PLATFORM_KEY;
+async function checkUpstreamKey(): Promise<DiagnosticCheck> {
+  const key = process.env.WOKEY_PLATFORM_KEY;
   if (!key) {
     return {
-      id: "openrouter",
+      id: "upstream",
       name: "Upstream model provider key",
       status: "fail",
-      detail: "OPENROUTER_PLATFORM_KEY missing from Next.js env — batch processor + managed-serving warmup will 401.",
+      detail: "WOKEY_PLATFORM_KEY missing from Next.js env — batch processor + managed-serving warmup will 401.",
     };
   }
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 5000);
-    const r = await fetch("https://openrouter.ai/api/v1/auth/key", {
+    // Wokey exposes no /auth/key introspection endpoint the way OpenRouter
+    // did, so the cheapest authenticated probe is the model list. A 200 here
+    // proves the credential is live and the base URL is reachable.
+    const base = process.env.WOKEY_BASE_URL ?? "https://api.wokey.ai/v1";
+    const r = await fetch(`${base}/models`, {
       headers: { Authorization: `Bearer ${key}` },
       signal: ctrl.signal,
     });
     clearTimeout(t);
     if (!r.ok) {
       return {
-        id: "openrouter",
+        id: "upstream",
         name: "Upstream model provider key",
         status: "fail",
         detail: `Upstream auth returned ${r.status}`,
-        remediation: "OPENROUTER_PLATFORM_KEY is invalid or revoked. Generate a fresh one at openrouter.ai/keys.",
+        remediation: "WOKEY_PLATFORM_KEY is invalid or revoked. Generate a fresh one in the Wokey console.",
       };
     }
-    return { id: "openrouter", name: "Upstream model provider key", status: "pass", detail: "Auth probe returned 200." };
+    return { id: "upstream", name: "Upstream model provider key", status: "pass", detail: "Model-list probe returned 200." };
   } catch (err) {
     return {
-      id: "openrouter",
+      id: "upstream",
       name: "Upstream model provider key",
       status: "warn",
       detail: `Could not reach upstream: ${err instanceof Error ? err.message : String(err)}`,
@@ -376,7 +380,7 @@ const CUSTOMER_CATEGORIES: CategorySpec[] = [
   {
     id: "inference_gateway",
     label: "Inference gateway",
-    checkIds: ["gateway", "openrouter"],
+    checkIds: ["gateway", "upstream"],
     copy: {
       operational:
         "All inference endpoints are routing normally to the model catalog.",
@@ -450,7 +454,7 @@ export default async function DiagnosticsPage() {
     checkUpstash(),
     checkUpstashCrossSide(),
     checkGateway(),
-    checkOpenRouterKey(),
+    checkUpstreamKey(),
   ]);
   const fetchedAt = new Date().toISOString();
 

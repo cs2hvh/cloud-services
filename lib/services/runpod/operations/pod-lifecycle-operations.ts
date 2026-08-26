@@ -9,8 +9,13 @@ import {
   closeActiveBilling,
   type ProvisionReservation,
 } from "@/config/billing-flow";
+import { randomBytes } from "crypto";
+// @ts-expect-error ssh2 has no type declarations
+import { utils as ssh2Utils } from "ssh2";
+
 import { Encryption } from "@/config/functions";
 import { BillingCredits } from "@/lib/billing/credits";
+import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
 import { createServiceClient } from "@/lib/supabase/server";
 
 import { RunPodClient } from "../client";
@@ -112,9 +117,25 @@ function isRunPodError(e: unknown): e is RunPodError {
     );
 }
 
+/**
+ * The name RunPod shows for a pod in its own console.
+ *
+ * Format: `ahura-cloud-<podId>-<user's name>`. The prefix used to be
+ * "samatva-", the parent company rather than the product, which made pods
+ * unidentifiable when looking at the RunPod account.
+ *
+ * `podId` is our `gpu_pods.id`, and it sits before the user-supplied part on
+ * purpose: the whole tag is truncated at RunPod's 191-character limit, so
+ * anything that must survive truncation has to come first. That makes every
+ * pod traceable back to a row even when two customers pick the same name.
+ *
+ * Safe to change: nothing matches on this prefix. Reconciliation and every
+ * lifecycle call key off `runpod_pod_id` (RunPod's own UUID), so pods created
+ * under the old prefix keep working untouched.
+ */
 function nameToHostname(podId: number, name: string): string {
     const cleaned = name.replace(/[^a-zA-Z0-9-]/g, "-").toLowerCase();
-    const tag = `samatva-${podId}-${cleaned}`;
+    const tag = `ahura-cloud-${podId}-${cleaned}`;
     return tag.length > 191 ? tag.slice(0, 191) : tag;
 }
 
@@ -157,6 +178,9 @@ export const podLifecycleOperations = {
             // smuggle in an arbitrary image. A custom deploy (no templateId)
             // still accepts any caller-supplied public image.
             let imageName = req.imageName;
+            // Hoisted out of the block below so the env-prep step further down
+            // can see the catalog's hints (does this image run Jupyter?).
+            let templateHints: Record<string, string> | null = null;
             if (req.templateId) {
                 let template;
                 try {
@@ -176,6 +200,7 @@ export const podLifecycleOperations = {
                     };
                 }
                 imageName = template.imageName;
+                templateHints = template.envHints ?? null;
             }
             if (!imageName || imageName.length > 256) {
                 return { success: false, error: "imageName is required", errorCode: "INVALID" };
@@ -311,10 +336,51 @@ export const podLifecycleOperations = {
                 };
             }
 
-            // 5. Prepare env (inject SSH key + optional root password)
+            // 5. Prepare env (SSH keys, Jupyter token, optional root password)
             const userEnv: Record<string, string> = { ...(req.env || {}) };
-            if (req.publicKey) userEnv.PUBLIC_KEY = req.publicKey;
+
+            // 5a. Platform-managed keypair for the in-browser terminal.
+            //
+            // Generated per pod. Only the PUBLIC half is injected; the private
+            // half is encrypted into gpu_pods.terminal_key_blob and never
+            // enters the container — anything in env is readable by every
+            // process in the pod, including the customer's own root shell.
+            //
+            // This is additive: the customer's key (if any) is appended after,
+            // so they keep their own access. It also means the terminal works
+            // on images that only accept keys, where a root password would be
+            // silently ignored.
+            const terminalKeyPair = ssh2Utils.generateKeyPairSync("ed25519");
+            const platformPublicKey = String(terminalKeyPair.public).trim();
+
+            const keyLines = [platformPublicKey];
+            if (req.publicKey) keyLines.push(req.publicKey.trim());
+            // Our entrypoint appends PUBLIC_KEY to authorized_keys; a newline
+            // separated list installs both. Third-party images that only read
+            // the first line still get the platform key, which is the one the
+            // terminal needs.
+            userEnv.PUBLIC_KEY = keyLines.join("\n");
+
             if (req.rootPassword) userEnv.ROOT_PASSWORD = req.rootPassword;
+
+            // 5b. Jupyter access token.
+            //
+            // Our Jupyter images launch with --ServerApp.token="${JUPYTER_TOKEN:-}".
+            // With the variable unset that expands to an EMPTY token, which
+            // disables Jupyter's authentication entirely — on a port published
+            // through a public proxy, with --allow-root, and Jupyter ships a
+            // terminal. Anyone who knew the pod id had a root shell.
+            //
+            // Both spellings are set: JUPYTER_TOKEN is our images' convention,
+            // JUPYTER_PASSWORD is the provider's. Setting the one an image does
+            // not read is harmless; failing to set the one it does read is not.
+            const runsJupyter = templateHints?.jupyter === "8888";
+            if (runsJupyter) {
+                const jupyterToken = randomBytes(24).toString("base64url");
+                userEnv.JUPYTER_TOKEN = jupyterToken;
+                userEnv.JUPYTER_PASSWORD = jupyterToken;
+            }
+
             const envKeys = Object.keys(userEnv);
 
             const encryptionKey = process.env.ENCRYPTION_KEY;
@@ -322,6 +388,22 @@ export const podLifecycleOperations = {
                 encryptionKey && envKeys.length > 0
                     ? JSON.stringify(Encryption.encrypt(JSON.stringify(userEnv), encryptionKey))
                     : null;
+
+            // The private half of the terminal keypair. Stored only if we can
+            // encrypt it — writing a bare private key to the database because
+            // ENCRYPTION_KEY happens to be unset would be worse than having no
+            // web terminal at all, so this degrades to "terminal unavailable"
+            // rather than "key at rest in plaintext".
+            const terminalKeyBlob = encryptionKey
+                ? JSON.stringify(
+                      Encryption.encrypt(String(terminalKeyPair.private), encryptionKey)
+                  )
+                : null;
+            if (!encryptionKey) {
+                console.warn(
+                    "[GPU:createPod] ENCRYPTION_KEY unset — web terminal disabled for this pod"
+                );
+            }
 
             // 6. Reserve pod row BEFORE calling RunPod (provides rollback anchor + idemp source-of-truth)
             const billingStart = new Date();
@@ -344,6 +426,9 @@ export const podLifecycleOperations = {
                         req.ports && req.ports.length > 0 ? req.ports : ["22/tcp"],
                     env_keys: envKeys,
                     env_blob: envBlob,
+                    // Encrypted separately from env_blob and deliberately NOT
+                    // injected into the container — see the column comment.
+                    terminal_key_blob: terminalKeyBlob,
                     status: "provisioning",
                     details: {
                         provisioning: {
@@ -409,7 +494,19 @@ export const podLifecycleOperations = {
                     runpodReq
                 );
             } catch (e) {
-                const errMsg = isRunPodError(e) ? e.message : "RunPod request failed";
+                // The raw upstream message goes to OUR logs only. It is a
+                // JSON-schema validation dump that names the provider, its API
+                // host and the failing request path — a customer once saw
+                // "At #/paths/pods/post for POST https://rest.<provider>/v1/pods".
+                //
+                // It is also not actionable by them: they chose a GPU from a
+                // list we produced, so an upstream rejection means our catalog
+                // is wrong, not their input.
+                const rawMsg = isRunPodError(e) ? e.message : String(e);
+                console.error(
+                    `[GPU:createPod] upstream rejected pod ${podId}: ${rawMsg}`
+                );
+                const errMsg = customerSafeErrorMessage(rawMsg) || "Could not start the pod";
                 const errCode = isRunPodError(e) ? e.code : "SERVER";
                 await supabase
                     .from("gpu_pods")

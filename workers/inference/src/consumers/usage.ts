@@ -25,6 +25,15 @@ interface ModelOffPeak {
 
 interface PricingInfo {
   pricing: ModelPricing;
+  /**
+   * What the upstream charges US, as opposed to what we charge the customer.
+   *
+   * Null when the model has no recorded cost basis, in which case
+   * upstream_cost_cents falls back to the billed cost — the old Phase 1
+   * behaviour, and still the honest answer for a model whose cost we do not
+   * know.
+   */
+  upstream_pricing: ModelPricing | null;
   off_peak: ModelOffPeak | null;
 }
 
@@ -44,7 +53,7 @@ export async function handleUsageBatch(
   const { data: modelRows, error: modelErr } = await supabase
     .schema("inference")
     .from("models")
-    .select("model_id, pricing, off_peak")
+    .select("model_id, pricing, upstream_pricing, off_peak")
     .in("model_id", modelIds);
 
   if (modelErr) {
@@ -64,6 +73,7 @@ export async function handleUsageBatch(
   for (const m of modelRows ?? []) {
     pricingMap.set(m.model_id as string, {
       pricing: (m.pricing ?? {}) as ModelPricing,
+      upstream_pricing: (m.upstream_pricing ?? null) as ModelPricing | null,
       off_peak: (m.off_peak ?? null) as ModelOffPeak | null,
     });
   }
@@ -72,7 +82,7 @@ export async function handleUsageBatch(
   const rows = batch.messages.map((msg) => {
     const event = msg.body;
     const info = pricingMap.get(event.modelId);
-    const { costCents, isOffPeak } = computeCost(event, info);
+    const { costCents, upstreamCostCents, isOffPeak } = computeCost(event, info);
 
     return {
       org_id: event.orgId,
@@ -88,9 +98,17 @@ export async function handleUsageBatch(
       num_units: event.numUnits,
       unit_label: event.unitLabel,
       cost_cents: costCents,
-      // For Phase 1 the pass-through cost == billed cost (0% markup).
-      // Phase 2 introduces markup logic; upstream_cost stays as the raw rate.
-      upstream_cost_cents: costCents,
+      // What the upstream charged US, priced from models.upstream_pricing.
+      //
+      // This used to be `costCents` — a literal copy of the billed amount,
+      // left over from a Phase 1 where markup was 0% so the two genuinely were
+      // equal. That stopped being true and nobody noticed: 2,074 of 2,083
+      // historical rows have the two identical, so every margin figure ever
+      // derived from this column has been exactly zero.
+      //
+      // Falls back to costCents when the model has no recorded cost basis,
+      // which preserves the old behaviour rather than inventing a margin.
+      upstream_cost_cents: upstreamCostCents,
       is_off_peak: isOffPeak,
       latency_ms: event.latencyMs,
       ttft_ms: event.ttftMs,
@@ -177,29 +195,18 @@ export async function handleUsageBatch(
  *
  * Rounded UP so micro-amounts don't round to zero and undercount.
  */
-function computeCost(
+export function computeCost(
   event: UsageEvent,
   info: PricingInfo | undefined
-): { costCents: number; isOffPeak: boolean } {
-  // Don't charge for non-success requests or unknown models
+): { costCents: number; upstreamCostCents: number; isOffPeak: boolean } {
+  // Don't charge for non-success requests or unknown models.
+  // Cost is zero too — a failed request still cost us nothing billable, and
+  // recording a phantom upstream cost here would show negative margin.
   if (!info || event.status !== "success") {
-    return { costCents: 0, isOffPeak: false };
+    return { costCents: 0, upstreamCostCents: 0, isOffPeak: false };
   }
 
-  const p = info.pricing;
-  const input = event.inputTokens ?? 0;
-  const output = event.outputTokens ?? 0;
-  const cached = event.cachedTokens ?? 0;
-  const billableInput = Math.max(0, input - cached);
-
-  const inputRate = p.input_cents_per_mtok ?? 0;
-  const outputRate = p.output_cents_per_mtok ?? 0;
-  const cachedRate = p.cached_cents_per_mtok ?? inputRate;
-
-  const rawCents =
-    (billableInput * inputRate) / 1_000_000 +
-    (cached * cachedRate) / 1_000_000 +
-    (output * outputRate) / 1_000_000;
+  const rawCents = rateCost(event, info.pricing);
 
   let discountPct = 0;
   let isOffPeak = false;
@@ -231,7 +238,40 @@ function computeCost(
   }
 
   const finalCents = Math.ceil(rawCents * (1 - discountPct / 100));
-  return { costCents: finalCents, isOffPeak };
+
+  // Upstream cost, priced from the SAME token counts against the upstream's
+  // rates. Deliberately NOT discounted: an off-peak window is a concession we
+  // make to the customer, not one the upstream makes to us, so applying it
+  // here would understate cost and overstate margin during exactly the hours
+  // margin is thinnest.
+  const up = info.upstream_pricing;
+  const upstreamCostCents = up
+    ? Math.ceil(rateCost(event, up))
+    : finalCents;   // no cost basis recorded — fall back to old behaviour
+
+  return { costCents: finalCents, upstreamCostCents, isOffPeak };
+}
+
+/**
+ * Token-count × rate arithmetic, shared by the billed price and the upstream
+ * cost so the two can never drift apart in how they treat cached tokens.
+ * Returns raw (unrounded) cents — callers round.
+ */
+function rateCost(event: UsageEvent, p: ModelPricing): number {
+  const input = event.inputTokens ?? 0;
+  const output = event.outputTokens ?? 0;
+  const cached = event.cachedTokens ?? 0;
+  const billableInput = Math.max(0, input - cached);
+
+  const inputRate = p.input_cents_per_mtok ?? 0;
+  const outputRate = p.output_cents_per_mtok ?? 0;
+  const cachedRate = p.cached_cents_per_mtok ?? inputRate;
+
+  return (
+    (billableInput * inputRate) / 1_000_000 +
+    (cached * cachedRate) / 1_000_000 +
+    (output * outputRate) / 1_000_000
+  );
 }
 
 // ────────────────────────────────────────────────────────────────────

@@ -5,9 +5,26 @@
  * a per-isolate in-memory cache (5-min TTL) so repeated requests on the same
  * Worker isolate skip the Postgres round-trip. Cold isolate = one SELECT.
  *
- * The compiled preset config is merged into the outgoing OpenRouter body
- * to control model fallback chain + provider routing preferences. The
- * caller's request body takes precedence on fields they explicitly set.
+ * ⚠ MOST OF THIS FEATURE IS INERT SINCE THE MOVE TO WOKEY.
+ *
+ * Presets were built against OpenRouter's request extensions: a `models`
+ * array (its fallback chain) and a `provider` object (sort, max_latency,
+ * max_price, allow_fallbacks). None of those are OpenAI-standard fields, and
+ * Wokey does not implement them — a live probe on 2026-08-25 sent both and
+ * got a normal 200 back with them ignored.
+ *
+ * Silently ignored is the worst of the possible outcomes: an org that
+ * configured a fallback chain believes it has failover and does not. So
+ * `applyPreset` no longer puts those fields on the wire, and the gateway
+ * marks affected responses with `X-Ahura-Preset-Fallback: unsupported`.
+ *
+ * What still works — and is worth keeping — is the preset as a NAMED DEFAULT
+ * MODEL: a caller can send `X-Ahura-Preset` with no `model` and get the
+ * preset's first model. That behaviour is ours, not the upstream's.
+ *
+ * Restoring real fallback means implementing it in the gateway (catch the
+ * upstream error, retry the next model in the chain) rather than delegating
+ * to the upstream. That is a feature, not a config change.
  */
 import { createClient } from "@supabase/supabase-js";
 import type { Env } from "../types.ts";
@@ -65,16 +82,33 @@ export async function resolvePreset(
 }
 
 /**
- * Merge a resolved preset into an outgoing OpenRouter chat-completions body.
+ * True when the upstream implements OpenRouter-style `models` / `provider`
+ * request extensions. False for Wokey — see the file header. Read by the
+ * route handlers to decide whether to warn the caller.
+ */
+export const UPSTREAM_HONOURS_PRESET_ROUTING = false;
+
+/** Does this preset ask for behaviour the upstream cannot deliver? */
+export function presetRoutingIsDegraded(preset: PresetConfig): boolean {
+  if (UPSTREAM_HONOURS_PRESET_ROUTING) return false;
+  return (
+    preset.models.length > 1 ||
+    !!preset.provider_sort ||
+    !!preset.max_latency_ms ||
+    !!preset.preferred_max_price_per_mtok ||
+    preset.allow_fallbacks === true
+  );
+}
+
+/**
+ * Merge a resolved preset into an outgoing chat-completions body.
  * The caller's explicit fields take precedence; preset fills the gaps.
  *
- *   - `models`: caller's `model` first, then preset's models (deduped). This
- *     becomes OpenRouter's fallback chain — if the first model errors or has
- *     no capacity, OR rolls down the list.
- *   - `provider.sort`: preset wins ONLY if caller didn't set provider.sort.
- *   - `provider.max_latency`: same.
- *   - `provider.max_price`: same.
- *   - `provider.allow_fallbacks`: preset wins only if caller didn't set it.
+ * Only the default-model behaviour is applied: if the caller sent no `model`,
+ * the preset's first model becomes it. The former fallback-chain and
+ * provider-routing fields are deliberately NOT emitted — the upstream ignores
+ * them, so putting them on the wire would only make the request look like it
+ * requested something it did not get.
  *
  * Returns the merged body (does not mutate input).
  */
@@ -84,47 +118,22 @@ export function applyPreset(
 ): Record<string, unknown> {
   const out: Record<string, unknown> = { ...body };
 
-  // 1. Model fallback chain — put caller's model first, then preset models
+  // Named default model — the one part of a preset the gateway itself can
+  // honour. If the caller named a model, theirs wins.
   const callerModel = typeof body.model === "string" ? body.model : null;
-  const merged: string[] = [];
-  if (callerModel) merged.push(callerModel);
-  for (const m of preset.models) {
-    if (!merged.includes(m)) merged.push(m);
-  }
-  // If body already has a `models` array, append preset entries to it (deduped)
-  if (Array.isArray(body.models)) {
-    const callerExtra = body.models.filter((m): m is string => typeof m === "string");
-    for (const m of callerExtra) {
-      if (!merged.includes(m)) merged.push(m);
-    }
-  }
-  out.models = merged;
-  // Keep the canonical `model` as the first item so OpenRouter still
-  // reports model attribution correctly when no fallback fires.
-  if (!callerModel && merged.length > 0) {
-    out.model = merged[0];
+  if (!callerModel && preset.models.length > 0) {
+    out.model = preset.models[0];
   }
 
-  // 2. Provider routing preferences — preset fills gaps in caller config
-  const callerProvider = (body.provider as Record<string, unknown> | undefined) ?? {};
-  const provider: Record<string, unknown> = { ...callerProvider };
-
-  if (preset.provider_sort && provider.sort === undefined) {
-    provider.sort = preset.provider_sort;
-  }
-  if (preset.max_latency_ms && provider.max_latency === undefined) {
-    provider.max_latency = preset.max_latency_ms;
-  }
-  if (preset.preferred_max_price_per_mtok && provider.max_price === undefined) {
-    provider.max_price = preset.preferred_max_price_per_mtok;
-  }
-  if (preset.allow_fallbacks !== undefined && provider.allow_fallbacks === undefined) {
-    provider.allow_fallbacks = preset.allow_fallbacks;
-  }
-
-  if (Object.keys(provider).length > 0) {
-    out.provider = provider;
-  }
+  // The fallback chain and provider-routing preferences are NOT emitted.
+  // They were OpenRouter extensions; Wokey accepts and ignores them. Sending
+  // them would put a request on the wire that appears to ask for failover and
+  // price/latency steering it will never receive — misleading in upstream
+  // logs and in any traffic capture. Dropping them changes no behaviour,
+  // because there was none to change.
+  //
+  // A caller who set `models` or `provider` themselves keeps whatever they
+  // sent; it is not this function's job to strip a caller's own fields.
 
   return out;
 }

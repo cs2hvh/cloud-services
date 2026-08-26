@@ -6,8 +6,8 @@
  *
  * POST /api/inference/byok-keys
  *   Body: { name, provider, api_key }
- *   - Verifies the key against the upstream (OpenRouter for 'openrouter';
- *     skipped for other providers in Phase 1 since we only use OpenRouter)
+ *   - Verifies the key against the upstream (a 1-token completion for 'wokey';
+ *     skipped for providers the gateway does not route to)
  *   - Encrypts with BYOK_DEK (AES-GCM)
  *   - Stores in inference.byok_keys with the bytea ciphertext payload
  *
@@ -28,7 +28,7 @@ import { auditContextFrom, recordAudit } from "@/lib/inference/audit";
 
 const createSchema = z.object({
   name: z.string().min(1).max(100),
-  provider: z.enum(["openrouter", "openai", "anthropic", "google", "mistral", "custom"]),
+  provider: z.enum(["wokey", "openrouter", "openai", "anthropic", "google", "mistral", "custom"]),
   api_key: z.string().min(10).max(500),
 });
 
@@ -138,30 +138,72 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Verify the key against the upstream before storing. Phase 1 only verifies
-  // OpenRouter keys (the canonical BYOK provider); other providers skip
-  // verification since the gateway always routes through OpenRouter anyway.
+  // Verify the key against the upstream before storing, so a typo surfaces
+  // here rather than as a mystery 401 on the customer's first real request.
+  //
+  // Wokey has no key-introspection endpoint, and its GET /v1/models answers
+  // 200 WITHOUT auth — so hitting that would "verify" any string at all.
+  // The cheapest authenticated probe is a 1-token completion. It costs the
+  // customer a fraction of a cent against their own key, which is the price
+  // of not storing a credential we never confirmed.
+  //
+  // Only 401/403 marks a key invalid. A 5xx or a network blip means the
+  // upstream is unhappy, not that the key is wrong, and rejecting on those
+  // would block a customer from adding a perfectly good key during an
+  // upstream incident.
   let isValid = true;
   let verifyError: string | null = null;
-  if (provider === "openrouter") {
+
+  if (provider === "wokey") {
+    const base = process.env.WOKEY_BASE_URL ?? "https://api.wokey.ai/v1";
+    try {
+      const resp = await fetch(`${base.replace(/\/+$/, "")}/chat/completions`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${api_key}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "claude-haiku-4-5",
+          messages: [{ role: "user", content: "hi" }],
+          max_tokens: 1,
+        }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (resp.status === 401 || resp.status === 403) {
+        isValid = false;
+        verifyError = "the provider rejected this key";
+      }
+    } catch (err) {
+      // Network/timeout — inconclusive, not invalid. Store it and let the
+      // gateway's own error path report the truth on first use.
+      console.warn(
+        "[Inference BYOK] wokey verification inconclusive:",
+        err instanceof Error ? err.message : String(err)
+      );
+    }
+  } else if (provider === "openrouter") {
+    // Retained for the historical rows only — 'openrouter' is no longer the
+    // platform upstream, so a key stored under it will never be used.
     try {
       const resp = await fetch("https://openrouter.ai/api/v1/key", {
         headers: { Authorization: `Bearer ${api_key}` },
       });
       if (!resp.ok) {
         isValid = false;
-        verifyError = `OpenRouter returned ${resp.status}`;
+        verifyError = `provider returned ${resp.status}`;
       }
     } catch (err) {
       isValid = false;
       verifyError = err instanceof Error ? err.message : String(err);
     }
-    if (!isValid) {
-      return NextResponse.json(
-        { error: `BYOK key verification failed: ${verifyError}` },
-        { status: 400 }
-      );
-    }
+  }
+
+  if (!isValid) {
+    return NextResponse.json(
+      { error: `BYOK key verification failed: ${verifyError}` },
+      { status: 400 }
+    );
   }
 
   // Encrypt + format for bytea storage

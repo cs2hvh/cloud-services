@@ -65,12 +65,18 @@ interface ByokKey {
   created_at: string;
 }
 
+// 'wokey' is the only provider the gateway actually routes BYOK traffic to.
+// The rest are reserved for a future direct-routing path — a key stored under
+// any of them is encrypted and kept, but will never be selected at request
+// time, so they are labelled as inactive rather than presented as choices that
+// work. 'openrouter' is absent deliberately: it is no longer an upstream, and
+// offering it would let someone add a key that silently never gets used.
 const PROVIDERS = [
-  { value: 'openrouter', label: 'OpenRouter — all models (recommended)' },
-  { value: 'openai', label: 'OpenAI (reserved for direct routing)' },
-  { value: 'anthropic', label: 'Anthropic (reserved for direct routing)' },
-  { value: 'google', label: 'Google (reserved for direct routing)' },
-  { value: 'mistral', label: 'Mistral (reserved for direct routing)' },
+  { value: 'wokey', label: 'Wokey — all models (recommended)' },
+  { value: 'openai', label: 'OpenAI (not yet routed)' },
+  { value: 'anthropic', label: 'Anthropic (not yet routed)' },
+  { value: 'google', label: 'Google (not yet routed)' },
+  { value: 'mistral', label: 'Mistral (not yet routed)' },
   { value: 'custom', label: 'Custom' },
 ];
 
@@ -82,7 +88,7 @@ export default function ByokKeysPage() {
   const [deleteKey, setDeleteKey] = useState<ByokKey | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const [form, setForm] = useState({ name: '', provider: 'openrouter', api_key: '' });
+  const [form, setForm] = useState({ name: '', provider: 'wokey', api_key: '' });
 
   const load = async () => {
     setLoading(true);
@@ -120,7 +126,7 @@ export default function ByokKeysPage() {
       const data = await r.json();
       if (!r.ok) throw new Error(data.error ?? 'Failed to add BYOK key');
       toast.success(`Added "${form.name}"`);
-      setForm({ name: '', provider: 'openrouter', api_key: '' });
+      setForm({ name: '', provider: 'wokey', api_key: '' });
       setCreateOpen(false);
       await load();
     } catch (err) {
@@ -155,7 +161,7 @@ export default function ByokKeysPage() {
   // Stats
   const validCount = keys.filter((k) => k.is_valid).length;
   const providers = new Set(keys.map((k) => k.provider)).size;
-  const openrouterCount = keys.filter((k) => k.provider === 'openrouter').length;
+  const routableCount = keys.filter((k) => k.provider === 'wokey').length;
 
   return (
     <PageCanvas>
@@ -189,10 +195,10 @@ export default function ByokKeysPage() {
           accent={validCount > 0 ? '#4ade80' : undefined}
         />
         <StatCell
-          label="OpenRouter keys"
-          value={String(openrouterCount)}
-          hint="Primary BYOK provider"
-          accent={openrouterCount > 0 ? ACCENT : undefined}
+          label="Routable keys"
+          value={String(routableCount)}
+          hint="Wokey — the active upstream"
+          accent={routableCount > 0 ? ACCENT : undefined}
         />
         <StatCell
           label="Providers"
@@ -277,7 +283,7 @@ export default function ByokKeysPage() {
       ) : (
         <EmptyState
           title="No BYOK keys yet"
-          description="Add a provider key to route requests through your own account. Most teams add an OpenRouter key — covers every model in the catalog."
+          description="Add a provider key to route requests through your own account. Add a Wokey key — it covers every model in the catalog."
           action={
             <PrimaryButton onClick={() => setCreateOpen(true)}>
               <Plus className="h-3.5 w-3.5" />
@@ -297,7 +303,7 @@ export default function ByokKeysPage() {
         <NoteCard
           eyebrow="Verification"
           title="Validated at create"
-          body="OpenRouter keys are tested against /v1/key before storage. Failed verifications surface in the status column and block BYOK billing until resolved."
+          body="Wokey keys are verified with a 1-token completion before storage, since the provider exposes no key-introspection endpoint. Failed verifications surface in the status column and block BYOK billing until resolved."
         />
       </section>
 
@@ -317,7 +323,7 @@ export default function ByokKeysPage() {
               <Input
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="my-openrouter-key"
+                placeholder="my-wokey-key"
                 className="bg-white/[0.02] border-white/[0.08]"
               />
             </Field>
@@ -338,7 +344,7 @@ export default function ByokKeysPage() {
                 type="password"
                 value={form.api_key}
                 onChange={(e) => setForm({ ...form, api_key: e.target.value })}
-                placeholder={form.provider === 'openrouter' ? 'sk-or-v1-…' : 'sk-…'}
+                placeholder={form.provider === 'wokey' ? 'wk-…' : 'sk-…'}
                 className="bg-white/[0.02] border-white/[0.08] font-mono"
               />
               <p className={`${MONO} mt-1 text-[10.5px] text-white/40`}>

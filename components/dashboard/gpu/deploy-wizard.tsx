@@ -27,7 +27,7 @@ import {
     Loader2,
 } from "lucide-react";
 import { generateIdempotencyKey } from "@/lib/idempotency";
-import { storagePerHour } from "@/lib/services/runpod/helpers";
+import { GPU_MARKUP_PCT, storagePerHour } from "@/lib/services/runpod/helpers";
 
 import { SoftwareIcon } from "./software-icons";
 import type { InventoryRowClient, StockStatus } from "./types";
@@ -57,6 +57,9 @@ type WizardTemplate = {
     description: string;
     ports?: string[];
     defaultContainerDiskGb?: number;
+    /** Catalog hints. `password_auth: "unsupported"` marks an image whose
+     *  entrypoint ignores ROOT_PASSWORD, so a password alone locks you out. */
+    envHints?: Record<string, string> | null;
 };
 
 interface ApiTemplate {
@@ -66,6 +69,7 @@ interface ApiTemplate {
     description: string | null;
     ports?: string[];
     defaultContainerDiskGb?: number;
+    envHints?: Record<string, string> | null;
 }
 
 const CUSTOM_TEMPLATE: WizardTemplate = {
@@ -111,14 +115,73 @@ function tierLabel(name: string): string {
 
 function archLabel(name: string): string {
     const n = name.toLowerCase();
-    if (/(b100|b200|b300|gb200|rtx 50|rtx pro 6000|rtx pro 4500)/.test(n)) return "Blackwell";
+
+    // Ada-suffixed cards are tested FIRST. "RTX 5000 Ada" is Ada Lovelace, but
+    // a loose /rtx 50/ test claims it for Blackwell — which it did until this
+    // was rewritten, putting a 2022 workstation card in the newest tier.
+    if (/\bada\b/.test(n)) return "Ada Lovelace";
+
+    if (/(b100|b200|b300|gb200)/.test(n)) return "Blackwell";
+    // RTX PRO 4000/4500/5000/6000 are Blackwell. Matched on "pro <n>" rather
+    // than "rtx pro <n>" because the MIG slices arrive named "PRO 6000 MIG
+    // 24GB", with no RTX prefix — those previously fell through to the
+    // "NVIDIA" catch-all and showed no architecture at all.
+    if (/\bpro\s?(4000|4500|5000|6000)\b/.test(n)) return "Blackwell";
+    // Consumer Blackwell is 5060–5090. Bounded so it cannot swallow the
+    // "5000"-numbered workstation cards of earlier generations.
+    if (/rtx\s?50[6-9]0/.test(n)) return "Blackwell";
+
     if (/(h100|h200|gh200)/.test(n)) return "Hopper";
-    if (/(a100|a40|a6000|a5000|a4000|rtx 30|rtx a)/.test(n)) return "Ampere";
-    if (/(l4|l40|rtx 40|rtx 6000 ada|rtx pro 4000|ada)/.test(n)) return "Ada Lovelace";
     if (/(mi300|mi325)/.test(n)) return "CDNA 3";
-    if (/(v100)/.test(n)) return "Volta";
-    if (/(t4)/.test(n)) return "Turing";
+    if (/(a100|a40|a6000|a5000|a4500|a4000|a2000|rtx 30)/.test(n)) return "Ampere";
+    if (/(l40|rtx 40)/.test(n)) return "Ada Lovelace";
+    if (/\bl4\b/.test(n)) return "Ada Lovelace";   // after l40, or it steals it
+    if (/v100/.test(n)) return "Volta";
+    if (/\bt4\b/.test(n)) return "Turing";
     return "NVIDIA";
+}
+
+/**
+ * Which generation bucket a card belongs to.
+ *
+ * The catalogue is 48 GPUs deep and spans seven architectures, which is the
+ * root of the "these cards are confusing" problem: a B300 and a 2019 Tesla
+ * V100 sat side by side, distinguished only by a small architecture caption
+ * most buyers do not read as a date.
+ *
+ * Three buckets rather than seven, because the question a buyer is actually
+ * asking is "is this current, or am I looking at old stock?" — not "which
+ * microarchitecture is this". MI300X sits with Hopper: it is AMD's 2023
+ * flagship and a contemporary of the H100, so grouping it by release era is
+ * more honest than by vendor.
+ */
+const GEN_LATEST = 0, GEN_PREVIOUS = 1, GEN_EARLIER = 2;
+
+const GENERATIONS = [
+    {
+        label: "Latest generation",
+        blurb: "Blackwell — newest silicon, highest throughput per GPU",
+    },
+    {
+        label: "Previous generation",
+        blurb: "Hopper and MI300X — proven, and usually better value per hour",
+    },
+    {
+        label: "Earlier generations",
+        blurb: "Ada, Ampere and older — lowest cost for light or bursty work",
+    },
+] as const;
+
+function generationIndex(name: string): 0 | 1 | 2 {
+    switch (archLabel(name)) {
+        case "Blackwell":
+            return GEN_LATEST;
+        case "Hopper":
+        case "CDNA 3":
+            return GEN_PREVIOUS;
+        default:
+            return GEN_EARLIER;
+    }
 }
 
 function vendorLabel(name: string): string {
@@ -145,7 +208,10 @@ export default function DeployWizard({
     const [name, setName] = useState("");
     const [gpuCatalogId, setGpuCatalogId] = useState(initialGpu);
     const [gpuCount, setGpuCount] = useState(1);
-    const [interruptible, setInterruptible] = useState(false);
+    // Spot/interruptible capacity is not sold. The column still exists on
+    // gpu_pods and gpu_pricing, and pod creation still takes the flag, so this
+    // is a product decision expressed at the UI rather than a schema change.
+    const interruptible = false;
 
     const [templates, setTemplates] = useState<WizardTemplate[]>([CUSTOM_TEMPLATE]);
     const [templateId, setTemplateId] = useState<string>("");
@@ -211,6 +277,7 @@ export default function DeployWizard({
                               description: t.description ?? "",
                               ports: t.ports,
                               defaultContainerDiskGb: t.defaultContainerDiskGb,
+                              envHints: t.envHints ?? null,
                           }))
                         : [];
                 setTemplates([...rows, CUSTOM_TEMPLATE]);
@@ -259,6 +326,14 @@ export default function DeployWizard({
         if (selectedTemplate.defaultContainerDiskGb) {
             setContainerDiskGb(selectedTemplate.defaultContainerDiskGb);
         }
+        // Drop any password typed against a previous template that supported
+        // one. The field is hidden for key-only images, so without this a
+        // stale value would still be encrypted and shipped as ROOT_PASSWORD to
+        // an image that ignores it — invisible in the UI, and misreported as
+        // "Root pwd set" in the summary.
+        if (selectedTemplate.envHints?.password_auth !== "supported") {
+            setRootPassword("");
+        }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [templateId]);
 
@@ -266,14 +341,12 @@ export default function DeployWizard({
         (v) => String(v.id) === networkVolumeId
     );
 
-    const observedRate = interruptible
-        ? selectedRow?.spotPerHr
-        : selectedRow?.onDemandPerHr;
-    // GPU compute (observed × default markup × count) + local-disk storage.
-    // Mirrors the billed rate in pod-lifecycle-operations so the quote matches.
+    const observedRate = selectedRow?.onDemandPerHr;
+    // GPU compute (observed × markup × count) + local-disk storage. Mirrors
+    // the billed rate in pod-lifecycle-operations so the quote matches.
     const gpuHourly =
         observedRate !== null && observedRate !== undefined
-            ? Math.round(observedRate * 1.25 * gpuCount * 10000) / 10000
+            ? Math.round(observedRate * GPU_MARKUP_PCT * gpuCount * 10000) / 10000
             : null;
     const storageHourly = storagePerHour({ containerDiskGb, volumeGb });
     const estimatedHourly =
@@ -288,7 +361,23 @@ export default function DeployWizard({
     const hasGpu = !!selectedRow && selectedRow.stockStatus !== "none";
     const hasImage = effectiveImage.length > 0;
     const hasStorage = containerDiskGb >= 10;
-    const hasAuth = publicKey.trim().length > 0 || rootPassword.length >= 12;
+    // Does the SELECTED image actually honour a root password?
+    //
+    // ROOT_PASSWORD is our own convention, implemented in the entrypoint of
+    // our ghcr.io images (infra/runpod/os-images/_shared/start.sh runs chpasswd
+    // and enables PasswordAuthentication). Third-party images — the provider's
+    // official ones, or anything a user types under "custom" — ignore the
+    // variable entirely and ship with password login disabled.
+    //
+    // Treating a password as sufficient for those produced the worst possible
+    // outcome: the deploy SUCCEEDS, the pod starts billing, and the customer
+    // discovers at `ssh` time that they have no way in. Fail-safe: anything
+    // not explicitly marked "supported" requires a key.
+    const passwordAuthSupported =
+        selectedTemplate?.envHints?.password_auth === "supported";
+    const hasAuth =
+        publicKey.trim().length > 0 ||
+        (passwordAuthSupported && rootPassword.length >= 12);
     const hasName = name.trim().length > 0;
 
     // ── Validation ────────────────────────────────────────────────────
@@ -301,7 +390,12 @@ export default function DeployWizard({
     if (!hasImage) issues.push("Container image");
     if (containerDiskGb < 10 || containerDiskGb > 2000)
         issues.push("Disk between 10–2000 GB");
-    if (!hasAuth) issues.push("SSH key or 12+ character root password");
+    if (!hasAuth)
+        issues.push(
+            passwordAuthSupported
+                ? "SSH key or 12+ character root password"
+                : "SSH public key (this image has no password login)"
+        );
 
     const canSubmit = issues.length === 0 && !isLoading;
 
@@ -325,7 +419,12 @@ export default function DeployWizard({
         attempted && (containerDiskGb < 10 || containerDiskGb > 2000)
             ? "Container disk must be 10–2000 GB"
             : null;
-    const authError = attempted && !hasAuth ? "Add an SSH key or a root password (12+ characters)" : null;
+    const authError =
+        attempted && !hasAuth
+            ? passwordAuthSupported
+                ? "Add an SSH key or a root password (12+ characters)"
+                : "This image only supports key-based SSH — add a public key"
+            : null;
 
     // Launch click: if anything's missing, reveal inline errors + jump to the
     // first one instead of silently doing nothing.
@@ -588,18 +687,73 @@ export default function DeployWizard({
 
                         return (
                             <>
-                                {inStock.length > 0 && (
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-2.5">
-                                        {inStock.map((c) => (
-                                            <GpuCard
-                                                key={c.row.gpuCatalogId}
-                                                row={c.row}
-                                                selected={gpuCatalogId === c.row.gpuCatalogId}
-                                                onSelect={() => setGpuCatalogId(c.row.gpuCatalogId)}
-                                            />
-                                        ))}
-                                    </div>
-                                )}
+                                {/*
+                                  Grouped by generation rather than one flat
+                                  grid. A newest-silicon B300 and a 2019 V100
+                                  previously sat adjacent with nothing but a
+                                  small architecture caption between them.
+
+                                  Headings are only rendered for groups that
+                                  actually have cards, so a narrow stock filter
+                                  or search does not leave empty section
+                                  titles behind. When a filter collapses the
+                                  result to a single group the heading still
+                                  shows — it is the thing telling you WHICH
+                                  generation survived the filter.
+                                */}
+                                {inStock.length > 0 &&
+                                    GENERATIONS
+                                        .map((gen, genIdx) => ({
+                                            gen,
+                                            genIdx,
+                                            cards: inStock.filter(
+                                                (c) => generationIndex(c.row.displayName) === genIdx
+                                            ),
+                                        }))
+                                        // Drop empties BEFORE indexing, so spacing keys off
+                                        // position among rendered groups rather than position
+                                        // in GENERATIONS — otherwise a filter that removes the
+                                        // first group leaves a stray gap above the second.
+                                        .filter((g) => g.cards.length > 0)
+                                        .map(({ gen, genIdx, cards }, renderedIdx) => {
+                                        return (
+                                            <div key={gen.label} className={renderedIdx > 0 ? "mt-7" : ""}>
+                                                <div className="mb-3 flex items-baseline justify-between gap-3 border-b border-white/[0.06] pb-2">
+                                                    <div className="flex items-baseline gap-2.5">
+                                                        <h3
+                                                            className="text-[13px] font-semibold tracking-[-0.01em] text-white"
+                                                        >
+                                                            {gen.label}
+                                                        </h3>
+                                                        {genIdx === GEN_LATEST && (
+                                                            <span
+                                                                className={`${MONO} border px-1.5 py-px text-[9.5px] uppercase tracking-[0.12em]`}
+                                                                style={{ borderColor: ACCENT, color: ACCENT }}
+                                                            >
+                                                                New
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <span className={`${MONO} shrink-0 text-[10.5px] text-white/35`}>
+                                                        {cards.length}
+                                                    </span>
+                                                </div>
+                                                <p className="mb-3 text-[11.5px] leading-relaxed text-white/40">
+                                                    {gen.blurb}
+                                                </p>
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-2.5">
+                                                    {cards.map((c) => (
+                                                        <GpuCard
+                                                            key={c.row.gpuCatalogId}
+                                                            row={c.row}
+                                                            selected={gpuCatalogId === c.row.gpuCatalogId}
+                                                            onSelect={() => setGpuCatalogId(c.row.gpuCatalogId)}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
 
                                 {outOfStock.length > 0 && (
                                     <>
@@ -680,49 +834,6 @@ export default function DeployWizard({
                                     ) : (
                                         <p className="text-[12px] text-white/40">Out of stock.</p>
                                     )}
-                                </div>
-                            </div>
-
-                            <div>
-                                <Label className={`${MONO} mb-2 block text-[10.5px] uppercase tracking-[0.14em] text-white/45`}>
-                                    Pricing mode
-                                </Label>
-                                <div className="grid grid-cols-2 gap-2">
-                                    {[
-                                        { value: false, title: "On-demand", rate: selectedRow.onDemandPerHr, subtitle: "Guaranteed" },
-                                        { value: true, title: "Spot", rate: selectedRow.spotPerHr, subtitle: "Interruptible" },
-                                    ].map((opt) => {
-                                        const isSelected = interruptible === opt.value;
-                                        const available = opt.rate !== null && opt.rate !== undefined;
-                                        return (
-                                            <button
-                                                key={String(opt.value)}
-                                                type="button"
-                                                onClick={() => available && setInterruptible(opt.value)}
-                                                disabled={!available}
-                                                className="border p-3 text-left transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                                style={
-                                                    isSelected
-                                                        ? {
-                                                              borderColor: BORDER_ACCENT,
-                                                              background: ACCENT_DIM,
-                                                              boxShadow: `0 0 0 1px ${BORDER_ACCENT}`,
-                                                          }
-                                                        : {
-                                                              borderColor: "rgba(255,255,255,0.06)",
-                                                              background: "#111216",
-                                                          }
-                                                }
-                                            >
-                                                <p className="text-[13px] font-semibold text-white">{opt.title}</p>
-                                                <p className="text-[10.5px] text-white/45">{opt.subtitle}</p>
-                                                <p className={`${MONO} mt-2 text-[13px] font-semibold text-white tabular-nums`}>
-                                                    {available ? `$${opt.rate?.toFixed(2)}` : "—"}
-                                                    <span className="ml-0.5 text-[10px] font-normal text-white/40">/GPU·hr</span>
-                                                </p>
-                                            </button>
-                                        );
-                                    })}
                                 </div>
                             </div>
                         </div>
@@ -884,12 +995,20 @@ export default function DeployWizard({
                             <span className={`text-[12px] ${publicKey.trim().length > 0 ? "text-white" : "text-white/45"}`}>
                                 SSH key
                             </span>
-                            <span className={`${MONO} text-[10px] uppercase tracking-[0.16em] text-white/30 mx-1`}>or</span>
-                            <AuthDot ok={rootPassword.length >= 12} />
-                            <span className={`text-[12px] ${rootPassword.length >= 12 ? "text-white" : "text-white/45"}`}>
-                                Root password
-                                <span className={`${MONO} ml-1 text-[10px] text-white/35`}>(12+)</span>
-                            </span>
+                            {/* The "or root password" alternative is hidden, not
+                                disabled, when the image cannot honour it — offering
+                                a choice that does not exist is what let people
+                                deploy pods they could not log into. */}
+                            {passwordAuthSupported && (
+                                <>
+                                    <span className={`${MONO} text-[10px] uppercase tracking-[0.16em] text-white/30 mx-1`}>or</span>
+                                    <AuthDot ok={rootPassword.length >= 12} />
+                                    <span className={`text-[12px] ${rootPassword.length >= 12 ? "text-white" : "text-white/45"}`}>
+                                        Root password
+                                        <span className={`${MONO} ml-1 text-[10px] text-white/35`}>(12+)</span>
+                                    </span>
+                                </>
+                            )}
                             <span
                                 className={`${MONO} ml-auto text-[10px] uppercase tracking-[0.14em]`}
                                 style={{ color: hasAuth ? "#4ade80" : "rgba(255,255,255,0.35)" }}
@@ -913,18 +1032,20 @@ export default function DeployWizard({
                             />
                         </div>
 
-                        <div>
-                            <Label className={`${MONO} mb-2 block text-[10.5px] uppercase tracking-[0.14em] text-white/45`}>
-                                Root password
-                            </Label>
-                            <Input
-                                type="password"
-                                value={rootPassword}
-                                onChange={(e) => setRootPassword(e.target.value)}
-                                placeholder="At least 12 characters if no SSH key"
-                                className="h-10 border-white/[0.08] bg-[#0d0e11] text-[13px] text-white placeholder:text-white/30 focus-visible:ring-0 focus-visible:border-white/25"
-                            />
-                        </div>
+                        {passwordAuthSupported && (
+                            <div>
+                                <Label className={`${MONO} mb-2 block text-[10.5px] uppercase tracking-[0.14em] text-white/45`}>
+                                    Root password
+                                </Label>
+                                <Input
+                                    type="password"
+                                    value={rootPassword}
+                                    onChange={(e) => setRootPassword(e.target.value)}
+                                    placeholder="At least 12 characters if no SSH key"
+                                    className="h-10 border-white/[0.08] bg-[#0d0e11] text-[13px] text-white placeholder:text-white/30 focus-visible:ring-0 focus-visible:border-white/25"
+                                />
+                            </div>
+                        )}
                     </div>
 
                     {/* ── Advanced ─────────────────────────────────── */}
@@ -1029,7 +1150,6 @@ export default function DeployWizard({
                             label="GPU"
                             value={selectedRow ? `${gpuCount}× ${selectedRow.displayName}` : "—"}
                         />
-                        <DetailRow label="Mode" value={interruptible ? "Spot" : "On-demand"} />
                         <DetailRow label="Image" value={effectiveImage || "—"} mono truncate />
                         <DetailRow
                             label="Disk"
@@ -1295,13 +1415,29 @@ function GpuCard({
             {/* Top — name + arch + vram pill */}
             <div className="mb-1 flex items-start justify-between gap-2.5">
                 <div className="min-w-0 flex-1">
-                    <h3 className="text-[14.5px] font-semibold tracking-[-0.015em] text-[#76B900]">
+                    {/* Vendor-coloured, not hardcoded NVIDIA green — the MI300X
+                        is an AMD part and was being rendered in NVIDIA's brand
+                        colour, which is both wrong and actively misleading on a
+                        page whose whole job is telling cards apart. */}
+                    <h3
+                        className="text-[14.5px] font-semibold tracking-[-0.015em]"
+                        style={{ color: vendor === "AMD" ? "#ED4C3A" : "#76B900" }}
+                    >
                         {row.displayName}
                     </h3>
                     <div className={`${MONO} mt-0.5 flex items-center gap-1.5 text-[10.5px] text-white/35`}>
                         <span className="text-white/55">{vendor}</span>
                         <span className="opacity-40">·</span>
                         <span>{arch}</span>
+                        {generationIndex(row.displayName) === GEN_LATEST && (
+                            <>
+                                <span className="opacity-40">·</span>
+                                {/* Repeated on the card as well as the section
+                                    heading, because cards are also shown
+                                    ungrouped in the out-of-stock list. */}
+                                <span style={{ color: ACCENT }}>New</span>
+                            </>
+                        )}
                     </div>
                 </div>
                 <span
@@ -1315,7 +1451,9 @@ function GpuCard({
             <div className="mt-3 mb-3 flex items-baseline justify-between">
                 <div style={SERIF_STYLE} className="flex items-baseline gap-0.5 text-[28px] leading-none tracking-[-0.025em] text-white font-bold tabular-nums">
                     <span className="text-[16px] text-white/55 font-medium">$</span>
-                    {row.onDemandPerHr !== null ? row.onDemandPerHr.toFixed(2) : "—"}
+                    {row.onDemandPerHr !== null
+                        ? (row.onDemandPerHr * GPU_MARKUP_PCT).toFixed(2)
+                        : "—"}
                     <span className={`${MONO} ml-1 text-[9.5px] tracking-[0.02em] text-white/35 font-normal`}>
                         /GPU·hr
                     </span>

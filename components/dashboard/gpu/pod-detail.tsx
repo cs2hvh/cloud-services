@@ -21,6 +21,7 @@ import {
     XCircle,
 } from "lucide-react";
 
+import { PodTerminal } from "./pod-terminal";
 import type { CloudType, PodStatus } from "./types";
 
 interface GpuPodDetailFromApi {
@@ -484,6 +485,13 @@ export default function GpuPodDetail() {
                             value={pod.ports.length > 0 ? pod.ports.join(", ") : "—"}
                             mono
                         />
+                    </div>
+
+                    {/* In-browser shell. Sits under the connection details
+                        rather than in its own tab so the copy-paste SSH command
+                        and the one-click alternative are side by side. */}
+                    <div className="mt-4">
+                        <PodTerminal podId={pod.id} disabled={pod.status !== "running"} />
                     </div>
                 </section>
 

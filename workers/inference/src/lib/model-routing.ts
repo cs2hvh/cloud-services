@@ -29,6 +29,19 @@ export interface ModelRouting {
    *  managed endpoint. vLLM's openai-server only accepts requests
    *  whose `model` matches its `--served-model-name`. */
   served_model_name: string | null;
+  /**
+   * What the upstream calls this model, when that differs from what we
+   * call it publicly.
+   *
+   * Our catalog ids are namespaced (`anthropic/claude-opus-5`) because they
+   * were minted when OpenRouter was the upstream and its ids were ours.
+   * Wokey uses bare ids (`claude-opus-5`). Rather than rewrite the catalog —
+   * which would break every customer integration that names a model — the
+   * public id stays put and this column carries the upstream's spelling.
+   *
+   * NULL means the two agree and the public id goes upstream unchanged.
+   */
+  upstream_model_id: string | null;
   is_active: boolean;
 }
 
@@ -47,11 +60,12 @@ export async function lookupModelRouting(
   const { data } = await supabase
     .schema("inference")
     .from("models")
-    .select("serving_type, serving_url, is_active")
+    .select("serving_type, serving_url, upstream_model_id, is_active")
     .eq("model_id", modelId)
     .maybeSingle<{
       serving_type: ServingType;
       serving_url: string | null;
+      upstream_model_id: string | null;
       is_active: boolean;
     }>();
 
@@ -61,6 +75,7 @@ export async function lookupModelRouting(
     serving_type: data.serving_type,
     serving_url: data.serving_url,
     served_model_name: data.serving_type === "runpod_ft" ? "adapter" : null,
+    upstream_model_id: data.upstream_model_id,
     is_active: data.is_active,
   };
 }

@@ -80,7 +80,7 @@ export const listModels: Handler<{
       owned_by: m.org_id
         ? "ahura-private"
         : m.serving_type === "proxy"
-          ? "openrouter"
+          ? "wokey"
           : "ahura",
       display_name: m.display_name,
       description: m.description,
