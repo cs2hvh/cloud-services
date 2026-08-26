@@ -294,7 +294,7 @@ push cannot see an empty push.
 The second is not optional decoration. It is the only thing separating "found
 nothing" from "cannot report anything".
 
-### And the exit code is part of the check
+### The tools themselves lie, and that is a different problem
 
 Two tools reported success while failing, in the same hour:
 
@@ -304,8 +304,19 @@ Two tools reported success while failing, in the same hour:
 - `node --experimental-strip-types --check` **exits 0** on a file with nine
   syntax errors, including unterminated string literals.
 
-Both are the same shape as everything else here: the failure signal existed and
-something downstream swallowed it.
+- `node --test <directory>` resolves the directory as a module and reports
+  **tests 1, fail 1**. It fails loudly here — but had the path resolved to
+  something importable it would have reported **tests 1, pass 1**: a green suite
+  that ran nothing. Use quoted globs, never a bare directory.
+
+These are worth separating from the guard failures above. A broken guard is our
+code and we can fix it. A tool that reports success while doing nothing is the
+floor those guards stand on, and no amount of care in our own code detects it —
+only running a known-bad input through the whole chain does.
+
+The practical rule: **before trusting any tool's clean result, make it report a
+dirty one once.** Every instance in this section was found that way, and none
+was found by reading.
 
 **The rule:** a parse that yields nothing, a read that returns nothing, and a
 write whose failure is swallowed all look exactly like success. Distinguish
