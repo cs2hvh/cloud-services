@@ -174,6 +174,8 @@ function row(over: Partial<DeploymentRow> = {}): DeploymentRow {
     image_digest: "sha256:aaa",
     error_code: null,
     error_message: null,
+    container_port: 3000,
+    run_as_user: 1000,
     queued_at: "2026-08-26T10:00:00.000Z",
     started_at: "2026-08-26T10:00:10.000Z",
     ready_at: "2026-08-26T10:01:10.000Z",
@@ -253,4 +255,17 @@ test("two placeholder deployments produce distinguishable labels", () => {
   const a = toDeploymentDto(row({ ref: "dpl-aaa", git_sha: "0000000" }));
   const b = toDeploymentDto(row({ ref: "dpl-bbb", git_sha: "0000000" }));
   assert.notEqual(a.label, b.label);
+});
+
+test("runtime facts pass through, and absence is stated not guessed", () => {
+  // Both caused outages by living only in build-time detection. A deployment
+  // built before they were recorded must say so rather than have the UI
+  // substitute a default that was never what this build actually used.
+  const known = toDeploymentDto(row({ container_port: 8000, run_as_user: 0 }));
+  assert.equal(known.runtime.port, 8000);
+  assert.equal(known.runtime.user, 0, "root is 0, and 0 must not read as absent");
+
+  const unknown = toDeploymentDto(row({ container_port: null, run_as_user: null }));
+  assert.equal(unknown.runtime.port, null);
+  assert.equal(unknown.runtime.user, null);
 });

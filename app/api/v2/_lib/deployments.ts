@@ -33,6 +33,17 @@ export interface DeploymentRow {
   image_digest: string | null;
   error_code: string | null;
   error_message: string | null;
+  /**
+   * Runtime facts captured AT BUILD TIME, not re-derived on deploy. Both
+   * caused outages by living only in build-time detection: the reconciler
+   * hardcoded port 3000 and killed a gunicorn app listening on 8000, and a
+   * root image was rejected by runAsNonRoot with no uid to override it.
+   *
+   * They are per-deployment because rolling back must restore THAT build's
+   * port and uid, not whatever detection would produce today.
+   */
+  container_port: number | null;
+  run_as_user: number | null;
   queued_at: string;
   started_at: string | null;
   ready_at: string | null;
@@ -43,6 +54,7 @@ export interface DeploymentRow {
 export const DEPLOYMENT_COLUMNS =
   "ref, state, trigger, git_sha, git_ref, git_message, git_author, " +
   "image_repo, image_digest, error_code, error_message, " +
+  "container_port, run_as_user, " +
   "queued_at, started_at, ready_at";
 
 export const DEPLOYMENT_COLUMNS_EXPANDED =
@@ -72,6 +84,8 @@ export interface DeploymentDto {
   };
   /** Ref when the sha is a placeholder, short sha otherwise. Safe to display. */
   label: string;
+  /** What this build runs as. null means it was built before these were recorded. */
+  runtime: { port: number | null; user: number | null };
   image: { repo: string; digest: string } | null;
   error: { code: string | null; message: string } | null;
   timing: {
@@ -123,6 +137,7 @@ export function toDeploymentDto(row: DeploymentRow): DeploymentDto {
     // Never a row of identical zeros: the ref is unique per deployment even
     // when the commit is not recorded.
     label: placeholder ? row.ref : row.git_sha.slice(0, 7),
+    runtime: { port: row.container_port, user: row.run_as_user },
     image:
       row.image_repo && row.image_digest
         ? { repo: row.image_repo, digest: row.image_digest }

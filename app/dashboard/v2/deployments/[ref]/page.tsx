@@ -117,6 +117,23 @@ export default async function DeploymentPage({ params }: Params) {
             )
           }
         />
+        {/* Recorded at build time so a rollback restores THIS build's runtime,
+            not whatever detection would produce today. Both fields caused
+            outages when they lived only in build-time detection. */}
+        <Fact
+          label="Port"
+          value={d.runtime.port === null ? "not recorded" : String(d.runtime.port)}
+        />
+        <Fact
+          label="Runs as"
+          value={
+            d.runtime.user === null
+              ? "not recorded"
+              : d.runtime.user === 0
+                ? "root"
+                : `uid ${d.runtime.user}`
+          }
+        />
       </dl>
 
       <h2 className="m-0 mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/40">
