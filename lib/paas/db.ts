@@ -298,7 +298,7 @@ export const deployments = {
     ),
   create: async (input: {
     projectId: string; environmentId: string; trigger: string;
-    gitSha: string; gitRef: string; gitMessage?: string | null;
+    gitSha: string | null; gitRef: string; gitMessage?: string | null;
     containerPort?: number; runAsUser?: number;
   }) =>
     (await db.insert<DeploymentRow>("deployments", {
@@ -316,7 +316,7 @@ export const deployments = {
    */
   setState: async (ref: string, patch: {
     state?: DeploymentRow["state"];
-    imageRepo?: string; imageDigest?: string;
+    imageRepo?: string; imageDigest?: string; gitSha?: string;
     errorCode?: string; errorMessage?: string;
     startedAt?: boolean; readyAt?: boolean;
   }) =>
@@ -324,6 +324,10 @@ export const deployments = {
       ...(patch.state ? { state: patch.state } : {}),
       ...(patch.imageRepo ? { image_repo: patch.imageRepo } : {}),
       ...(patch.imageDigest ? { image_digest: patch.imageDigest } : {}),
+      // Write-once in the database: null may become a value, a value may never
+      // change. So this fills in a commit the build discovered without ever
+      // being able to rewrite recorded provenance.
+      ...(patch.gitSha ? { git_sha: patch.gitSha } : {}),
       ...(patch.errorCode ? { error_code: patch.errorCode } : {}),
       ...(patch.errorMessage ? { error_message: patch.errorMessage.slice(0, 2000) } : {}),
       ...(patch.startedAt ? { started_at: new Date().toISOString() } : {}),

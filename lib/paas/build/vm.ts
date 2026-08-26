@@ -71,6 +71,12 @@ export interface BuildRequest {
 export interface BuildResult {
   status: "success" | "failure";
   imageDigest?: string;
+  /**
+   * The commit the build actually built. Empty or absent when the clone could
+   * not report one — callers must treat that as UNKNOWN and store null, never
+   * substitute a placeholder that looks like a sha.
+   */
+  gitSha?: string;
   error?: string;
   finishedAt: string;
 }
@@ -115,6 +121,7 @@ const CLOUD_INIT_LINES: string[] = [
   "  'status': os.environ.get('STATUS', 'failure'),",
   "  'imageDigest': os.environ.get('DIGEST', ''),",
   "  'error': os.environ.get('ERR', ''),",
+  "  'gitSha': os.environ.get('GIT_SHA', ''),",
   "  'finishedAt': __import__('datetime').datetime.utcnow().isoformat() + 'Z',",
   "}))",
   "PYEOF",
@@ -123,7 +130,7 @@ const CLOUD_INIT_LINES: string[] = [
   "  # Power off. The controller destroys the instance; this only stops the clock.",
   "  shutdown -h now",
   "}",
-  "export STATUS DIGEST ERR",
+  "export STATUS DIGEST ERR GIT_SHA",
   "trap finish EXIT",
   "",
   'fail() { ERR="$1"; STATUS=failure; export ERR STATUS; echo "ERROR: $1"; exit 1; }',
@@ -155,7 +162,14 @@ const CLOUD_INIT_LINES: string[] = [
   "sudo -u builder git config --global --unset credential.helper 2>/dev/null || true",
   "",
   "cd '/home/builder/src@@ROOT_DIR@@' || fail 'root directory not found in repository'",
-  "sudo -u builder git rev-parse HEAD",
+  // Capture the sha rather than only printing it. Recording what a build
+  // ACTUALLY built is what makes a rollback target identifiable — without it
+  // every manual deploy is indistinguishable from every other in the promote
+  // picker, and a user cannot tell which build they are about to point a
+  // hostname at.
+  "GIT_SHA=$(sudo -u builder git -C '/home/builder/src' rev-parse HEAD 2>/dev/null || echo '')",
+  "export GIT_SHA",
+  "echo \"commit $GIT_SHA\"",
   "",
   "# The Dockerfile arrives base64-encoded, so no repository content and no",
   "# framework string is ever interpolated into a shell token.",

@@ -150,7 +150,16 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
     projectId: project.id,
     environmentId: env.id,
     trigger: "manual",
-    gitSha: "0000000",
+    // NULL, not a placeholder. At this point the repository has not been cloned
+    // and the commit is genuinely unknown; the build fills it in below once it
+    // reports what it actually checked out.
+    //
+    // This used to write '0000000', which satisfies the sha regex and is
+    // therefore indistinguishable from a real value. Master's promote picker
+    // labels each option by short sha, so every manual deploy rendered as an
+    // identical "0000000" and a user could not tell which build they were
+    // pointing a hostname at.
+    gitSha: null,
     gitRef: branch,
     // Persist the runtime facts. The reconciler builds pod specs from rows, so
     // a port or uid that lives only in detection means it has to guess — and it
@@ -200,6 +209,15 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
     throw new Error(`build failed for ${d.ref}: ${msg}`);
   }
   say("build", `image ${result.imageDigest}`);
+
+  // Record the commit the build actually checked out. Only when the build
+  // reported one — an empty or malformed value stays null rather than becoming
+  // a plausible-looking string, which is the whole reason '0000000' was a bug.
+  // The column is write-once, so this can fill the unknown but never rewrite it.
+  if (result.gitSha && /^[0-9a-f]{7,40}$/.test(result.gitSha)) {
+    await deployments.setState(d.ref, { gitSha: result.gitSha });
+    say("build", `commit ${result.gitSha.slice(0, 7)}`);
+  }
 
   // ── 3. publish ────────────────────────────────────────────────────────────
   await deployments.setState(d.ref, { state: "publishing" });
