@@ -13,7 +13,7 @@ change anything, run by a person who has read a report first.
 ## Running it
 
 ```bash
-node --test "lib/paas/telemetry/*.test.ts"                                   # 372 tests, no deps
+node --test "lib/paas/telemetry/*.test.ts"                                   # 380 tests, no deps
 node --env-file=.env --env-file=.env.local scripts/v3/operator-view.ts       # everything, once
 node --env-file=.env --env-file=.env.local scripts/v3/fleet-drift.ts --prove
 node --env-file=.env --env-file=.env.local scripts/v3/dns-drift.ts
@@ -76,10 +76,10 @@ were right, and the fix was a runner rather than a correction to them.
 | `sweep-dns-drift` | `26 * * * *` |
 | `sweep-fleet-drift` | `44 * * * *` |
 
-**Four of them have self-fired successfully. One has never succeeded**, and
-that is a live finding rather than a footnote — see below. Run
-`scripts/v3/sweep-health.ts` for the current state; it is also the last section
-of `operator-view.ts`.
+**Do not trust this page for their current state** — run
+`scripts/v3/sweep-health.ts`, which is also the last section of
+`operator-view.ts`. The history below is kept because the failure was
+instructive, not because it is still true.
 
 Two properties make these safe to run unattended, and both were designed for
 it rather than discovered afterwards:
@@ -114,24 +114,28 @@ exactly the durations the table exists to measure.
 Alerting is a separate decision. The exit codes carry the severity; nothing
 consumes them.
 
-### One sweep has never worked, and the other four prove less than they look
+### Why sweep-health exists: a green fleet that proved nothing
 
-`sweep-r2-drift` has fired every hour since 14:51 and **never succeeded**. It is
-not broken: it runs, produces a complete and correct report, and exits `10` —
-*ran and found something* — which Kubernetes marks as a failed Job.
+*(Found 2026-08-26 17:xx, fixed by a redeploy within the hour. Kept because the
+shape recurs, not as a current state.)*
 
-The deployed ConfigMap carries pre-contract source (`process.exit(clean ? 0 :
-1)`) and the deployed command has no exit-code translation, so its real findings
-reach the scheduler as a crash. `sweeps.ts` behaved correctly throughout: it
+`sweep-r2-drift` had fired every hour since 14:51 and **never succeeded**. It
+was not broken: it ran, produced a complete and correct report, and exited `10`
+— *ran and found something* — which Kubernetes marks as a failed Job.
+
+The deployed ConfigMap carried pre-contract source (`process.exit(clean ? 0 :
+1)`) and the deployed command had no exit-code translation, so its real findings
+reached the scheduler as a crash. `sweeps.ts` behaved correctly throughout: it
 **refuses** to translate `10`/`11` unless it can see the contract in the shipped
 source, precisely so a mapping is never applied to the wrong convention. The
 contract shipped after the CronJobs were installed, and nothing re-deployed
 them.
 
-**The other four matter more.** They are green because they have found nothing.
-All five lack the translation, so the first real finding from any of them will
-look exactly like a crash — a green fleet was evidence of an empty platform, not
-a working pipeline, and there was no way to tell those apart from outside.
+**The other four mattered more.** They were green because they had found
+nothing. All five lacked the translation, so the first real finding from any of
+them would have looked exactly like a crash — a green fleet was evidence of an
+empty platform, not a working pipeline, and there was no way to tell those apart
+from outside.
 
 That is why `sweep-health.ts` checks two independent things and never lets the
 first imply the second:
@@ -150,14 +154,22 @@ observation was the one that would have revealed the others were missing.
 has observed its domain and is merely stale, one without has never observed it
 at all, and collapsing them overstates the first case while burying the second.
 
-**Not fixed.** The repair is `scripts/v2/install-sweeps.ts --apply`, which
-writes cron infrastructure and needs a human. The dry run confirms it would ship
-the contract and enable the translation:
+**Fixed by re-running `scripts/v2/install-sweeps.ts --apply`**, which ships the
+current source and enables the translation. `sweep-health` detected the change
+on its own, dropping its untranslated count from five to zero without being
+told — which is the behaviour to expect from it, and the reason to run it rather
+than read this.
 
-```
-running source: 387a1e0492457c2d — STALE; this tree is fb62210cb697a766
-exit-code contract: present — 10/11 (ran and found something) will report success
-```
+Two things the episode is worth remembering for:
+
+- **`install-sweeps.ts` reports staleness on a dry run** (`running source:
+  <hash> — STALE`), because a CronJob ships a *snapshot* of the source and never
+  updates itself. Eleven commits landed while the cluster ran the older copy.
+- **Contract presence is asked per sweep**, not once for the fleet. It used to
+  test the union of every closure, so one contract-aware script granted the
+  translation to all five. Harmless in practice — the mapping only touches
+  `10`/`11`, which a script without the contract never emits — but it stated a
+  fleet-wide fact that was untrue of `usage-sample`.
 
 ## What exists
 
@@ -179,7 +191,7 @@ exit-code contract: present — 10/11 (ran and found something) will report succ
 | `telemetry/quota.ts` | Whether a ResourceQuota can be enforced without eviction | 25 |
 | `telemetry/trivy.ts` | Three verdicts — `undecided` blocks, it does not pass | 16 |
 | `telemetry/density.ts` | Pods per node: kubelet cut, sandbox charge, $/pod | 9 |
-| `telemetry/sandbox.ts` | What a gVisor sandbox costs vs what we charge for it | 9 |
+| `telemetry/sandbox.ts` | Sandbox cost vs what we charge, and headroom against it | 17 |
 | `telemetry/sweep-health.ts` | Whether the sweeps ran, and whether findings survive | 13 |
 | `telemetry/cadence.ts` | Whether a schedule can produce what it claims to measure | 9 |
 | `telemetry/exit-codes.ts` | What a sweep's exit code means to a scheduler | — |
@@ -420,13 +432,49 @@ on a `g6-standard-16`:
 
 At 64Mi, Starter returns from 0.8% margin to ~10.8%.
 
-**No replacement value is proposed, deliberately.** The sentry is not separable:
-cAdvisor sees cgroups, and a gVisor pod is one opaque cgroup holding sentry,
-gofer and app together — that opacity is the product working. The result is a
-*ceiling*, not a figure, and reserving too little kills pods under load. The
-safe number comes from a load test. What is established is that there is room
-worth measuring for, and that repricing before measuring would be repricing
-against a number already known to be wrong in the expensive direction.
+**This measurement proposes no replacement value, deliberately.** The sentry is
+not separable from here: cAdvisor sees cgroups, and a gVisor pod is one opaque
+cgroup holding sentry, gofer and app together — that opacity is the product
+working. The result is a *ceiling*, not a figure.
+
+**The figure came from the load test that followed.** `scripts/v2/sandbox-loadtest.ts`
+(deploy lane) A/Bs the same workload against `runc`, changing nothing but
+`runtimeClassName`, and measures the sandbox at **42–45 MiB** — about a third of
+the declaration, and consistent with the idle ceiling above. Its first version
+had the workload report its own RSS from *inside* the sandbox, which is the
+sentry's virtualised view rather than host cgroup accounting; it produced
+negative overhead, and only the absurd sign caught it.
+
+**Still not applied, and the reason is not caution for its own sake.**
+Under-declaring overhead produces no warning of any kind: the scheduler accepts
+more pods than the node can hold and the kernel OOM-kills whichever allocates
+next, possibly a different tenant's than the one that caused it. Silent,
+delayed, and landing on the wrong person. One workload shape on an idle node
+cannot establish what holds for the worst moment of the worst tenant.
+
+### Headroom — what makes the cut reversible
+
+So `sandbox-overhead.ts` also tracks the only quantity observable on real tenant
+workloads: **the whole pod against its whole reservation** (requests +
+`podFixed`), continuously. At the current 128Mi:
+
+```
+dpl-1a483c1793c7   93.5 MiB of 640.0 MiB   14.6%
+dpl-e2404975a02e   88.9 MiB of 640.0 MiB   13.9%
+dpl-e2215252040c   66.3 MiB of 640.0 MiB   10.4%
+```
+
+This is **not evidence for a reduction** — these are the workloads we happen to
+have, not the worst a tenant can produce. It is what makes one reversible: if
+pods start running hot afterwards, this says so before a node does.
+
+The sentry's share is still not separable, and here it does not matter. If the
+total fits, the split between app and sandbox is an accounting question; if it
+does not, the pod is at risk regardless of which half grew.
+
+An unread pod reports null utilisation, never zero, and the peak ignores it
+rather than averaging it in — a pod at 0% would be the strongest possible
+argument for cutting a reservation, on no evidence at all.
 
 The parsing carries this lane's recurring defect in its most expensive location:
 **a gVisor pod exposes no named container series at all.** Summing named
