@@ -92,6 +92,22 @@ export const SWEEP_JOBS: SweepJob[] = [
     needs: ["db", "linode"],
     why: "Linode reality against the control plane, priced. The only job holding the Linode token, and the only one needing no cluster access.",
   },
+  {
+    name: "preview-reap",
+    script: "scripts/v3/preview-reap.ts",
+    schedule: "36 * * * *",
+    // `db` for the index, `k8s` to answer whether a preview is actually RUNNING.
+    // Installed with `db` alone first, and running it said so itself: "cluster
+    // unreadable — running below is UNKNOWN, not no". That is the honest answer
+    // and a useless one — an unindexed environment with a live pod is the urgent
+    // case, and it cannot be told from a harmless empty one without looking.
+    //
+    // The k8s grant is the shared READ-ONLY ClusterRole: get and list, no delete.
+    // This sweep must never gain write access; if it ever needs to remove
+    // something, that belongs to the deploy lane behind a person.
+    needs: ["db", "k8s"],
+    why: "Previews are free and expire 48h after their last push. Nothing else bounds them, and an unreaped preview is a container running for nobody. REPORTS ONLY — there is no --apply, deliberately: this sweep deletes running environments if it is ever wrong, so the licence to delete stays with a person who has read the plan.",
+  },
 ];
 
 /** Environment variables each credential set requires. Sourced from the operator's own env. */

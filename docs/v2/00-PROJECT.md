@@ -157,14 +157,27 @@ behavioural tests replaying confirmed v1 criticals.
     the hostname serving. Three gates, and **unlabelled is not orphaned** —
     proven live, an unlabelled Ingress survived a pass that removed the orphan
     beside it.
-  - **Still not wired:** no scheduled sweep calls the reaper. The decision logic
-    (`shouldReap`/`planReap`) and the outside check on its plans
-    (`reap-safety.ts`, e6) both exist; nothing runs them on a timer yet.
-  - Note for whoever builds that sweep: **before today no preview environment
-    had ever existed**, so a reap sweep would have examined zero aliases and
-    reported clean forever. Honest about `examined: 0` and still useless. Zero
-    previews on a platform that has never made one is not zero previews on one
-    that reaps them.
+  - **PROVEN END TO END** 2026-08-26 (`6fc528ab`). One real preview built from
+    `docker/welcome-to-docker@dependabot/npm_and_yarn/braces-3.0.3` — a genuine
+    feature branch, and a long slashed name that exercises `previewLabel`'s
+    truncation and hash:
+    `welcome-to-docker-dependabot-npm-c77bde.ahurasense.com` → **200**, and
+    `v2-docker.ahurasense.com` (production) → **200, unmoved**. All six
+    pre-existing apps still serve.
+  - Two more defaults found building it: detection probed **main** for every
+    build (right code, wrong recipe), and DNS was **silently skipped** when no
+    gateway address was given — `if (gatewayIp)` with no else, so the deploy
+    reported success and the hostname resolved to nothing. Both fixed; see §8.
+  - **`preview-reap` is scheduled** — sixth CronJob, `36 * * * *`, `db + k8s`
+    read-only. **REPORTS ONLY, and there is no `--apply` by design:** it deletes
+    running environments if it is ever wrong, so the licence to delete stays with
+    a person who has read the plan. Verified by running in-cluster, not by
+    applying: exit 0, `1 examined, 0 past TTL, 1 kept, 47.8h remaining`.
+    - Installed first with `db` alone, and running it said so itself — *"cluster
+      unreadable — running below is UNKNOWN, not no"*. Honest and useless: the
+      urgent case (an unindexed environment with a **live pod**) cannot be told
+      from a harmless empty one without looking. Found by running it, not by
+      reading it.
 - **Build logs are not surfaced to users.**
 
 ### Economics
@@ -427,6 +440,37 @@ Two rules fall out, and the second is the operational one:
   risky change is made is worse than no check, because its silence reads as
   reassurance — and unlike the other two failures, nobody is looking any more.
 
+### A default that fits the only case that exists is a landmine for the next one
+
+Sibling of the guard modes above — same family (a thing that is correct until
+the world grows a second case) with a different trigger. The guard modes are
+about **checks going quiet**; this is about **defaults going wrong**.
+
+Three instances, all found on the same day, all in code that was correct when
+written:
+
+| Defaulted | Correct while | Broke when |
+|---|---|---|
+| idempotency key `(project, sha)` | every push built production | a branch cut from the production head pushed an already-deployed commit — **the preview was never created**, and 200 to GitHub looks like a successful retry |
+| `toPoint = [...existing]` — point every alias | a project's hostnames all served one build | a preview build repointed **production** at itself: pushing any feature branch replaces the live site |
+| `inspectRepo` probes main | there was one branch worth building | a preview got the right **code** and main's **recipe** — framework, port, Dockerfile |
+
+The tell is the same each time: a value that is not passed in, derived from the
+only case that existed. **`deployFromRepo` deriving the environment from the
+deployment row rather than accepting an option is the fix shape** — an option
+would have needed a default, and the default would have been `production`,
+which is precisely the bug.
+
+Two rules:
+
+1. When adding a second case to something that has only ever had one, **list
+   every place the old case is assumed rather than asked for.** Grep for the
+   constant, not for the feature.
+2. **A latent defect goes live as a side effect of an unrelated correct change.**
+   The webhook change that started recording preview deployments was right, small
+   and well tested, and it armed a production outage three files away. Nothing
+   about the arming change looks dangerous, which is what makes this class hard.
+
 ### The tools themselves lie, and that is a different problem
 
 Two tools reported success while failing, in the same hour:
@@ -441,6 +485,20 @@ Two tools reported success while failing, in the same hour:
   **tests 1, fail 1**. It fails loudly here — but had the path resolved to
   something importable it would have reported **tests 1, pass 1**: a green suite
   that ran nothing. Use quoted globs, never a bare directory.
+
+- **`script | grep ...; echo $?` reports GREP's status, not the script's.** Same
+  mechanism as `tsc | head`, and worth its own line because it bit again in the
+  obvious disguise: filtering noise out of a script's output. Three "exit=0"
+  readings on `preview-proof.ts` were reported here and meant nothing — the
+  script's own exits were never observed. **Run the command unpiped and read
+  `$?` before quoting any exit code.**
+
+- **`process.exit()` can abort with pending stdout.** On Windows, a script that
+  prints a long report and then calls `process.exit(N)` can die under a libuv
+  assertion — the report prints correctly and the shell sees **127**. Found on
+  two v3 scripts, intermittently, after one had already been reported as
+  passing. Use `process.exitCode` and return; wrap the body in `main()` if a
+  top-level return would be needed (it is a syntax error in a module).
 
 These are worth separating from the guard failures above. A broken guard is our
 code and we can fix it. A tool that reports success while doing nothing is the
