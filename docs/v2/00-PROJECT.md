@@ -131,11 +131,28 @@ behavioural tests replaying confirmed v1 criticals.
   rather than to us. **Certificates are blocked**: Cloudflare for SaaS returns
   `code 1404: No quota has been allocated for this zone`. *User action —*
   SSL/TLS → Custom Hostnames.
-- **Preview deployments: decided and mostly built.** Free, 48h from last push,
-  Starter-sized, always 1 instance. Hostnames mint (`previewLabel`),
-  `shouldDeploy` returns a `kind`, and `shouldReap`/`planReap` decide lifetime.
-  **Not yet wired:** the build worker does not act on `kind` — a preview push
-  still builds as production — and no scheduled sweep calls the reaper.
+- **Preview deployments: routed and sized.** Free, 48h from last push,
+  Starter-sized, always 1 instance. A push to a non-production branch now lands
+  in its own preview environment (`environments.forBranch`, named after the raw
+  branch so `feature/foo` and `feature-foo` stay distinct), and the reconciler
+  forces Starter + 1 instance for any deployment whose environment is a preview.
+  Sizing is forced there rather than at the webhook so it holds for every path
+  that reaches a pod.
+  - Wiring this surfaced a defect one layer down: the idempotency key was
+    `(project, sha)`, which is correct only while every push builds production.
+    A branch cut from the production head pushes a commit that is *already
+    deployed*, so the old key answered "already recorded" and **the preview was
+    never created** — silently, since 200 is what a successful retry looks like.
+    Now keyed on `(environment, sha)`. `scripts/v2/preview-proof.ts` shows the
+    two keys disagreeing against the live database.
+  - **Still not wired:** no scheduled sweep calls the reaper. The decision logic
+    (`shouldReap`/`planReap`) and the outside check on its plans
+    (`reap-safety.ts`, e6) both exist; nothing runs them on a timer yet.
+  - Note for whoever builds that sweep: **before today no preview environment
+    had ever existed**, so a reap sweep would have examined zero aliases and
+    reported clean forever. Honest about `examined: 0` and still useless. Zero
+    previews on a platform that has never made one is not zero previews on one
+    that reaps them.
 - **Build logs are not surfaced to users.**
 
 ### Economics
