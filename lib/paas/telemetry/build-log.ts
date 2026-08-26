@@ -33,8 +33,15 @@
  * not a credential reaching them silently.
  */
 
-/** What a stage's raw output may do. */
-export type StagePolicy = "show" | "drop";
+/**
+ * What a stage's raw output may do.
+ *
+ * `marker-only` keeps the stage's own marker line and drops everything after
+ * it. It exists for a stage whose marker is informative but whose body runs
+ * commands carrying credentials — the reader still sees that the stage
+ * happened, and learns nothing about what it did.
+ */
+export type StagePolicy = "show" | "drop" | "marker-only";
 
 /**
  * The build script's stages, in the order it emits them, mirroring the markers
@@ -83,8 +90,13 @@ export const STAGES: Array<{ marker: RegExp; name: string; policy: StagePolicy; 
   {
     marker: /^=== finishing: status=(\S+) ===$/,
     name: "finish",
-    policy: "show",
-    why: "Terminal status. Contains no operands.",
+    policy: "marker-only",
+    why:
+      "The marker itself is just a status. What follows it is not: vm.ts's exit " +
+      "trap curls the build log to a PRESIGNED R2 URL immediately after printing " +
+      "this line, and curl prints the URL on failure. The signature in that URL " +
+      "grants write to the log object. Show that the build finished; show nothing " +
+      "about how it was uploaded.",
   },
 ];
 
@@ -202,33 +214,54 @@ export function sanitizeBuildLog(raw: string): SanitizedLog {
   let dropping = true; // default deny: nothing is shown until a stage says so
   let sawUnknownMarker = false;
 
+  /**
+   * The stage currently being suppressed, recorded only once a line is
+   * ACTUALLY dropped from it.
+   *
+   * Reporting a stage as dropped when it had no body would make `altered` true
+   * for a log where nothing was removed, and the notice would tell the reader
+   * output is missing when none is. A sanitiser that cries wolf gets ignored.
+   */
+  let suppressing: { name: string; counted: boolean } | null = null;
+
   for (const rawLine of raw.split(/\r?\n/)) {
     const line = rawLine.replace(/\s+$/, "");
 
     const stage = STAGES.find((s) => s.marker.test(line));
     if (stage) {
-      dropping = stage.policy === "drop";
-      if (dropping) {
-        droppedStages.push(stage.name);
-      } else {
-        kept.push(line);
-      }
+      dropping = stage.policy !== "show";
+      // `marker-only` keeps the marker and then drops the body — the reader
+      // sees that the stage ran without seeing what it ran.
+      if (stage.policy === "show" || stage.policy === "marker-only") kept.push(line);
+      suppressing = dropping ? { name: stage.name, counted: false } : null;
       continue;
     }
 
     // A marker-shaped line we do not recognise. Treat it as the start of an
     // unclassified stage and stop showing output, rather than assuming the
     // previous stage's policy still applies.
+    // Recorded eagerly, unlike a classified stage: an unrecognised marker is
+    // itself the finding — the build script emits a stage this file has never
+    // heard of — whether or not any output followed it.
     if (/^(---|===).*(---|===)$/.test(line)) {
       sawUnknownMarker = true;
       dropping = true;
       droppedStages.push(`unclassified:${line.slice(0, 40)}`);
+      suppressing = { name: `unclassified:${line.slice(0, 40)}`, counted: true };
       continue;
     }
 
     if (dropping) {
-      if (CONTROLLED_LINES.some((re) => re.test(line))) kept.push(line);
-      else if (droppedStages.length === 0) droppedPreamble += 1;
+      if (CONTROLLED_LINES.some((re) => re.test(line))) {
+        kept.push(line);
+      } else if (suppressing) {
+        if (!suppressing.counted) {
+          droppedStages.push(suppressing.name);
+          suppressing.counted = true;
+        }
+      } else {
+        droppedPreamble += 1;
+      }
       continue;
     }
 

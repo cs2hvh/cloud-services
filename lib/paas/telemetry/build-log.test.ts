@@ -148,6 +148,39 @@ test("terminal success lines survive the upload stage", () => {
   assert.match(r.text, /=== finishing: status=success ===/);
 });
 
+test("the finish stage shows its marker but never its body — the log upload is a presigned PUT", () => {
+  // vm.ts's exit trap prints `=== finishing: ... ===` and then curls the build
+  // log to a presigned R2 URL. A failed upload prints that URL, and its
+  // signature grants write to the log object.
+  const raw = [
+    "=== ahura build dpl_1 ===",
+    "--- build ---",
+    "compiled",
+    "=== finishing: status=failure ===",
+    `curl: (22) The requested URL returned error: 403 https://r2/bucket/builds/dpl_1/build.log` +
+      `?X-Amz-Credential=AKIAIOSFODNN7EXAMPLE%2F20260826&X-Amz-Signature=abc123def456`,
+  ].join("\n");
+
+  const r = sanitizeBuildLog(raw);
+
+  assert.match(r.text, /=== finishing: status=failure ===/, "the status is shown");
+  assert.equal(r.text.includes("X-Amz-Signature"), false, "how it was uploaded is not");
+  assert.equal(r.text.includes("abc123def456"), false);
+  assert.equal(r.text.includes("AKIAIOSFODNN7EXAMPLE"), false);
+  assert.ok(r.droppedStages.includes("finish"));
+});
+
+test("a marker-only stage does not re-enable output for what follows it", () => {
+  const raw = [
+    "=== ahura build dpl_1 ===",
+    "=== finishing: status=success ===",
+    "secret-ish trailing output",
+  ].join("\n");
+
+  const r = sanitizeBuildLog(raw);
+  assert.equal(r.text.includes("secret-ish"), false);
+});
+
 // ── other credential shapes ─────────────────────────────────────────────────
 
 test("JWTs, bearer headers and PEM bodies are redacted", () => {
@@ -272,12 +305,22 @@ test("every stage marker the build script emits is classified in STAGES", () => 
 test("every stage carries a stated reason, so a 'show' is a decision and not a default", () => {
   for (const s of STAGES) {
     assert.ok(s.why.length > 20, `stage ${s.name} needs a real justification`);
-    assert.ok(["show", "drop"].includes(s.policy));
+    assert.ok(["show", "drop", "marker-only"].includes(s.policy));
   }
   assert.ok(
-    STAGES.some((s) => s.policy === "drop"),
+    STAGES.some((s) => s.policy !== "show"),
     "an allowlist that shows everything is not an allowlist",
   );
+});
+
+test("no stage carrying a presigned URL is classified 'show'", () => {
+  // vm.ts curls a presigned R2 URL in two places: the upload stage, and the
+  // exit trap that follows the finish marker. Neither may show its body.
+  for (const name of ["upload", "finish"]) {
+    const stage = STAGES.find((s) => s.name === name);
+    assert.ok(stage, `stage ${name} must exist`);
+    assert.notEqual(stage.policy, "show", `stage ${name} curls a presigned URL`);
+  }
 });
 
 test("every pattern is global, or replace would only fix the first occurrence", () => {
