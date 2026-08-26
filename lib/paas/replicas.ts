@@ -36,6 +36,14 @@ export interface DeploymentFact {
   ref: string;
   state: string;
   image_digest: string | null;
+  /**
+   * Non-null means asleep ON PURPOSE — idle, at zero replicas, and waking on
+   * the next request. Optional so existing callers keep working, but pass it:
+   * without it a sleeping production app is indistinguishable from a
+   * superseded old build, and a user shown "stopped" for their live app will
+   * reasonably conclude it is broken.
+   */
+  scaled_to_zero_at?: string | null;
 }
 
 export type ReplicaStatus =
@@ -43,6 +51,13 @@ export type ReplicaStatus =
   | "serving"
   /** Object kept at zero replicas. Rollback is a scale-up. */
   | "scaled-to-zero"
+  /**
+   * Zero replicas DELIBERATELY: idle, still the live target for its hostname,
+   * and woken by the next request. Distinct from `scaled-to-zero`, which is a
+   * superseded old build. Rendering the two the same shows someone's live
+   * production app as "stopped".
+   */
+  | "asleep"
   /** Object exists, replicas wanted, none ready yet — deploying or broken. */
   | "not-ready"
   /**
@@ -159,8 +174,14 @@ export async function replicaStates(
     // Order matters. A deployment with ready replicas that is NOT the alias
     // target is not "serving" — nothing routes to it. Collapsing the two is how
     // an operator concludes an app is fine while its hostname returns 502.
+    // Asleep is checked FIRST and independently of replica count. The wake path
+    // scales the pod up before the reconciler clears the flag, so there is a
+    // window where the app is both marked asleep and running — reporting it as
+    // "serving" there would be true of the pod and wrong about what the
+    // control plane is about to do.
     let status: ReplicaStatus;
-    if (scale.replicas === 0) status = "scaled-to-zero";
+    if (f.scaled_to_zero_at != null) status = "asleep";
+    else if (scale.replicas === 0) status = "scaled-to-zero";
     else if (scale.readyReplicas === 0) status = "not-ready";
     else if (opts.servingRef === f.ref) status = "serving";
     else status = "running-unrouted";

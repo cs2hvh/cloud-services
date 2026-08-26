@@ -98,3 +98,35 @@ test("each deployment is looked up in its own project namespace", async () => {
   });
   assert.ok(seen[0].includes("/namespaces/app-prj-xyz/"), seen[0]);
 });
+
+test("an asleep deployment is NOT reported as superseded", () => {
+  // The distinction a user reads very differently: superseded is an old build,
+  // asleep is their LIVE app, idle and waking on the next request. Rendering
+  // both as "scaled to zero" shows someone's production app as stopped.
+  return replicaStates("prj-1", [{ ...ready("dpl-a"), scaled_to_zero_at: "2026-08-26T14:00:00Z" }], {
+    servingRef: "dpl-a",
+    client: fakeClient({ "dpl-a": { replicas: 0, readyReplicas: 0 } }),
+  }).then((out) => {
+    assert.equal(out[0].status, "asleep");
+    assert.equal(out[0].rollable, true);
+  });
+});
+
+test("asleep wins over a running pod during the wake window", async () => {
+  // The activator scales up before the reconciler clears the flag, so both are
+  // briefly true. Reporting "serving" there is right about the pod and wrong
+  // about what the control plane is about to do.
+  const out = await replicaStates("prj-1", [{ ...ready("dpl-a"), scaled_to_zero_at: "2026-08-26T14:00:00Z" }], {
+    servingRef: "dpl-a",
+    client: fakeClient({ "dpl-a": { replicas: 1, readyReplicas: 1 } }),
+  });
+  assert.equal(out[0].status, "asleep");
+});
+
+test("omitting scaled_to_zero_at keeps the old behaviour", async () => {
+  const out = await replicaStates("prj-1", [ready("dpl-a")], {
+    servingRef: "dpl-a",
+    client: fakeClient({ "dpl-a": { replicas: 1, readyReplicas: 1 } }),
+  });
+  assert.equal(out[0].status, "serving");
+});

@@ -28,7 +28,7 @@ for (const p of all) {
 
   const states = await replicaStates(
     p.ref,
-    rows.map((d) => ({ ref: d.ref, state: d.state, image_digest: d.image_digest })),
+    rows.map((d) => ({ ref: d.ref, state: d.state, image_digest: d.image_digest, scaled_to_zero_at: d.scaled_to_zero_at })),
     { servingRef, kubeconfigPath: process.env.V2_KUBECONFIG ?? "C:/ahura-secrets/kubeconfig-v2-dev.yaml" },
   );
 
