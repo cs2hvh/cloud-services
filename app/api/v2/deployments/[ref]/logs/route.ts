@@ -93,8 +93,8 @@ export async function GET(request: Request, { params }: Params) {
   // looks innocuous and a slice cannot know which stage it came from.
   const clean = sanitizeBuildLog(body.toString("utf8"));
 
-  const params = new URL(request.url).searchParams;
-  const offsetRaw = params.get("offset");
+  const query = new URL(request.url).searchParams;
+  const offsetRaw = query.get("offset");
   const page =
     offsetRaw === null
       ? // No page requested: the end, because a build fails at the end.
@@ -102,12 +102,11 @@ export async function GET(request: Request, { params }: Params) {
       : paginate(clean, {
           offset: Number(offsetRaw) || 0,
           // limit is clamped server-side regardless of what is asked for.
-          limit: Number(params.get("limit")) || undefined,
+          limit: Number(query.get("limit")) || undefined,
         });
 
-  if (params.get("format") === "text") {
-    return new Response(page.lines.join("
-"), {
+  if (query.get("format") === "text") {
+    return new Response(page.lines.join("\n"), {
       status: 200,
       headers: {
         "Content-Type": "text/plain; charset=utf-8",

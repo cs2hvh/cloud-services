@@ -60,8 +60,7 @@ export default async function DeploymentPage({ params }: Params) {
       // reverse order — a credential straddling a cut looks innocuous in both
       // halves. Same module the API route uses, so one set of rules.
       const clean = sanitizeBuildLog(bytes.toString("utf8"));
-      log = tail(clean, LOG_TAIL_LINES).lines.join("
-");
+      log = tail(clean, LOG_TAIL_LINES).lines.join("\n");
       logNotice = alterationNotice(clean);
     }
   } catch (err) {

@@ -341,7 +341,8 @@ test("allowMissing never appears on a write", () => {
   for (const file of REAL) {
     const r = allowMissingSites(read(file));
     examined += r.examined;
-    for (const method of r.onWrite) offenders.push();
+    for (const method of r.onWrite)
+      offenders.push(`${file}: allowMissing on ${method}`);
   }
 
   // THE THIRD STATE. Zero sites examined does not mean clean, it means the

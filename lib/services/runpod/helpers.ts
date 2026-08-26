@@ -25,6 +25,23 @@ export function normalizeStockStatus(
  * Stored on the pod record at create time and frozen for the pod's life so
  * customers aren't charged a moving rate as upstream prices fluctuate.
  */
+/**
+ * House markup on the provider rate. 1.0 sells GPU capacity at exactly what
+ * RunPod charges us, which is the current product decision.
+ *
+ * The authoritative value lives in gpu_pricing.markup_pct — every server-side
+ * price reads it from there. This constant exists only for the deploy wizard,
+ * which quotes client-side from a live inventory row carrying no pricing
+ * column. Change this and gpu_pricing together or the quote drifts from what
+ * checkout charges.
+ *
+ * Ported from C:/cloud-services, where it was added alongside the
+ * deploy-wizard edit that imports it. That wizard edit reached this repo in
+ * 2a0c22f9 and this constant did not, so the import has been broken since the
+ * fork point — invisible until npm install made a typecheck possible.
+ */
+export const GPU_MARKUP_PCT = 1.0;
+
 export function computeResalePerHour(args: {
     observedPerHr: number;
     markupPct: number;
