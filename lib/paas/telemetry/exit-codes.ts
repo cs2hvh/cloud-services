@@ -24,8 +24,11 @@
  *       2 says the instrument is wrong.
  *  10   Ran successfully and FOUND something. This is the tool working. A
  *       scheduler should surface it, not treat it as a failure.
- *  11   Ran successfully and found something URGENT — currently only a
- *       claimable hostname, which any tenant can capture by naming it.
+ *  11   Ran successfully and found something URGENT: a finding that gets worse
+ *       on its own, or that someone else can act on before a human reads the
+ *       report. Two so far — a CLAIMABLE HOSTNAME, which any tenant can capture
+ *       by naming it, and a RUNNING PREVIEW POD NO SWEEP CAN REACH, which bills
+ *       until somebody notices it by hand.
  *
  * The gap between 2 and 10 is deliberate: codes under 10 are about the RUN,
  * codes from 10 up are about the WORLD. A new "could not" reason gets 3, a new

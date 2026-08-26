@@ -13,7 +13,7 @@ change anything, run by a person who has read a report first.
 ## Running it
 
 ```bash
-node --test "lib/paas/telemetry/*.test.ts"                                   # 421 tests, no deps
+node --test "lib/paas/telemetry/*.test.ts"                                   # 435 tests, no deps
 node --env-file=.env --env-file=.env.local scripts/v3/operator-view.ts       # everything, once
 node --env-file=.env --env-file=.env.local scripts/v3/fleet-drift.ts --prove
 node --env-file=.env --env-file=.env.local scripts/v3/dns-drift.ts
@@ -51,7 +51,7 @@ Exit codes are meant for schedulers, and the contract lives in
 | `1` | **could not run** — nothing was measured; alert |
 | `2` | the instrument is wrong — self-check failed or input refused |
 | `10` | ran and **found** something — the tool working, not failing |
-| `11` | **urgent** — currently only a claimable hostname |
+| `11` | **urgent** — a finding that worsens on its own, or that someone else can act on first |
 
 Codes under 10 are about the *run*; codes from 10 up are about the *world*.
 That split exists because `1` used to mean both "found drift" and "could not
@@ -233,6 +233,7 @@ Two things the episode is worth remembering for:
 | `telemetry/sandbox.ts` | Sandbox cost vs what we charge, and headroom against it | 21 |
 | `telemetry/attribution.ts` | Per-app cost against tier, and whether it still fits | 16 |
 | `telemetry/reap-safety.ts` | Whether a reap plan is fit for a human to act on | 17 |
+| `telemetry/preview-index.ts` | Which previews the reaper can see, and which it cannot | 14 |
 | `telemetry/sweep-health.ts` | Whether the sweeps ran, and whether findings survive | 13 |
 | `telemetry/cadence.ts` | Whether a schedule can produce what it claims to measure | 9 |
 | `telemetry/exit-codes.ts` | What a sweep's exit code means to a scheduler | — |
@@ -606,27 +607,45 @@ Findings sort oldest first with unknown age **last** — an unreadable age is no
 an extreme value, and sorting it as one would put the entries that must never be
 reaped at the top of the list a human reads.
 
-`scripts/v3/preview-reap.ts` runs it. It found something on its first pass, and
-not the thing either lane was looking for:
+### Indexed by environment, not by alias
 
-```
-1 preview environment(s) THE REAPER CANNOT SEE.
-  env-e3c24db7512d  feature-x  0 deployment(s), 0 ready
-```
+`planReap` takes **aliases**, so a preview without one is neither reaped nor
+kept — never examined, and no TTL reaches it. The alias is minted at *deploy*
+time rather than when the environment is created, so **every failed and
+in-flight build sits in that window**. Walking aliases lets the reaper's own
+index decide what exists, and a preview missing from it is invisible rather than
+overdue.
 
-**`planReap` walks aliases.** A preview *environment* with no preview *alias* is
-neither reaped nor kept — it is never examined, so no TTL applies to it.
-Harmless today because it holds nothing; the moment one gets a deployment and
-the hostname mint fails, that is a container running free forever, which is the
-exact abuse vector the 48h policy exists to close.
+The environment row is the honest index: it is written from the webhook, before
+any build runs, so it is the thing that cannot be missing.
 
-That also answers, with data rather than inference, a question the deploy lane
-raised: how to tell *no previews because the platform reaps them* from *no
-previews because none can exist*. `paas.environments` has `kind=preview` while
-`paas.aliases` has none — the reaper's index is empty while the thing it indexes
-is not. Both cases print differently and **neither prints as clean**;
-examined-zero with no preview environments at all reports as **unproven**, since
-a sweep over an unwired capability reports exactly that forever.
+**A second reason, found the expensive way.** The first version of this sweep
+walked aliases filtered on `kind === "preview"`. There is no such kind —
+`paas.alias_kind` is `('production','branch','deployment','custom')` and a
+preview alias is `branch`. It would have examined zero aliases forever and
+reported that honestly: the "observes nothing" failure, inside the script
+written to detect it. Indexing by environment removes the dependency on alias
+kind altogether — whatever alias points at a preview environment's deployment
+*is* that preview's alias, whatever it is called.
+
+`preview-index.ts` carries that logic with 14 tests, because the live cluster
+currently has no preview environments and an untested path that never runs is
+indistinguishable from one that does not work.
+
+The finding it exists to produce: an invisible preview **with a running pod**.
+Routing precedes the converge step, so a pod normally arrives *after* its alias —
+one without means something ran between those two points and did not finish, and
+no sweep will ever reach it. That is `EXIT_URGENT`, alongside a claimable
+hostname, because it bills until somebody notices by hand. A cluster that cannot
+be read reports `running: null`, never `false`: collapsing unknown to "no pod"
+would downgrade the urgent case on the strength of a failed API call.
+
+It also answers, with data rather than inference, how to tell *no previews
+because the platform reaps them* from *no previews because none can exist*.
+Examined-zero with preview environments present means the reaper's index is
+empty while the thing it indexes is not; examined-zero with no environments at
+all reports as **unproven**, since a sweep over an unwired capability reports
+exactly that forever. Neither prints as clean.
 
 ### Warm fraction, and what flat pricing did to it
 
