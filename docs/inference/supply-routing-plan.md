@@ -69,10 +69,12 @@ The question this document answers: *we buy all our model capacity from one
 supplier. Should we buy some of it from Wokey instead, and what would that
 actually take?*
 
-Every price, endpoint and model list below was verified against the live APIs on
-2026-08-25, not taken from vendor marketing or from the ChatGPT research
-transcript in [openrouter-vs-wokey.md](./openrouter-vs-wokey.md). Where the
-transcript is wrong, this document says so.
+Every price, endpoint and model list below was verified against the live APIs,
+not taken from vendor marketing. The research that started this began as an AI
+chat transcript; that transcript is deliberately NOT in the repository, because
+several of its claims turned out to be false — most notably that Wokey serves
+Gemini models, which it does not. What survived verification is here; what did
+not is recorded as a correction in §6.2.
 
 ---
 
@@ -1283,6 +1285,6 @@ the engineering and should be dropped.
 Live APIs read 2026-08-25: `api.wokey.ai/v1/models/pricing`,
 `api.wokey.ai/v1/models`, endpoint probes against `api.wokey.ai/v1/*`,
 `openrouter.ai/api/v1/models`, `openrouter.ai/pricing`, OpenRouter prompt-caching
-guide. Codebase read at commit `30271aff` on `ai-admin-workphase-7`. Background
-research transcript: [openrouter-vs-wokey.md](./openrouter-vs-wokey.md) — treat
-its capability and vendor claims as unverified; the corrections are in §6.2.
+guide. Codebase read at commit `30271aff` on `ai-admin-workphase-7`. The originating research transcript is not kept: its vendor and capability
+claims did not survive checking (§6.2), and a wrong document in `docs/` is worse
+than no document.

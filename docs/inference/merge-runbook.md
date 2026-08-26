@@ -30,7 +30,6 @@ The four staged files:
 
 ```
 A  docs/inference/DELIVERY-RECORD.md
-A  docs/inference/openrouter-vs-wokey.md
 A  docs/inference/supply-routing-plan.md
 M  docs/inference/README.md
 ```
@@ -44,10 +43,6 @@ with the merge instead of trailing between checkouts.
 
 Two things to settle first:
 
-* `openrouter-vs-wokey.md` is a verbatim AI transcript containing errors (it
-  claims Wokey serves Gemini; it does not). Either add a two-line header saying
-  so and pointing at `supply-routing-plan.md` §6.2, or accept that a reader may
-  take it at face value.
 * `DELIVERY-RECORD.md` claims a permissions file holds a plaintext SSH password.
   That file could not be found on this branch or on `origin/dev`. Confirm it or
   reword it — an unverifiable security claim in a status document is worse than
