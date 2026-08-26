@@ -13,7 +13,7 @@ change anything, run by a person who has read a report first.
 ## Running it
 
 ```bash
-node --test "lib/paas/telemetry/*.test.ts"                                   # 200 tests, no deps
+node --test "lib/paas/telemetry/*.test.ts"                                   # 218 tests, no deps
 node --env-file=.env --env-file=.env.local scripts/v3/operator-view.ts       # everything, once
 node --env-file=.env --env-file=.env.local scripts/v3/fleet-drift.ts --prove
 node --env-file=.env --env-file=.env.local scripts/v3/dns-drift.ts
@@ -54,16 +54,19 @@ different severity and deserves a different page.
 | `telemetry/signals.ts` | Abuse and quota signals — detection only | 17 |
 | `telemetry/drift-history.ts` | Findings → `paas.drift_observations` | 13 |
 | `telemetry/usage-store.ts` | Interval deltas → `paas.usage_samples` | 19 |
+| `telemetry/metrics.ts` | metrics.k8s.io quantities → cores and bytes | 18 |
 | `telemetry/operator.ts` | Composition for the API and dashboard | — |
 | `telemetry/fleet-source.ts` | The I/O half. Every call is a GET | — |
 
-Surfaces: `GET /api/v2/admin/{fleet,hostnames,workloads,storage,usage}`,
+Surfaces: `GET /api/v2/admin/{fleet,hostnames,workloads,storage,metrics,usage}`,
 `GET /api/v2/admin/pods/{namespace}/{pod}/logs`, and `/dashboard/v2/admin`.
 
 The dashboard calls `operatorView()` directly rather than fetching its own API —
 a round trip to its own process would add a failure mode and an auth hop for
-nothing. Each of its five sections renders independently, because an operator
-dashboard is most useful exactly when one dependency is broken.
+nothing. Each of its sections renders independently, because an operator
+dashboard is most useful exactly when one dependency is broken — the metrics
+section currently proves that, reporting that metrics-server is absent while
+the other five render normally.
 
 ## What the live system currently says
 
@@ -247,8 +250,18 @@ so no RLS is being bypassed. The gate fails closed on every path and returns
 **Blocked on the infrastructure lane:**
 
 - **metrics-server is not installed** — `metrics.k8s.io` is absent from `/apis`.
-  Per-app CPU and memory (T4) cannot be built until it is. On LKE it usually
-  needs `--kubelet-insecure-tls` or the right `--kubelet-preferred-address-types`.
+  On LKE it usually needs `--kubelet-insecure-tls` or the right
+  `--kubelet-preferred-address-types`, for the same node-identity reason the
+  containerd/Service-DNS problem in [03-status.md](03-status.md) bit.
+
+  T4 is *built* against it regardless (`metrics.ts`, 18 tests, plus the route
+  and the operator section) and activates the moment it is installed. The
+  parsing is tested rather than trusted because that is where it goes wrong
+  quietly: metrics-server reports CPU in nanocores and memory in kibibytes, and
+  reading `Mi` as `M` understates every memory figure by 4.6% without raising
+  anything. `metricsView()` throws when the API is absent rather than returning
+  zeros — an idle app and a missing metrics API produce the same number, and a
+  dashboard showing 0m CPU everywhere looks like a working one.
 - **Two more `paas.drift_kind` values.** `expired` and `claimable` have no
   honest home in the four that exist, so their *history* is not recorded — see
   the mapping note in `drift-history.ts`. Both are still reported by their own
