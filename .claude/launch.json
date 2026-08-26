@@ -2,16 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "next-dev",
+      "name": "admin",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev:next"],
-      "port": 3000
-    },
-    {
-      "name": "next-dev-fast",
-      "runtimeExecutable": "npx",
-      "runtimeArgs": ["next", "dev", "--turbopack", "-p", "3010"],
-      "port": 3010
+      "runtimeArgs": ["run", "admin:dev"],
+      "port": 3001
     }
   ]
 }

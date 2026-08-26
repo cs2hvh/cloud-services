@@ -1,0 +1,9 @@
+/* The admin app reuses the main app's stylesheet wholesale so shared
+   components (components/admin, components/ui) render identically here.
+   The @source directives register the shared trees for Tailwind's class
+   scanning, since this app builds with apps/admin as the project root. */
+@import "../../../app/globals.css";
+
+@source "../../../components";
+@source "../app";
+@source "../components";

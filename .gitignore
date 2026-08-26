@@ -26,6 +26,7 @@ vitest-report.json
 
 # next.js
 /.next/
+apps/admin/.next/
 /out/
 /project-demos
 /app-platform
