@@ -39,8 +39,9 @@ import {
 } from "./k8s/manifests.ts";
 import { ACTIVATOR_NAME, activatorAliasService } from "./k8s/activator.ts";
 import { appIngress } from "./k8s/gateway.ts";
-import { projects, deployments, aliases, envVars, type ProjectRow, type DeploymentRow, type AliasRow } from "./db.ts";
+import { projects, deployments, aliases, envVars, environments, type ProjectRow, type DeploymentRow, type AliasRow } from "./db.ts";
 import { requireTier, clampInstances, resourcesFor, DEFAULT_TIER } from "./tiers.ts";
+import { PREVIEW_TIER, PREVIEW_INSTANCES } from "./previews.ts";
 import { decryptEnvValue, pgHexToBytes } from "./secrets.ts";
 import { createHash } from "node:crypto";
 
@@ -216,10 +217,20 @@ export async function reconcileProject(
   const actions: ReconcileAction[] = [];
   const dry = opts.dryRun === true;
 
-  const [projectAliases, ready] = await Promise.all([
+  const [projectAliases, ready, projectEnvs] = await Promise.all([
     aliases.forProject(project.id),
     deployments.readyForProject(project.id),
+    environments.forProject(project.id),
   ]);
+
+  // Which environments are previews, so sizing can differ from the project's
+  // tier. A deployment whose environment is NOT positively known to be a preview
+  // is sized from the project's tier — the direction matters. Sizing a preview
+  // at Pro costs us money for at most the 48h TTL; sizing a Pro production app
+  // at Starter hands a paying customer 512 MB where they bought 4 GB, and their
+  // app OOMs. Losing a little money beats breaking a customer, so the discount
+  // applies only where the preview is established, never where it is assumed.
+  const previewEnvIds = new Set(projectEnvs.filter((e) => e.kind === "preview").map((e) => e.id));
 
   if (!ready.length) {
     actions.push({ kind: "noop", target: project.ref, detail: "no ready deployment yet" });
@@ -315,8 +326,17 @@ export async function reconcileProject(
 
     // Resolve the sizing once per deployment. Throws on an unknown tier rather
     // than substituting a default — see the note at the apply below.
-    const tier = requireTier(project.tier ?? DEFAULT_TIER);
-    const instances = clampInstances(project.instance_count ?? 1);
+    //
+    // A preview is Starter-sized and single-instance whatever the project holds
+    // (docs/v2/05-pricing.md §7). Previews are free, so without this the cost of
+    // a free preview would scale with the customer's tier — a Pro Plus app would
+    // hand out free 4 GB containers on every branch, which is the abuse vector
+    // the preview policy exists to close. Forcing it here rather than at the
+    // webhook means it holds for every path that reaches a pod, including a
+    // reconcile of a preview that was recorded before this rule existed.
+    const isPreview = previewEnvIds.has(d.environment_id);
+    const tier = isPreview ? requireTier(PREVIEW_TIER) : requireTier(project.tier ?? DEFAULT_TIER);
+    const instances = isPreview ? PREVIEW_INSTANCES : clampInstances(project.instance_count ?? 1);
     const tierResources = resourcesFor(tier);
 
     const live = await liveDeployment(k, ns, name);

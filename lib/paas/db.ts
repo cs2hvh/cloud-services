@@ -341,6 +341,45 @@ export const environments = {
     (await db.insert<EnvironmentRow>("environments", {
       project_id: input.projectId, kind: input.kind, name: input.name,
     }))[0],
+
+  /**
+   * The preview environment for a branch, created on first sight.
+   *
+   * Named after the RAW branch, not a sanitised label. `unique (project_id,
+   * name)` then means one environment per branch as the database sees it —
+   * `feature/foo` and `feature-foo` stay distinct, where keying on a sanitised
+   * label would silently merge them into one environment serving two branches.
+   * The hostname is where sanitising belongs, and `previewLabel` already carries
+   * a hash of the full branch so the collision cannot reappear there either.
+   *
+   * The insert races: two pushes to a new branch arrive together, both find
+   * nothing, both insert. That unique constraint is what resolves it — the loser
+   * gets a 409 and re-selects the winner's row, rather than both proceeding and
+   * leaving two environments, two aliases, and two pods for one branch.
+   */
+  forBranch: async (projectId: string, branch: string): Promise<EnvironmentRow> => {
+    const existing = await db.select<EnvironmentRow>(
+      "environments",
+      `select=*&project_id=eq.${projectId}&name=eq.${encodeURIComponent(branch)}`,
+    );
+    if (existing[0]) return existing[0];
+
+    try {
+      return (await db.insert<EnvironmentRow>("environments", {
+        project_id: projectId, kind: "preview", name: branch,
+      }))[0];
+    } catch (e) {
+      if (!(e instanceof DbError) || e.status !== 409) throw e;
+      const raced = await db.select<EnvironmentRow>(
+        "environments",
+        `select=*&project_id=eq.${projectId}&name=eq.${encodeURIComponent(branch)}`,
+      );
+      // A 409 means a row exists; if we cannot then read it, something other
+      // than the race is wrong and guessing would be worse than failing.
+      if (!raced[0]) throw e;
+      return raced[0];
+    }
+  },
 };
 
 export const deployments = {
@@ -356,6 +395,29 @@ export const deployments = {
     (await db.select<DeploymentRow>(
       "deployments",
       `select=*&project_id=eq.${projectId}&git_sha=eq.${sha}&order=queued_at.desc&limit=1`,
+    ))[0] ?? null,
+
+  /**
+   * The same question, scoped to one environment — and the correct key now that
+   * previews exist.
+   *
+   * Project+sha was right while every push built production, and became wrong
+   * the moment a second environment could want the same commit. Branching is
+   * exactly that case: `git checkout -b feature-x && git push -u origin
+   * feature-x` sends a push whose sha is the head of the production branch, the
+   * commit already deployed. Deduping on project+sha finds it and answers
+   * "already recorded" — so the preview is never created, and the failure is
+   * silent, because returning 200 to GitHub is what a successful retry looks
+   * like. Not an edge case: it is the first push of every new branch cut from
+   * the production head.
+   *
+   * Same commit, same environment is a retry. Same commit, different
+   * environment is a different deployment.
+   */
+  byEnvironmentAndSha: async (environmentId: string, sha: string) =>
+    (await db.select<DeploymentRow>(
+      "deployments",
+      `select=*&environment_id=eq.${environmentId}&git_sha=eq.${sha}&order=queued_at.desc&limit=1`,
     ))[0] ?? null,
 
   /**
