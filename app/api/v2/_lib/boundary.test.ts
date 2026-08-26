@@ -61,12 +61,25 @@ function walk(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-/** Like walk(), but without exclusions — for checking an excluded subtree. */
+/**
+ * Like walk(), but without exclusions and including .tsx — for checking a
+ * subtree walk() skips, or the dashboard.
+ *
+ * The .tsx part is not incidental. The first version collected only .ts, so
+ * scanning app/dashboard/v2 found nothing and the check below passed while
+ * examining zero files. Its own "the scan must find something" assertion is
+ * what caught that — which is the entire argument for including one.
+ */
 function walkAll(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) walkAll(path, out);
-    else if (entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts")) out.push(path);
+    else if (
+      (entry.name.endsWith(".ts") || entry.name.endsWith(".tsx")) &&
+      !entry.name.endsWith(".test.ts")
+    ) {
+      out.push(path);
+    }
   }
   return out;
 }
@@ -187,6 +200,70 @@ test("auth.ts still states the rules these tests enforce", () => {
   const header = readFileSync(join(ROOT, "_lib", "auth.ts"), "utf8");
   assert.match(header, /createServiceClient/);
   assert.match(header, /RLS/);
+});
+
+/**
+ * Every call to replicaStates() must pass scaled_to_zero_at.
+ *
+ * DeploymentFact.scaled_to_zero_at is OPTIONAL. Omitting it does not fail —
+ * it silently degrades: a sleeping production app renders as a superseded old
+ * build, and the user is shown "stopped" for their live site. An optional
+ * field that changes correctness rather than completeness produces an
+ * invisible failure, and this is the only thing that would notice.
+ *
+ * String matching rather than a regex on purpose: the shapes here are literal
+ * identifiers, and the mangled-escape bug that made the namespace check
+ * vacuous came from a regex that survived a patch badly.
+ */
+const callsReplicaStates = (src: string) => src.includes("replicaStates(");
+const passesSleepFact = (src: string) => src.includes("scaled_to_zero_at");
+
+test("every replicaStates call passes the sleep fact", () => {
+  // Scans the dashboard too — the call lives there, not in a route.
+  const surfaces = [...walk(ROOT), ...walkAll("app/dashboard/v2")];
+  const callers = surfaces.filter((f) => callsReplicaStates(read(f)));
+  assert.ok(callers.length > 0, "nothing calls replicaStates — has it moved?");
+
+  const silent = callers.filter((f) => !passesSleepFact(read(f)));
+  assert.deepEqual(
+    silent,
+    [],
+    "omitting scaled_to_zero_at renders a live sleeping app as a dead one"
+  );
+});
+
+test("the sleep-fact guard fails on a discovered file that omits it", () => {
+  // The detector test above proves the predicates. This proves the WALK and
+  // the filter work together — the pair that silently examined zero files
+  // when walkAll collected only .ts.
+  const root = mkdtempSync(join(tmpdir(), "v2-sleepfact-"));
+  writeFileSync(
+    join(root, "page.tsx"),
+    "const s = await replicaStates(ref, rows.map(d => ({ ref: d.ref })));",
+    "utf8"
+  );
+  const found = walkAll(root);
+  assert.equal(found.length, 1, "the walk must see a .tsx file");
+
+  const callers = found.filter((f) => callsReplicaStates(read(f)));
+  assert.equal(callers.length, 1, "the call must be detected");
+  assert.deepEqual(
+    callers.filter((f) => !passesSleepFact(read(f))),
+    callers,
+    "the omission must be flagged"
+  );
+});
+
+test("the sleep-fact detector distinguishes passing it from not", () => {
+  const withFact = code(
+    "await replicaStates(ref, rows.map(d => ({ ref: d.ref, scaled_to_zero_at: d.x })));"
+  );
+  const without = code(
+    "await replicaStates(ref, rows.map(d => ({ ref: d.ref, state: d.state })));"
+  );
+  assert.ok(callsReplicaStates(withFact) && passesSleepFact(withFact));
+  assert.ok(callsReplicaStates(without), "the call itself must be detected");
+  assert.ok(!passesSleepFact(without), "the omission must be detected");
 });
 
 // ── the same predicates against a fixture tree ───────────────────────
