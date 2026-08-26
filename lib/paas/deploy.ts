@@ -21,7 +21,8 @@
 import { detectFramework, detectPackageManager, DETECTION_FILES, type RepoFiles } from "./build/detect.ts";
 import { generateDockerfile, servingPort, runtimeUid } from "./build/dockerfile.ts";
 import { leaseBuildVm, pollBuildResult, destroyBuildVm, type BuildRequest } from "./build/vm.ts";
-import { presign, getObject, r2Keys } from "./build/r2.ts";
+import { presign, getObject, deleteObject, r2Keys } from "./build/r2.ts";
+import { imageIsDurable } from "./build/registry.ts";
 import { kube } from "./k8s/client.ts";
 import { PAAS_NAMESPACE, REGISTRY_PUSH, publisherJob } from "./k8s/manifests.ts";
 import { reconcileProject, kubeContextFromEnv } from "./reconciler.ts";
@@ -341,6 +342,39 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
     imageDigest: result.imageDigest!,
   });
   say("publish", "ready");
+
+  // ── 3b. reclaim the transfer artifact ─────────────────────────────────────
+  //
+  // image.tar exists to move bytes from a build VM that holds no registry
+  // credentials to a publisher that does. Once skopeo has finished, it is a
+  // second copy of something already stored durably — and nothing was deleting
+  // it, so 8 deployments had left 592 MB, 65% of the bucket, growing with
+  // deploy frequency.
+  //
+  // Deleted HERE rather than by a scheduled reaper, on app-deploy-3's argument:
+  // the reaper's licence to delete comes from a human reading its plan, and an
+  // unattended hourly version is wrong 24 times a day the first time its
+  // classification is wrong. This is the same delete with the safety established
+  // at the one moment it is cheapest to establish — we have just published, and
+  // can read the registry's own storage to confirm it.
+  //
+  // Wrapped whole: a deploy that succeeded must not fail because cleanup did.
+  // A tarball nobody deleted costs a fraction of a cent; a failed deploy costs a
+  // customer their release.
+  try {
+    const durability = await imageIsDurable(project.ref, result.imageDigest!);
+    if (durability.durable) {
+      await deleteObject(r2Keys.imageTar(d.ref));
+      say("reclaim", `image.tar deleted — ${durability.reason}`);
+    } else {
+      // Kept, deliberately and loudly. The reaper will report it later, and a
+      // human decides. Silence here would look identical to a successful
+      // reclaim in the logs.
+      say("reclaim", `image.tar KEPT — ${durability.reason}`);
+    }
+  } catch (err) {
+    say("reclaim", `image.tar KEPT — cleanup failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
 
   // ── 4. route ──────────────────────────────────────────────────────────────
   const label = (opts.hostnameLabel ?? `v2-${project.slug}`).slice(0, 40);
