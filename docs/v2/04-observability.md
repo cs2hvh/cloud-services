@@ -13,7 +13,7 @@ change anything, run by a person who has read a report first.
 ## Running it
 
 ```bash
-node --test "lib/paas/telemetry/*.test.ts"                                   # 435 tests, no deps
+node --test "lib/paas/telemetry/*.test.ts"                                   # 442 tests, no deps
 node --env-file=.env --env-file=.env.local scripts/v3/operator-view.ts       # everything, once
 node --env-file=.env --env-file=.env.local scripts/v3/fleet-drift.ts --prove
 node --env-file=.env --env-file=.env.local scripts/v3/dns-drift.ts
@@ -104,21 +104,25 @@ for `reconcileProject`'s callers, found the only one was a proof script, and
 held `routingLive = false` against being told twice that routing worked. They
 were right, and the fix was a runner rather than a correction to them.
 
-**Five sweeps now run as CronJobs** in `ahura-system`, installed by
-`scripts/v2/install-sweeps.ts --apply`:
+**The sweeps run as CronJobs** in `ahura-system`, installed by
+`scripts/v2/install-sweeps.ts --apply`, on staggered minutes so no two contend
+for the same API.
 
-| Sweep | Schedule |
-|---|---|
-| `sweep-usage-sample` | `*/15 * * * *` |
-| `sweep-workload-drift` | `8,23,38,53 * * * *` |
-| `sweep-r2-drift` | `12 * * * *` |
-| `sweep-dns-drift` | `26 * * * *` |
-| `sweep-fleet-drift` | `44 * * * *` |
-
-**Do not trust this page for their current state** — run
-`scripts/v3/sweep-health.ts`, which is also the last section of
+**Do not trust this page for how many there are or whether they are working** —
+run `scripts/v3/sweep-health.ts`, which is also the last section of
 `operator-view.ts`. The history below is kept because the failure was
 instructive, not because it is still true.
+
+**They may never gain a write verb.** Every sweep reads the world, prints a
+finding, and a person decides. The reap sweeps name exactly the resources a
+`delete` would destroy — pods, deployments, preview environments — so one added
+verb turns the least trusted code in the system, running unattended against
+every namespace, into something that can act on its own classifications.
+`sweep-rbac.test.ts` enforces it against `sweeps.ts`, and checks the binding
+both directions: a sweep that declares `k8s` must be bound, and one that does
+not must not be. The quieter failure is the second — a sweep granted `k8s` and
+left out of the binding would run, fail every API call, and with generous error
+handling report an empty world.
 
 Two properties make these safe to run unattended, and both were designed for
 it rather than discovered afterwards:
@@ -242,6 +246,7 @@ Two things the episode is worth remembering for:
 | `telemetry/admin-boundary.test.ts` | Test-only: enforces the admin security boundary | 8 |
 | `telemetry/write-safety.test.ts` | Test-only: no write in this lane swallows its failure | 7 |
 | `telemetry/exit-contract.test.ts` | Test-only: no script exits on a bare non-zero number | 4 |
+| `telemetry/sweep-rbac.test.ts` | Test-only: the sweeps may never gain a write verb | 7 |
 
 Surfaces: `GET /api/v2/admin/{fleet,hostnames,workloads,storage,metrics,usage}`,
 `GET /api/v2/admin/pods/{namespace}/{pod}/logs`, and `/dashboard/v2/admin`.
