@@ -19,6 +19,8 @@ export interface ProjectRow {
   production_branch: string;
   root_directory: string | null;
   framework: string | null;
+  scale_to_zero: boolean;
+  idle_seconds: number | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
@@ -38,6 +40,17 @@ export interface ProjectDto {
     installed: boolean;
   };
   framework: string | null;
+  /**
+   * Sleeping is OPT-IN and off by default. It is a trade, not a free win: the
+   * app costs nothing while asleep and the first visitor after an idle period
+   * waits several seconds. Anything behind a health check, or that a human is
+   * watching, should leave it off.
+   */
+  sleep: {
+    enabled: boolean;
+    /** null means the platform default. */
+    idleSeconds: number | null;
+  };
   team: { ref: string; slug: string; name: string } | null;
   createdAt: string;
   updatedAt: string;
@@ -56,6 +69,7 @@ export function toProjectDto(row: ProjectRow): ProjectDto {
       installed: row.installation_id !== null,
     },
     framework: row.framework,
+    sleep: { enabled: row.scale_to_zero, idleSeconds: row.idle_seconds },
     team: row.teams
       ? { ref: row.teams.ref, slug: row.teams.slug, name: row.teams.name }
       : null,
@@ -67,7 +81,8 @@ export function toProjectDto(row: ProjectRow): ProjectDto {
 /** Columns every project read selects. `id` is deliberately absent. */
 export const PROJECT_COLUMNS =
   "ref, name, slug, provider, repo_id, repo_full_name, installation_id, " +
-  "production_branch, root_directory, framework, created_at, updated_at, deleted_at";
+  "production_branch, root_directory, framework, scale_to_zero, idle_seconds, " +
+  "created_at, updated_at, deleted_at";
 
 export const PROJECT_COLUMNS_WITH_TEAM =
   `${PROJECT_COLUMNS}, teams:team_id (ref, slug, name)`;

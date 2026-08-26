@@ -20,6 +20,7 @@ import { Notice, Empty } from "@/components/v2/notice";
 import { EnvEditor, type EnvVarSummary } from "@/components/v2/env-editor";
 import { DomainManager, type DomainSummary } from "@/components/v2/domain-manager";
 import { PromoteControl } from "@/components/v2/promote-control";
+import { SleepSettings } from "@/components/v2/sleep-settings";
 import { replicaStates, type ReplicaState } from "@/lib/paas/replicas.ts";
 import {
   StateBadge,
@@ -53,7 +54,10 @@ export default async function ProjectPage({ params }: Params) {
 
   const { data: projectRow } = await caller.db
     .from("projects")
-    .select("id, ref, name, repo_full_name, production_branch, framework, installation_id")
+    .select(
+      "id, ref, name, repo_full_name, production_branch, framework, " +
+        "installation_id, scale_to_zero, idle_seconds"
+    )
     .eq("ref", ref)
     .is("deleted_at", null)
     .maybeSingle();
@@ -70,6 +74,8 @@ export default async function ProjectPage({ params }: Params) {
     production_branch: string;
     framework: string | null;
     installation_id: number | null;
+    scale_to_zero: boolean;
+    idle_seconds: number | null;
   };
 
   const [
@@ -336,6 +342,19 @@ export default async function ProjectPage({ params }: Params) {
           projectRef={project.ref}
           variables={variables}
           canSave
+        />
+      </Section>
+
+      <Section title="Sleep">
+        {/* sweepScheduled is false: the idle sweep is a script, not a
+            schedule. The panel records the setting and says plainly that
+            nothing acts on it yet, rather than describing behaviour the
+            system does not have. */}
+        <SleepSettings
+          projectRef={project.ref}
+          enabled={project.scale_to_zero}
+          idleSeconds={project.idle_seconds}
+          sweepScheduled={false}
         />
       </Section>
 

@@ -58,7 +58,16 @@ interface PatchBody {
   productionBranch?: unknown;
   rootDirectory?: unknown;
   framework?: unknown;
+  scaleToZero?: unknown;
+  idleSeconds?: unknown;
 }
+
+/**
+ * Floor on idle_seconds, matching the database constraint. Below this the app
+ * sleeps between a visitor's own page loads, which reads as the site being
+ * broken rather than as a saving.
+ */
+const MIN_IDLE_SECONDS = 60;
 
 export async function PATCH(request: Request, { params }: Params) {
   const caller = await getCaller();
@@ -108,6 +117,24 @@ export async function PATCH(request: Request, { params }: Params) {
 
   if (body.framework === null || typeof body.framework === "string") {
     patch.framework = body.framework === null ? null : String(body.framework);
+  }
+
+  if (typeof body.scaleToZero === "boolean") {
+    patch.scale_to_zero = body.scaleToZero;
+  }
+
+  if (body.idleSeconds === null) {
+    // Explicit null means "use the platform default", which is different from
+    // not sending the field at all.
+    patch.idle_seconds = null;
+  } else if (typeof body.idleSeconds === "number") {
+    if (!Number.isInteger(body.idleSeconds) || body.idleSeconds < MIN_IDLE_SECONDS) {
+      return invalid(
+        `Idle time must be a whole number of seconds, at least ${MIN_IDLE_SECONDS}.`,
+        { idleSeconds: "too_short" }
+      );
+    }
+    patch.idle_seconds = body.idleSeconds;
   }
 
   if (Object.keys(patch).length === 0) {
