@@ -11,6 +11,20 @@ import { lookupModelRouting } from "./model-routing.ts";
 import { resolveUpstreamKey } from "./openrouter.ts";
 import { sendTrace, type SpanName, type SpanStatus, type TraceSpan } from "./trace.ts";
 
+/**
+ * Supplier-reported cost in credits -> cents, or null.
+ *
+ * OpenRouter puts `usage.cost` on every response. It beats anything we derive
+ * from a rate table, so it is captured wherever a real upstream response is
+ * parsed. Null (not 0) when absent: 0 would assert "this was free", which is
+ * only true for a cache hit, and a missing field is not the same as a free
+ * request.
+ */
+export function reportedCostCents(cost: number | undefined | null): number | null {
+  if (typeof cost !== "number" || !Number.isFinite(cost) || cost < 0) return null;
+  return cost * 100;
+}
+
 // ── Error body ───────────────────────────────────────────────────────────────
 
 export function gatewayError(message: string, type: string, code: string, requestId: string) {
@@ -35,9 +49,12 @@ export function buildBaseEvent(
     modality,
     requestId,
     billedTo: "platform",
+    provider: "openrouter",
     inputTokens: null,
     outputTokens: null,
     cachedTokens: null,
+    cacheWriteTokens: null,
+    reportedUpstreamCostCents: null,
     numUnits: null,
     unitLabel: null,
     costCents: 0,

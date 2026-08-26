@@ -16,6 +16,12 @@ export interface ModelPricing {
   input_cents_per_mtok?: number;
   output_cents_per_mtok?: number;
   cached_cents_per_mtok?: number;
+  /** Cost of WRITING to the upstream prompt cache, 5-minute TTL. Higher than
+   *  input_cents_per_mtok on every provider that charges for it. */
+  cache_write_cents_per_mtok?: number;
+  /** Same, 1-hour TTL. Synced for completeness; not used for costing until the
+   *  upstream tells us which TTL a given write used — see rawTokenCostCents. */
+  cache_write_1h_cents_per_mtok?: number;
   // Per-unit multimodal modalities.
   cents_per_image?: number;
   cents_per_1k_chars?: number;
@@ -112,9 +118,15 @@ export async function handleUsageBatch(
       modality: event.modality,
       request_id: event.requestId,
       billed_to: event.billedTo,
+      provider: event.provider,
       input_tokens: event.inputTokens,
       output_tokens: event.outputTokens,
       cached_tokens: event.cachedTokens,
+      cache_write_tokens: event.cacheWriteTokens,
+      // Null here means upstream_cost_cents below was DERIVED from a rate
+      // table rather than reported by the supplier — the difference between a
+      // measured margin and an estimated one.
+      reported_upstream_cost_cents: event.reportedUpstreamCostCents,
       num_units: event.numUnits,
       unit_label: event.unitLabel,
       cost_cents: costCents,
@@ -205,10 +217,11 @@ export async function handleUsageBatch(
  * Compute the billable cost for one usage event in cents.
  *
  * Token-based modalities (chat, completion, embedding):
- *   billable_input = max(0, input_tokens - cached_tokens)
- *   raw_cents = billable_input * input_rate / 1M
- *             + cached_tokens  * cached_rate / 1M
- *             + output_tokens  * output_rate / 1M
+ *   billable_input = max(0, input_tokens - cached_tokens - cache_write_tokens)
+ *   raw_cents = billable_input     * input_rate       / 1M
+ *             + cached_tokens      * cached_rate      / 1M
+ *             + cache_write_tokens * cache_write_rate / 1M
+ *             + output_tokens      * output_rate      / 1M
  *   final     = ceil(raw_cents * (1 - off_peak_discount/100))
  *
  * Per-unit modalities:
@@ -240,15 +253,35 @@ function rawTokenCostCents(pricing: ModelPricing, event: UsageEvent): number {
   const input = event.inputTokens ?? 0;
   const output = event.outputTokens ?? 0;
   const cached = event.cachedTokens ?? 0;
-  const billableInput = Math.max(0, input - cached);
+  const cacheWrite = event.cacheWriteTokens ?? 0;
+  // Cache reads AND cache writes are both subsets of prompt_tokens, each with
+  // its own rate. Clamped at 0 because an upstream that reports them as
+  // ADDITIONAL rather than included would otherwise drive this negative and
+  // silently credit the customer.
+  const billableInput = Math.max(0, input - cached - cacheWrite);
 
   const inputRate = pricing.input_cents_per_mtok ?? 0;
   const outputRate = pricing.output_cents_per_mtok ?? 0;
   const cachedRate = pricing.cached_cents_per_mtok ?? inputRate;
+  // Falls back to the plain input rate, never to 0, and that fallback is what
+  // keeps CUSTOMER bills identical to before this leg existed: those tokens
+  // used to be counted as plain input, and inputRate x n is exactly what they
+  // still cost. Only the UPSTREAM figure moves, because upstream_pricing does
+  // carry a real write rate once synced — which is the entire point. A model
+  // is charged a cache-write premium only when an operator deliberately sets
+  // one on the customer-facing price.
+  //
+  // The 1-hour rate is synced but unused. The response does not say which TTL
+  // a write used; the REQUEST does (`cache_control.ttl`), so this is knowable
+  // and deliberately not done — reading request bodies on the billing path to
+  // split a rate that differs by 1.6x is not worth the coupling today. Using
+  // the cheaper 5m rate under-states cost on 1h writes; it never over-states.
+  const cacheWriteRate = pricing.cache_write_cents_per_mtok ?? inputRate;
 
   return (
     (billableInput * inputRate) / 1_000_000 +
     (cached * cachedRate) / 1_000_000 +
+    (cacheWrite * cacheWriteRate) / 1_000_000 +
     (output * outputRate) / 1_000_000
   );
 }
@@ -271,12 +304,22 @@ export function computeCost(
     return { costCents: 0, isOffPeak: false, upstreamCostCents: 0 };
   }
 
+  // A cost the supplier REPORTED beats one we derived. Our rate table can be
+  // stale, can be missing a modality entirely (embeddings, rerank and audio
+  // have no row at all — the upstream catalog endpoint lists chat models only),
+  // and cannot represent a supplier that settles at request time. A number the
+  // supplier put in the response has none of those failure modes.
+  const reported = event.reportedUpstreamCostCents;
+  const hasReported = typeof reported === "number" && Number.isFinite(reported) && reported >= 0;
+
   // Per-unit modalities bypass the token-based path entirely.
   if (isPerUnitLabel(event.unitLabel)) {
     const costCents = computeUnitCost(event, info.pricing);
-    const upstreamCostCents = hasAnyRate(info.upstreamPricing)
-      ? computeUnitCost(event, info.upstreamPricing)
-      : costCents; // not synced / not applicable to this row — see PricingInfo doc comment
+    const upstreamCostCents = hasReported
+      ? Math.ceil(reported)
+      : hasAnyRate(info.upstreamPricing)
+        ? computeUnitCost(event, info.upstreamPricing)
+        : costCents; // not synced / not applicable to this row — see PricingInfo doc comment
     return { costCents, isOffPeak: false, upstreamCostCents };
   }
 
@@ -315,7 +358,9 @@ export function computeCost(
 
   // Never discounted — off-peak is a promotion on what WE charge, not a
   // change in what the upstream provider bills us for the same tokens.
-  const upstreamCostCents = hasAnyRate(info.upstreamPricing)
+  const upstreamCostCents = hasReported
+    ? Math.ceil(reported)
+    : hasAnyRate(info.upstreamPricing)
     ? Math.ceil(rawTokenCostCents(info.upstreamPricing, event))
     : finalCents; // not synced yet — see PricingInfo doc comment
 

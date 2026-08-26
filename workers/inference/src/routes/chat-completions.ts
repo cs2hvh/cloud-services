@@ -19,7 +19,9 @@ import {
 import { scrubJson, scrubSsePassthrough } from "../lib/brand-scrub.ts";
 import { applyPreset, resolvePreset } from "../lib/presets.ts";
 import { isAutoModel, requirementsFromRequest, resolveAutoModel } from "../lib/router.ts";
-import { assertModelAvailable } from "../lib/gateway.ts";
+import { assertModelAvailable, reportedCostCents } from "../lib/gateway.ts";
+import { markSupplierFailed, resolveSupplierRoute } from "../lib/supplier-routing.ts";
+import { DEFAULT_SUPPLIER } from "../lib/suppliers/index.ts";
 import { lookupCache, shouldCache, writeCache } from "../lib/cache.ts";
 import {
   extractEmbeddableText,
@@ -94,7 +96,10 @@ interface OpenAIUsage {
   prompt_tokens?: number;
   completion_tokens?: number;
   total_tokens?: number;
-  prompt_tokens_details?: { cached_tokens?: number };
+  prompt_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number };
+  /** What OpenRouter charged us, in credits (1 credit = $1). Returned on every
+   *  response including the final streaming chunk — no parameter needed. */
+  cost?: number;
 }
 
 interface OpenAIChatResponse {
@@ -584,6 +589,8 @@ export const chatCompletions: Handler<{
           outputTokens: cached.usage?.completion_tokens ?? null,
           // Account cache hits at the cached_tokens rate (consumer applies this)
           cachedTokens: cached.usage?.prompt_tokens ?? null,
+          cacheWriteTokens: null, // served from cache — nothing written
+          reportedUpstreamCostCents: null, // our cache, not theirs — no upstream call
           status: "success",
           cacheKind: "l1",
         })
@@ -658,6 +665,8 @@ export const chatCompletions: Handler<{
             // consumer's pricing function reads cachedTokens to apply
             // the cached-input rate, matching the L1 path.
             cachedTokens: semanticHit.usage?.prompt_tokens ?? null,
+            cacheWriteTokens: null, // served from cache — nothing written
+            reportedUpstreamCostCents: null, // our cache, not theirs
             status: "success",
             cacheKind: "semantic",
           })
@@ -692,17 +701,83 @@ export const chatCompletions: Handler<{
     }
   }
 
-  // 6. Forward to OpenRouter
-  const upstream = await forwardJson({
+  // 6. Pick a supplier, then forward.
+  //
+  // resolveSupplierRoute() is a lookup, not a decision — an operator chose a
+  // supplier per model in the admin screen and this checks whether that choice
+  // is currently allowed. Every uncertainty resolves to OpenRouter.
+  const route = await resolveSupplierRoute({
     env: c.env,
-    body: outgoingBody,
-    upstreamKey,
+    modelId: effectiveModel,
+    catalogUpstreamModelId: (outgoingBody.model as string) ?? effectiveModel,
+    orgId: auth.orgId,
     path: "/chat/completions",
-    signal: c.req.raw.signal,
-    extraHeaders: {
-      "X-Title": "AhuraCloud Inference",
-    },
+    billing: auth.billing,
+    hasPreset: presetConfig !== null,
+    // Already read at step 3 — passing it saves a second round trip to the
+    // same row on every single chat request.
+    preferredProvider: routing?.preferred_provider ?? null,
   });
+
+  const forwardTo = (supplier: typeof route.supplier, key: string, modelId: string) =>
+    forwardJson({
+      env: c.env,
+      // Each supplier has its own id for the same model: 'claude-sonnet-4-6'
+      // at Wokey where our catalog says 'anthropic/claude-sonnet-4.6'.
+      body: { ...outgoingBody, model: modelId },
+      upstreamKey: key,
+      path: "/chat/completions",
+      signal: c.req.raw.signal,
+      supplier,
+      extraHeaders: { "X-Title": "AhuraCloud Inference" },
+    });
+
+  // route.key is null for every fallback, which is what keeps a customer-BYOK
+  // request on the customer's own decrypted key rather than ours.
+  let upstream = await forwardTo(route.supplier, route.key ?? upstreamKey, route.upstreamModelId);
+  let servedBy = route.supplier.id;
+
+  // FALLBACK, and its one hard limit: this can only run BEFORE the first byte
+  // reaches the customer. Once a stream has started the response is committed —
+  // switching suppliers mid-answer would splice two different generations
+  // together. That is why this sits here, on the status code, and not inside
+  // the stream handler. See docs/inference/supply-routing-plan.md §9.8.
+  const supplierLooksUnhealthy = (status: number) =>
+    status === 408 || status === 429 || status >= 500;
+
+  if (!upstream.ok && route.reason === "preferred") {
+    // Only a supplier-side failure earns a cooldown. A 4xx we caused — a
+    // malformed body, an unsupported parameter — would fail identically
+    // everywhere, so parking the route would take a healthy supplier out of
+    // service for our own bug. Still fall back, though: the customer gets an
+    // answer either way.
+    if (supplierLooksUnhealthy(upstream.status)) {
+      c.executionCtx.waitUntil(markSupplierFailed(c.env, route.supplier.id, effectiveModel));
+    }
+    console.warn(JSON.stringify({
+      level: "warn", scope: "supplier-fallback", requestId,
+      supplier: route.supplier.id, httpStatus: upstream.status,
+      message: "preferred supplier failed before responding — falling back",
+    }));
+    // upstreamKey, not a freshly-resolved platform key: this branch is only
+    // reachable when a non-default supplier was chosen, which never happens for
+    // BYOK, so the caller's key is already the right one.
+    upstream = await forwardTo(
+      DEFAULT_SUPPLIER,
+      upstreamKey,
+      (outgoingBody.model as string) ?? effectiveModel,
+    );
+    servedBy = DEFAULT_SUPPLIER.id;
+  }
+  // NOT returned as a response header: naming the upstream to the customer is
+  // exactly what brand-scrub.ts exists to prevent. It goes on the trace span,
+  // where operators read it and customers cannot.
+  /** Stamp every usage event from here on with who actually charged us, and
+   *  every trace span with WHY that supplier was chosen. Without the reason, an
+   *  operator who enables Wokey and sees no Wokey traffic has nothing to look
+   *  at — which is the "no traffic" state §9.5 says must never be silent. */
+  const servedByProvider = { provider: servedBy };
+  const routeAttributes = { supplier: servedBy, supplier_reason: route.reason };
 
   // 5. Error responses — scrub brand info, forward Retry-After, pass status through
   if (!upstream.ok) {
@@ -711,6 +786,7 @@ export const chatCompletions: Handler<{
     c.executionCtx.waitUntil(
       sendUsage(c.env, {
         ...baseUsageEvent(auth, effectiveModel, requestId, startedAt),
+        ...servedByProvider,
         status: errStatus,
         errorCode: `upstream_${upstream.status}`,
       })
@@ -722,7 +798,7 @@ export const chatCompletions: Handler<{
         outputTokens: null,
         status: errStatus,
         payload: null,
-        attributes: { upstream_http_status: upstream.status },
+        attributes: { ...routeAttributes, upstream_http_status: upstream.status },
       })
     );
     // Forward Retry-After so clients can back off correctly on 429/503
@@ -769,9 +845,12 @@ export const chatCompletions: Handler<{
         c.executionCtx.waitUntil(
           sendUsage(c.env, {
             ...baseUsageEvent(auth, effectiveModel, requestId, startedAt),
+            ...servedByProvider,
             inputTokens: usage?.prompt_tokens ?? null,
             outputTokens: usage?.completion_tokens ?? null,
             cachedTokens: usage?.prompt_tokens_details?.cached_tokens ?? null,
+            cacheWriteTokens: usage?.prompt_tokens_details?.cache_write_tokens ?? null,
+            reportedUpstreamCostCents: reportedCostCents(usage?.cost),
             status: "success",
           })
         );
@@ -785,7 +864,7 @@ export const chatCompletions: Handler<{
             payload: shouldSamplePayload(auth, DEFAULT_TRACE_SAMPLE_RATE)
               ? { input: outgoingBody.messages, output: null }
               : null,
-            attributes: { streaming: true },
+            attributes: { ...routeAttributes, streaming: true },
           })
         );
       }
@@ -818,9 +897,12 @@ export const chatCompletions: Handler<{
   c.executionCtx.waitUntil(
     sendUsage(c.env, {
       ...baseUsageEvent(auth, effectiveModel, requestId, startedAt),
+      ...servedByProvider,
       inputTokens: parsedUsage?.prompt_tokens ?? null,
       outputTokens: parsedUsage?.completion_tokens ?? null,
       cachedTokens: parsedUsage?.prompt_tokens_details?.cached_tokens ?? null,
+      cacheWriteTokens: parsedUsage?.prompt_tokens_details?.cache_write_tokens ?? null,
+      reportedUpstreamCostCents: reportedCostCents(parsedUsage?.cost),
       status: "success",
     })
   );
@@ -834,7 +916,7 @@ export const chatCompletions: Handler<{
       payload: shouldSamplePayload(auth, DEFAULT_TRACE_SAMPLE_RATE)
         ? { input: outgoingBody.messages, output: parsedData ?? null }
         : null,
-      attributes: {},
+      attributes: { ...routeAttributes },
     })
   );
 
@@ -872,6 +954,7 @@ export const chatCompletions: Handler<{
               c.executionCtx.waitUntil(
                 sendUsage(c.env, {
                   ...baseUsageEvent(auth, effectiveModel, `${requestId}-r1`, startedAt),
+                  ...servedByProvider,
                   inputTokens:  parsedUsage?.prompt_tokens ?? null,
                   outputTokens: parsedUsage?.completion_tokens ?? null,
                   status: "success",
@@ -925,6 +1008,7 @@ export const chatCompletions: Handler<{
                 c.executionCtx.waitUntil(
                   sendUsage(c.env, {
                     ...baseUsageEvent(auth, effectiveModel, `${requestId}-r1`, startedAt),
+                    ...servedByProvider,
                     inputTokens:  parsedUsage?.prompt_tokens ?? null,
                     outputTokens: parsedUsage?.completion_tokens ?? null,
                     status: "success",
@@ -1056,9 +1140,12 @@ function baseUsageEvent(
     modality: "chat",
     requestId,
     billedTo: auth.billing,
+    provider: "openrouter",
     inputTokens: null,
     outputTokens: null,
     cachedTokens: null,
+    cacheWriteTokens: null,
+    reportedUpstreamCostCents: null,
     numUnits: null,
     unitLabel: null,
     costCents: 0,           // computed by the usage consumer using catalog pricing

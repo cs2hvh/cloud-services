@@ -15,9 +15,12 @@ function agentEvent(unitLabel: string, numUnits: number): UsageEvent {
     modality: "chat", // irrelevant to computeUnitCost; it switches on unitLabel
     requestId: "req_1",
     billedTo: "platform",
+    provider: "openrouter",
     inputTokens: null,
     outputTokens: null,
     cachedTokens: null,
+    cacheWriteTokens: null,
+    reportedUpstreamCostCents: null,
     numUnits,
     unitLabel,
     costCents: 0,
@@ -32,7 +35,13 @@ function agentEvent(unitLabel: string, numUnits: number): UsageEvent {
   };
 }
 
-function chatEvent(opts: { inputTokens: number; outputTokens: number; cachedTokens?: number }): UsageEvent {
+function chatEvent(opts: {
+  inputTokens: number;
+  outputTokens: number;
+  cachedTokens?: number;
+  cacheWriteTokens?: number;
+  reportedUpstreamCostCents?: number | null;
+}): UsageEvent {
   return {
     orgId: "org_1",
     apiKeyId: "key_1",
@@ -41,9 +50,12 @@ function chatEvent(opts: { inputTokens: number; outputTokens: number; cachedToke
     modality: "chat",
     requestId: "req_1",
     billedTo: "platform",
+    provider: "openrouter",
     inputTokens: opts.inputTokens,
     outputTokens: opts.outputTokens,
     cachedTokens: opts.cachedTokens ?? 0,
+    cacheWriteTokens: opts.cacheWriteTokens ?? null,
+    reportedUpstreamCostCents: opts.reportedUpstreamCostCents ?? null,
     numUnits: null,
     unitLabel: null,
     costCents: 0,
@@ -195,5 +207,163 @@ describe("normalizeNumUnits", () => {
     // 1 (ceil'd) cpu-second × 0.06 = 0.06 → ceil → 1 cent — computed from the
     // SAME normalized event, not the raw fractional one.
     expect(computeUnitCost(normalized, { cents_per_cpu_second: 0.06 })).toBe(1);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Cache writes. Regression guard for a live under-billing bug: the cost model
+// knew about cache READS only, so the expensive half of prompt caching was
+// invisible. A write is 1.25x input at a 5-minute TTL and 2x at an hour — i.e.
+// caching a prompt once and never reusing it costs MORE than not caching.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("computeCost — cache write tokens", () => {
+  // 100 in / 10 out per Mtok-cents: input 100, output 500, read 10, write 125.
+  const info: PricingInfo = {
+    pricing: {
+      input_cents_per_mtok: 100,
+      output_cents_per_mtok: 500,
+      cached_cents_per_mtok: 10,
+      cache_write_cents_per_mtok: 125,
+    },
+    upstreamPricing: null,
+    off_peak: null,
+  };
+
+  it("prices a cache write ABOVE fresh input, not at zero", () => {
+    const written = computeCost(
+      chatEvent({ inputTokens: 1_000_000, outputTokens: 0, cacheWriteTokens: 1_000_000 }),
+      info,
+    ).costCents;
+    const fresh = computeCost(
+      chatEvent({ inputTokens: 1_000_000, outputTokens: 0 }),
+      info,
+    ).costCents;
+
+    expect(written).toBe(125);
+    expect(fresh).toBe(100);
+    // The whole point: writing the cache is the expensive path.
+    expect(written).toBeGreaterThan(fresh);
+  });
+
+  it("does not double-charge — a written token is not also billed as input", () => {
+    // 1M input of which 400k written, 100k read, 500k fresh.
+    const cost = computeCost(
+      chatEvent({
+        inputTokens: 1_000_000,
+        outputTokens: 0,
+        cachedTokens: 100_000,
+        cacheWriteTokens: 400_000,
+      }),
+      info,
+    ).costCents;
+    // 500k*100 + 100k*10 + 400k*125, all per Mtok = 50 + 1 + 50 = 101
+    expect(cost).toBe(101);
+  });
+
+  it("treats an unsynced write rate as input-priced, never as free", () => {
+    const cost = computeCost(
+      chatEvent({ inputTokens: 1_000_000, outputTokens: 0, cacheWriteTokens: 1_000_000 }),
+      { pricing: { input_cents_per_mtok: 100, output_cents_per_mtok: 500 }, upstreamPricing: null, off_peak: null },
+    ).costCents;
+    expect(cost).toBe(100);
+  });
+
+  it("costs nothing extra when the upstream reports no write", () => {
+    const cost = computeCost(chatEvent({ inputTokens: 1_000_000, outputTokens: 0 }), info).costCents;
+    expect(cost).toBe(100);
+  });
+});
+
+describe("computeCost — cache writes must not change what customers pay", () => {
+  // The safety property behind shipping this at all. Before the write leg
+  // existed, cache-write tokens were counted as plain input and charged at the
+  // input rate. They are now a separate leg, but with no customer-facing write
+  // price set they fall back to the input rate — so the total is identical.
+  //
+  // Only the UPSTREAM number moves, because upstream_pricing gets a real write
+  // rate from the sync. That is what makes margin correct without repricing
+  // anybody.
+  const customerPricing = { input_cents_per_mtok: 100, output_cents_per_mtok: 500, cached_cents_per_mtok: 10 };
+
+  it("bills the same with and without the write breakdown", () => {
+    const withBreakdown = computeCost(
+      chatEvent({ inputTokens: 1_000_000, outputTokens: 0, cacheWriteTokens: 300_000 }),
+      { pricing: customerPricing, upstreamPricing: null, off_peak: null },
+    ).costCents;
+
+    // The same request as the old code saw it: no write field at all.
+    const asBefore = computeCost(
+      chatEvent({ inputTokens: 1_000_000, outputTokens: 0 }),
+      { pricing: customerPricing, upstreamPricing: null, off_peak: null },
+    ).costCents;
+
+    expect(withBreakdown).toBe(asBefore);
+    expect(withBreakdown).toBe(100);
+  });
+
+  it("moves the UPSTREAM figure once a real write rate is synced", () => {
+    const { costCents, upstreamCostCents } = computeCost(
+      chatEvent({ inputTokens: 1_000_000, outputTokens: 0, cacheWriteTokens: 1_000_000 }),
+      {
+        pricing: customerPricing,
+        // What the supplier actually charges: a write is 1.25x input.
+        upstreamPricing: { input_cents_per_mtok: 80, output_cents_per_mtok: 400, cache_write_cents_per_mtok: 100 },
+        off_peak: null,
+      },
+    );
+    expect(costCents).toBe(100);          // customer unchanged
+    expect(upstreamCostCents).toBe(100);  // cost is the write rate, not the input rate
+    // Margin is now honestly zero on this request rather than a phantom 20%.
+    expect(upstreamCostCents).toBeGreaterThan(80);
+  });
+});
+
+describe("computeCost — a cost the supplier reported beats one we derived", () => {
+  // OpenRouter returns `usage.cost` on every response, streaming included. It is
+  // authoritative, per-request, and works for modalities our rate table has no
+  // row for at all — embeddings, rerank and audio are absent from the upstream
+  // catalog endpoint, which lists chat models only.
+  const info: PricingInfo = {
+    pricing: { input_cents_per_mtok: 100, output_cents_per_mtok: 500 },
+    upstreamPricing: { input_cents_per_mtok: 80, output_cents_per_mtok: 400 },
+    off_peak: null,
+  };
+
+  it("uses the reported cost instead of the rate table", () => {
+    const { costCents, upstreamCostCents } = computeCost(
+      chatEvent({ inputTokens: 1_000_000, outputTokens: 0, reportedUpstreamCostCents: 73 }),
+      info,
+    );
+    expect(costCents).toBe(100);         // what we charge is ours to decide
+    expect(upstreamCostCents).toBe(73);  // what it cost is theirs to report
+  });
+
+  it("falls back to the rate table when nothing was reported", () => {
+    const { upstreamCostCents } = computeCost(
+      chatEvent({ inputTokens: 1_000_000, outputTokens: 0 }),
+      info,
+    );
+    expect(upstreamCostCents).toBe(80);
+  });
+
+  it("prices a modality the rate table cannot, when the supplier reports it", () => {
+    // upstreamPricing null = "we have no cost basis for this row" — the exact
+    // state every embedding, rerank and audio model is in today.
+    const { upstreamCostCents } = computeCost(
+      chatEvent({ inputTokens: 1_000_000, outputTokens: 0, reportedUpstreamCostCents: 12 }),
+      { pricing: { input_cents_per_mtok: 100, output_cents_per_mtok: 500 }, upstreamPricing: null, off_peak: null },
+    );
+    expect(upstreamCostCents).toBe(12);
+  });
+
+  it("ignores a nonsense report rather than trusting it", () => {
+    for (const bad of [Number.NaN, -1, Number.POSITIVE_INFINITY]) {
+      const { upstreamCostCents } = computeCost(
+        chatEvent({ inputTokens: 1_000_000, outputTokens: 0, reportedUpstreamCostCents: bad }),
+        info,
+      );
+      expect(upstreamCostCents).toBe(80); // fell back to the rate table
+    }
   });
 });

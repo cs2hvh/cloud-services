@@ -116,9 +116,12 @@ export const agentToolUsage = async (
     modality: "agent_tool",
     requestId,
     billedTo: auth.billing,
+    provider: "openrouter",
     inputTokens: null,
     outputTokens: null,
     cachedTokens: null,
+    cacheWriteTokens: null,
+    reportedUpstreamCostCents: null,
     numUnits: units,
     unitLabel,
     costCents: 0, // computed downstream by the usage consumer's catalog pricing

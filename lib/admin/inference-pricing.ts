@@ -18,12 +18,13 @@
 export type Pricing = Record<string, unknown>;
 
 /** The three token prices the pricing screen edits. */
-export const TOKEN_FIELDS = ["input_cents_per_mtok", "cached_cents_per_mtok", "output_cents_per_mtok"] as const;
+export const TOKEN_FIELDS = ["input_cents_per_mtok", "cached_cents_per_mtok", "cache_write_cents_per_mtok", "output_cents_per_mtok"] as const;
 export type TokenField = (typeof TOKEN_FIELDS)[number];
 
 export const TOKEN_FIELD_LABELS: Record<TokenField, string> = {
   input_cents_per_mtok: "Input",
-  cached_cents_per_mtok: "Cached",
+  cached_cents_per_mtok: "Cache read",
+  cache_write_cents_per_mtok: "Cache write",
   output_cents_per_mtok: "Output",
 };
 

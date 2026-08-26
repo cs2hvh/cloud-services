@@ -29,7 +29,9 @@ const OR_URL = "https://openrouter.ai/api/v1/models";
 interface OrPricing {
   prompt?: string;           // USD per token (input)
   completion?: string;       // USD per token (output)
-  input_cache_read?: string; // USD per token (cached input)
+  input_cache_read?: string;      // USD per token (cache READ — cheap)
+  input_cache_write?: string;     // USD per token (cache WRITE, 5-minute TTL)
+  input_cache_write_1h?: string;  // USD per token (cache WRITE, 1-hour TTL)
   image?: string;            // USD per image (for image gen models)
   request?: string;          // USD per request (flat fee)
 }
@@ -52,6 +54,8 @@ interface UpstreamPricing {
   input_cents_per_mtok?: number;
   output_cents_per_mtok?: number;
   cached_cents_per_mtok?: number;
+  cache_write_cents_per_mtok?: number;
+  cache_write_1h_cents_per_mtok?: number;
   cents_per_image?: number;
 }
 
@@ -61,11 +65,18 @@ function buildUpstreamPricing(or: OrPricing): UpstreamPricing {
   const input  = toCentsPerMtok(or.prompt);
   const output = toCentsPerMtok(or.completion);
   const cached = toCentsPerMtok(or.input_cache_read);
+  // Cache WRITES were never synced. On Anthropic a 5-minute write is 1.25x
+  // input and an hour is 2x — i.e. more than not caching — so leaving these
+  // out under-stated our cost on every cached request.
+  const cacheWrite   = toCentsPerMtok(or.input_cache_write);
+  const cacheWrite1h = toCentsPerMtok(or.input_cache_write_1h);
   const image  = or.image ? Math.round(parseFloat(or.image) * 100) : null; // cents per image
 
   if (input  != null) p.input_cents_per_mtok  = input;
   if (output != null) p.output_cents_per_mtok  = output;
   if (cached != null) p.cached_cents_per_mtok  = cached;
+  if (cacheWrite   != null) p.cache_write_cents_per_mtok    = cacheWrite;
+  if (cacheWrite1h != null) p.cache_write_1h_cents_per_mtok = cacheWrite1h;
   if (image  != null) p.cents_per_image         = image;
 
   return p;

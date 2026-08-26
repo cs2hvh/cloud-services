@@ -30,6 +30,8 @@ one OpenAI-compatible gateway:
 |---|---|
 | **[STATUS.md](./STATUS.md)** | **Live build state. Read first when picking up a fresh session.** What's deployed, what works, what's pending, all decisions made, file map, known gotchas. |
 | [architecture.md](./architecture.md) | System design, components, data model, key tradeoffs |
+| [DELIVERY-RECORD.md](./DELIVERY-RECORD.md) | Deep's contribution to the platform — what was built, faults found and closed, adjacent platform work, and open items. Written for a status review rather than a working session. |
+| [supply-routing-plan.md](./supply-routing-plan.md) | Where our model capacity is bought, what it costs, and the phased plan for a second supplier (Wokey). Verified prices and endpoint probes, plus the three cost-reporting defects found writing it. |
 | [setup.md](./setup.md) | Operator runbook — apply migrations, configure Cloudflare, deploy Workers, verify |
 | [phases.md](./phases.md) | Original 8-phase delivery roadmap with scope, durations, ship signals |
 | [migration-ahurasense.md](./migration-ahurasense.md) | Domain switch runbook: `cs2hvh.com` (current) → `ahurasense.com` (target, pending CF perms) |

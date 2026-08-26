@@ -35,6 +35,11 @@ export interface ModelRouting {
   /** Model capabilities JSONB — route-specific handlers can read feature flags
    *  (e.g. supported_durations, supports_i2v) without extra DB queries. */
   capabilities: Record<string, unknown> | null;
+  /** Which supplier this model is bought from. NULL = OpenRouter. Selected here
+   *  so supplier routing does not re-read a row we already have — this lookup
+   *  runs on every request, and a second round trip for a feature with no
+   *  traffic is a cost paid by every request that will never use it. */
+  preferred_provider: string | null;
 }
 
 /**
@@ -49,18 +54,72 @@ export async function lookupModelRouting(
     auth: { persistSession: false },
   });
 
-  const { data } = await supabase
-    .schema("inference")
-    .from("models")
-    .select("serving_type, serving_url, upstream_model_id, is_active, capabilities")
-    .eq("model_id", modelId)
-    .maybeSingle<{
-      serving_type: ServingType;
-      serving_url: string | null;
-      upstream_model_id: string | null;
-      is_active: boolean;
-      capabilities: Record<string, unknown> | null;
-    }>();
+  // BASE COLUMNS vs the one added for supplier routing, kept apart on purpose.
+  //
+  // This function runs on EVERY request on EVERY route, and its `null` return
+  // is read by assertModelAvailable as "this model is not in the catalog" — a
+  // customer-facing 404. So a query that merely FAILS is indistinguishable from
+  // a model that does not exist.
+  //
+  // That matters because `preferred_provider` arrives in migration
+  // 20260825000002. Selecting it unconditionally would mean: deploy this Worker
+  // before that migration is applied and PostgREST rejects the column, `data`
+  // is null, and every model on every modality reports "not found". A total
+  // outage caused by deploy ordering, on a column that exists for a feature
+  // with no traffic.
+  //
+  // So the optional column is tried, and its absence is survivable: fall back
+  // to the base select and treat the supplier preference as unset. The
+  // optimisation (one query instead of two) is kept when the column is there;
+  // the hard dependency is not.
+  const BASE = "serving_type, serving_url, upstream_model_id, is_active, capabilities";
+  type Row = {
+    serving_type: ServingType;
+    serving_url: string | null;
+    upstream_model_id: string | null;
+    is_active: boolean;
+    capabilities: Record<string, unknown> | null;
+    preferred_provider?: string | null;
+  };
+
+  const read = (columns: string) =>
+    supabase
+      .schema("inference")
+      .from("models")
+      .select(columns)
+      .eq("model_id", modelId)
+      .maybeSingle<Row>();
+
+  let { data, error } = await read(`${BASE}, preferred_provider`);
+  if (error) {
+    console.warn(
+      JSON.stringify({
+        level: "warn",
+        scope: "model-routing",
+        message: "catalog read failed with preferred_provider — retrying without it",
+        modelId,
+        err: error.message,
+      })
+    );
+    ({ data, error } = await read(BASE));
+  }
+
+  if (error) {
+    // A genuine catalog failure. Still returns null, which the callers render
+    // as "model not found" — wrong, but pre-existing and unchanged here; a
+    // database this broken is failing auth and spend checks too. Logged so it
+    // is not silent.
+    console.error(
+      JSON.stringify({
+        level: "error",
+        scope: "model-routing",
+        message: "catalog read failed",
+        modelId,
+        err: error.message,
+      })
+    );
+    return null;
+  }
 
   if (!data) return null;
 
@@ -71,6 +130,9 @@ export async function lookupModelRouting(
     upstream_model_id: data.upstream_model_id,
     is_active: data.is_active,
     capabilities: data.capabilities ?? null,
+    // undefined when the column is not there yet — normalised to null, which
+    // means "no preference", which routes to OpenRouter.
+    preferred_provider: data.preferred_provider ?? null,
   };
 }
 

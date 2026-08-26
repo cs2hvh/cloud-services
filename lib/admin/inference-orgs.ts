@@ -21,6 +21,11 @@ export interface OrgRow {
   /** Per-org vector ceiling; null = platform default (migration 20260804000001). */
   vector_quota: number | null;
   zdr_default: boolean | null;
+  /** May this org be served by marketplace supply (resold subscription
+   *  capacity)? Default false. Mutually exclusive with zdr_default — the API
+   *  refuses to set both, because marketplace suppliers may retain request
+   *  payloads for 14 days on failed requests. */
+  allow_marketplace_supply: boolean | null;
   region_pin: string | null;
   deleted_at: string | null;
   created_at: string;
@@ -199,4 +204,30 @@ export function overview(orgs: OrgRow[], members: OrgMemberRow[], keys: ApiKeyRo
     internal_keys_live: live.filter((k) => k.is_internal_service).length,
     orgs_without_cap: orgs.filter((o) => !o.deleted_at && cents(o.hard_cap_cents) === 0).length,
   };
+}
+
+// ── Supply policy ────────────────────────────────────────────────────────────
+
+/**
+ * Would this update leave an org both zero-data-retention AND permitted to use
+ * marketplace supply?
+ *
+ * Those are incompatible promises. Marketplace capacity is resold subscription
+ * quota, and the supplier's own terms allow keeping the full request payload
+ * for 14 days on failed or abnormal requests, unredacted. An org told it has
+ * ZDR must never be routed there.
+ *
+ * Evaluated against the state AFTER the patch, not before, so setting both in
+ * one request is caught too — which is exactly how it would happen: somebody
+ * clicks two toggles and saves once.
+ *
+ * Pure so it can be tested without a database, like every other rule here.
+ */
+export function violatesZdrSupplyRule(
+  before: { zdr_default?: unknown; allow_marketplace_supply?: unknown } | null,
+  patch: { zdr_default?: unknown; allow_marketplace_supply?: unknown },
+): boolean {
+  const after = (field: "zdr_default" | "allow_marketplace_supply"): boolean =>
+    typeof patch[field] === "boolean" ? (patch[field] as boolean) : before?.[field] === true;
+  return after("zdr_default") && after("allow_marketplace_supply");
 }
