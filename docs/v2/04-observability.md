@@ -13,7 +13,7 @@ change anything, run by a person who has read a report first.
 ## Running it
 
 ```bash
-node --test "lib/paas/telemetry/*.test.ts"                                   # 380 tests, no deps
+node --test "lib/paas/telemetry/*.test.ts"                                   # 384 tests, no deps
 node --env-file=.env --env-file=.env.local scripts/v3/operator-view.ts       # everything, once
 node --env-file=.env --env-file=.env.local scripts/v3/fleet-drift.ts --prove
 node --env-file=.env --env-file=.env.local scripts/v3/dns-drift.ts
@@ -55,6 +55,25 @@ Codes under 10 are about the *run*; codes from 10 up are about the *world*.
 That split exists because `1` used to mean both "found drift" and "could not
 run", which is unalertable: those need opposite responses and arrived as the
 same number.
+
+**Enforced, not conventional.** Both spellings of `process.exit(1)` are the
+same three characters, so a reviewer cannot tell a correct one from a relapse
+by reading it — and a relapse stays invisible until a scheduler acts on it.
+`exit-contract.test.ts` refuses any bare non-zero exit under `scripts/v3`;
+`exit(0)` stays allowed because it is unambiguous. Comments are stripped first,
+so a docblock explaining the old convention describes the problem rather than
+committing it.
+
+Two rules the sweeps follow that are easy to get backwards:
+
+- **A partial sweep never exits clean.** `drift-sweep.ts` skips the hostname
+  scope when the gateway has no address; exiting `0` would tell a scheduler
+  that a domain nobody looked at is fine. Incomplete coverage is a finding.
+- **A finding is not a failure.** A drift script exiting `10` has worked. The
+  CronJobs translate `10`/`11` to a zero pod exit so Kubernetes agrees, and
+  `sweeps.ts` refuses to apply that translation unless it can see the contract
+  in the shipped source — a mapping applied to the wrong convention turns the
+  alert-worthy case into a green tick.
 
 ## Scheduling it — the premise, not the last mile
 
@@ -199,6 +218,7 @@ Two things the episode is worth remembering for:
 | `telemetry/fleet-source.ts` | The I/O half. Every call is a GET | — |
 | `telemetry/admin-boundary.test.ts` | Test-only: enforces the admin security boundary | 8 |
 | `telemetry/write-safety.test.ts` | Test-only: no write in this lane swallows its failure | 7 |
+| `telemetry/exit-contract.test.ts` | Test-only: no script exits on a bare non-zero number | 4 |
 
 Surfaces: `GET /api/v2/admin/{fleet,hostnames,workloads,storage,metrics,usage}`,
 `GET /api/v2/admin/pods/{namespace}/{pod}/logs`, and `/dashboard/v2/admin`.
