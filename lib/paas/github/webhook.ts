@@ -80,11 +80,18 @@ export interface PushEvent {
  */
 export function parsePushEvent(payload: unknown): PushEvent | null {
   if (typeof payload !== "object" || payload === null) return null;
-  const p = payload as Record<string, any>;
+  // `unknown` rather than `any`: every field below is shape-checked before use,
+  // and typing this as `any` would let a future edit read a field without one.
+  const p = payload as Record<string, unknown>;
+  const repository = p.repository as { full_name?: unknown } | undefined;
+  const headCommit = p.head_commit as
+    | { message?: unknown; id?: unknown; author?: { username?: unknown; name?: unknown } }
+    | undefined;
+  const installation = p.installation as { id?: unknown } | undefined;
 
-  const repoFullName = p.repository?.full_name;
+  const repoFullName = repository?.full_name;
   const ref = p.ref;
-  const sha = p.after ?? p.head_commit?.id;
+  const sha = p.after ?? headCommit?.id;
   if (typeof repoFullName !== "string" || typeof ref !== "string" || typeof sha !== "string") return null;
   if (!/^[0-9a-f]{40}$/i.test(sha)) return null;
 
@@ -99,15 +106,15 @@ export function parsePushEvent(payload: unknown): PushEvent | null {
     repoFullName,
     branch,
     sha: sha.toLowerCase(),
-    message: typeof p.head_commit?.message === "string" ? p.head_commit.message.slice(0, 500) : null,
+    message: typeof headCommit?.message === "string" ? headCommit.message.slice(0, 500) : null,
     author:
-      typeof p.head_commit?.author?.username === "string"
-        ? p.head_commit.author.username
-        : typeof p.head_commit?.author?.name === "string"
-          ? p.head_commit.author.name
+      typeof headCommit?.author?.username === "string"
+        ? headCommit.author.username
+        : typeof headCommit?.author?.name === "string"
+          ? headCommit.author.name
           : null,
     deleted,
-    installationId: typeof p.installation?.id === "number" ? p.installation.id : null,
+    installationId: typeof installation?.id === "number" ? installation.id : null,
   };
 }
 

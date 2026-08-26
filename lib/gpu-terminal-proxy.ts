@@ -26,6 +26,14 @@
  * worker makes with brand-scrub. If those constants ever change, this must
  * change with them.
  */
+interface SshShellStream {
+  on(event: "data" | "close", listener: (chunk: Buffer) => void): void;
+  stderr?: { on(event: "data", listener: (chunk: Buffer) => void): void };
+  write(data: string | Buffer): void;
+  setWindow(rows: number, cols: number, height: number, width: number): void;
+  close(): void;
+}
+
 import { createDecipheriv, pbkdf2Sync } from "crypto";
 import { createClient } from "@supabase/supabase-js";
 // @ts-expect-error ssh2 has no type declarations
@@ -132,7 +140,7 @@ export async function handleGpuTerminal(
   };
 
   ssh.on("ready", () => {
-    ssh.shell({ term: "xterm-256color", cols: 80, rows: 24 }, (err: Error | undefined, stream: any) => {
+    ssh.shell({ term: "xterm-256color", cols: 80, rows: 24 }, (err: Error | undefined, stream: SshShellStream) => {
       if (err) return fail(clientWs, "Could not open shell", err.message);
 
       console.log(
