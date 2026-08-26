@@ -36,6 +36,12 @@ export const WORKLOAD_SEVERITY = [
   "superseded-live",
   "phantom",
   "unplaced",
+  // Not a problem — the platform working as designed. It is a distinct STATE
+  // rather than a finding, and conflating it with `healthy` is what this
+  // status exists to stop: an operator seeing "0 pods, healthy" cannot tell
+  // whether four apps are asleep and saving money or four apps are silently
+  // not running.
+  "asleep",
   "healthy",
 ] as const;
 
@@ -59,6 +65,16 @@ export interface DeploymentRowLike {
   project_id: string;
   /** ISO. Used to decide which of a project's deployments is the newest. */
   created_at?: string;
+  /**
+   * Non-null means asleep ON PURPOSE — scaled to zero by the idle sweep, with
+   * an activator in front of the hostname to wake it on request.
+   *
+   * This is the field that separates a sleeping app from a broken one. Both
+   * are a `ready` row with zero running pods, and without it the two are
+   * indistinguishable in exactly the direction that matters: the platform's
+   * headline cost saving looks identical to four apps being down.
+   */
+  scaled_to_zero_at?: string | null;
 }
 
 export interface PlacementLike {
@@ -82,6 +98,8 @@ export interface WorkloadFinding {
 
 export interface WorkloadDriftReport {
   findings: WorkloadFinding[];
+  /** Deployments asleep on purpose. The cost saving, counted. */
+  asleep: number;
   /** Pods held by workloads the control plane does not account for. */
   unaccountedPods: number;
   /** Every tenant pod observed, accounted for or not. */
@@ -155,6 +173,21 @@ export function reconcileWorkloads(input: WorkloadReconcileInput): WorkloadDrift
           `The control plane believes this deployment failed. Something is serving ` +
           `traffic that nothing intends to be running.`,
         actionable: true,
+      });
+      continue;
+    }
+
+    // Asleep on purpose. Checked BEFORE `down`, because both are a ready row
+    // with zero pods and only `scaled_to_zero_at` tells them apart — and
+    // before `superseded-live`, because a sleeping older revision holds no
+    // pods and is therefore not the cost multiplier that finding is about.
+    if (LIVE_STATES.has(row.state) && pods === 0 && row.scaled_to_zero_at) {
+      findings.push({
+        ...base,
+        status: "asleep",
+        detail: `scaled to zero at ${row.scaled_to_zero_at}, activator serving the hostname`,
+        action: "",
+        actionable: false,
       });
       continue;
     }
@@ -245,6 +278,7 @@ export function reconcileWorkloads(input: WorkloadReconcileInput): WorkloadDrift
 
   return {
     findings,
+    asleep: findings.filter((f) => f.status === "asleep").length,
     unaccountedPods,
     observedPods,
     clean: findings.every((f) => !f.actionable),

@@ -53,7 +53,7 @@ const [rows, placementRows, clusters] = await Promise.all([
   // paas.deployments has no created_at — it tracks queued_at/started_at/ready_at.
   // queued_at is the one that always exists, so it is what orders a project's
   // deployments when deciding which is superseded.
-  db.select<DeploymentRowLike>("deployments", "select=ref,state,project_id,created_at:queued_at"),
+  db.select<DeploymentRowLike>("deployments", "select=ref,state,project_id,scaled_to_zero_at,created_at:queued_at"),
   // deployment_placements keys on deployment_id; resolve to refs so the
   // classifier compares like with like.
   db.select<{ deployment_id: string; namespace: string }>(
@@ -95,7 +95,8 @@ const line = "─".repeat(96);
 console.log(`\nWorkload drift — Kubernetes Deployments vs paas.deployments`);
 console.log(line);
 console.log(
-  `  cluster: ${workloads.length} tenant Deployment(s), ${report.observedPods} pod(s) ready`,
+  `  cluster: ${workloads.length} tenant Deployment(s), ${report.observedPods} pod(s) ready` +
+    (report.asleep ? `, ${report.asleep} asleep on purpose` : ""),
 );
 console.log(`  records: ${rows.length} deployment row(s), ${placements.length} placement(s)`);
 console.log(line);

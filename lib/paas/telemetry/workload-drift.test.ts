@@ -153,6 +153,62 @@ test("a deliberately scaled-to-zero deployment is not down — nothing was asked
   assert.equal(r.clean, true);
 });
 
+test("an app asleep on purpose is `asleep`, not `healthy` — the saving is not silence", () => {
+  // Scale-to-zero landed and four deployments went to 0/0. They all read
+  // HEALTHY, which conflates the platform's headline cost saving with four
+  // apps silently not running. Only scaled_to_zero_at tells them apart.
+  const r = run({
+    workloads: [wl({ desiredReplicas: 0, readyReplicas: 0 })],
+    deployments: [row({ scaled_to_zero_at: "2026-08-26T14:00:00Z" })],
+  });
+
+  const f = only(r);
+  assert.equal(f.status, "asleep");
+  assert.equal(f.actionable, false, "the platform working is not a finding");
+  assert.equal(r.asleep, 1);
+  assert.equal(r.clean, true);
+  assert.match(f.detail, /activator serving the hostname/);
+});
+
+test("asleep is checked before down, since both are a ready row with no pods", () => {
+  // If `down` ran first, an app that scale-to-zero put to sleep with
+  // replicas still nominally 1 would be reported as an outage.
+  const r = run({
+    workloads: [wl({ desiredReplicas: 1, readyReplicas: 0 })],
+    deployments: [row({ scaled_to_zero_at: "2026-08-26T14:00:00Z" })],
+  });
+
+  assert.equal(only(r).status, "asleep");
+  assert.equal(r.clean, true);
+});
+
+test("a ready row with no pods and NO scaled_to_zero_at is still down", () => {
+  // The distinction has to cut both ways or it just suppresses the outage.
+  const r = run({
+    workloads: [wl({ desiredReplicas: 1, readyReplicas: 0 })],
+    deployments: [row({ scaled_to_zero_at: null })],
+  });
+
+  assert.equal(only(r).status, "down");
+  assert.equal(r.clean, false);
+});
+
+test("a sleeping older revision is not superseded-live — it holds no pods to multiply", () => {
+  const r = run({
+    workloads: [
+      wl({ deploymentRef: "dpl_old", desiredReplicas: 0, readyReplicas: 0 }),
+      wl({ deploymentRef: "dpl_new" }),
+    ],
+    deployments: [
+      row({ ref: "dpl_old", created_at: "2026-08-26T09:00:00Z", scaled_to_zero_at: "2026-08-26T14:00:00Z" }),
+      row({ ref: "dpl_new", created_at: "2026-08-26T11:00:00Z" }),
+    ],
+  });
+
+  assert.equal(r.findings.find((f) => f.deploymentRef === "dpl_old")?.status, "asleep");
+  assert.equal(r.findings.some((f) => f.status === "superseded-live"), false);
+});
+
 // ── the control plane contradicting reality ─────────────────────────────────
 
 test("a row saying error while pods serve is terminal-live, and counts as unaccounted", () => {

@@ -275,7 +275,7 @@ export async function workloadView(): Promise<WorkloadView> {
     .map(workloadFrom);
 
   const [rows, placementRows, withIds, clusters] = await Promise.all([
-    db.select<DeploymentRowLike>("deployments", "select=ref,state,project_id,created_at:queued_at"),
+    db.select<DeploymentRowLike>("deployments", "select=ref,state,project_id,scaled_to_zero_at,created_at:queued_at"),
     db.select<{ deployment_id: string; namespace: string }>(
       "deployment_placements",
       "select=deployment_id,namespace",
