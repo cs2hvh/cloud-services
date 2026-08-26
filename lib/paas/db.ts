@@ -206,3 +206,149 @@ export const buildVms = {
       "select=*&state=in.(requested,provisioning,running,releasing)&order=created_at",
     ),
 };
+
+// ── teams, projects, deployments, aliases ───────────────────────────────────
+//
+// These are TENANT tables. Everything here uses the service role and is for
+// reconcilers and provisioning scripts only. Anything acting on behalf of a
+// user must go through an RLS-scoped client instead — v1 used the service-role
+// client for 100% of tenant queries and reduced its own RLS to decoration.
+
+export interface TeamRow { id: string; ref: string; slug: string; name: string }
+export interface ProjectRow {
+  id: string; ref: string; team_id: string; name: string; slug: string;
+  provider: "github" | "gitlab" | "bitbucket";
+  repo_id: string; repo_full_name: string; installation_id: number | null;
+  production_branch: string; root_directory: string | null; framework: string | null;
+}
+export interface EnvironmentRow { id: string; ref: string; project_id: string; kind: string; name: string }
+export interface DeploymentRow {
+  id: string; ref: string; project_id: string; environment_id: string;
+  state: "queued" | "building" | "publishing" | "ready" | "error" | "canceled";
+  trigger: string; git_sha: string; git_ref: string;
+  image_repo: string | null; image_digest: string | null;
+  error_code: string | null; error_message: string | null;
+  queued_at: string; started_at: string | null; ready_at: string | null;
+}
+export interface AliasRow {
+  id: string; ref: string; project_id: string; hostname: string;
+  kind: "production" | "branch" | "deployment" | "custom";
+  deployment_id: string | null;
+}
+
+export const teams = {
+  bySlug: async (slug: string) =>
+    (await db.select<TeamRow>("teams", `select=*&slug=eq.${slug}`))[0] ?? null,
+  create: async (input: { slug: string; name: string; createdBy: string }) =>
+    (await db.insert<TeamRow>("teams", {
+      slug: input.slug, name: input.name, created_by: input.createdBy,
+    }))[0],
+};
+
+export const projects = {
+  list: () => db.select<ProjectRow>("projects", "select=*&deleted_at=is.null&order=created_at"),
+  byRef: async (ref: string) =>
+    (await db.select<ProjectRow>("projects", `select=*&ref=eq.${ref}`))[0] ?? null,
+  bySlug: async (teamId: string, slug: string) =>
+    (await db.select<ProjectRow>(
+      "projects", `select=*&team_id=eq.${teamId}&slug=eq.${slug}&deleted_at=is.null`,
+    ))[0] ?? null,
+  create: async (input: {
+    teamId: string; name: string; slug: string;
+    provider: "github" | "gitlab" | "bitbucket";
+    repoId: string; repoFullName: string; installationId?: number | null;
+    productionBranch?: string; rootDirectory?: string | null; framework?: string | null;
+  }) =>
+    (await db.insert<ProjectRow>("projects", {
+      team_id: input.teamId, name: input.name, slug: input.slug,
+      provider: input.provider, repo_id: input.repoId, repo_full_name: input.repoFullName,
+      installation_id: input.installationId ?? null,
+      production_branch: input.productionBranch ?? "main",
+      root_directory: input.rootDirectory ?? null,
+      framework: input.framework ?? null,
+    }))[0],
+};
+
+export const environments = {
+  forProject: (projectId: string) =>
+    db.select<EnvironmentRow>("environments", `select=*&project_id=eq.${projectId}`),
+  production: async (projectId: string) =>
+    (await db.select<EnvironmentRow>(
+      "environments", `select=*&project_id=eq.${projectId}&kind=eq.production`,
+    ))[0] ?? null,
+  create: async (input: { projectId: string; kind: string; name: string }) =>
+    (await db.insert<EnvironmentRow>("environments", {
+      project_id: input.projectId, kind: input.kind, name: input.name,
+    }))[0],
+};
+
+export const deployments = {
+  byRef: async (ref: string) =>
+    (await db.select<DeploymentRow>("deployments", `select=*&ref=eq.${ref}`))[0] ?? null,
+  forProject: (projectId: string, limit = 50) =>
+    db.select<DeploymentRow>(
+      "deployments", `select=*&project_id=eq.${projectId}&order=queued_at.desc&limit=${limit}`,
+    ),
+  /** Ready deployments, newest first — the rollback candidate list. */
+  readyForProject: (projectId: string, limit = 20) =>
+    db.select<DeploymentRow>(
+      "deployments",
+      `select=*&project_id=eq.${projectId}&state=eq.ready&order=ready_at.desc&limit=${limit}`,
+    ),
+  create: async (input: {
+    projectId: string; environmentId: string; trigger: string;
+    gitSha: string; gitRef: string; gitMessage?: string | null;
+  }) =>
+    (await db.insert<DeploymentRow>("deployments", {
+      project_id: input.projectId, environment_id: input.environmentId,
+      trigger: input.trigger, git_sha: input.gitSha, git_ref: input.gitRef,
+      git_message: input.gitMessage ?? null, state: "queued",
+    }))[0],
+  /**
+   * Advance state. The DB trigger refuses to move a terminal deployment or to
+   * rewrite an image_digest, so an out-of-order or duplicate finalization is
+   * rejected by the database rather than silently overwriting — which is
+   * exactly what v1's two racing finalizers did to each other.
+   */
+  setState: async (ref: string, patch: {
+    state?: DeploymentRow["state"];
+    imageRepo?: string; imageDigest?: string;
+    errorCode?: string; errorMessage?: string;
+    startedAt?: boolean; readyAt?: boolean;
+  }) =>
+    (await db.update<DeploymentRow>("deployments", `ref=eq.${ref}`, {
+      ...(patch.state ? { state: patch.state } : {}),
+      ...(patch.imageRepo ? { image_repo: patch.imageRepo } : {}),
+      ...(patch.imageDigest ? { image_digest: patch.imageDigest } : {}),
+      ...(patch.errorCode ? { error_code: patch.errorCode } : {}),
+      ...(patch.errorMessage ? { error_message: patch.errorMessage.slice(0, 2000) } : {}),
+      ...(patch.startedAt ? { started_at: new Date().toISOString() } : {}),
+      ...(patch.readyAt ? { ready_at: new Date().toISOString() } : {}),
+    }))[0],
+};
+
+export const aliases = {
+  all: () => db.select<AliasRow>("aliases", "select=*&order=created_at"),
+  forProject: (projectId: string) =>
+    db.select<AliasRow>("aliases", `select=*&project_id=eq.${projectId}`),
+  production: async (projectId: string) =>
+    (await db.select<AliasRow>(
+      "aliases", `select=*&project_id=eq.${projectId}&kind=eq.production`,
+    ))[0] ?? null,
+  byHostname: async (hostname: string) =>
+    (await db.select<AliasRow>("aliases", `select=*&hostname=eq.${hostname.toLowerCase()}`))[0] ?? null,
+  create: async (input: {
+    projectId: string; hostname: string; kind: AliasRow["kind"]; deploymentId?: string | null;
+  }) =>
+    (await db.insert<AliasRow>("aliases", {
+      project_id: input.projectId, hostname: input.hostname.toLowerCase(),
+      kind: input.kind, deployment_id: input.deploymentId ?? null,
+    }))[0],
+  /**
+   * Promotion AND rollback are both this one call. No rebuild, no retag, no new
+   * image. v1's rollback re-pointed a mutable Docker Hub tag that nothing
+   * pruned or guaranteed still existed.
+   */
+  point: async (ref: string, deploymentId: string) =>
+    (await db.update<AliasRow>("aliases", `ref=eq.${ref}`, { deployment_id: deploymentId }))[0],
+};

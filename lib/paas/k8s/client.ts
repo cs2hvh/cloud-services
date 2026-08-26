@@ -65,7 +65,36 @@ interface RequestOptions {
 }
 
 export function kube(ctx: KubeContext) {
-  function raw<T>(opts: RequestOptions): Promise<T | null> {
+  /**
+   * Retry transient failures.
+   *
+   * Every operation this client performs is idempotent — GETs, Server-Side
+   * Apply, and scale patches all converge rather than accumulate — so a retry
+   * cannot double-apply anything. Worth doing because the reconciler moves
+   * production traffic: a 30-second API blip aborted a rollback mid-flight
+   * once, leaving the alias updated in the database while the cluster still
+   * served the old deployment. Divergence between desired and actual state is
+   * exactly what this loop exists to prevent.
+   *
+   * 5xx and timeouts retry. 4xx does not: a rejected request is rejected.
+   */
+  async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
+    let lastError: unknown;
+    for (let i = 0; i < attempts; i++) {
+      try {
+        return await fn();
+      } catch (e) {
+        lastError = e;
+        const status = e instanceof KubeError ? e.status : undefined;
+        const retryable = status === undefined || status >= 500 || status === 429;
+        if (!retryable || i === attempts - 1) throw e;
+        await new Promise((r) => setTimeout(r, 1000 * 2 ** i + Math.floor(Math.random() * 400)));
+      }
+    }
+    throw lastError;
+  }
+
+  function rawOnce<T>(opts: RequestOptions): Promise<T | null> {
     const url = new URL(opts.path, ctx.server);
     const payload =
       opts.body === undefined
@@ -92,7 +121,7 @@ export function kube(ctx: KubeContext) {
                 }
               : {}),
           },
-          timeout: 30_000,
+          timeout: 45_000,
         },
         (res) => {
           const chunks: Buffer[] = [];
@@ -126,6 +155,8 @@ export function kube(ctx: KubeContext) {
       req.end();
     });
   }
+
+  const raw = <T>(opts: RequestOptions): Promise<T | null> => withRetry(() => rawOnce<T>(opts));
 
   return {
     raw,
