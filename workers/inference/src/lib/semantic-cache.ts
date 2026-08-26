@@ -26,6 +26,25 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Env } from "../types.ts";
 
+/**
+ * Master switch for the semantic cache — currently OFF.
+ *
+ * The cache works by embedding the incoming prompt and looking for a stored
+ * response within SIMILARITY_THRESHOLD cosine distance. That embed step needs
+ * an embeddings endpoint, and the platform's upstream (Wokey) serves none —
+ * see routes/embeddings.ts for the detail.
+ *
+ * Both public entry points short-circuit on this flag, so the cache degrades
+ * to a permanent miss: every request goes upstream, nothing breaks, no error
+ * is surfaced to the caller. The alternative — letting embedPrompt() throw on
+ * every single request and relying on the catch below — would work too, but
+ * it would burn a 4-second timeout and log an exception per request.
+ *
+ * Flip back to true only once an embeddings provider is configured AND
+ * EMBED_MODEL below points at a model that provider actually serves.
+ */
+export const SEMANTIC_CACHE_AVAILABLE = false;
+
 export const SIMILARITY_THRESHOLD = 0.95;
 export const TTL_SECONDS = 3600; // 1 hour
 const EMBED_MODEL = "openai/text-embedding-3-small";
@@ -120,16 +139,31 @@ export function temperatureBucket(t: number | null | undefined): number {
  * skips the cache on failure rather than blocking the request path.
  */
 async function embedPrompt(env: Env, text: string, upstreamKey: string): Promise<number[]> {
+  // Unreachable while SEMANTIC_CACHE_AVAILABLE is false. Kept wired to a
+  // dedicated, optional embeddings provider rather than deleted, so turning
+  // the cache back on is a configuration change (set EMBEDDINGS_BASE_URL,
+  // optionally EMBEDDINGS_API_KEY, flip the flag) instead of a code rewrite.
+  //
+  // The key falls back to the caller's upstream key, which is correct only
+  // when the embeddings provider IS the main upstream. When it isn't — the
+  // likely case, since the main upstream serves no embeddings — set
+  // EMBEDDINGS_API_KEY explicitly.
+  if (!env.EMBEDDINGS_BASE_URL) {
+    throw new Error(
+      "No embeddings provider configured (EMBEDDINGS_BASE_URL unset)"
+    );
+  }
+  const embedKey = env.EMBEDDINGS_API_KEY ?? upstreamKey;
+
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), EMBED_TIMEOUT_MS);
   try {
-    const r = await fetch(`${env.OPENROUTER_BASE_URL}/embeddings`, {
+    const r = await fetch(`${env.EMBEDDINGS_BASE_URL}/embeddings`, {
       method: "POST",
       signal: ctrl.signal,
       headers: {
-        Authorization: `Bearer ${upstreamKey}`,
+        Authorization: `Bearer ${embedKey}`,
         "Content-Type": "application/json",
-        "X-Title": "AhuraCloud Inference (semantic cache)",
       },
       body: JSON.stringify({
         model: EMBED_MODEL,
@@ -160,6 +194,7 @@ async function embedPrompt(env: Env, text: string, upstreamKey: string): Promise
 export async function lookupSemanticCache(
   input: SemanticCacheLookupInput
 ): Promise<SemanticCacheHit | null> {
+  if (!SEMANTIC_CACHE_AVAILABLE) return null;
   try {
     const embedding = await embedPrompt(input.env, input.promptText, input.upstreamKey);
     const supabase = createClient(
@@ -236,6 +271,7 @@ export async function lookupSemanticCache(
  * since the actual response has already been served to the user.
  */
 export async function writeSemanticCache(input: SemanticCacheWriteInput): Promise<void> {
+  if (!SEMANTIC_CACHE_AVAILABLE) return;
   try {
     const embedding = await embedPrompt(input.env, input.promptText, input.upstreamKey);
     const supabase = createClient(

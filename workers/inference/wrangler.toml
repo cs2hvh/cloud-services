@@ -106,7 +106,7 @@ max_concurrency = 2
 # Environment variables
 # ───────────────────────────────────────────────────────────────
 [vars]
-OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+WOKEY_BASE_URL = "https://api.wokey.ai/v1"
 SUPABASE_URL = "https://xafjjpgazdxhktpfeuri.supabase.co"
 GATEWAY_VERSION = "0.1.0"
 ENV = "production"
@@ -118,7 +118,10 @@ CONTROL_PLANE_URL = "https://ahurasense.com"
 
 # Secrets (set via `wrangler secret put` — never commit values):
 #   • SUPABASE_SERVICE_ROLE_KEY  — for inference.lookup_api_key RPC
-#   • OPENROUTER_PLATFORM_KEY    — used for platform-billed requests
+#   • WOKEY_PLATFORM_KEY         — used for platform-billed requests. MUST be
+#                                  set before deploy; the gateway throws a
+#                                  clear error rather than sending
+#                                  `Bearer undefined` upstream.
 #   • BYOK_DEK                   — AES-GCM data encryption key (matches Postgres kms_key_version)
 #   • OTEL_EXPORTER_OTLP_HEADERS — auth header for OTel collector
 #   • BATCH_PROCESSOR_TOKEN      — shared cron secret. MUST equal the

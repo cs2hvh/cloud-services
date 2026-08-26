@@ -7,7 +7,7 @@
  *
  *   • Streams the input file from R2 line-by-line
  *   • Each line is { custom_id, method, url, body } per OpenAI spec
- *   • Fires each request at OPENROUTER directly (bypassing the Workers
+ *   • Fires each request at the WOKEY upstream directly (bypassing the Workers
  *     gateway so we can mark usage rows with is_batch=true at insert time)
  *   • Writes one response line per input line to the output JSONL
  *   • Failures go to an error JSONL
@@ -41,7 +41,7 @@ function makeFileId(): string {
   return `file_${crypto.randomUUID().replace(/-/g, "").slice(0, 24)}`;
 }
 
-const OPENROUTER_BASE = process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1";
+const WOKEY_BASE = process.env.WOKEY_BASE_URL ?? "https://api.wokey.ai/v1";
 // 50% off the platform rate — OpenAI-equivalent discount tier.
 const BATCH_DISCOUNT_FACTOR = 0.5;
 // Per-request fetch timeout. Keeps a single slow upstream from wedging the whole batch.
@@ -123,9 +123,9 @@ export async function POST(
 
   // ─── Resolve the upstream OpenRouter key (platform billing only
   //     for batch — BYOK in async land is hairy and out of scope). ──
-  const upstreamKey = process.env.OPENROUTER_PLATFORM_KEY;
+  const upstreamKey = process.env.WOKEY_PLATFORM_KEY;
   if (!upstreamKey) {
-    console.error("[Inference Batches] OPENROUTER_PLATFORM_KEY missing — batch cannot run");
+    console.error("[Inference Batches] WOKEY_PLATFORM_KEY missing — batch cannot run");
     await supabase
       .schema("inference")
       .from("batches")
@@ -232,7 +232,7 @@ export async function POST(
     try {
       const ctrl = new AbortController();
       const t = setTimeout(() => ctrl.abort(), PER_REQUEST_TIMEOUT_MS);
-      resp = await fetch(`${OPENROUTER_BASE}${upstreamPath}`, {
+      resp = await fetch(`${WOKEY_BASE}${upstreamPath}`, {
         method: parsed.method ?? "POST",
         headers: {
           "Content-Type": "application/json",

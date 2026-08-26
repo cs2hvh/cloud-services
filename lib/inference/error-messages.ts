@@ -36,12 +36,30 @@ export function customerSafeErrorMessage(raw: string | null | undefined): string
   if (/out of memory|cuda out of memory|outofmemory/i.test(raw)) {
     return "The model was too large for the selected GPU. Re-run on a larger GPU, use qLoRA, or pick a smaller base model.";
   }
+  // Upstream JSON-schema validation dump. Scrubbing the provider name out of
+  // these still leaves unreadable spec prose ("At #/paths/pods/post ... the
+  // request body is defined as an object"), and none of it is actionable: the
+  // customer chose from a list we rendered, so a rejected field means OUR
+  // catalog is out of step with what the provider will accept.
+  if (
+    /does not meet the schema requirements|#\/paths\/|properties\/[\w/]+\/(enum|items)/i.test(raw)
+  ) {
+    return "That configuration was rejected — the selected GPU or image can't be deployed right now. Try a different GPU, or contact support if it persists.";
+  }
   // Any raw Python traceback / stderr dump — never show internals or file paths.
   if (/traceback \(most recent call last\)|file "\/|\b(os|io|runtime|import|value|key|type)error\b|modulenotfounderror|assertionerror/i.test(raw)) {
     return "Training failed while running. Check your dataset format and hyperparameters, then re-run; contact support if it keeps failing.";
   }
 
   return raw
+    // URLs first, before the vendor-name rules below. A bare
+    // /\bRunPod\b/ pass over "https://rest.runpod.io/v1/pods" rewrites the
+    // host in place and leaves "https://rest.GPU compute.io/v1/instances" —
+    // which still discloses that an upstream exists, at what path, and is
+    // gibberish to the reader. Strip the whole URL instead.
+    .replace(/\bhttps?:\/\/\S+/gi, "the upstream service")
+    // Bare hostnames that survive URL stripping (e.g. "at rest.runpod.io").
+    .replace(/\b[\w-]+\.(runpod|wokey|openrouter|linode|upstash)\.\w+/gi, "the upstream service")
     .replace(/\bRunPod\b/gi, "GPU compute")
     .replace(/\bUpstash\b/gi, "cache")
     .replace(/\bCloudflare\b/gi, "edge")

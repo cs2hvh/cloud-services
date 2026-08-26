@@ -1,8 +1,9 @@
 /**
  * Custom Next.js server with VNC WebSocket proxy.
  *
- * This wraps the standard Next.js HTTP server and adds a WebSocket
- * upgrade handler on /ws/vnc for proxying VNC traffic to Proxmox.
+ * This wraps the standard Next.js HTTP server and adds WebSocket
+ * upgrade handlers: /ws/vnc proxies VNC to Proxmox, /ws/gpu-terminal
+ * bridges an authenticated browser terminal to a GPU pod over SSH.
  *
  * Usage:
  *   DEV:   tsx server.ts
@@ -14,6 +15,8 @@ import { parse } from 'url';
 import next from 'next';
 import { WebSocketServer, WebSocket } from 'ws';
 import { validateVncToken } from './lib/vnc-token';
+import { validateGpuTerminalToken } from './lib/gpu-terminal-token';
+import { handleGpuTerminal } from './lib/gpu-terminal-proxy';
 
 const dev = process.env.NODE_ENV !== 'production';
 const hostname = process.env.HOSTNAME || '0.0.0.0';
@@ -39,8 +42,37 @@ app.prepare().then(() => {
   // Remove Next.js upgrade listeners so we can intercept first
   server.removeAllListeners('upgrade');
 
+  // ── GPU web terminal (WebSocket ⇄ SSH) ───────────────
+  // Separate WebSocketServer from the VNC one: different payload type, and
+  // keeping them apart means a bug in either cannot deliver a connection to
+  // the wrong handler.
+  const termWss = new WebSocketServer({ noServer: true });
+  termWss.on('connection', (clientWs: WebSocket, _req: unknown, payload: unknown) => {
+    void handleGpuTerminal(
+      clientWs,
+      payload as NonNullable<ReturnType<typeof validateGpuTerminalToken>>
+    );
+  });
+
   server.on('upgrade', (req, socket, head) => {
     const { pathname, query } = parse(req.url!, true);
+
+    if (pathname === '/ws/gpu-terminal') {
+      const token = query.token as string;
+      // Same failure shape for missing and invalid: a client that can tell
+      // "no token" from "bad token" learns nothing useful, but a client that
+      // can tell "bad signature" from "unknown pod" could probe pod ids.
+      const payload = token ? validateGpuTerminalToken(token) : null;
+      if (!payload) {
+        socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+        socket.destroy();
+        return;
+      }
+      termWss.handleUpgrade(req, socket, head, (clientWs) => {
+        termWss.emit('connection', clientWs, req, payload);
+      });
+      return;
+    }
 
     // Only handle VNC WebSocket upgrades; everything else goes to Next.js HMR
     if (pathname !== '/ws/vnc') {
@@ -177,5 +209,6 @@ app.prepare().then(() => {
   server.listen(port, () => {
     console.log(`> Ready on http://${hostname}:${port}`);
     console.log(`> VNC WebSocket proxy active on /ws/vnc`);
+    console.log(`> GPU terminal proxy active on /ws/gpu-terminal`);
   });
 });
