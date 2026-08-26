@@ -23,12 +23,22 @@ export default async function PanelLayout({
     <div className="flex h-screen overflow-hidden">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center justify-between border-b border-border px-6">
-          <div />
+        <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-black/20 px-6">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-300">
+            Production data
+          </span>
           <div className="flex items-center gap-3">
-            <span className="text-sm text-muted-foreground">
-              {admin.email}
-            </span>
+            <div className="flex items-center gap-2">
+              <span
+                className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold text-white"
+                style={{
+                  background: "linear-gradient(135deg, #3987e5 0%, #9085e9 100%)",
+                }}
+              >
+                {(admin.email || "?").slice(0, 1).toUpperCase()}
+              </span>
+              <span className="text-sm text-muted-foreground">{admin.email}</span>
+            </div>
             <SignOutButton />
           </div>
         </header>

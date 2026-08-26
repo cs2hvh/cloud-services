@@ -34,31 +34,39 @@ export type AdminSection = {
   icon: LucideIcon;
   migrated: boolean;
   description: string;
+  group: string;
 };
 
 export const MAIN_APP_URL =
   process.env.NEXT_PUBLIC_MAIN_APP_URL || "https://ahuracloud.com";
 
+/** Group render order for the sidebar and overview. "" renders ungrouped at top. */
+export const SECTION_GROUPS = ["", "Platform", "Compute", "Services", "Commerce"];
+
 export const ADMIN_SECTIONS: AdminSection[] = [
-  { title: "Overview", slug: "", icon: LayoutDashboard, migrated: true, description: "Admin home" },
-  { title: "Users", slug: "users", icon: Users, migrated: true, description: "Accounts, roles, suspensions" },
-  { title: "Support", slug: "support", icon: LifeBuoy, migrated: true, description: "Tickets and replies" },
-  { title: "Pricing", slug: "pricing", icon: BadgeDollarSign, migrated: false, description: "Plans, promos, categories" },
-  { title: "Coupons", slug: "coupons", icon: TicketPercent, migrated: false, description: "Discount codes" },
-  { title: "Servers", slug: "servers", icon: Server, migrated: true, description: "Customer VMs — fleet, actions, revenue" },
-  { title: "Hosts", slug: "hosts", icon: HardDrive, migrated: false, description: "Proxmox hypervisors" },
-  { title: "GPU", slug: "gpu", icon: Cpu, migrated: false, description: "GPU inventory and sync" },
-  { title: "Game", slug: "game", icon: Gamepad2, migrated: false, description: "Game hosting console" },
-  { title: "Linode Console", slug: "servers/linode", icon: Cloud, migrated: true, description: "Catalog, pricing, kill-switch" },
-  { title: "Kubernetes", slug: "kubernetes", icon: Boxes, migrated: false, description: "Managed clusters" },
-  { title: "Databases", slug: "databases", icon: Database, migrated: false, description: "Managed databases" },
-  { title: "Network & DDoS", slug: "network-ddos", icon: ShieldAlert, migrated: false, description: "Spectrum apps" },
-  { title: "Object Storage", slug: "object-storage", icon: Archive, migrated: false, description: "Buckets and spaces" },
-  { title: "Platform Apps", slug: "platform-apps", icon: AppWindow, migrated: false, description: "PaaS deployments" },
-  { title: "Cluster Monitor", slug: "cluster-monitor", icon: Activity, migrated: false, description: "Internal cluster health" },
-  { title: "Domains", slug: "domains", icon: Globe, migrated: false, description: "Registrations and transfers" },
-  { title: "AI Agents", slug: "ai-agents", icon: Bot, migrated: false, description: "Agents, models, usage" },
-  { title: "Audit Logs", slug: "audit-logs", icon: ScrollText, migrated: false, description: "Admin activity trail" },
+  { title: "Overview", slug: "", icon: LayoutDashboard, migrated: true, description: "Admin home", group: "" },
+
+  { title: "Users", slug: "users", icon: Users, migrated: true, description: "Accounts, roles, suspensions", group: "Platform" },
+  { title: "Support", slug: "support", icon: LifeBuoy, migrated: true, description: "Tickets and replies", group: "Platform" },
+  { title: "Audit Logs", slug: "audit-logs", icon: ScrollText, migrated: false, description: "Admin activity trail", group: "Platform" },
+
+  { title: "Servers", slug: "servers", icon: Server, migrated: true, description: "Customer VMs — fleet, actions, revenue", group: "Compute" },
+  { title: "Linode Console", slug: "servers/linode", icon: Cloud, migrated: true, description: "Catalog, pricing, kill-switch", group: "Compute" },
+  { title: "Hosts", slug: "hosts", icon: HardDrive, migrated: false, description: "Proxmox hypervisors", group: "Compute" },
+  { title: "GPU", slug: "gpu", icon: Cpu, migrated: false, description: "GPU inventory and sync", group: "Compute" },
+  { title: "Game", slug: "game", icon: Gamepad2, migrated: false, description: "Game hosting console", group: "Compute" },
+  { title: "Kubernetes", slug: "kubernetes", icon: Boxes, migrated: false, description: "Managed clusters", group: "Compute" },
+
+  { title: "AI Labs", slug: "ai-agents", icon: Bot, migrated: false, description: "Inference platform", group: "Services" },
+  { title: "Databases", slug: "databases", icon: Database, migrated: false, description: "Managed databases", group: "Services" },
+  { title: "Object Storage", slug: "object-storage", icon: Archive, migrated: false, description: "Buckets and spaces", group: "Services" },
+  { title: "Network & DDoS", slug: "network-ddos", icon: ShieldAlert, migrated: false, description: "Spectrum apps", group: "Services" },
+  { title: "Platform Apps", slug: "platform-apps", icon: AppWindow, migrated: false, description: "PaaS deployments", group: "Services" },
+  { title: "Domains", slug: "domains", icon: Globe, migrated: false, description: "Registrations and transfers", group: "Services" },
+  { title: "Cluster Monitor", slug: "cluster-monitor", icon: Activity, migrated: false, description: "Internal cluster health", group: "Services" },
+
+  { title: "Pricing", slug: "pricing", icon: BadgeDollarSign, migrated: false, description: "Plans, promos, categories", group: "Commerce" },
+  { title: "Coupons", slug: "coupons", icon: TicketPercent, migrated: false, description: "Discount codes", group: "Commerce" },
 ];
 
 export function sectionHref(section: AdminSection): string {

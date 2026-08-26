@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Open_Sans, Geist_Mono } from "next/font/google";
+import { Open_Sans, Geist_Mono, Sora } from "next/font/google";
 import { Toaster } from "sonner";
 import "./globals.css";
 
@@ -12,6 +12,12 @@ const openSans = Open_Sans({
 const geistMono = Geist_Mono({
   subsets: ["latin"],
   variable: "--font-geist-mono",
+  display: "swap",
+});
+
+const sora = Sora({
+  subsets: ["latin"],
+  variable: "--font-sora",
   display: "swap",
 });
 
@@ -31,7 +37,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body
-        className={`${openSans.variable} ${geistMono.variable} bg-background text-foreground antialiased`}
+        className={`${openSans.variable} ${geistMono.variable} ${sora.variable} bg-background text-foreground antialiased`}
       >
         {children}
         <Toaster position="top-right" theme="dark" richColors />

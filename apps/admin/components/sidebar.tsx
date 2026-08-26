@@ -3,8 +3,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ExternalLink, ShieldCheck } from "lucide-react";
-import { ADMIN_SECTIONS, sectionHref } from "@admin/lib/sections";
+import {
+  ADMIN_SECTIONS,
+  SECTION_GROUPS,
+  sectionHref,
+  type AdminSection,
+} from "@admin/lib/sections";
 import { cn } from "@/lib/utils";
+
+const ACCENT = "#3987e5";
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -18,43 +25,85 @@ export function Sidebar() {
     )
     .sort((a, b) => b.length - a.length)[0];
 
+  const renderItem = (section: AdminSection) => {
+    const href = sectionHref(section);
+    const active = section.migrated && href === activeHref;
+
+    const inner = (
+      <>
+        {/* active accent bar */}
+        <span
+          className={cn(
+            "absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-full transition-opacity",
+            active ? "opacity-100" : "opacity-0",
+          )}
+          style={{ backgroundColor: ACCENT }}
+        />
+        <section.icon
+          className="h-4 w-4 shrink-0 transition-colors"
+          style={active ? { color: ACCENT } : undefined}
+        />
+        <span className="flex-1 truncate">{section.title}</span>
+        {!section.migrated && (
+          <ExternalLink className="h-3 w-3 shrink-0 opacity-40" />
+        )}
+      </>
+    );
+
+    const className = cn(
+      "relative flex items-center gap-2.5 rounded-md px-3 py-[7px] text-[13px] transition-colors",
+      active
+        ? "bg-[#3987e5]/10 font-medium text-foreground"
+        : "text-muted-foreground hover:bg-white/[0.04] hover:text-foreground",
+    );
+
+    return section.migrated ? (
+      <Link key={section.slug} href={href} className={className}>
+        {inner}
+      </Link>
+    ) : (
+      <a key={section.slug} href={href} className={className}>
+        {inner}
+      </a>
+    );
+  };
+
   return (
-    <aside className="flex h-screen w-60 shrink-0 flex-col border-r border-border bg-card/40">
-      <div className="flex h-14 items-center gap-2 border-b border-border px-4">
-        <ShieldCheck className="h-5 w-5" />
-        <span className="text-sm font-semibold tracking-wide">
-          AhuraSense Admin
-        </span>
+    <aside className="flex h-screen w-60 shrink-0 flex-col border-r border-border bg-black/30">
+      <div className="flex h-14 items-center gap-2.5 border-b border-border px-4">
+        <div
+          className="flex h-7 w-7 items-center justify-center rounded-lg"
+          style={{
+            background: "linear-gradient(135deg, #3987e5 0%, #9085e9 100%)",
+          }}
+        >
+          <ShieldCheck className="h-4 w-4 text-white" />
+        </div>
+        <div className="leading-tight">
+          <div className="font-heading text-[13px] font-semibold tracking-wide">
+            AhuraSense
+          </div>
+          <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+            Admin
+          </div>
+        </div>
       </div>
 
-      <nav className="flex-1 space-y-0.5 overflow-y-auto p-2 custom-scrollbar">
-        {ADMIN_SECTIONS.map((section) => {
-          const href = sectionHref(section);
-          const active = section.migrated && href === activeHref;
-
-          const className = cn(
-            "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors",
-            active
-              ? "bg-accent text-accent-foreground"
-              : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
-          );
-
-          if (!section.migrated) {
-            // Not migrated yet — jump to the section in the main app.
-            return (
-              <a key={section.slug} href={href} className={className}>
-                <section.icon className="h-4 w-4 shrink-0" />
-                <span className="flex-1 truncate">{section.title}</span>
-                <ExternalLink className="h-3 w-3 shrink-0 opacity-50" />
-              </a>
-            );
-          }
-
+      <nav className="flex-1 overflow-y-auto px-2 pb-4 custom-scrollbar">
+        {SECTION_GROUPS.map((group) => {
+          const items = ADMIN_SECTIONS.filter((s) => s.group === group);
+          if (items.length === 0) return null;
           return (
-            <Link key={section.slug} href={href} className={className}>
-              <section.icon className="h-4 w-4 shrink-0" />
-              <span className="flex-1 truncate">{section.title}</span>
-            </Link>
+            <div key={group || "root"}>
+              {group ? (
+                <div className="px-3 pb-1 pt-5 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground/60">
+                  {group}
+                </div>
+              ) : (
+                <div className="pt-2" />
+              )}
+              <div className="space-y-0.5">{items.map(renderItem)}</div>
+            </div>
           );
         })}
       </nav>

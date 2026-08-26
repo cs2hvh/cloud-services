@@ -7,3 +7,8 @@
 @source "../../../components";
 @source "../app";
 @source "../components";
+
+/* Headings wear Sora; body copy stays Open Sans. */
+.font-heading {
+  font-family: var(--font-sora), var(--font-open-sans), sans-serif;
+}
