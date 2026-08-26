@@ -175,4 +175,9 @@ console.log(
     `  it is busy or idle. What varies, and what this watches, is whether the app\n` +
     `  still fits the tier it is on.\n`,
 );
-process.exit(fleet.withFindings > 0 || skipped.length > 0 ? EXIT_FINDINGS : EXIT_CLEAN);
+
+// Assigned, not called. `process.exit()` here aborted on Windows with a libuv
+// assertion after printing the report in full — the shell saw 127, a crash,
+// rather than the verdict. Assigning lets Node drain stdout and exit with the
+// code intact. See preview-reap.ts for the same fix and the full note.
+process.exitCode = fleet.withFindings > 0 || skipped.length > 0 ? EXIT_FINDINGS : EXIT_CLEAN;
