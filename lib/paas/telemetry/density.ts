@@ -122,6 +122,102 @@ export function costPerPod(nodeMonthlyUsd: number, pods: number): number | null 
   return pods > 0 ? nodeMonthlyUsd / pods : null;
 }
 
+// ── reading the claim out of the doc ────────────────────────────────────────
+
+export interface DensityClaim {
+  podLabel: string;
+  podBytes: number;
+  pods: number;
+  costUsd: number;
+}
+
+export interface PricingClaim {
+  nodeType: string;
+  usableClaimGb: number;
+  rows: DensityClaim[];
+}
+
+/**
+ * Parse the pod-density table out of 05-pricing.md.
+ *
+ * PARSED RATHER THAN TRANSCRIBED, and the difference matters. A hand-copied
+ * constant is a second copy of a fact, and this lane has now shipped stale
+ * prose three times for exactly that reason — tests compare code to code, and
+ * nothing compares a sentence to the world. Reading the doc makes the doc the
+ * single copy, so correcting it moves the checker with it.
+ *
+ * Returns null — never a partial or empty table — when the shape is not
+ * recognised. A caller must treat that as "could not read the claim" and refuse
+ * to run, because an empty claim list compares clean against anything and would
+ * report a table it never actually read as verified. That is this lane's
+ * recurring defect, and it would be at its most convincing here.
+ *
+ * The doc writes tier sizes as "512 MB". They denote Kubernetes quantities —
+ * the Starter tier is `512Mi` in manifests — so they are read as binary.
+ */
+export function parseDensityTable(markdown: string): PricingClaim | null {
+  // The heading line carries the shape and the usable claim together:
+  // | Pod RAM | On `g6-standard-16` (60 GB usable) | $/pod/mo |
+  const header = /\|\s*Pod RAM\s*\|\s*On\s*`([^`]+)`\s*\(([\d.]+)\s*GB usable\)\s*\|/.exec(markdown);
+  if (!header) return null;
+
+  const nodeType = header[1];
+  const usableClaimGb = Number(header[2]);
+  if (!Number.isFinite(usableClaimGb)) return null;
+
+  const rows: DensityClaim[] = [];
+  // Rows follow the header until the first blank line. Anything between that
+  // does not parse as a row aborts the whole read rather than being skipped:
+  // a silently dropped row is a claim that never gets checked.
+  //
+  // Resume from the end of the header LINE, not the end of the matched text —
+  // the match stops at the last column it needs, and the trailing cells would
+  // otherwise be read as the first row and end the loop before it began.
+  const lineEnd = markdown.indexOf("\n", header.index);
+  if (lineEnd === -1) return null;
+  const after = markdown.slice(lineEnd + 1);
+  for (const line of after.split("\n")) {
+    const trimmed = line.trim();
+    if (trimmed === "") break;
+    if (!trimmed.startsWith("|")) break;
+    if (/^\|[\s|:-]+\|$/.test(trimmed)) continue; // the |---|---| separator
+
+    const cells = trimmed.split("|").slice(1, -1).map((c) => c.trim());
+    if (cells.length < 3) return null;
+
+    const size = /^([\d.]+)\s*(MB|GB|Mi|Gi)$/.exec(cells[0]);
+    // Pod counts may carry an italic annotation: "110 *(kubelet cap binds)*".
+    const pods = /^(\d+)/.exec(cells[1]);
+    const cost = /\$\s*([\d.]+)/.exec(cells[2]);
+    if (!size || !pods || !cost) return null;
+
+    const n = Number(size[1]);
+    const unit = size[2].startsWith("M") ? 1024 ** 2 : 1024 ** 3;
+    rows.push({
+      podLabel: cells[0],
+      podBytes: n * unit,
+      pods: Number(pods[1]),
+      costUsd: Number(cost[1]),
+    });
+  }
+
+  return rows.length > 0 ? { nodeType, usableClaimGb, rows } : null;
+}
+
+/**
+ * Monthly price of a node shape, from the cost-floor table in the same doc.
+ *
+ * Same contract: null rather than a guess. Pricing the fleet against an
+ * invented node price would be the most expensive possible way to be confident.
+ */
+export function parseNodePrice(markdown: string, nodeType: string): number | null {
+  const escaped = nodeType.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const row = new RegExp(`\\|\\s*\`${escaped}\`\\s*\\|[^|]*\\|[^|]*\\|\\s*\\*\\*\\$([\\d,.]+)\\*\\*`).exec(markdown);
+  if (!row) return null;
+  const n = Number(row[1].replace(/,/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
+
 export interface DensityComparison {
   podLabel: string;
   claimedPods: number;

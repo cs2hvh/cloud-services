@@ -18,19 +18,37 @@
  *              run. Its allocatable comes from the tiered kubelet formula,
  *              anchored to the real node it does reproduce.
  *
- * The sandbox overhead is read FROM THE CLUSTER rather than from gvisor.ts on
- * purpose. What sets density is what the SCHEDULER charges a pod, which is the
- * RuntimeClass's `overhead.podFixed` — not what the sentry actually consumes,
- * and not what a source file intends. If the two disagree, the cluster wins and
- * this notices.
+ * Both sides of the comparison are read from their source rather than copied
+ * into this file, and for the same reason: a transcribed fact is a second copy,
+ * and copies go stale silently.
+ *
+ *   The CLAIM comes from 05-pricing.md itself, so correcting the doc moves this
+ *   checker with it and there is never a stale table to compare against. A doc
+ *   this cannot parse stops the run — an unread table compares clean against
+ *   any measurement, which would report it verified.
+ *
+ *   The SANDBOX CHARGE comes from the live RuntimeClass, not from gvisor.ts.
+ *   What sets density is what the SCHEDULER bills a pod — `overhead.podFixed` —
+ *   not what the sentry consumes and not what a source file intends. If the two
+ *   disagree, the cluster wins and this notices.
  *
  * READ-ONLY.
  */
 
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import { EXIT_CLEAN, EXIT_FINDINGS, EXIT_CANNOT_RUN, EXIT_UNTRUSTWORTHY } from "../../lib/paas/telemetry/exit-codes.ts";
 import { loadKubeconfig, kube } from "../../lib/paas/k8s/client.ts";
 import { parseQuantity } from "../../lib/paas/telemetry/metrics.ts";
-import { nodeDensity, kubeletReservedBytes, costPerPod, compareDensity } from "../../lib/paas/telemetry/density.ts";
+import {
+  nodeDensity,
+  kubeletReservedBytes,
+  costPerPod,
+  compareDensity,
+  parseDensityTable,
+  parseNodePrice,
+} from "../../lib/paas/telemetry/density.ts";
 
 const KUBECONFIG = process.env.V2_KUBECONFIG ?? "C:/ahura-secrets/kubeconfig-v2-dev.yaml";
 const JSON_OUT = process.argv.includes("--json");
@@ -41,25 +59,56 @@ const GIB = 1024 ** 3;
 /** Namespaces whose pods are platform cost, not tenant workload. */
 const SYSTEM_NAMESPACES = ["kube-system", "ahura-system"];
 
-/**
- * The claims in docs/v2/05-pricing.md §2, transcribed.
- *
- * Transcribed rather than parsed: a regex over prose would fail open the day
- * someone reformats the table, and this lane has been bitten by exactly that
- * shape of silent pass. A human copies these; the test that they still match
- * the doc is a human reading the doc.
- */
-const CLAIMED_NODE = { type: "g6-standard-16", nominalBytes: 64 * GIB, monthlyUsd: 384, usableClaimGb: 60 };
-const CLAIMED_ROWS = [
-  { podLabel: "512Mi", podBytes: 512 * MIB, pods: 110, costUsd: 3.49 },
-  { podLabel: "1Gi", podBytes: 1 * GIB, pods: 56, costUsd: 6.86 },
-  { podLabel: "2Gi", podBytes: 2 * GIB, pods: 28, costUsd: 13.71 },
-  { podLabel: "4Gi", podBytes: 4 * GIB, pods: 14, costUsd: 27.43 },
-];
 /** The doc's per-pod sandbox allowance, for comparison against the real one. */
 const CLAIMED_SENTRY_BYTES = 30 * 1000 * 1000;
 /** §2's loading for system nodes, NodeBalancer, registry, R2, observability. */
 const PLATFORM_LOADING = 0.15;
+
+// The claim is READ from docs/v2/05-pricing.md rather than copied into here.
+// A transcribed constant is a second copy of a fact, and the copy goes stale
+// silently — this lane has shipped that defect three times. Reading the doc
+// means correcting the doc moves this checker with it, and a doc that cannot
+// be read stops the run instead of quietly comparing against nothing.
+const DOC_PATH = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "docs", "v2", "05-pricing.md");
+
+let markdown: string;
+try {
+  markdown = readFileSync(DOC_PATH, "utf8");
+} catch {
+  console.error(`cannot read ${DOC_PATH} — there is no claim to check against`);
+  process.exit(EXIT_CANNOT_RUN);
+}
+
+const pricingClaim = parseDensityTable(markdown);
+if (pricingClaim === null) {
+  console.error(
+    "could not parse the pod-density table in 05-pricing.md — refusing to run.\n" +
+      "An unread table compares clean against any measurement, which would report it verified.",
+  );
+  process.exit(EXIT_UNTRUSTWORTHY);
+}
+
+const monthlyUsd = parseNodePrice(markdown, pricingClaim.nodeType);
+if (monthlyUsd === null) {
+  console.error(`05-pricing.md has no monthly price for ${pricingClaim.nodeType} — refusing to invent one`);
+  process.exit(EXIT_UNTRUSTWORTHY);
+}
+
+// The shape's nominal RAM, from the doc's cost-floor table. Read rather than
+// inferred from the type name: the 16 in `g6-standard-16` is vCPU, not GB, and
+// a shape whose suffix happened to match would be a coincidence, not a source.
+const nominalMatch = new RegExp(`\\|\\s*\`${pricingClaim.nodeType}\`\\s*\\|[^|]*\\|\\s*([\\d.]+)\\s*GB\\s*\\|`).exec(markdown);
+if (!nominalMatch) {
+  console.error(`05-pricing.md does not state how much RAM ${pricingClaim.nodeType} has`);
+  process.exit(EXIT_UNTRUSTWORTHY);
+}
+const CLAIMED_NODE = {
+  type: pricingClaim.nodeType,
+  nominalBytes: Number(nominalMatch[1]) * GIB,
+  monthlyUsd,
+  usableClaimGb: pricingClaim.usableClaimGb,
+};
+const CLAIMED_ROWS = pricingClaim.rows;
 
 const k = kube(loadKubeconfig(KUBECONFIG));
 if (!(await k.healthz())) {
