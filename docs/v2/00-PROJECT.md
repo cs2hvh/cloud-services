@@ -178,6 +178,19 @@ behavioural tests replaying confirmed v1 criticals.
       urgent case (an unindexed environment with a **live pod**) cannot be told
       from a harmless empty one without looking. Found by running it, not by
       reading it.
+  - **The action half is built but has never executed** —
+    `scripts/v2/preview-reap-apply.ts` (`01706d43`). Manual, not a CronJob, on
+    the r2-reap precedent. Refuses to act unless `checkReapPlan` reports nothing.
+    Order is load-bearing: **DNS first, then the alias row** — the reverse leaves
+    a record pointing at the gateway that no Ingress routes, which is a claimable
+    hostname. Neither pod nor Ingress is deleted here; removing the alias makes
+    the reconciler do both.
+    - Dry run verified both directions: reaps nothing at 0.3h, identifies the one
+      expired preview when its age is advanced past the TTL.
+    - **`--apply` was blocked by the permission classifier and has NOT been run.**
+      *User action —* it deletes DNS records and database rows, so it needs an
+      explicit go-ahead. Until then, an expired preview is reported and not
+      removed.
 - **Build logs are not surfaced to users.**
 
 ### Economics
