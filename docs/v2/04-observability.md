@@ -626,25 +626,32 @@ one needs a runner, and those are different asks. See the scheduling section.)*
   incremental object to follow. Real streaming needs the build VM to upload
   chunks periodically — a change in the build lane. Fetch, sanitise and
   paginate are done, which covers the stated acceptance criterion.
-- **Anything that runs on a schedule.** Every sweep is scheduler-ready — exit 0
-  clean, 1 could-not-run, 10 findings, 11 for a claimable hostname — and nothing schedules
-  them. `drift-sweep.ts --record` is the one intended for cron, at roughly two
-  minutes per run. This is a standing configuration decision rather than code.
 - **A `rpc()` helper in `lib/paas/db.ts`.** `drift-sweep.ts` inlines one
   because it is currently the only caller. Second caller should promote it.
-- **Log streaming.** Fetch and paginate are done; following an in-flight build
-  is not.
-- **Pod-level reconciliation against `paas.deployments`.** The fleet reconciler
-  compares Linode to the control plane. A pod with no deployment row is
-  invisible to it — the node is recorded and the cluster is recorded, so the pod
-  rides along. The concurrent-deployment case above is exactly this defect one
-  layer down.
-- **Alerting.** Exit codes are scheduler-ready; nothing schedules them.
+- **Alerting.** The exit codes carry the severity and the sweeps now emit them
+  correctly; nothing consumes them. `drift-sweep.ts` is not among the scheduled
+  CronJobs — the five sweeps run their sources individually. Scheduling the
+  aggregate as well is a configuration decision, not code.
+- **`podFixed` is still declared at 128Mi** against a measured 42–45 MiB. See
+  the sandbox section: the measurement exists, the headroom monitor exists, the
+  change has not been made.
 
-**Cannot be verified here:** `node_modules` is deliberately not installed — the
-user declined `npm install`. Everything under `app/` is therefore reviewed by
-inspection only: no typecheck, no lint, nothing executed. `.tsx` cannot even be
-syntax-checked, since Node strips types but does not transform JSX.
+*(Two items were listed here and are done. **Scheduling**: five sweeps run as
+CronJobs — see the scheduling section, and `sweep-health.ts` for whether they
+are working. **Pod-level reconciliation against `paas.deployments`**: that is
+`workload-drift.ts`, which reports unaccounted pods and reconciles
+`pod_allocated`. The fleet reconciler still only compares Linode to the control
+plane, which is why the two are separate tools.)*
+
+**What can and cannot be checked here.** `node_modules` is installed, so
+`npx tsc --noEmit` typechecks the repo — it currently reports one pre-existing
+error unrelated to this lane (`components/dashboard/gpu/deploy-wizard.tsx:30`
+imports `GPU_MARKUP_PCT`, which `lib/services/runpod/helpers` does not export;
+arrived with the Wokey/GPU migration in `2a0c22f9`).
+
+`.tsx` still cannot be *executed* or syntax-checked by `node --test`, since
+Node strips types but does not transform JSX. So everything under `app/` is
+typechecked but never run.
 
 That is why every decision lives in `lib/paas/telemetry/`, where `node --test`
 actually runs it, and why `scripts/v3/operator-view.ts` exists — it exercises
