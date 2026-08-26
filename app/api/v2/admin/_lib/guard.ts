@@ -66,12 +66,41 @@ export interface Operator {
 }
 
 /**
+ * Say out loud, once, when the strong authorization path is not configured.
+ *
+ * The header above describes ADMIN_EMAILS as something that "should be set in
+ * production", which is a deployment-time condition stated in the one place it
+ * can never be checked. Without it, requireAdmin falls back to a `roles` array
+ * on user_profiles — data a compromised account could plausibly reach — and
+ * nothing anywhere says so.
+ *
+ * A comment cannot notice its own violation. This can.
+ */
+let warnedAboutFallback = false;
+
+function warnIfWeakPath(): void {
+  if (warnedAboutFallback) return;
+  warnedAboutFallback = true;
+
+  const configured = (process.env.ADMIN_EMAILS ?? "").split(",").some((s) => s.trim() !== "");
+  if (!configured) {
+    console.warn(
+      "[paas/admin] ADMIN_EMAILS is not set. Operator authorization is falling back to " +
+        "user_profiles.roles, which is weaker: it is data a compromised account may be " +
+        "able to reach, and it guards fleet cost, cluster ids and every tenant's name. " +
+        "Set ADMIN_EMAILS in production.",
+    );
+  }
+}
+
+/**
  * Resolve the caller as a platform operator, or null.
  *
  * Callers MUST treat null as "stop" and return `adminNotFound()`. Returning
  * data on a null operator is the only way this subtree can leak.
  */
 export async function getOperator(): Promise<Operator | null> {
+  warnIfWeakPath();
   const result = await requireAdmin();
   if (!result.ok || !result.userId || !result.email) return null;
   return { userId: result.userId, email: result.email };
