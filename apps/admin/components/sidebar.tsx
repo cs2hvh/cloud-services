@@ -9,6 +9,15 @@ import { cn } from "@/lib/utils";
 export function Sidebar() {
   const pathname = usePathname();
 
+  // Longest-matching migrated href wins, so /servers/linode highlights the
+  // Linode Console entry rather than both it and Servers.
+  const activeHref = ADMIN_SECTIONS.filter((s) => s.migrated)
+    .map((s) => sectionHref(s))
+    .filter((href) =>
+      href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`),
+    )
+    .sort((a, b) => b.length - a.length)[0];
+
   return (
     <aside className="flex h-screen w-60 shrink-0 flex-col border-r border-border bg-card/40">
       <div className="flex h-14 items-center gap-2 border-b border-border px-4">
@@ -21,11 +30,7 @@ export function Sidebar() {
       <nav className="flex-1 space-y-0.5 overflow-y-auto p-2 custom-scrollbar">
         {ADMIN_SECTIONS.map((section) => {
           const href = sectionHref(section);
-          const active = section.migrated
-            ? section.slug === ""
-              ? pathname === "/"
-              : pathname === href || pathname.startsWith(`${href}/`)
-            : false;
+          const active = section.migrated && href === activeHref;
 
           const className = cn(
             "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors",

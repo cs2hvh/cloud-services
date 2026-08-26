@@ -1,5 +1,6 @@
 import { requireAdmin } from "@/lib/supabase/auth";
 import { notFound } from "next/navigation";
+import { ConfirmProvider } from "@/components/ui/confirm";
 import { Sidebar } from "@admin/components/sidebar";
 import { SignOutButton } from "@admin/components/sign-out-button";
 
@@ -32,7 +33,7 @@ export default async function PanelLayout({
           </div>
         </header>
         <main className="flex-1 overflow-y-auto p-6 custom-scrollbar">
-          {children}
+          <ConfirmProvider>{children}</ConfirmProvider>
         </main>
       </div>
     </div>
