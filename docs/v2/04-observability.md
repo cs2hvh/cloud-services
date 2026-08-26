@@ -179,18 +179,28 @@ on everything below that is marked fixed.
   at roughly 0.3% of a core. There is no scale-to-zero, so the fleet costs the
   always-on model in the plan while delivering nothing that needs it.
 
-### The meter was flattering the cost model, and `period_seconds` caught it
+### The meter was flattering the cost model by 23×, and `period_seconds` caught it
 
-Worth recording because it is the most consequential bug this lane shipped.
+The most consequential bug this lane shipped, and it is worth stating in
+business terms rather than as a metering detail.
 
 Running `--period` against real stored samples reported three apps that are
 warm **100%** of the time as **4.3% warm** — and not degraded. The sampler had
 run for two minutes of the hour, and `unobserved_seconds` only records gaps
 *between* samples, never the stretch where nothing sampled at all.
 
-So an unmonitored fleet read as idle-to-zero: precisely the number that makes
-the $18–20k model look already achieved. The meter was wrong in the direction
-that tells you what you want to hear, and it was confident.
+The plan's entire v2 business case is a ~5× gap — ~$52k/month always-on against
+~$18–20k with idle-to-zero — resting on one unmeasured number, and that number
+is the warm fraction. The first attempt to measure it was wrong by roughly
+**23×, in the direction that says the model is already achieved**.
+
+Had that reached the pricing conversation it would have confirmed what everyone
+wants to be true, with a real measurement behind it. A number that flatters the
+case and is confident about it is worse than no number.
+
+It is also the strongest argument for a schedule: a meter that runs only when
+someone remembers produces exactly this failure by construction, because
+"nobody was watching" and "nothing was happening" are the same reading.
 
 The fix uses the `period_seconds` column the infrastructure lane added over the
 requested shape, for an unrelated reason — pod-seconds alone is ambiguous
@@ -198,6 +208,24 @@ between one pod for five minutes and five pods for one. Summing it gives
 coverage, warm fraction divides by what was *watched*, and coverage below 95%
 marks the period degraded. Rows written before the column fall back to the old
 semantics.
+
+### The migrations do not describe the database
+
+`grep -rn "expired\|claimable" supabase/migrations/*paas*` returns nothing, and
+the live `paas.drift_kind` enum has both. Six values in the database, four in
+the files. Reproduced independently from two different worktrees.
+
+Anyone reasoning about that schema from the repository — a future session, a
+reviewer, either of the other lanes — gets a confident wrong answer. This was
+nearly acted on in both directions at once: a peer's claim that the values
+existed was almost taken on trust, then almost rejected on the file grep.
+Trusting would have been right by accident; checking the file would have been
+wrong on evidence.
+
+So `scripts/v3/telemetry-probe.ts` probes the live schema instead: each enum
+value with a no-op `resolve_drift_not_in`, which changes nothing when no
+observation of that kind is open. Before assuming what the schema supports,
+run it.
 
 ### Rules that enforce themselves
 
