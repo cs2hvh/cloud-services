@@ -187,10 +187,18 @@ behavioural tests replaying confirmed v1 criticals.
   authorization falls back to `user_profiles.roles`, *"which is weaker: it is
   data a compromised account may be able to reach, and it guards fleet cost,
   cluster ids and every tenant's name."* Must be set before production.
-- **No customer-facing v2 UI exists.** One page (`/dashboard/v2/admin`) and
-  seven API routes, all operator-only. No signup, no project creation, no deploy
-  button, no app list — everything a customer would do runs through scripts
-  today. This is the largest remaining piece.
+- **No customer-facing v2 UI exists.** One page (`/dashboard/v2/admin`), all
+  operator-only. No signup, no project creation, no deploy button, no app list.
+  This is the largest remaining piece.
+  - **First tenant-facing API route landed** 2026-08-26 (`108bb833`):
+    `GET /api/v2/projects`, RLS-scoped, the read every UI surface needs first.
+    401 verified live against the running server.
+  - **Everything customer-facing is unverifiable from this session.** Dashboard
+    pages sit behind the auth guard and there is no way to hold a session
+    without signing in, which needs a password. So UI can be *built* here but
+    only its unauthenticated boundary can be *proven* — the same standard the
+    admin routes were held to, and no higher. **Someone with a login should
+    drive the authenticated path.**
 - ~~Custom domains blocked on certificates~~ — **PROVEN END TO END** 2026-08-26
   on a real third-party domain. `app.ahurasense.ai` → **200**, its own
   certificate (`CN=app.ahurasense.ai`, Google Trust Services), serving content
