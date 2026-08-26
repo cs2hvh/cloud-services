@@ -98,14 +98,18 @@ behavioural tests replaying confirmed v1 criticals.
 ### Blocks opening signups to untrusted tenants
 - **No egress rate limiting**, no crypto-mining heuristics, no abuse response.
 - **Free-plan Cloudflare**: per-tenant WAF is Enterprise-only; 1 rate-limit rule.
-- **No reserved-hostname list.** Apps live at `<app>.ahurasense.com` alongside 30
-  live production records, so a tenant could claim a name that collides.
+- ~~No reserved-hostname list~~ — **DONE** (`e70a5506`). A tenant could have
+  claimed `api` or `www`: the deploy path only checked `paas.aliases`, and live
+  production DNS has no aliases row. Reserved set seeded from the live zone —
+  23 single-label records, none previously protected.
 
 ### Blocks a real customer
 - **GitHub App installed on zero accounts** (`installations = 0`). Every deploy so
   far used our own signed payloads. **User action.**
-- **`npm install` has never run in this repo.** The v2 dashboard and API routes
-  have never been typechecked or executed. Inspected code, not working code.
+- **Nothing has RENDERED.** `npm install` is done and the repo typechecks (2
+  errors left, both owned by lanes fixing them), but no route has served a
+  request and no component has mounted. `next build` needs real env in the UI
+  worktree — a user decision.
 - **No preview deployments** for non-production branches. Per-alias routing
   supports them; the policy — hostname scheme, lifetime, who pays — does not exist.
 - **Build logs are not surfaced to users.**
@@ -146,11 +150,12 @@ behavioural tests replaying confirmed v1 criticals.
    - Two files had unterminated string literals that
      `node --experimental-strip-types --check` **exits 0 on**. Every "parses
      clean" claim made with that command was weaker than stated.
-3. **Nothing has rendered yet.** Typecheck and lint are a far stronger floor than
-   yesterday, but no route has served a request and no component has mounted.
-   `next build` needs real env in the UI worktree — **a user decision**, since it
-   means putting a secrets file there.
-3. **Install the GitHub App** on `cs2hvh` and prove one real customer push.
+3. ~~**Reserved hostnames**~~ — **DONE** (`e70a5506`).
+4. ~~**R2 tarball accumulation**~~ — **DONE** (`60d4a61b`), fixed at the source
+   rather than on a timer.
+5. **Get something to RENDER.** `next build` needs real env in the UI worktree —
+   **a user decision**, since it means putting a secrets file there.
+6. **Install the GitHub App** on `cs2hvh` and prove one real customer push.
 4. **Reserved-hostname list** before any signup path opens.
 5. **Preview deployments** — needs the user's policy decision first.
 6. **Egress limiting and abuse response** — needs Cloudflare plan decision.
