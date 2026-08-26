@@ -257,7 +257,7 @@ export interface ProjectRow {
   tier: string;
   instance_count: number;
 }
-export interface EnvironmentRow { id: string; ref: string; project_id: string; kind: string; name: string }
+export interface EnvironmentRow { id: string; ref: string; project_id: string; kind: string; name: string; created_at: string }
 /**
  * Mirrors the paas.deployment_trigger enum EXACTLY.
  *
