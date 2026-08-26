@@ -209,10 +209,12 @@ for (const s of sweeps) {
 
 console.log(line);
 console.log(`  ${total} observation(s) across ${sweeps.length} sweep(s)`);
-console.log(
-  `  NOT recorded, no honest drift_kind for them: ${UNMAPPED.join(", ")}. ` +
-    `Both are still reported by their own tools.`,
-);
+if (UNMAPPED.length) {
+  console.log(
+    `  NOT recorded, no honest drift_kind for them: ${UNMAPPED.join(", ")}. ` +
+      `Still reported by their own tools.`,
+  );
+}
 
 if (!RECORD) {
   console.log(`\n  Report only. Re-run with --record to write history.\n`);

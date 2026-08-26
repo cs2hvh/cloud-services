@@ -74,10 +74,18 @@ test("fleet statuses map to the four drift kinds", () => {
   }
 });
 
-test("statuses with no honest kind are skipped, not approximated", () => {
-  // expired: the row is CORRECT and the reaper failed. Calling it `stale` would
-  // say the control plane is lying when it is telling the truth.
-  for (const status of ["expired", "reserved", "foreign", "tracked"] as const) {
+test("expired has its own kind, because the row is right and the reaper failed", () => {
+  // Was deliberately unrecorded while drift_kind had four values, rather than
+  // filed under `stale` — which would have asserted the control plane was
+  // lying when it was telling the truth. The infrastructure lane added the
+  // value, which is what a visible gap is for.
+  const [o] = observationsFromFleet([fleet({ status: "expired", kind: "build-vm" })], []);
+  assert.equal(o.kind, "expired");
+  assert.equal(o.resourceType, "build_vm");
+});
+
+test("statuses that are genuinely not drift are still skipped", () => {
+  for (const status of ["reserved", "foreign", "tracked"] as const) {
     assert.deepEqual(observationsFromFleet([fleet({ status })], []), [], status);
   }
 });
@@ -103,15 +111,33 @@ test("resource types are stable and schema-legal", () => {
   assert.equal(fleetResourceType("build-vm"), fleetResourceType("build-vm-row"));
 });
 
-test("hostname findings map, and claimable is deliberately not recorded", () => {
+test("hostname findings map, and claimable now has its own kind", () => {
   assert.equal(observationsFromHostnames([host({ status: "unrecorded" })])[0].kind, "unrecorded");
   assert.equal(observationsFromHostnames([host({ status: "phantom" })])[0].kind, "stale");
 
   // Filing a security finding under the heading used for untracked spend would
-  // bury it. It is still reported, with its own exit code — just not here.
-  assert.deepEqual(observationsFromHostnames([host({ status: "claimable" })]), []);
+  // have buried it, so it went unrecorded until the enum could express it.
+  // A hostname resolving to the gateway with nothing routing it can be
+  // captured by the next Ingress to name it, in any tenant namespace.
+  assert.equal(observationsFromHostnames([host({ status: "claimable" })])[0].kind, "claimable");
+
   assert.deepEqual(observationsFromHostnames([host({ status: "healthy" })]), []);
   assert.deepEqual(observationsFromHostnames([host({ status: "foreign" })]), []);
+});
+
+test("every kind a mapper can produce is inside a resolve scope", () => {
+  // Anything recorded but never resolved stays open forever, which is the bug
+  // the declared-scope design exists to prevent. Now that expired and
+  // claimable are recorded, their scopes have to exist too.
+  const produced = new Set([
+    ...observationsFromFleet([fleet({ status: "expired", kind: "build-vm" })], []),
+    ...observationsFromHostnames([host({ status: "claimable" })]),
+  ].map((o) => `${o.kind} ${o.resourceType}`));
+
+  const scoped = new Set([...FLEET_SCOPE, ...HOSTNAME_SCOPE].map((s) => `${s.kind} ${s.resourceType}`));
+  for (const p of produced) {
+    assert.ok(scoped.has(p), `${p} is recorded but never resolved`);
+  }
 });
 
 test("only orphaned R2 objects are recorded, never merely redundant ones", () => {

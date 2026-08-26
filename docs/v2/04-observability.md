@@ -162,18 +162,42 @@ on everything below that is marked fixed.
   rollback is a scale-up rather than a rebuild. Every deploy used to leave the
   previous Deployment at full replicas, silently doubling pod count per deploy.
 
+- **`clusters.pod_allocated` is derived, not counted**, and self-heals. It read
+  0 because five places read the column and none wrote it. It is now recomputed
+  from the cluster each sweep — installing metrics-server moved it 23 → 24 with
+  no intervention, which an incremented counter would have required someone to
+  remember.
+
 **Still open:**
 
-- **`clusters.pod_allocated` reads 0 against 3 pods running.** Placement uses
-  that column to decide where the next app goes, and LKE enforces the pod cap
-  hard, so a number drifting low means scheduling onto a cluster fuller than the
-  record admits. Infrastructure lane.
-- **782 MB reclaimable in R2 — 72% of the bucket.** It was 486 MB an hour
+- **846 MB reclaimable in R2 — 73% of the bucket.** It was 486 MB two hours
   earlier: every redeploy writes a fresh `image.tar` that nothing deletes, so
   this scales with deploy frequency rather than being a fixed backlog. That is a
-  different argument at 10,000 apps than it looks like at four.
-- **Warm fraction is 1.0.** There is no scale-to-zero, so the fleet costs the
-  always-on model in the plan rather than the idle-to-zero one.
+  different argument at 10,000 apps than it looks like at five.
+- **Warm fraction is 1.0, and the apps are doing nothing.** With metrics-server
+  live the reading is `100.0% warm, 2–3m cpu` — each app holds a full pod slot
+  at roughly 0.3% of a core. There is no scale-to-zero, so the fleet costs the
+  always-on model in the plan while delivering nothing that needs it.
+
+### The meter was flattering the cost model, and `period_seconds` caught it
+
+Worth recording because it is the most consequential bug this lane shipped.
+
+Running `--period` against real stored samples reported three apps that are
+warm **100%** of the time as **4.3% warm** — and not degraded. The sampler had
+run for two minutes of the hour, and `unobserved_seconds` only records gaps
+*between* samples, never the stretch where nothing sampled at all.
+
+So an unmonitored fleet read as idle-to-zero: precisely the number that makes
+the $18–20k model look already achieved. The meter was wrong in the direction
+that tells you what you want to hear, and it was confident.
+
+The fix uses the `period_seconds` column the infrastructure lane added over the
+requested shape, for an unrelated reason — pod-seconds alone is ambiguous
+between one pod for five minutes and five pods for one. Summing it gives
+coverage, warm fraction divides by what was *watched*, and coverage below 95%
+marks the period degraded. Rows written before the column fall back to the old
+semantics.
 
 ### Rules that enforce themselves
 
@@ -338,19 +362,15 @@ so no RLS is being bypassed. The gate fails closed on every path and returns
 
 **Blocked on the infrastructure lane:**
 
-- **metrics-server is not installed** — `metrics.k8s.io` is absent from `/apis`.
-  On LKE it usually needs `--kubelet-insecure-tls` or the right
-  `--kubelet-preferred-address-types`, for the same node-identity reason the
-  containerd/Service-DNS problem in [03-status.md](03-status.md) bit.
+*(metrics-server and the two extra `drift_kind` values were listed here and
+have both landed. T4 was built while `metrics.k8s.io` was absent and was
+correct on its first contact with real data — `2943895n` → `3m`,
+`65240Ki` → `63.7 MiB` — which is the argument for testing quantity parsing
+rather than trusting it. Reading `Mi` as `M` understates memory by 4.6% and
+throws nothing. `metricsView()` still throws when the API is absent rather than
+returning zeros: an idle app and a missing metrics API produce the same number,
+and a dashboard showing `0m` everywhere looks like a working one.)*
 
-  T4 is *built* against it regardless (`metrics.ts`, 18 tests, plus the route
-  and the operator section) and activates the moment it is installed. The
-  parsing is tested rather than trusted because that is where it goes wrong
-  quietly: metrics-server reports CPU in nanocores and memory in kibibytes, and
-  reading `Mi` as `M` understates every memory figure by 4.6% without raising
-  anything. `metricsView()` throws when the API is absent rather than returning
-  zeros — an idle app and a missing metrics API produce the same number, and a
-  dashboard showing 0m CPU everywhere looks like a working one.
 - **Two more `paas.drift_kind` values.** `expired` and `claimable` have no
   honest home in the four that exist, so their *history* is not recorded — see
   the mapping note in `drift-history.ts`. Both are still reported by their own

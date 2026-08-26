@@ -25,7 +25,7 @@ import type { Finding } from "./reconcile.ts";
 import type { HostnameFinding } from "./dns-drift.ts";
 import type { R2Finding } from "./r2-drift.ts";
 
-export type DriftKind = "unrecorded" | "stale" | "denied" | "unpriced";
+export type DriftKind = "unrecorded" | "stale" | "denied" | "unpriced" | "expired" | "claimable";
 
 export interface Observation {
   kind: DriftKind;
@@ -38,18 +38,25 @@ export interface Observation {
 }
 
 /**
- * Finding statuses with no honest home in `paas.drift_kind`.
+ * Nothing is unmapped any more, and how that happened is the point.
  *
- * `expired` — a live build VM past its deadline. The row is CORRECT; the
- *   reaper failed. That is an operational failure, not a record-versus-reality
- *   mismatch, and calling it `stale` would say the control plane is lying when
- *   it is telling the truth.
- * `claimable` — a hostname resolving to the gateway with nothing routing it.
- *   A security finding, not a bookkeeping one. Recording it as `unrecorded`
- *   would bury the most serious thing this platform can detect under the
- *   heading used for untracked spend.
+ * `expired` and `claimable` were deliberately NOT recorded while
+ * `paas.drift_kind` had four values, rather than filed under an approximate
+ * one. `expired` means the row is CORRECT and the reaper failed, so calling it
+ * `stale` would assert the control plane is lying when it is telling the
+ * truth. `claimable` is a security finding that would have been buried under
+ * the heading used for untracked spend.
+ *
+ * The infrastructure lane then added both. Refusing to approximate turned a
+ * visible gap into a schema change — which is what a visible gap is for. An
+ * approximation would have been invisible and permanent, and the history would
+ * have been quietly wrong about which of these ever happened.
+ *
+ * Verified against the LIVE database rather than the migration files, which
+ * are behind it: `scripts/v3/telemetry-probe.ts` probes every enum value with
+ * a no-op RPC.
  */
-export const UNMAPPED = ["expired", "claimable"] as const;
+export const UNMAPPED = [] as const;
 
 const FLEET_KIND: Record<string, DriftKind | null> = {
   unrecorded: "unrecorded",
@@ -58,7 +65,9 @@ const FLEET_KIND: Record<string, DriftKind | null> = {
   // Row and cloud both exist and disagree on a field: the control plane's
   // record is wrong, which is what `stale` means.
   mismatched: "stale",
-  expired: null,
+  // A live build VM past its deadline. Its own kind, because the row is right
+  // and the reaper is what failed.
+  expired: "expired",
   reserved: null, // benign by design — this is RECORD BEFORE CREATE working
   foreign: null, // not ours
   tracked: null,
@@ -118,9 +127,18 @@ export function observationsFromHostnames(findings: HostnameFinding[]): Observat
   const out: Observation[] = [];
 
   for (const f of findings) {
-    // `claimable` is skipped on purpose — see UNMAPPED.
     const kind: DriftKind | null =
-      f.status === "unrecorded" ? "unrecorded" : f.status === "phantom" ? "stale" : null;
+      f.status === "unrecorded"
+        ? "unrecorded"
+        : f.status === "phantom"
+          ? "stale"
+          : // A hostname resolving to the gateway with nothing routing it. Its
+            // own kind rather than `unrecorded`, because the next Ingress to
+            // name it — in any tenant namespace — receives its traffic, and
+            // that is not a bookkeeping problem.
+            f.status === "claimable"
+            ? "claimable"
+            : null;
     if (!kind) continue;
 
     out.push({
@@ -179,11 +197,13 @@ export const FLEET_SCOPE: SweepScope[] = [
   { kind: "denied", resourceType: "lke_cluster" },
   { kind: "denied", resourceType: "build_vm" },
   { kind: "unpriced", resourceType: "instance" },
+  { kind: "expired", resourceType: "build_vm" },
 ];
 
 export const HOSTNAME_SCOPE: SweepScope[] = [
   { kind: "unrecorded", resourceType: "hostname" },
   { kind: "stale", resourceType: "hostname" },
+  { kind: "claimable", resourceType: "hostname" },
 ];
 
 export const R2_SCOPE: SweepScope[] = [{ kind: "unrecorded", resourceType: "r2_object" }];
