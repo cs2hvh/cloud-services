@@ -13,13 +13,24 @@ change anything, run by a person who has read a report first.
 ## Running it
 
 ```bash
-node --test "lib/paas/telemetry/*.test.ts"                                   # 123 tests, no deps
+node --test "lib/paas/telemetry/*.test.ts"                                   # 159 tests, no deps
 node --env-file=.env --env-file=.env.local scripts/v3/operator-view.ts       # everything, once
 node --env-file=.env --env-file=.env.local scripts/v3/fleet-drift.ts --prove
 node --env-file=.env --env-file=.env.local scripts/v3/dns-drift.ts
+node --env-file=.env --env-file=.env.local scripts/v3/r2-drift.ts
 node --env-file=.env --env-file=.env.local scripts/v3/usage-sample.ts --samples 20 --interval 30
+node --env-file=.env --env-file=.env.local scripts/v3/pod-logs.ts <ns> <pod>
 node --env-file=.env --env-file=.env.local scripts/v3/telemetry-probe.ts
+
+# History: the only script here that writes, and only to an append-only log
+node --env-file=.env --env-file=.env.local scripts/v3/drift-sweep.ts          # report
+node --env-file=.env --env-file=.env.local scripts/v3/drift-sweep.ts --record # write
+node --env-file=.env --env-file=.env.local scripts/v3/drift-sweep.ts --history
 ```
+
+`drift-sweep --record` is the one thing intended for a scheduler. It takes
+around two minutes, since it reads Linode, Cloudflare, R2 and the cluster in
+one pass — fine on a five-minute cron, too slow for anything interactive.
 
 Both env files are required: Supabase credentials live in `.env`, the `V2_*`
 ones in `.env.local`.
@@ -37,7 +48,9 @@ different severity and deserves a different page.
 | `telemetry/runtime-logs.ts` | Pod logs: clamping, previous-container, path validation | 19 |
 | `telemetry/usage.ts` | Warm-seconds, pod-seconds, build-minutes | 23 |
 | `telemetry/dns-drift.ts` | Cloudflare vs Ingress vs `paas.aliases` | 17 |
+| `telemetry/r2-drift.ts` | R2 objects vs `paas.deployments` | 20 |
 | `telemetry/signals.ts` | Abuse and quota signals — detection only | 17 |
+| `telemetry/drift-history.ts` | Findings → `paas.drift_observations` | 13 |
 | `telemetry/operator.ts` | Composition for the API and dashboard | — |
 | `telemetry/fleet-source.ts` | The I/O half. Every call is a GET | — |
 
@@ -56,7 +69,36 @@ Read on 2026-08-26 against LKE `647920`:
   which the schema supports as a single write — have nothing to read.
 - **5 apps, all warm 100% of the time, 1 pod each.** There is no scale-to-zero.
 - **Two deployments running concurrently** in `prj-node-js-getting-started`.
-  Correct if one is held warm for rollback; a per-app cost multiplier if not.
+  This turned out to be real: every deploy left the previous Deployment at full
+  replicas, silently doubling cost per deploy. Fixed in `636a8225`, which now
+  scales superseded deployments to zero and keeps the object so rollback stays
+  a scale-up. The pair observed here predate that fix.
+- **486.3 MB reclaimable in R2 — 70% of the bucket**, and nothing prunes it.
+  Independently measured at the same figure by the infrastructure lane.
+
+### The R2 finding, and one thing it nearly got wrong
+
+The reclaimable bulk is `image.tar` for ready deployments. That is safe because
+the tar is a *transfer* artifact: skopeo copies it into the registry, and from
+then on the deployable image is the registry's digest-pinned copy — the schema
+enforces it, `deployments_ready_has_image` requires `image_repo` and
+`image_digest` on any `ready` row. Rollback repoints a Service selector at a
+digest and never re-reads the tar.
+
+Two things the live run corrected that reasoning alone did not:
+
+**The same bucket backs the in-cluster registry** — 116 objects, 210.9 MB under
+`registry/`. Those blobs *are* the deployed images, and they are exactly what
+makes a tar redundant. They were initially unclassified, which was safe (unknown
+is never proposed for deletion) but made 85% of the report noise. Now recognised
+explicitly, with the coupling stated: if registry blobs were ever reclaimable,
+the redundant classification would be wrong too.
+
+**Several "orphaned" build logs belong to apps running right now.** A missing
+`paas.deployments` row is not proof the app is gone — those deployments simply
+predate the recording work. So `reclaimable` is separate from disposition: an
+orphaned log is a *finding*, not garbage, and deleting it to save 7 KB would
+destroy the only account of how a live app was built.
 
 ## The finding that matters commercially
 
@@ -161,23 +203,20 @@ so no RLS is being bypassed. The gate fails closed on every path and returns
 - **metrics-server is not installed** — `metrics.k8s.io` is absent from `/apis`.
   Per-app CPU and memory (T4) cannot be built until it is. On LKE it usually
   needs `--kubelet-insecure-tls` or the right `--kubelet-preferred-address-types`.
-- **`listObjects` in `lib/paas/build/r2.ts`** — R2 holds
-  `builds/{ref}/{build.log,image.tar,meta.json}` for every deployment ever made
-  and nothing prunes any of it. `image.tar` is the whole OCI archive. Requested
-  rather than written here, because implementing it means duplicating the SigV4
-  signing that already exists.
-- **A migration for drift history** — drift detected once and corrected is
-  invisible afterwards, so "when did this appear and how long did it persist"
-  cannot be answered. Suggested shape:
-  `paas.drift_observations(id, observed_at, kind, status, cloud_id, ref, hourly, detail, resolved_at)`,
-  service-role like the other fleet tables.
+- **Two more `paas.drift_kind` values.** `expired` and `claimable` have no
+  honest home in the four that exist, so their *history* is not recorded — see
+  the mapping note in `drift-history.ts`. Both are still reported by their own
+  tools and exit codes; only duration is missing.
 
 **Not started:**
 
 - **Persisting usage samples.** The sampler runs and the arithmetic is tested,
   but nothing writes samples anywhere, so warm fraction exists only for the
   duration of one process. This is the single highest-value remaining item: it
-  is what turns the measurement into something billing can read.
+  is what turns the measurement into something billing can read. Needs a table
+  shaped like `drift_observations` — the pattern is now established.
+- **A `rpc()` helper in `lib/paas/db.ts`.** `drift-sweep.ts` inlines one
+  because it is currently the only caller. Second caller should promote it.
 - **Log streaming.** Fetch and paginate are done; following an in-flight build
   is not.
 - **Pod-level reconciliation against `paas.deployments`.** The fleet reconciler
