@@ -46,6 +46,41 @@ const SERVICE_ROLE_ALLOWED: Array<{ path: string; why: string }> = [
   },
 ];
 
+/**
+ * The predicates, defined ONCE and used by both the real check and its proof.
+ *
+ * Master shipped a namespace check whose regex had been mangled by a heredoc
+ * into something matching nothing — a check that had been passing vacuously
+ * since the moment it was written, in the file whose entire purpose is that
+ * checks must be able to fail. It survived because the same pattern was inlined
+ * twice and only one copy rotted.
+ *
+ * I proved this file catches a real violation by hand: I added a route
+ * importing both forbidden things, watched both assertions fail and name it,
+ * then deleted it. That proof was real and it was also TEMPORARY — nothing
+ * committed would notice if these regexes stopped matching tomorrow.
+ *
+ * So the proof is permanent now, and it runs against the same function the scan
+ * does. If a predicate is ever broken, the proof fails rather than the scan
+ * quietly passing.
+ */
+export const FORBIDDEN = {
+  serviceRoleDb: {
+    name: "service-role db client",
+    // Matches `from "@/lib/paas/db"` and `from "../../lib/paas/db.ts"`, but not
+    // lib/paas/db-something and not lib/paas/telemetry/*.
+    test: (src: string) => /from\s+["'][^"']*lib\/paas\/db(\.ts)?["']/.test(src),
+    violating: 'import { projects } from "@/lib/paas/db";',
+    innocent: 'import { operatorView } from "@/lib/paas/telemetry/operator";',
+  },
+  tenantWriteViaReconciler: {
+    name: "promoteAndConverge",
+    test: (src: string) => /\bpromoteAndConverge\b/.test(src),
+    violating: "await promoteAndConverge(projectId, ref);",
+    innocent: "await reconcileProjectByRef(ref);",
+  },
+} as const;
+
 function walk(dir: string, out: string[] = []): string[] {
   let entries: string[];
   try {
@@ -78,9 +113,7 @@ test("no request handler imports the service-role database client", () => {
     const r = rel(f);
     if (allowed.has(r)) continue;
     const src = readFileSync(f, "utf8");
-    // Matches `from "@/lib/paas/db"` and `from "../../lib/paas/db.ts"` alike,
-    // but NOT lib/paas/db-something or lib/paas/telemetry/*.
-    if (/from\s+["'][^"']*lib\/paas\/db(\.ts)?["']/.test(src)) offenders.push(r);
+    if (FORBIDDEN.serviceRoleDb.test(src)) offenders.push(r);
   }
 
   assert.deepEqual(
@@ -102,7 +135,7 @@ test("no request handler performs a tenant-scoped write through the reconciler",
   const offenders: string[] = [];
   for (const f of appFiles()) {
     const src = readFileSync(f, "utf8");
-    if (/\bpromoteAndConverge\b/.test(src)) offenders.push(rel(f));
+    if (FORBIDDEN.tenantWriteViaReconciler.test(src)) offenders.push(rel(f));
   }
   assert.deepEqual(
     offenders,
@@ -140,4 +173,32 @@ test("the scan actually sees the app directory", () => {
     files.some((f) => rel(f).startsWith("app/api/v2/")),
     "expected to find the v2 API routes",
   );
+});
+
+test("EVERY PREDICATE CAN ACTUALLY FAIL", () => {
+  // The check on the checks. Master shipped one whose regex had been mangled by
+  // a heredoc into a pattern matching nothing — passing vacuously from the
+  // moment it was written, in the file whose whole purpose is that checks must
+  // be able to fail. It survived because the pattern was inlined twice and only
+  // one copy rotted.
+  //
+  // Each predicate is asserted to match a violating line AND to leave an
+  // innocent one alone. Matching everything is the same defect as matching
+  // nothing: a check that fails on correct code gets deleted, and then there is
+  // no check at all.
+  for (const [key, rule] of Object.entries(FORBIDDEN)) {
+    assert.equal(rule.test(rule.violating), true, `${key} does not catch its own violating example — it may match nothing`);
+    assert.equal(rule.test(rule.innocent), false, `${key} flags innocent code — it may match everything`);
+  }
+});
+
+test("the db predicate does not confuse neighbouring modules for the client itself", () => {
+  // lib/paas/telemetry/* is safe to import from a route; lib/paas/db is not.
+  // A predicate too loose here would fail every operator route and be removed.
+  const t = FORBIDDEN.serviceRoleDb.test;
+  assert.equal(t('from "@/lib/paas/db"'), true);
+  assert.equal(t('from "../../lib/paas/db.ts"'), true);
+  assert.equal(t('from "@/lib/paas/telemetry/operator"'), false);
+  assert.equal(t('from "@/lib/paas/k8s/client"'), false);
+  assert.equal(t('from "@/lib/paas/replicas"'), false, "the shaped accessor is the SAFE way to read this");
 });
