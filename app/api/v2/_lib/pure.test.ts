@@ -23,6 +23,8 @@ import { fromPostgrestError } from "./http.ts";
 import {
   toDeploymentDto,
   isPlaceholderSha,
+  DEPLOYMENT_STATES,
+  DEPLOYMENT_TRIGGERS,
   type DeploymentRow,
 } from "./deployments.ts";
 
@@ -230,4 +232,42 @@ test("runtime facts pass through, and absence is stated not guessed", () => {
   const unknown = toDeploymentDto(row({ container_port: null, run_as_user: null }));
   assert.equal(unknown.runtime.port, null);
   assert.equal(unknown.runtime.user, null);
+});
+
+// ── null git_sha ─────────────────────────────────────────────────────
+// paas.deployments.git_sha became nullable when the deploy path stopped
+// inventing commits. The generated type still said `string` for a while,
+// which is precisely what made .slice(0,7) look safe. It was not: a null sha
+// threw and would have 500'd the deployment list and detail page.
+
+test("a null sha does not throw", () => {
+  const d = toDeploymentDto(row({ git_sha: null, state: "queued", started_at: null, ready_at: null }));
+  assert.equal(d.commit.sha, null);
+  assert.equal(d.commit.shortSha, "");
+  assert.equal(d.commit.isPlaceholder, true);
+  assert.equal(d.label, "dpl-abc", "must fall back to the ref");
+});
+
+test("isPlaceholderSha treats null as carrying no information", () => {
+  assert.equal(isPlaceholderSha(null), true);
+});
+
+// ── enum mirrors ─────────────────────────────────────────────────────
+// A queued deployment is normal now, not stuck: the webhook records and a
+// worker builds, so a row can sit in queued with no build activity.
+
+test("queued deployments report no duration and are not terminal", () => {
+  const d = toDeploymentDto(row({ state: "queued", started_at: null, ready_at: null }));
+  assert.equal(d.timing.durationMs, null);
+  assert.equal(d.isTerminal, false);
+});
+
+test("the enum mirrors contain no duplicates and are non-empty", () => {
+  // Cheap invariants that hold without a database. The live comparison is in
+  // boundary.test.ts and skips when Postgres is unreachable.
+  for (const list of [DEPLOYMENT_STATES, DEPLOYMENT_TRIGGERS]) {
+    assert.ok(list.length > 0);
+    assert.equal(new Set(list).size, list.length, "duplicate enum value");
+  }
+  assert.ok(DEPLOYMENT_TRIGGERS.includes("git_push"), "the webhook writes git_push, not push");
 });

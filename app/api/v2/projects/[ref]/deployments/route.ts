@@ -17,6 +17,7 @@ import {
 } from "../../../_lib/http";
 import {
   DEPLOYMENT_COLUMNS,
+  DEPLOYMENT_STATES,
   toDeploymentDto,
   type DeploymentRow,
 } from "../../../_lib/deployments";
@@ -67,15 +68,9 @@ export async function GET(request: Request, { params }: Params) {
     .limit(limit + 1); // one extra row tells us whether more exist
 
   if (state) {
-    const allowed = [
-      "queued",
-      "building",
-      "publishing",
-      "ready",
-      "error",
-      "canceled",
-    ];
-    if (!allowed.includes(state)) {
+    // The single list, not a second copy — a filter that silently rejects a
+    // newly-added state is the same drift in a quieter place.
+    if (!(DEPLOYMENT_STATES as readonly string[]).includes(state)) {
       return invalid(`Unknown state "${state}".`, { state: "invalid" });
     }
     query = query.eq("state", state);

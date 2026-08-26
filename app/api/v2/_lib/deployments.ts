@@ -7,25 +7,53 @@
  * see an "edit" field will eventually grow a button for it.
  */
 
-export const TERMINAL_STATES = ["ready", "error", "canceled"] as const;
-export type DeploymentState =
-  | "queued"
-  | "building"
-  | "publishing"
-  | (typeof TERMINAL_STATES)[number];
+/**
+ * These mirror Postgres enums (paas.deployment_state, paas.deployment_trigger).
+ * A TypeScript union mirroring a database enum drifts silently: the compiler
+ * has nothing to compare against, so a typo or a newly-added value passes
+ * every test and fails at the database.
+ *
+ * cloud-services-73 shipped exactly that — a webhook writing trigger "push"
+ * against an enum whose value is "git_push", typed as `string`, green
+ * everywhere, and the first symptom would have been a customer's first push
+ * returning 400 in production.
+ *
+ * boundary.test.ts checks these against the live enum, and SKIPS rather than
+ * passes when the database is unreachable — a mirror check that quietly
+ * succeeds without checking anything reports confidence it never established.
+ */
+export const DEPLOYMENT_STATES = [
+  "queued",
+  "building",
+  "publishing",
+  "ready",
+  "error",
+  "canceled",
+] as const;
 
-export type DeploymentTrigger =
-  | "git_push"
-  | "pull_request"
-  | "manual"
-  | "redeploy"
-  | "rollback";
+export const DEPLOYMENT_TRIGGERS = [
+  "git_push",
+  "pull_request",
+  "manual",
+  "redeploy",
+  "rollback",
+] as const;
+
+export const TERMINAL_STATES = ["ready", "error", "canceled"] as const;
+export type DeploymentState = (typeof DEPLOYMENT_STATES)[number];
+
+export type DeploymentTrigger = (typeof DEPLOYMENT_TRIGGERS)[number];
 
 export interface DeploymentRow {
   ref: string;
   state: DeploymentState;
   trigger: DeploymentTrigger;
-  git_sha: string;
+  /**
+   * Nullable since the deploy path became honest about commits it does not
+   * know. The generated type claimed `string` for a while after the column
+   * changed, which is exactly the sort of lie that makes .slice() look safe.
+   */
+  git_sha: string | null;
   git_ref: string;
   git_message: string | null;
   git_author: string | null;
@@ -68,7 +96,7 @@ export interface DeploymentDto {
   isTerminal: boolean;
   trigger: DeploymentTrigger;
   commit: {
-    sha: string;
+    sha: string | null;
     shortSha: string;
     ref: string;
     message: string | null;
@@ -115,7 +143,8 @@ function durationMs(row: DeploymentRow): number | null {
  * path writes "0000000" when it has no commit, and all-zero shas of any length
  * are the git convention for "none".
  */
-export function isPlaceholderSha(sha: string): boolean {
+export function isPlaceholderSha(sha: string | null): boolean {
+  if (sha === null) return true;
   return !/^[0-9a-f]{7,40}$/i.test(sha) || /^0+$/.test(sha);
 }
 
@@ -128,7 +157,8 @@ export function toDeploymentDto(row: DeploymentRow): DeploymentDto {
     trigger: row.trigger,
     commit: {
       sha: row.git_sha,
-      shortSha: row.git_sha.slice(0, 7),
+      // Never .slice() a value the database may return as null.
+      shortSha: row.git_sha === null ? "" : row.git_sha.slice(0, 7),
       ref: row.git_ref,
       message: row.git_message,
       author: row.git_author,
@@ -136,7 +166,7 @@ export function toDeploymentDto(row: DeploymentRow): DeploymentDto {
     },
     // Never a row of identical zeros: the ref is unique per deployment even
     // when the commit is not recorded.
-    label: placeholder ? row.ref : row.git_sha.slice(0, 7),
+    label: placeholder || row.git_sha === null ? row.ref : row.git_sha.slice(0, 7),
     runtime: { port: row.container_port, user: row.run_as_user },
     image:
       row.image_repo && row.image_digest

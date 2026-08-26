@@ -33,10 +33,18 @@
  * months from now. Adopted from app-deploy-3, whose version of this idea was
  * better than mine.
  *
- * app/api/v2/admin/** is deliberately EXCLUDED — it belongs to the
- * observability lane, is fleet-scoped by construction, and has its own
- * boundary suite. Asserting here about files owned there reports green while
- * the two diverge.
+ * TWO SUBTREES ARE EXCLUDED, for different reasons, and neither is silencing.
+ *
+ * app/api/v2/admin/** belongs to the observability lane, is fleet-scoped by
+ * construction, and has its own boundary suite. Asserting here about files
+ * owned there reports green while the two diverge.
+ *
+ * app/api/v2/webhooks/** has no user session by nature — GitHub is the caller.
+ * It cannot resolve a caller and its writes are legitimately elevated, so the
+ * tenant checks below would flag correct code. The guarantee that DOES apply
+ * is asserted instead: the signature is verified before anything is written.
+ * Excluding a file without replacing its guarantee is how an exclusion list
+ * becomes a way to pass.
  */
 
 import { test } from "node:test";
@@ -60,7 +68,7 @@ function walk(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (entry.name !== "admin") walk(path, out);
+      if (entry.name !== "admin" && entry.name !== "webhooks") walk(path, out);
     } else if (entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts")) {
       out.push(path);
     }
@@ -148,6 +156,47 @@ test("auth.ts still states the rules these tests enforce", () => {
   assert.match(header, /createServiceClient/);
   assert.match(header, /RLS/);
 });
+
+test("every webhook verifies its signature before it writes anything", () => {
+  // A webhook's authentication is the HMAC, not a session. That check must
+  // come before the first database call, not merely be present: verifying
+  // afterwards means an unsigned request has already had an effect.
+  const dir = join(ROOT, "webhooks");
+  let hooks: string[] = [];
+  try {
+    hooks = walkAll(dir).filter((f) => f.endsWith("route.ts"));
+  } catch {
+    return; // no webhooks yet
+  }
+  assert.ok(hooks.length > 0, "the webhook subtree exists but has no routes");
+
+  for (const file of hooks) {
+    const src = code(readFileSync(file, "utf8"));
+    const at = src.indexOf("export async function POST(");
+    assert.ok(at >= 0, `${file} has no POST handler`);
+    const body = src.slice(at);
+    const verify = body.indexOf("verifyWebhookSignature");
+    assert.ok(verify >= 0, `${file} never verifies a signature`);
+    // First write of any kind.
+    const write = Math.min(
+      ...[".insert(", ".update(", ".upsert(", ".delete(", "create("]
+        .map((m) => body.indexOf(m))
+        .filter((i) => i >= 0)
+        .concat([Number.MAX_SAFE_INTEGER])
+    );
+    assert.ok(verify < write, `${file} writes before verifying its signature`);
+  }
+});
+
+/** Like walk(), but without the exclusions — for checking an excluded subtree. */
+function walkAll(dir: string, out: string[] = []): string[] {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) walkAll(path, out);
+    else if (entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts")) out.push(path);
+  }
+  return out;
+}
 
 // ── the same machinery against a fixture tree ────────────────────────
 // Proves the checkers, the traversal, the comment stripping and the exclusion
