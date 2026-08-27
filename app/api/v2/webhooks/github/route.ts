@@ -24,6 +24,7 @@
 
 import { verifyWebhookSignature, parsePushEvent, shouldDeploy } from "@/lib/paas/github/webhook";
 import { projects, environments, deployments, db } from "@/lib/paas/db";
+import { resolveRepoTarget } from "@/lib/paas/repo-target";
 
 export const dynamic = "force-dynamic";
 
@@ -71,10 +72,28 @@ export async function POST(req: Request) {
     return json(503, { error: "control plane unreachable" });
   }
 
-  const project = await projects.byRepoFullName(push.repoFullName);
-  if (!project) {
-    return json(202, { ok: true, ignored: `no project for ${push.repoFullName}` });
+  // Provider-scoped, and a LIST. Two teams may each connect the same public
+  // repository; the old lookup took whichever row came back first and built
+  // one customer’s commit onto the other’s hostname — succeeding, silently.
+  const target = resolveRepoTarget(
+    await projects.matchingRepo("github", push.repoFullName),
+    push.repoFullName,
+    "github",
+  );
+
+  if (target.kind === "none") {
+    return json(202, { ok: true, ignored: target.reason });
   }
+
+  if (target.kind === "ambiguous") {
+    // 202, NOT 5xx. A retry cannot resolve this — the ambiguity is in our own
+    // data, so GitHub would redeliver against it until the delivery expired.
+    // Loud in the log because the customer just sees a push that did nothing.
+    console.error("[v2/webhooks/github] refusing ambiguous repo:", target.reason, target.refs);
+    return json(202, { ok: true, ignored: target.reason, projects: target.refs });
+  }
+
+  const project = target.project;
 
   const decision = shouldDeploy(push, project.production_branch);
   if (!decision.deploy) {

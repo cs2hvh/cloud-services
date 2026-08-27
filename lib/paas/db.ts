@@ -324,11 +324,24 @@ export const projects = {
    * Deleted projects are excluded: a push to a repo whose project was removed
    * must not resurrect it.
    */
-  byRepoFullName: async (fullName: string) =>
-    (await db.select<ProjectRow>(
+  /**
+   * Every live project for this repository ON THIS PROVIDER.
+   *
+   * Returns a LIST, not a row, and takes the provider it was missing. Two teams
+   * may each connect the same public repository, and across three providers
+   * acme/api on GitLab is a different repository from acme/api on GitHub — so
+   * taking [0] from an unordered query built one customer's commit onto another
+   * customer's hostname, successfully and silently.
+   *
+   * Callers decide with resolveRepoTarget, which refuses ambiguity rather than
+   * guessing. See lib/paas/repo-target.ts.
+   */
+  matchingRepo: async (provider: string, fullName: string) =>
+    db.select<ProjectRow>(
       "projects",
-      `select=*&repo_full_name=eq.${encodeURIComponent(fullName)}&deleted_at=is.null`,
-    ))[0] ?? null,
+      `select=*&provider=eq.${encodeURIComponent(provider)}` +
+        `&repo_full_name=eq.${encodeURIComponent(fullName)}&deleted_at=is.null`,
+    ),
   bySlug: async (teamId: string, slug: string) =>
     (await db.select<ProjectRow>(
       "projects", `select=*&team_id=eq.${teamId}&slug=eq.${slug}&deleted_at=is.null`,

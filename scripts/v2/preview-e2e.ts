@@ -29,6 +29,7 @@
 
 import { parsePushEvent, shouldDeploy } from "../../lib/paas/github/webhook.ts";
 import { projects, environments, deployments, aliases, db } from "../../lib/paas/db.ts";
+import { resolveRepoTarget } from "../../lib/paas/repo-target.ts";
 import { deployFromRepo } from "../../lib/paas/deploy.ts";
 import { kube, loadKubeconfig } from "../../lib/paas/k8s/client.ts";
 import { PAAS_NAMESPACE } from "../../lib/paas/k8s/manifests.ts";
@@ -59,12 +60,16 @@ async function main(): Promise<void> {
     return;
   }
 
-  const project = await projects.byRepoFullName(repoArg);
-  if (!project) {
-    console.error(`no project for ${repoArg} — proving nothing`);
+  // Provider-scoped and ambiguity-refusing, exactly as the webhook resolves it.
+  // A proof that resolved the repo more loosely than production does would be
+  // proving something production never runs.
+  const target = resolveRepoTarget(await projects.matchingRepo("github", repoArg), repoArg, "github");
+  if (target.kind !== "one") {
+    console.error(`${target.reason} — proving nothing`);
     process.exitCode = EXIT_CANNOT_RUN;
     return;
   }
+  const project = target.project;
   if (branchArg === project.production_branch) {
     console.error(`${branchArg} IS the production branch — that would prove the opposite of the point`);
     process.exitCode = EXIT_CANNOT_RUN;
