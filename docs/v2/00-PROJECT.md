@@ -827,6 +827,22 @@ returns NULL for anything unmatched, so adding a fourth `git_provider` would
 silently switch that constraint off for it: still listed, still green,
 enforcing nothing.
 
+### A backtick in generated text ends the template literal it lives in
+
+`dockerfile.ts` builds Dockerfiles inside JS template literals. Twice now I have
+written an explanatory comment containing a backticked term — ```./...` matches
+every package`` — into one of those literals, which closes it and turns the rest
+of the file into a syntax error tens of lines away from the edit. `tsc` reports
+the confusion at the NEXT stage boundary, so the message names a Dockerfile line
+in a completely different generator.
+
+The same applies to `${`, which silently interpolates instead of failing.
+
+**The rule:** text injected into a Dockerfile template gets no backticks and no
+`${`. Say the name plainly. And run `npx tsc --noEmit` after every patch script
+that touches a generator — this class is invisible on a read and instant on a
+typecheck.
+
 ### The tools themselves lie, and that is a different problem
 
 Two tools reported success while failing, in the same hour:

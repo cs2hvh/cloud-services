@@ -516,8 +516,20 @@ WORKDIR /src
 COPY go.mod go.su[m] ./
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
 COPY . .
+# Building ./... matches EVERY package, and a single -o cannot receive more than one:
+#
+#     go: cannot write multiple packages to non-directory /out/server
+#
+# Any module with a package beside its main — which is most of them; this one
+# has users, articles and common — failed here after downloading every
+# dependency. Asking go which package is the main one covers a main at the root
+# and a main under cmd/ alike, and refuses clearly when there is none, which is
+# what a library looks like and should not be deployed as a server.
 RUN --mount=type=cache,target=/root/.cache/go-build \\
-    CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/server ./...
+    MAIN=$(go list -f '{{if eq .Name "main"}}{{.ImportPath}}{{end}}' ./... | head -1); \\
+    if [ -z "$MAIN" ]; then echo "no main package in this module — nothing to run"; exit 1; fi; \\
+    echo "building $MAIN"; \\
+    CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/server "$MAIN"
 
 FROM gcr.io/distroless/static-debian12:nonroot AS runner
 ENV PORT=${d.port}

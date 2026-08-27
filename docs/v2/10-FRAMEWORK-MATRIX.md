@@ -69,7 +69,7 @@ support gap being mistaken for a build gap.
 | 32 | tiangolo/full-stack-fastapi-template `backend/` | The same repo with our own advice applied | BUILD-ERR | build failed | Its Dockerfile bind-mounts `uv.lock` from the build context, and that file is at the repo ROOT. See the gap below |
 | 33 | pallets/flask | Flask — a LIBRARY | REFUSED | at detect | Previously leased a VM to fail installing itself |
 | 34 | **gohugoio/hugoDocs** | Hugo, real documentation site | **PASS** | **200** | Hugo was not a framework at all before this. Four defects between detection and a served page |
-| 35 | gothinkster/golang-gin-realworld-example-app | Gin, go.mod | FAIL | clone failed | Not diagnosed — the clone itself failed, which is ours to explain. Open |
+| 35 | gothinkster/golang-gin-realworld-example-app | Gin, go.mod, no root README | APP-ERR | 503 | Two platform defects: the default branch was guessed wrong, then `go build ./...` could not write multiple packages to one output. Now builds and routes; the app itself crash-loops on exit 2 |
 | 36 | gothinkster/rails-realworld-example-app | Rails, Gemfile | BUILD-ERR | build failed | Bundler aborts on a 2017 Gemfile against Ruby 3.3. Ruby has the version-pinning gap Node had |
 | 37 | shadcn-ui/taxonomy (with its environment set) | Next.js validating env AT BUILD TIME | BUILD-ERR | build failed | Pushed through THREE platform defects. What remains is the repository's own rot: unpinned Radix drifted and its source no longer typechecks |
 | 38 | github/gitignore | No framework marker at all | REFUSED | at detect | Now says so. It used to be told to connect a GitHub account it does not need |
@@ -143,6 +143,24 @@ And one that had nothing to do with package managers:
   answered 503. CRA, Vite, Vue, Angular, Gatsby, Astro and Hugo were all
   affected, and it stayed hidden because everything deployed here before was a
   Node server or a repo-supplied Dockerfile.
+- **the default branch was guessed from two files many repositories lack.**
+  Detection probed README.md and package.json on `main` and fell back to
+  `master`; a Go repository has no package.json, and this one has no root
+  README either. Worse, the wrong guess LOOKED right:
+  raw.githubusercontent.com still serves a branch GitHub has renamed, so
+  `master/go.mod` returned 200 and detection reported a ref that `git clone`
+  then could not find. GitHub is now asked for `default_branch` instead.
+- **`go build ./...` cannot write multiple packages to one output.** Any module
+  with a package beside its main — most of them — failed after downloading
+  every dependency. The main package is now located with `go list`, which
+  covers a main at the root and one under cmd/ alike, and refuses clearly when
+  there is none.
+
+**Known limitation — cgo.** Go binaries are built `CGO_ENABLED=0` because the
+runtime is `distroless/static`. A dependency that needs cgo — `go-sqlite3` is
+the common one — builds but fails at startup. Supporting it means a second Go
+runtime shape with a libc in it, which is a real decision rather than an
+oversight.
 - **the build could not read the project's environment.** Applications that
   validate configuration during `next build` — @t3-oss/env-nextjs is
   everywhere — could not be deployed at all, however completely the customer
