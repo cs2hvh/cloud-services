@@ -452,4 +452,7 @@ export const DETECTION_FILES = [
   "requirements.txt",
   "pyproject.toml",
   "Gemfile",
+  // Contents, not just presence: this file's whole purpose is the version
+  // written inside it.
+  ".nvmrc",
 ] as const;

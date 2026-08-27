@@ -20,6 +20,7 @@
 
 import { detectFramework, detectPackageManager, DETECTION_FILES, type RepoFiles } from "./build/detect.ts";
 import { generateDockerfile, servingPort, runtimeUid } from "./build/dockerfile.ts";
+import { resolveNodeVersion, enginesNodeFrom } from "./build/node-version.ts";
 import { leaseBuildVm, pollBuildResult, destroyBuildVm, type BuildRequest } from "./build/vm.ts";
 import { presign, deleteObject, r2Keys } from "./build/r2.ts";
 import { imageIsDurable } from "./build/registry.ts";
@@ -474,10 +475,23 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
     );
   }
 
+  // WHICH NODE, because a repository that pins one is pinning it for a reason:
+  // a native addon with no prebuilt binary for a newer ABI, a dependency that
+  // reads a V8 header that has since changed. Building those on the newest Node
+  // fails deep inside node-gyp with a message naming a C++ header, which nobody
+  // traces back to a base image they never chose. This hardcoded 22 and ignored
+  // every pin the repository offered.
+  const nodeChoice = resolveNodeVersion({
+    enginesNode: enginesNodeFrom(rootPackageJson),
+    nvmrc: files.contents[".nvmrc"] ?? null,
+  });
+  say("detect", `node ${nodeChoice.major} — ${nodeChoice.reason}`);
+
   const dockerfile = generateDockerfile({
     detection,
     packageManager: pm,
     hasLockfile,
+    nodeVersion: String(nodeChoice.major),
     isWorkspace,
     // Only public-prefixed keys become build args; runtime values are injected
     // from a Secret and must never enter an image layer.
