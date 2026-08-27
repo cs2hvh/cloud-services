@@ -9,6 +9,7 @@
  */
 
 import { checkCustomDomain } from "../../../_lib/domains";
+import { reconcileProjectByRef } from "@/lib/paas/reconciler.ts";
 import { listCustomHostnames, deleteCustomHostname } from "@/lib/paas/edge/cloudflare";
 import { DOMAIN_COLUMNS, FALLBACK_ORIGIN, liveStateFor, toDomainDto, type DomainRow } from "@/lib/paas/domain-view";
 import { paasConfig } from "@/lib/paas/config";
@@ -43,6 +44,54 @@ type Params = { params: Promise<{ ref: string }> };
 // lib/paas/domain-view.ts. They were duplicated in the project page, whose
 // copy selected columns that do not exist — so the Domains tab rendered a
 // read failure against a perfectly readable table.
+
+/**
+ * Give this hostname an Ingress by giving it an alias.
+ *
+ * Idempotent: a domain re-added after removal has a released alias already,
+ * and un-releasing it is correct — the row records that the hostname once
+ * served, and reusing it keeps that history rather than accumulating a new
+ * row per attempt.
+ *
+ * Points at whatever production points at. A custom domain that serves a
+ * different build from the project's own hostname is a split nobody asked
+ * for and nothing would explain.
+ */
+async function ensureAliasFor(
+  caller: NonNullable<Awaited<ReturnType<typeof getCaller>>>,
+  projectId: string,
+  hostname: string,
+) {
+  const host = hostname.toLowerCase();
+
+  const { data: production } = await caller.db
+    .from("aliases")
+    .select("deployment_id")
+    .eq("project_id", projectId)
+    .eq("kind", "production")
+    .is("released_at", null)
+    .maybeSingle();
+
+  const deploymentId = (production as { deployment_id: string | null } | null)?.deployment_id ?? null;
+
+  const { data: existing } = await caller.db
+    .from("aliases")
+    .select("id")
+    .eq("project_id", projectId)
+    .eq("hostname", host)
+    .maybeSingle();
+
+  if (existing) {
+    await caller.db
+      .from("aliases")
+      .update({ released_at: null, deployment_id: deploymentId })
+      .eq("id", (existing as { id: string }).id);
+  } else {
+    await caller.db
+      .from("aliases")
+      .insert({ project_id: projectId, hostname: host, kind: "custom", deployment_id: deploymentId });
+  }
+}
 
 async function resolveProject(
   caller: NonNullable<Awaited<ReturnType<typeof getCaller>>>,
@@ -194,6 +243,28 @@ export async function POST(request: Request, { params }: Params) {
           ]
         : [];
 
+    // AN ALIAS, WHICH IS WHAT ACTUALLY ROUTES THE REQUEST.
+    //
+    // Claiming a domain created a domains row and a Cloudflare custom
+    // hostname and nothing else. The reconciler builds Ingress objects from
+    // paas.aliases, so no rule ever existed for the hostname — Cloudflare
+    // delivered the request to the cluster and Traefik answered
+    // `404 page not found`. Every custom domain added through this route was
+    // dead on arrival, however correct its DNS.
+    //
+    // Pointed at whatever production currently serves, so the domain answers
+    // the same build as the project's own hostname rather than a stale one.
+    await ensureAliasFor(caller, project.id, row.domain);
+
+    // Converge now so the Ingress exists in seconds rather than at the next
+    // sweep. A failure here is NOT a failed claim — the alias is durable and
+    // the level-triggered loop repairs it — so it is logged, not raised.
+    try {
+      await reconcileProjectByRef(project.ref);
+    } catch (e) {
+      console.error("[v2/domains] converge after claim failed:", (e as Error).message.slice(0, 200));
+    }
+
     await caller.db
       .from("domains")
       .update({
@@ -285,6 +356,25 @@ export async function DELETE(request: Request, { params }: Params) {
   // for anything this misses.
   const removedDomain = (data as { domain: string }).domain;
   let edgeNote = "Removed from the edge.";
+
+  // Release the routing alias too, or the Ingress survives the domain and the
+  // hostname keeps resolving to an app its owner believes they detached.
+  try {
+    await caller.db
+      .from("aliases")
+      .update({ released_at: new Date().toISOString() })
+      .eq("project_id", project.id)
+      .eq("hostname", removedDomain.toLowerCase())
+      .is("released_at", null);
+  } catch (e) {
+    console.error("[v2/domains] alias release failed:", (e as Error).message.slice(0, 160));
+  }
+
+  try {
+    await reconcileProjectByRef(project.ref);
+  } catch (e) {
+    console.error("[v2/domains] converge after removal failed:", (e as Error).message.slice(0, 200));
+  }
   try {
     const matches = await listCustomHostnames(removedDomain);
     const mine = matches.filter((h) => String(h.hostname).toLowerCase() === removedDomain.toLowerCase());
