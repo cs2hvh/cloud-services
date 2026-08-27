@@ -26,56 +26,29 @@
 import { spawn } from "node:child_process";
 import { EXIT_CLEAN, EXIT_FINDINGS, EXIT_CANNOT_RUN } from "../../lib/paas/telemetry/exit-codes.ts";
 
-interface Target {
-  repo: string;
-  /** What this repository is meant to exercise, for the matrix row. */
-  note: string;
-  branch?: string;
-  root?: string;
-}
-
-/**
- * Ordered by how likely a customer is to bring one, then by how much of the
- * build path each exercises. Node first because it is most of the market.
- */
-const BATCHES: Record<string, Target[]> = {
-  "node-1": [
-    { repo: "vercel/next-learn", note: "Next.js, monorepo — exercises root_directory", root: "dashboard/starter-example" },
-    { repo: "remix-run/indie-stack", note: "Remix, real stack with a build step" },
-    { repo: "sveltejs/realworld", note: "SvelteKit, full RealWorld app" },
-  ],
-  "node-2": [
-    { repo: "nuxt/starter", note: "Nuxt 3", branch: "v3" },
-    { repo: "withastro/starlight", note: "Astro, docs site with a heavy build" },
-    { repo: "expressjs/express", note: "Express — a LIBRARY, must refuse clearly rather than pretend" },
-  ],
-  "node-3": [
-    { repo: "nestjs/typescript-starter", note: "NestJS, TypeScript build step" },
-    { repo: "vitejs/vite", note: "Vite monorepo — large, exercises workspace handling" },
-    { repo: "facebook/create-react-app", note: "CRA monorepo" },
-  ],
-  python: [
-    { repo: "tiangolo/full-stack-fastapi-template", note: "FastAPI, real stack" },
-    { repo: "django/djangoproject.com", note: "Django, a real production site" },
-    { repo: "pallets/flask", note: "Flask — a LIBRARY, must refuse clearly" },
-  ],
-  go: [
-    { repo: "gin-gonic/examples", note: "Gin" },
-    { repo: "gohugoio/hugoDocs", note: "Hugo static site" },
-  ],
-  edges: [
-    { repo: "docker/awesome-compose", note: "No single app at the root — must refuse clearly" },
-    { repo: "github/gitignore", note: "No framework marker at all — must refuse clearly" },
-  ],
-};
+// The list lives in framework-targets.ts so it can grow without touching the
+// machinery that runs it, and so `--list` reads as a document.
+import { BATCHES, type Target } from "./framework-targets.ts";
 
 const args = process.argv.slice(2);
 
 if (args.includes("--list")) {
+  let total = 0;
   for (const [name, targets] of Object.entries(BATCHES)) {
-    console.log(`  ${name.padEnd(10)} ${targets.length} repo(s)`);
-    for (const t of targets) console.log(`             ${t.repo} — ${t.note}`);
+    console.log(`
+  ${name}`);
+    for (const t of targets) {
+      total++;
+      const mark = t.expect === "refuse" ? "must refuse" : t.expect === "app-err" ? "build+route" : "must serve";
+      const extra = [t.branch ? `@${t.branch}` : "", t.root ? `/${t.root}` : ""].filter(Boolean).join(" ");
+      console.log(`    ${mark.padEnd(12)} ${t.repo.padEnd(52)} ${t.note}${extra ? "  " + extra : ""}`);
+    }
   }
+  console.log(`
+  ${total} repositories across ${Object.keys(BATCHES).length} batches.`);
+  console.log(`  "must refuse" entries are meant to be turned away clearly — a matrix`);
+  console.log(`  without them only proves the easy half works.
+`);
   process.exit(EXIT_CLEAN);
 }
 
@@ -93,7 +66,7 @@ if (reposFlag >= 0) {
     .split(",")
     .map((r) => r.trim())
     .filter(Boolean)
-    .map((repo) => ({ repo, note: "ad hoc" }));
+    .map((repo) => ({ repo, note: "ad hoc", expect: "serve" as const }));
 } else if (batchName && BATCHES[batchName]) {
   targets = BATCHES[batchName];
 } else {
