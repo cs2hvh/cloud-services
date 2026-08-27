@@ -301,6 +301,16 @@ export const projects = {
     (await db.select<ProjectRow>("projects", `select=*&ref=eq.${ref}`))[0] ?? null,
 
   /**
+   * By primary key — for resolving the project a DEPLOYMENT already names.
+   *
+   * The build worker previously re-derived the project from (team slug, repo
+   * slug), which silently created a duplicate in the wrong team when the
+   * deployment came from the dashboard rather than a script.
+   */
+  byId: async (id: string) =>
+    (await db.select<ProjectRow>("projects", `select=*&id=eq.${id}`))[0] ?? null,
+
+  /**
    * Resolve a project from a repository full name, for webhook delivery.
    * Deleted projects are excluded: a push to a repo whose project was removed
    * must not resurrect it.

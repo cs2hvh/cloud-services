@@ -227,7 +227,29 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
   }
 
   const slug = opts.repo.split("/")[1].toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 38);
-  let project = await projects.bySlug(team.id, slug);
+
+  // AN ADOPTED DEPLOYMENT ALREADY KNOWS ITS PROJECT. Use it, and never re-derive
+  // one from the team slug.
+  //
+  // Re-deriving was correct while scripts were the only caller: they pass no
+  // teamSlug, `ahura-demo` is the seeded team, and the lookup found what they
+  // meant. The dashboard is the second caller, and its projects live in the
+  // customer's OWN team — so the lookup missed, created a duplicate project in
+  // ahura-demo, and split one app across two rows: the deployment stayed with
+  // the customer's project while the alias and DNS were created against the
+  // phantom one. The hostname then served 404, because it pointed at a project
+  // with no ready deployment.
+  //
+  // Observed exactly that way on the first dashboard deploy. Third instance of
+  // the same shape today — a default that fits the only case that exists is a
+  // landmine for the case about to be added (see docs/v2/00-PROJECT.md §8).
+  let project = adopted ? await projects.byId(adopted.project_id) : await projects.bySlug(team.id, slug);
+  if (adopted && !project) {
+    throw new Error(`deployment ${adopted.ref} references project ${adopted.project_id}, which does not exist`);
+  }
+  if (adopted && project) {
+    say("project", `${project.ref} (from the deployment, not re-derived)`);
+  }
   if (!project) {
     project = await projects.create({
       teamId: team.id,
