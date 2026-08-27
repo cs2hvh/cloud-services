@@ -295,12 +295,33 @@ export interface KubeNode {
   };
 }
 
+/** One container's state, in the three shapes Kubernetes reports it. */
+export interface ContainerState {
+  waiting?: { reason?: string; message?: string };
+  running?: { startedAt?: string };
+  terminated?: { exitCode: number; reason?: string; message?: string; finishedAt?: string };
+}
+
 export interface KubePod {
   metadata: { name: string; namespace: string; labels?: Record<string, string> };
   status?: {
     phase?: string;
-    conditions?: Array<{ type: string; status: string }>;
-    containerStatuses?: Array<{ ready: boolean; restartCount: number; image: string; imageID?: string }>;
+    // `reason` and `message` carry WHY a condition is false. Without them a pod
+    // that is Ready=False is indistinguishable from one that is still starting,
+    // and both look like a 503 from outside.
+    conditions?: Array<{ type: string; status: string; reason?: string; message?: string }>;
+    containerStatuses?: Array<{
+      ready: boolean;
+      restartCount: number;
+      image: string;
+      imageID?: string;
+      // A container that cannot start names a waiting reason (ImagePullBackOff,
+      // CrashLoopBackOff); one that has stopped names an exit code. `lastState`
+      // is the important half of a crash loop: by the time anyone looks, the
+      // current state is Waiting and the reason it died is in the previous one.
+      state?: ContainerState;
+      lastState?: ContainerState;
+    }>;
   };
 }
 

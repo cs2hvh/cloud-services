@@ -128,6 +128,48 @@ async function cleanup(): Promise<void> {
   }
 }
 
+/**
+ * Why did the hostname answer 5xx?
+ *
+ * The probe used to report `APP-ERR 503` and then delete the project, which
+ * ends the investigation before it starts: the pod is gone, and 503 covers
+ * everything from a crash loop to a readiness probe that never passes to an
+ * image that will not pull. Every one of those has a different owner.
+ *
+ * Pod STATUS is enough to tell them apart and is plain JSON, unlike the log
+ * endpoint. A container that exited names its exit code; one that cannot start
+ * names a waiting reason; one that is Running but not Ready is the app itself
+ * refusing to come up.
+ */
+async function diagnose(projectRef: string): Promise<void> {
+  try {
+    const k = kube(loadKubeconfig(process.env.V2_KUBECONFIG ?? "C:/ahura-secrets/kubeconfig-v2-dev.yaml"));
+    const pods = await k.listPods(`app-${projectRef}`);
+    if (!pods.length) {
+      console.log("  diagnose    no pods in the namespace — nothing was scheduled");
+      return;
+    }
+    for (const pod of pods) {
+      const phase = pod.status?.phase ?? "unknown";
+      const conds = (pod.status?.conditions ?? [])
+        .filter((c) => c.type === "Ready")
+        .map((c) => `Ready=${c.status}${c.reason ? ` (${c.reason})` : ""}`)
+        .join(" ");
+      console.log(`  diagnose    ${pod.metadata?.name}: phase=${phase} ${conds}`);
+      for (const cs of pod.status?.containerStatuses ?? []) {
+        const w = cs.state?.waiting;
+        const t = cs.state?.terminated ?? cs.lastState?.terminated;
+        if (w) console.log(`  diagnose      waiting: ${w.reason}${w.message ? ` — ${w.message}` : ""}`);
+        if (t) console.log(`  diagnose      exited ${t.exitCode} (${t.reason})${t.message ? ` — ${t.message}` : ""}`);
+        if (cs.restartCount) console.log(`  diagnose      restarts: ${cs.restartCount}`);
+      }
+    }
+  } catch (e) {
+    // Never let a diagnostic failure change the verdict — it is commentary on
+    // a result that has already been decided.
+    console.log(`  diagnose    could not read pod status: ${(e as Error).message.slice(0, 120)}`);
+  }
+}
 async function main(): Promise<number> {
   if (!(await db.reachable())) {
     console.error("control plane unreachable — proving nothing");
@@ -201,6 +243,7 @@ async function main(): Promise<number> {
   // own code answered badly — the platform did its job.
   const verdict = served ? "PASS" : status >= 500 ? "APP-ERR" : "FAIL";
   console.log(`  RESULT      ${verdict}  http=${status || "no answer"}`);
+  if (!served && builtRef) await diagnose(builtRef);
   console.log(`  project     ${builtRef ?? "(none)"}`);
   console.log(`  hostname    https://${hostname}`);
   console.log(`  stage       reached ${stage}`);

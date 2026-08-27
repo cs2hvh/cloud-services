@@ -78,7 +78,7 @@ export const BATCHES: Record<string, Target[]> = {
     { repo: "gothinkster/angular-realworld-example-app", note: "Angular, CLI build", expect: "serve" },
   ],
   svelte: [
-    { repo: "sveltejs/realworld", note: "SvelteKit on `master`, pnpm", expect: "serve" },
+    { repo: "sveltejs/realworld", note: "SvelteKit on `master`, pnpm; wants a backend API", expect: "app-err" },
   ],
   astro: [
     // Astro through OUR generated Dockerfile. astro-paper ships its own, so it
