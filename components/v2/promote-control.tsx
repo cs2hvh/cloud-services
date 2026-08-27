@@ -38,14 +38,12 @@ export interface PromotableDeployment {
 
 export function PromoteControl({
   projectRef,
-  aliasRef,
   hostname,
   currentDeploymentRef,
   candidates,
   routingLive,
 }: {
   projectRef: string;
-  aliasRef: string;
   hostname: string;
   currentDeploymentRef: string | null;
   candidates: PromotableDeployment[];
@@ -80,15 +78,38 @@ export function PromoteControl({
     setBusy(true);
     setResult(null);
 
-    const res = await fetch(`/api/v2/projects/${projectRef}/aliases`, {
-      method: "PATCH",
+    // /rollback, NOT PATCH /aliases. That endpoint moves ONE alias, which is
+    // right for pinning a single custom domain and wrong here: a project’s
+    // production and custom aliases are the same live site, so moving only
+    // production leaves every custom domain serving the version just judged
+    // broken. This page did exactly that — rolling back v2-docker left
+    // app.ahurasense.ai behind, and nothing reported a problem because each
+    // alias was individually consistent.
+    //
+    // It also refuses what PATCH could not see: a deployment whose image the
+    // registry no longer has, which would replace a working site with a pod
+    // that cannot start.
+    const res = await fetch(`/api/v2/projects/${projectRef}/rollback`, {
+      method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ alias: aliasRef, deployment: selected }),
+      body: JSON.stringify({ deployment: selected }),
     });
     const body = await res.json().catch(() => null);
 
     if (!res.ok) {
-      setResult(body?.error?.message ?? "Could not update the alias.");
+      setResult(body?.error?.message ?? "Could not roll back.");
+      setBusy(false);
+      return;
+    }
+
+    // Surfaced rather than swallowed. The rollback IS durable — the alias
+    // write succeeded — but the cluster has not caught up, and an operator
+    // who is not told will repeat a write that already worked.
+    if (body?.converged === false) {
+      setResult(
+        `Rolled back, but the cluster has not converged yet. It is recorded and ` +
+          `will be applied — do not repeat it. (${body?.convergeError ?? "no detail"})`,
+      );
       setBusy(false);
       return;
     }

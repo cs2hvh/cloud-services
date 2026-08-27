@@ -237,7 +237,6 @@ export default async function ProjectPage({ params }: { params: Promise<{ ref: s
           <div className="mt-3 border-t border-black/5 pt-3 dark:border-white/10">
             <PromoteControl
               projectRef={project.ref}
-              aliasRef={production.ref}
               hostname={production.hostname}
               currentDeploymentRef={
                 promotable.find((p) => p.ref === latest?.ref)?.ref ?? null
