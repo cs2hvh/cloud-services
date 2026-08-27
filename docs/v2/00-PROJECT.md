@@ -286,10 +286,16 @@ behavioural tests replaying confirmed v1 criticals.
     split the app in half — deployment in the customer team, alias and DNS in the
     phantom — and the hostname served **404**. An adopted deployment already
     knows its project and is now used directly.
-  - Still missing from the UI: build logs, custom-domain self-service, rollback,
-    and delete. **All four have APIs** (`deployments/[ref]/logs`,
-    `projects/[ref]/domains`, `projects/[ref]` DELETE) except rollback, which
-    has a working script and an applied RPC but no route — see below.
+  - ~~Still missing from the UI: build logs, custom-domain self-service,
+    rollback, and delete.~~ **ALL FOUR NOW EXIST** as of 2026-08-27. Build and
+    runtime logs, the domain manager with its verification records, rollback,
+    and delete are on the project page.
+    - Delete was the last, and it needed the route fixed first: DELETE marked
+      the row and left the workload running. `prj-61de90bd2dae` was deleted at
+      08:08 and eleven hours later still held three Deployments and four
+      Services. It now releases the aliases and deletes the namespace, and
+      reports `deleted` and `marked_for_deletion` as different outcomes rather
+      than flattening them.
 - **ROLLBACK WORKS, AND ONLY FROM A SCRIPT** 2026-08-27 (`418168fd`).
   `scripts/v2/rollback.ts --project … [--to …] [--apply]`. Proven on a live
   app in both directions: rolled `prj-560214c8fa34` back to `dpl-d04263409931`
