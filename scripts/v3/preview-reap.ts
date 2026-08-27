@@ -181,7 +181,15 @@ const code = !safety.safeToReview && !nothingWasThereToExamine
   ? EXIT_UNTRUSTWORTHY
   : urgent.length > 0
     ? EXIT_URGENT
-    : findings.length > 0 || actionable.length > 0 || (!proven && capabilityUsed)
+    // `!proven && capabilityUsed` used to be a third disjunct here — "the
+    // index is empty while the thing it indexes is not". It was written for
+    // the capability being unwired, and it fires identically on a FULLY
+    // REAPED fleet, which is the same defect the clause above it just fixed
+    // one layer down. Removed rather than narrowed: the condition it was
+    // reaching for is `actionable.length > 0`, which is already here. An
+    // unindexed environment with nothing running is the resting state of a
+    // reaped preview and is not evidence of anything.
+    : findings.length > 0 || actionable.length > 0
       ? EXIT_FINDINGS
       : EXIT_CLEAN;
 
@@ -272,14 +280,25 @@ if (JSON_OUT) {
   }
 
   console.log(`\n${line}`);
-  if (!proven) {
+  if (!proven && !capabilityUsed) {
+    // Nothing has ever been created. This is the only remaining case where
+    // examining zero says nothing: the sweep would print exactly this while
+    // the capability was unwired, and there is nothing here to tell the two
+    // apart.
     console.log(
-      capabilityUsed
-        ? `  planReap examined ZERO while ${index.environments} preview environment(s) exist — its index\n` +
-            `  is empty and the thing it indexes is not.\n`
-        : `  No preview environment has ever been created. This sweep is UNPROVEN rather\n` +
-            `  than clean: it would print exactly this while the capability was unwired,\n` +
-            `  and nothing here could tell the two apart.\n`,
+      `  No preview environment has ever been created. This sweep is UNPROVEN rather\n` +
+        `  than clean: it would print exactly this while the capability was unwired,\n` +
+        `  and nothing here could tell the two apart.\n`,
+    );
+  } else if (!proven && actionable.length === 0) {
+    // Examined zero because every environment is resting. That is what a
+    // working reaper leaves behind, and the previous wording — "its index is
+    // empty and the thing it indexes is not" — contradicted the line printed
+    // six rows above it in the same run.
+    console.log(
+      `  Nothing to examine: every preview environment is unindexed and idle, which\n` +
+        `  is what a reaped fleet looks like. The index is empty because the reaper\n` +
+        `  emptied it.\n`,
     );
   } else if (code === EXIT_CLEAN) {
     console.log(`  Every preview is within its TTL, and every one was examined.\n`);
