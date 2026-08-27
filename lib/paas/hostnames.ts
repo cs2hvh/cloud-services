@@ -78,6 +78,23 @@ const PLATFORM = [
   "activator", "ahura", "ahurasense", "cluster", "gateway", "grafana",
   "ingress", "kubernetes", "metrics", "operator", "paas", "prometheus",
   "registry", "traefik",
+  // `fallback` is the Cloudflare for SaaS FALLBACK ORIGIN — the hostname every
+  // customer's custom domain resolves to before the Ingress routes it by Host
+  // header. A tenant claiming this label would mint fallback.ahurasense.com,
+  // claim the Ingress for it, and receive EVERY customer's custom-domain
+  // traffic. Cross-tenant hijack of the whole custom-domain feature.
+  //
+  // Missed because LIVE_ZONE_LABELS was seeded from the zone as it stood, and
+  // this record was created afterwards — by me, for the fallback origin. The
+  // list is a SNAPSHOT, so anything added to the zone later is unreserved until
+  // someone remembers. Caught by the operator dashboard's own hostname panel
+  // reporting it as claimable, the first time that page was ever rendered.
+  //
+  // The general rule, and the reason this comment is long: CREATING A PLATFORM
+  // DNS RECORD IS ALSO A RESERVATION. A record with no paas.aliases row is
+  // invisible to the deploy path's collision check, which only asks whether
+  // another PROJECT holds the hostname.
+  "fallback",
 ] as const;
 
 /**

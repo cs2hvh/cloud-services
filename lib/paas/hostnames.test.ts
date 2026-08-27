@@ -181,3 +181,26 @@ test("a branch of only punctuation still yields a valid label", () => {
   assert.equal(checkLabel(label).ok, true, `${label} is not usable`);
   assert.notEqual(label, "my-app", "a preview must never mint the production label");
 });
+
+test("THE FALLBACK ORIGIN CANNOT BE CLAIMED BY A TENANT", () => {
+  // `fallback.ahurasense.com` is the Cloudflare for SaaS fallback origin: every
+  // customer's custom domain resolves to it before the Ingress routes by Host.
+  // A tenant claiming this label would receive EVERY customer's custom-domain
+  // traffic — a cross-tenant hijack of the entire feature.
+  //
+  // It was claimable for about an hour. LIVE_ZONE_LABELS is a SNAPSHOT of the
+  // zone, the record was created after that snapshot, and the deploy path's
+  // collision check only asks whether another PROJECT holds a hostname — a bare
+  // DNS record with no paas.aliases row is invisible to it.
+  assert.throws(() => assertLabelAvailable("fallback"));
+  assert.equal(checkLabel("fallback").ok, false);
+});
+
+test("every hostname the platform itself serves is reserved", () => {
+  // The generalisation, so the next platform record added to the zone has a
+  // place to be declared. Creating a platform DNS record IS a reservation, and
+  // nothing enforces that except this list.
+  for (const label of ["fallback", "activator", "registry", "traefik", "gateway"]) {
+    assert.equal(checkLabel(label).ok, false, `${label} must be reserved`);
+  }
+});
