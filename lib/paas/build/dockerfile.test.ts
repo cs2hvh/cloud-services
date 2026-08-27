@@ -296,3 +296,33 @@ test("npm needs no corepack anywhere", () => {
   const out = generateDockerfile(input({ detection, packageManager: "npm", hasLockfile: true }))!;
   assert.doesNotMatch(out, /corepack/, "npm ships with node; enabling corepack is pure cost");
 });
+
+test("BUN GETS A BUN IMAGE, AND NOTHING ELSE DOES", () => {
+  // bun is not node. It does not exist in node:alpine and corepack cannot shim
+  // it in — it is a separate runtime. The generated Dockerfile named bun in
+  // three RUN lines and never gave itself a machine that had it, so every bun
+  // project died at `bun: not found` on the first install.
+  //
+  // Both directions asserted: bun must get oven/bun, and npm/pnpm/yarn must NOT
+  // — switching everyone to a bun image would be a far larger change than the
+  // bug it fixed.
+  const detection = detect(["package.json"], {
+    "package.json": JSON.stringify({
+      dependencies: { "@sveltejs/kit": "2" },
+      scripts: { build: "vite build", start: "node build" },
+    }),
+  });
+
+  const bun = generateDockerfile(input({ detection, packageManager: "bun", hasLockfile: true }))!;
+  const bunFroms = bun.split("\n").filter((l) => l.startsWith("FROM "));
+  assert.ok(bunFroms.length >= 3, "expected a multi-stage build");
+  for (const f of bunFroms) {
+    assert.match(f, /oven\/bun/, `bun stage must use a bun image, got: ${f}`);
+  }
+
+  for (const packageManager of ["npm", "pnpm", "yarn"] as const) {
+    const out = generateDockerfile(input({ detection, packageManager, hasLockfile: true }))!;
+    assert.doesNotMatch(out, /oven\/bun/, `${packageManager} must stay on the node image`);
+    assert.match(out, /FROM node:/, `${packageManager} must use a node image`);
+  }
+});
