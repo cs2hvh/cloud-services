@@ -293,6 +293,14 @@ export interface AliasRow {
   id: string; ref: string; project_id: string; hostname: string;
   kind: "production" | "branch" | "deployment" | "custom";
   deployment_id: string | null;
+  /**
+   * Set when the owning project was torn down.
+   *
+   * The row is KEPT — it records which hostname served and is part of what
+   * explains a bill — but a released alias no longer holds its NAME, and the
+   * unique index skips it so somebody else can take it.
+   */
+  released_at: string | null;
 }
 
 export const teams = {
@@ -546,8 +554,34 @@ export const aliases = {
     (await db.select<AliasRow>(
       "aliases", `select=*&project_id=eq.${projectId}&kind=eq.production`,
     ))[0] ?? null,
+  /**
+   * Who holds this hostname RIGHT NOW.
+   *
+   * Released aliases are excluded. Teardown keeps the row — it records which
+   * hostname served and what the tenant was charged for — but a torn-down
+   * project must not go on owning the NAME. Without the filter, deleting a
+   * project made its hostname unusable by anyone forever, and the error named
+   * a project that no longer appears anywhere in the UI.
+   */
   byHostname: async (hostname: string) =>
-    (await db.select<AliasRow>("aliases", `select=*&hostname=eq.${hostname.toLowerCase()}`))[0] ?? null,
+    (
+      await db.select<AliasRow>(
+        "aliases",
+        `select=*&hostname=eq.${hostname.toLowerCase()}&released_at=is.null`,
+      )
+    )[0] ?? null,
+  /**
+   * Give up every hostname this project holds, keeping the rows.
+   *
+   * Idempotent, and it never un-releases: a second teardown run must not
+   * reopen a name somebody else has since taken.
+   */
+  releaseForProject: async (projectId: string) =>
+    db.update<AliasRow>(
+      "aliases",
+      `project_id=eq.${projectId}&released_at=is.null`,
+      { released_at: new Date().toISOString() },
+    ),
   create: async (input: {
     projectId: string; hostname: string; kind: AliasRow["kind"]; deploymentId?: string | null;
   }) =>

@@ -43,7 +43,7 @@ const line = () => console.log("─".repeat(96));
 
 interface Action {
   project: string;
-  kind: "scale-down" | "remove-ingress" | "remove-dns" | "noop";
+  kind: "scale-down" | "remove-ingress" | "remove-dns" | "release-name" | "noop";
   target: string;
   detail: string;
 }
@@ -149,6 +149,29 @@ async function main(): Promise<void> {
       failures.push(`${p.ref}: DNS removal failed (${(e as Error).message.slice(0, 100)})`);
     }
 
+    // 4. RELEASE THE HOSTNAMES, last, after the DNS record is gone.
+    //
+    //    The rows stay — they are what explains a bill — but the NAME has to
+    //    come back. `aliases_hostname_idx` was unique with no predicate and
+    //    `byHostname` had no notion of a deleted project, so a torn-down
+    //    project went on claiming its hostname forever: nobody, including its
+    //    owner, could ever use that name again, and the refusal named a
+    //    project that appears nowhere in the UI because it is deleted.
+    //
+    //    Ordered after DNS on purpose. Releasing first would let another
+    //    project claim the name while a record still pointed at this one's
+    //    address, and the new owner's first deploy would refuse to overwrite
+    //    a record pointing elsewhere.
+    try {
+      const held = (await aliases.forProject(p.id)).filter((a) => a.released_at === null);
+      for (const a of held) {
+        actions.push({ project: p.ref, kind: "release-name", target: a.hostname, detail: "hostname free to reuse" });
+      }
+      if (APPLY && held.length) await aliases.releaseForProject(p.id);
+    } catch (e) {
+      failures.push(`${p.ref}: releasing hostnames failed (${(e as Error).message.slice(0, 100)})`);
+    }
+
     if (!actions.some((a) => a.project === p.ref)) {
       actions.push({ project: p.ref, kind: "noop", target: p.ref, detail: "already torn down" });
     }
@@ -170,6 +193,7 @@ async function main(): Promise<void> {
   // aliases explain what the tenant was charged for, and project_charges
   // references the project.
   console.log(`  Database rows are KEPT. Build history is what explains a bill.`);
+  console.log(`  Hostnames are RELEASED — the row stays, the name becomes reusable.`);
 
   if (failures.length) {
     console.log(`\n  ${failures.length} failure(s) — the project stays deleted and will be retried:`);
