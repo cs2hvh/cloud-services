@@ -1,266 +1,188 @@
 /**
- * /api/v2/projects/[ref]/env — environment variables.
+ * GET    /api/v2/projects/{ref}/env — which variables are set (NEVER the values)
+ * PUT    /api/v2/projects/{ref}/env — set or replace variables
+ * DELETE /api/v2/projects/{ref}/env?key=NAME — remove one
  *
- * GET returns KEYS AND METADATA ONLY. It never returns a value, and there is
- * no query parameter that makes it. v1's public API returned every decrypted
- * value in one unaudited response, which bypassed the controls its own
- * dashboard enforced; the fix is that this surface has no code path capable of
- * decryption.
+ * VALUES ARE WRITE-ONLY. The GET returns names, whether a variable is public,
+ * and when it changed — never plaintext, never ciphertext, not even a masked
+ * prefix. A dashboard that can show a secret is a dashboard that leaks every
+ * secret the moment a session is stolen or a screenshot is shared, and "reveal"
+ * buttons are how that becomes routine. Rotating is cheap; unleaking is not.
  *
- * Reading a value requires an audited RPC that does not exist yet — the
- * decrypt path is in the infrastructure lane. Until it lands, values are
- * write-only from here, which is the correct default anyway: a dashboard needs
- * to SET secrets far more often than it needs to show them.
+ * ENCRYPTION IS BOUND TO (project, key), not merely stored beside it — moving a
+ * row to another project or renaming its key makes it undecryptable rather than
+ * silently readable in the wrong context. So the project ref is resolved under
+ * RLS FIRST, and the ref the caller sees is the ref the ciphertext is bound to.
  *
- * Writes encrypt here, in the route, so the master key never leaves the
- * server — and the INSERT still goes through the RLS client, so RLS remains
- * the authorization boundary. lib/paas/secrets deliberately exports no
- * decrypt path for this lane: values reach containers via the reconciler and
- * never come back through the API.
+ * PUBLIC VARIABLES ARE A DIFFERENT THING and are marked as such. A
+ * NEXT_PUBLIC_-prefixed value is baked into a JavaScript bundle at build time
+ * and is readable by anyone who loads the page. Storing it encrypted would imply
+ * a secrecy the deployment cannot honour, so the flag records the truth rather
+ * than the wish.
  */
 
-import { isPublicEnvKey } from "@/lib/paas/build/dockerfile.ts";
-import { encryptEnvValue, bytesToPgHex } from "@/lib/paas/secrets.ts";
-import { getCaller } from "../../../_lib/auth";
-import {
-  json,
-  unauthenticated,
-  notFound,
-  invalid,
-  conflict,
-  fromPostgrestError,
-  apiError,
-} from "../../../_lib/http";
+import { createClient } from "@/lib/supabase/server";
+import { encryptEnvValue, bytesToPgHex } from "@/lib/paas/secrets";
+import { json, unauthenticated, notFound, invalid, apiError } from "../../../_lib/http";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-type Params = { params: Promise<{ ref: string }> };
+type Ctx = { params: Promise<{ ref: string }> };
 
-/** POSIX-ish env name. Rejecting early keeps junk out of a build arg. */
+const PROJECT_REF = /^prj-[0-9a-f]{12}$/;
+/** POSIX-ish env name. Rejected rather than sanitised: a silently renamed variable is not set. */
 const ENV_KEY = /^[A-Za-z_][A-Za-z0-9_]{0,127}$/;
 
-async function resolveProject(
-  caller: NonNullable<Awaited<ReturnType<typeof getCaller>>>,
-  ref: string
-) {
-  const { data } = await caller.db
+async function project(supabase: Awaited<ReturnType<typeof createClient>>, ref: string) {
+  return supabase
+    .schema("paas")
     .from("projects")
-    .select("id, ref, name")
+    .select("id,ref,deleted_at")
     .eq("ref", ref)
-    .is("deleted_at", null)
     .maybeSingle();
-  return (data ?? null) as { id: string; ref: string; name: string } | null;
 }
 
-export async function GET(_request: Request, { params }: Params) {
-  const caller = await getCaller();
-  if (!caller) return unauthenticated();
-  const { ref } = await params;
+async function requireProject(ref: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+  if (authError || !user) return { error: unauthenticated() as Response };
+  if (!PROJECT_REF.test(ref)) return { error: notFound("Project") as Response };
 
-  const project = await resolveProject(caller, ref);
-  if (!project) return notFound("Project");
+  const p = await project(supabase, ref);
+  if (p.error) {
+    console.error("[v2/env] project read failed:", JSON.stringify(p.error));
+    return { error: apiError("internal", "Could not read the project.", 500) as Response };
+  }
+  if (!p.data || p.data.deleted_at) return { error: notFound("Project") as Response };
+  return { supabase, project: p.data };
+}
 
-  // value_ct is deliberately absent from this select. Adding it would put
-  // ciphertext on the wire for no reason and invite a future decrypt-on-read.
-  const { data, error } = await caller.db
+export async function GET(_req: Request, ctx: Ctx) {
+  const { ref } = await ctx.params;
+  const r = await requireProject(ref);
+  if ("error" in r) return r.error;
+
+  const { data, error } = await r.supabase
+    .schema("paas")
     .from("env_vars")
-    .select("key, is_public, created_at, updated_at, environments:environment_id (ref, kind)")
-    .eq("project_id", project.id)
-    .order("key", { ascending: true });
+    .select("key,is_public,environment_id,updated_at")
+    .eq("project_id", r.project.id)
+    .order("key");
 
   if (error) {
-    const mapped = fromPostgrestError(error);
-    if (mapped) return mapped;
-    console.error("[v2/env] list failed:", error);
-    return apiError("internal", "Could not load environment variables.", 500);
+    console.error("[v2/env GET] read failed:", JSON.stringify(error));
+    return apiError("internal", "Could not read environment variables.", 500);
   }
 
-  const rows = data as Array<{
-    key: string;
-    is_public: boolean;
-    created_at: string;
-    updated_at: string;
-    environments: { ref: string; kind: string } | null;
-  }>;
-
   return json({
-    project: { ref: project.ref, name: project.name },
-    variables: rows.map((row) => ({
-      key: row.key,
-      /** Public keys are baked into the build; the rest are runtime-only. */
-      isPublic: row.is_public,
-      scope: row.environments
-        ? { ref: row.environments.ref, kind: row.environments.kind }
-        : { ref: null, kind: "all" },
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-      /** Constant, not a flag — no request can change it. */
-      valueVisible: false,
+    // No values. See the header.
+    vars: (data ?? []).map((v) => ({
+      key: v.key,
+      isPublic: v.is_public,
+      scope: v.environment_id ? "environment" : "all",
+      updatedAt: v.updated_at,
     })),
-    note:
-      "Values are never returned by this endpoint. Reading one requires an " +
-      "audited lookup, which is not available yet.",
   });
 }
 
-interface PutBody {
-  key?: unknown;
-  value?: unknown;
-  environment?: unknown;
-}
+export async function PUT(req: Request, ctx: Ctx) {
+  const { ref } = await ctx.params;
+  const r = await requireProject(ref);
+  if ("error" in r) return r.error;
 
-export async function PUT(request: Request, { params }: Params) {
-  const caller = await getCaller();
-  if (!caller) return unauthenticated();
-  const { ref } = await params;
-
-  let body: PutBody;
+  let body: { vars?: unknown };
   try {
-    body = (await request.json()) as PutBody;
+    body = (await req.json()) as { vars?: unknown };
   } catch {
-    return invalid("Request body must be JSON.");
+    return invalid("Body is not JSON.");
   }
 
-  const key = typeof body.key === "string" ? body.key.trim() : "";
-  if (!ENV_KEY.test(key)) {
-    return invalid(
-      "Key must start with a letter or underscore and contain only letters, numbers and underscores.",
-      { key: "malformed" }
-    );
-  }
-  if (typeof body.value !== "string") {
-    return invalid("A string value is required.", { value: "required" });
+  const entries = body?.vars;
+  if (!entries || typeof entries !== "object" || Array.isArray(entries)) {
+    return invalid('Expected {"vars": {"NAME": "value", ...}}.');
   }
 
-  const project = await resolveProject(caller, ref);
-  if (!project) return notFound("Project");
+  const pairs = Object.entries(entries as Record<string, unknown>);
+  if (!pairs.length) return invalid("No variables given.");
+  if (pairs.length > 100) return invalid("Too many variables in one request (max 100).");
 
-  // isPublicEnvKey is the single source of truth for which prefixes become
-  // build args. Re-deriving the prefix list here is how the UI and the builder
-  // end up disagreeing about whether a value is baked into an image.
-  const isPublic = isPublicEnvKey(key);
+  const rows: Array<Record<string, unknown>> = [];
+  for (const [key, value] of pairs) {
+    if (!ENV_KEY.test(key)) {
+      return invalid(`"${key}" is not a valid variable name.`, { key: "shape" });
+    }
+    if (typeof value !== "string") {
+      return invalid(`Value for "${key}" must be a string.`, { [key]: "type" });
+    }
+    if (value.length > 32_768) {
+      return invalid(`Value for "${key}" is too large.`, { [key]: "size" });
+    }
 
-  // Encrypt before the write. projectRef and key are bound into the key
-  // derivation and the AAD, so a row copied to another project or renamed onto
-  // a public-prefixed key becomes undecryptable rather than quietly readable
-  // in the wrong context.
-  let valueCt: string;
-  let dekId: string;
-  try {
-    const enc = encryptEnvValue(project.ref, key, body.value);
-    valueCt = bytesToPgHex(enc.valueCt);
-    dekId = enc.dekId;
-  } catch (err) {
-    // Most likely a missing master key. Never fall back to storing plaintext
-    // in a column named ciphertext.
-    console.error("[v2/env] encryption failed:", err);
-    return apiError(
-      "internal",
-      "Could not encrypt the value. Nothing was written.",
-      500
-    );
-  }
+    let enc;
+    try {
+      // Bound to THIS project's ref — the one RLS just proved the caller owns.
+      enc = encryptEnvValue(r.project.ref, key, value);
+    } catch (e) {
+      // A missing master key must not become an unencrypted write. Refusing
+      // loudly is the only safe answer; storing plaintext "for now" is how a
+      // secret store stops being one.
+      console.error("[v2/env PUT] encryption failed:", (e as Error).message);
+      return apiError("internal", "Secret storage is not configured. Nothing has been saved.", 500);
+    }
 
-  // Not an upsert. paas.env_vars' unique index is an EXPRESSION index —
-  // (project_id, COALESCE(environment_id, '000...'), key) — and PostgREST's
-  // onConflict only accepts plain column names, so it cannot name this
-  // constraint. Update-then-insert is the honest way to express it.
-  const stamp = new Date().toISOString();
-  const { data: updated, error: updateError } = await caller.db
-    .from("env_vars")
-    .update({
-      value_ct: valueCt,
-      dek_id: dekId,
-      is_public: isPublic,
-      updated_at: stamp,
-    })
-    .eq("project_id", project.id)
-    .eq("key", key)
-    .is("environment_id", null)
-    .select("key")
-    .maybeSingle();
-
-  if (updateError) {
-    const mapped = fromPostgrestError(updateError);
-    if (mapped) return mapped;
-    console.error("[v2/env] update failed:", updateError);
-    return apiError("internal", "Could not save the variable.", 500);
-  }
-
-  if (!updated) {
-    const { error: insertError } = await caller.db.from("env_vars").insert({
-      project_id: project.id,
+    rows.push({
+      project_id: r.project.id,
       environment_id: null,
       key,
-      value_ct: valueCt,
-      dek_id: dekId,
-      is_public: isPublic,
+      value_ct: bytesToPgHex(enc.valueCt),
+      dek_id: enc.dekId,
+      is_public: key.startsWith("NEXT_PUBLIC_") || key.startsWith("PUBLIC_"),
     });
+  }
 
-    if (insertError) {
-      // Two concurrent first-writes of the same key: the expression index
-      // rejects the loser. Report it rather than silently discarding a value
-      // the user believes they saved.
-      if (insertError.code === "23505") {
-        return conflict(
-          `"${key}" was created by another request at the same time. Try again.`
-        );
-      }
-      const mapped = fromPostgrestError(insertError);
-      if (mapped) return mapped;
-      console.error("[v2/env] insert failed:", insertError);
-      return apiError("internal", "Could not save the variable.", 500);
-    }
+  const { error } = await r.supabase
+    .schema("paas")
+    .from("env_vars")
+    .upsert(rows, { onConflict: "project_id,environment_id,key" });
+
+  if (error) {
+    console.error("[v2/env PUT] write failed:", JSON.stringify(error));
+    return apiError("internal", "Could not save environment variables.", 500);
   }
 
   return json({
-    key,
-    isPublic,
-    status: "saved_restarting",
-    // Kubernetes reads envFrom once at container start, so a Secret change is
-    // invisible to a running pod. The reconciler rolls the pods via a content
-    // hash on the template. Saying "saved" alone would imply it already took
-    // effect, which it has not.
-    note: isPublic
-      ? "Saved. This is a build argument, so it applies on the next deployment, not to running pods."
-      : "Saved. Pods restart to pick up the new value, so it takes effect in a few seconds.",
+    saved: rows.map((x) => x.key),
+    // Stated because it is not obvious and it is the usual surprise: a running
+    // pod keeps the environment it started with.
+    note: "Saved. Redeploy for these to take effect.",
   });
 }
 
-export async function DELETE(request: Request, { params }: Params) {
-  const caller = await getCaller();
-  if (!caller) return unauthenticated();
-  const { ref } = await params;
+export async function DELETE(req: Request, ctx: Ctx) {
+  const { ref } = await ctx.params;
+  const r = await requireProject(ref);
+  if ("error" in r) return r.error;
 
-  const key = new URL(request.url).searchParams.get("key");
-  if (!key || !ENV_KEY.test(key)) {
-    return invalid("A valid `key` is required.", { key: "required" });
-  }
+  const key = new URL(req.url).searchParams.get("key");
+  if (!key || !ENV_KEY.test(key)) return invalid("Give a valid ?key= to delete.");
 
-  const project = await resolveProject(caller, ref);
-  if (!project) return notFound("Project");
-
-  // Delete is safe to implement fully: it needs no encryption, and RLS scopes
-  // it to the caller's project.
-  const { data, error } = await caller.db
+  const { error } = await r.supabase
+    .schema("paas")
     .from("env_vars")
     .delete()
-    .eq("project_id", project.id)
-    .eq("key", key)
-    .select("key")
-    .maybeSingle();
+    .eq("project_id", r.project.id)
+    .eq("key", key);
 
   if (error) {
-    const mapped = fromPostgrestError(error);
-    if (mapped) return mapped;
-    console.error("[v2/env] delete failed:", error);
-    return apiError("internal", "Could not delete the variable.", 500);
+    console.error("[v2/env DELETE] failed:", JSON.stringify(error));
+    return apiError("internal", "Could not delete that variable.", 500);
   }
-  if (!data) return notFound("Variable");
 
-  return json({
-    key: (data as { key: string }).key,
-    status: "deleted",
-    note: "Running deployments keep the old value until they are redeployed.",
-  });
+  // Deliberately not 404 when the key was absent: DELETE is idempotent, and
+  // reporting "not found" would let a caller probe which names exist.
+  return json({ deleted: key, note: "Redeploy for this to take effect." });
 }

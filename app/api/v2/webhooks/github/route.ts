@@ -81,16 +81,23 @@ export async function POST(req: Request) {
     return json(202, { ok: true, ignored: decision.reason });
   }
 
+  // The environment is resolved BEFORE the idempotency check, because it is part
+  // of the key. Deduping on project+sha alone would drop the first push of every
+  // branch cut from the production head — same commit, already deployed to
+  // production, so a preview would look like a retry. See
+  // deployments.byEnvironmentAndSha.
+  const env =
+    decision.kind === "production"
+      ? (await environments.production(project.id)) ??
+        (await environments.create({ projectId: project.id, kind: "production", name: "production" }))
+      : await environments.forBranch(project.id, decision.branch);
+
   // Idempotency. GitHub retries deliveries, and a retry must not build the same
   // commit twice — that is double spend and two racing deploys of one commit.
-  const existing = await deployments.byProjectAndSha(project.id, push.sha);
+  const existing = await deployments.byEnvironmentAndSha(env.id, push.sha);
   if (existing) {
     return json(200, { ok: true, deployment: existing.ref, note: "already recorded for this commit" });
   }
-
-  const env =
-    (await environments.production(project.id)) ??
-    (await environments.create({ projectId: project.id, kind: "production", name: "production" }));
 
   // The sha IS known here, unlike a manual deploy — it came from the event.
   const d = await deployments.create({
@@ -102,5 +109,11 @@ export async function POST(req: Request) {
     gitMessage: push.message,
   });
 
-  return json(202, { ok: true, deployment: d.ref, sha: push.sha.slice(0, 7) });
+  return json(202, {
+    ok: true,
+    deployment: d.ref,
+    sha: push.sha.slice(0, 7),
+    kind: decision.kind,
+    environment: env.ref,
+  });
 }

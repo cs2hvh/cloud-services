@@ -1,0 +1,167 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+  <style>
+    body { margin: 0; background: #000000; color: #ededed; font-family: "Geist", system-ui, sans-serif; }
+    a { color: #ededed; text-decoration: none; } a:hover { color: #ffffff; }
+    .mono { font-family: "Geist Mono", ui-monospace, monospace; }
+    /* signature motion: the provision log writes itself */
+    @keyframes typeIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+    @keyframes blink { 0%,49% { opacity: 1; } 50%,100% { opacity: 0; } }
+    @keyframes fill { from { width: 0; } to { width: var(--w, 100%); } }
+    .line { animation: typeIn .4s ease-out both; }
+    .caret { animation: blink 1.1s step-end infinite; }
+    .bar { animation: fill 2.2s cubic-bezier(.2,.7,.2,1) both; }
+  </style>
+</helmet>
+<div style="width: 1280px; background: #000; box-sizing: border-box;">
+
+  <!-- nav -->
+  <div style="display: flex; align-items: center; justify-content: space-between; padding: 18px 44px; border-bottom: 1px solid #1a1a1a;">
+    <div style="display: flex; align-items: center; gap: 32px;">
+      <div style="font-size: 15.5px; font-weight: 600; letter-spacing: -0.02em;">ahuracloud</div>
+      <div style="display: flex; gap: 22px; font-size: 13.5px; color: #a1a1a1;">
+        <span>Products</span><span>Solutions</span><span>Docs</span><span>Pricing</span>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <span style="font-size: 13.5px; color: #a1a1a1;">Log in</span>
+      <div style="font-size: 13.5px; font-weight: 500; color: #000; background: #fff; padding: 7px 15px; border-radius: 6px;">Sign up</div>
+    </div>
+  </div>
+
+  <!-- hero: product demo is the hero -->
+  <div style="padding: 82px 44px 56px; text-align: center; position: relative;">
+    <div style="position: absolute; inset: 0; background: radial-gradient(600px 300px at 50% 0%, rgba(255,255,255,0.045), transparent 70%);"></div>
+
+    <div style="position: relative;">
+      <div class="mono" style="display: inline-block; font-size: 11px; letter-spacing: 0.1em; color: #8f8f8f; border: 1px solid #1f1f1f; border-radius: 999px; padding: 5px 14px; margin-bottom: 30px;">EVERY BYTE STAYS IN INDIA</div>
+
+      <h1 style="font-size: 68px; font-weight: 600; letter-spacing: -0.045em; line-height: 1.02; margin: 0 auto 22px; max-width: 780px;">Ship AI infrastructure<br>in one command.</h1>
+
+      <p style="font-size: 17px; line-height: 1.6; color: #a1a1a1; max-width: 560px; margin: 0 auto 34px;">GPUs, inference endpoints, Postgres, Kubernetes and object storage from a single control plane. Provisioned in seconds, billed by the second in INR.</p>
+
+      <div style="display: flex; gap: 11px; justify-content: center; margin-bottom: 54px;">
+        <div style="font-size: 14px; font-weight: 500; color: #000; background: #fff; padding: 11px 22px; border-radius: 7px;">Start deploying</div>
+        <div style="font-size: 14px; font-weight: 500; color: #ededed; border: 1px solid #2a2a2a; padding: 11px 22px; border-radius: 7px;">Read the docs</div>
+      </div>
+    </div>
+
+    <!-- the console -->
+    <div style="position: relative; max-width: 900px; margin: 0 auto; border: 1px solid #1f1f1f; border-radius: 12px; background: #0a0a0a; overflow: hidden; text-align: left; box-shadow: 0 30px 90px rgba(0,0,0,0.7);">
+      <div style="display: flex; align-items: center; gap: 10px; padding: 11px 16px; border-bottom: 1px solid #1a1a1a; background: #0d0d0d;">
+        <div style="display: flex; gap: 6px;">
+          <span style="width: 9px; height: 9px; border-radius: 50%; background: #2a2a2a;"></span>
+          <span style="width: 9px; height: 9px; border-radius: 50%; background: #2a2a2a;"></span>
+          <span style="width: 9px; height: 9px; border-radius: 50%; background: #2a2a2a;"></span>
+        </div>
+        <span class="mono" style="font-size: 11px; color: #6f6f6f; margin-left: 6px;">ahura deploy — mumbai-1</span>
+        <span class="mono" style="font-size: 10.5px; color: #35d07f; margin-left: auto;">● in-region</span>
+      </div>
+
+      <div style="padding: 20px 22px 22px; display: flex; flex-direction: column; gap: 9px;">
+        <sc-for list="{{log}}" as="l" hint-placeholder-count="7">
+          <div class="line" style="display: flex; gap: 14px; align-items: baseline; animation-delay: {{l.delay}};">
+            <span class="mono" style="font-size: 11.5px; color: #4a4a4a; width: 52px; flex-shrink: 0;">{{l.t}}</span>
+            <span class="mono" style="font-size: 12px; color: {{l.color}}; width: 84px; flex-shrink: 0;">{{l.kind}}</span>
+            <span class="mono" style="font-size: 12px; color: #c9c9c9; flex-grow: 1;">{{l.msg}}</span>
+            <span class="mono" style="font-size: 11.5px; color: #6f6f6f;">{{l.ms}}</span>
+          </div>
+        </sc-for>
+        <div style="display: flex; gap: 14px; align-items: baseline; margin-top: 4px;">
+          <span class="mono" style="font-size: 11.5px; color: #4a4a4a; width: 52px;">—</span>
+          <span class="mono" style="font-size: 12px; color: #ededed;">$ <span class="caret">▌</span></span>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); border-top: 1px solid #1a1a1a;">
+        <sc-for list="{{meters}}" as="m" hint-placeholder-count="4">
+          <div style="padding: 15px 18px; border-right: 1px solid #1a1a1a;">
+            <div class="mono" style="font-size: 9.5px; letter-spacing: 0.12em; color: #6f6f6f; margin-bottom: 9px;">{{m.k}}</div>
+            <div class="mono" style="font-size: 15px; color: #fff; margin-bottom: 9px;">{{m.v}}</div>
+            <div style="height: 2px; background: #1a1a1a; border-radius: 2px; overflow: hidden;">
+              <div class="bar" style="height: 100%; background: {{accent}}; --w: {{m.pct}};"></div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <!-- proof -->
+  <div style="padding: 30px 44px 34px; border-top: 1px solid #141414;">
+    <div class="mono" style="font-size: 10.5px; letter-spacing: 0.12em; color: #6f6f6f; text-align: center; margin-bottom: 22px;">TRUSTED BY TEAMS BUILDING IN INDIA</div>
+    <div style="display: flex; gap: 46px; justify-content: center; align-items: center;">
+      <sc-for list="{{proof}}" as="p" hint-placeholder-count="5">
+        <div style="font-size: 13px; color: #3d3d3d; border: 1px dashed #232323; border-radius: 5px; padding: 8px 18px;">{{p.label}}</div>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- one control plane -->
+  <div style="padding: 62px 44px 70px; border-top: 1px solid #141414;">
+    <h2 style="font-size: 40px; font-weight: 600; letter-spacing: -0.035em; margin: 0 0 14px; max-width: 640px;">One control plane. The whole stack.</h2>
+    <p style="font-size: 16px; line-height: 1.62; color: #a1a1a1; max-width: 580px; margin: 0 0 44px;">Most teams stitch a GPU vendor to a database host to a Kubernetes provider. Here they share one API, one bill, one audit log, one jurisdiction.</p>
+
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 14px;">
+      <sc-for list="{{stack}}" as="s" hint-placeholder-count="6">
+        <div style="border: 1px solid #1c1c1c; border-radius: 10px; padding: 22px; background: linear-gradient(180deg, #0c0c0c, #080808);">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+            <span class="mono" style="font-size: 9.5px; letter-spacing: 0.12em; color: #6f6f6f;">{{s.tag}}</span>
+            <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="{{accent}}" stroke-width="1.3"><path d="M3 8h10M9 4l4 4-4 4"/></svg>
+          </div>
+          <div style="font-size: 16px; font-weight: 600; margin-bottom: 8px; letter-spacing: -0.01em;">{{s.title}}</div>
+          <div style="font-size: 13px; line-height: 1.6; color: #8f8f8f; margin-bottom: 16px;">{{s.body}}</div>
+          <div class="mono" style="font-size: 11px; color: #6f6f6f; border-top: 1px solid #1a1a1a; padding-top: 12px;">{{s.spec}}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{"accent":{"editor":"color","default":"#0095FF","options":["#0095FF","#ffffff","#35d07f","#a78bfa"]}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const accent = this.props.accent ?? '#0095FF';
+    return {
+      accent,
+      log: [
+        { t: '00:00', kind: 'resolve',  color: '#6f6f6f', msg: 'region mumbai-1 — residency policy: IN-only', ms: '12ms',  delay: '0s'   },
+        { t: '00:00', kind: 'gpu',      color: accent,    msg: 'reserved 1× H200 SXM · 141 GB HBM3e',        ms: '840ms', delay: '.25s' },
+        { t: '00:01', kind: 'postgres', color: accent,    msg: 'cluster pg-primary · 3 replicas in-region',   ms: '2.1s',  delay: '.5s'  },
+        { t: '00:03', kind: 'storage',  color: accent,    msg: 'bucket artifacts-prod · versioning on',       ms: '410ms', delay: '.75s' },
+        { t: '00:04', kind: 'endpoint', color: accent,    msg: 'inference route /v1/chat — warm',             ms: '1.3s',  delay: '1s'   },
+        { t: '00:05', kind: 'audit',    color: '#6f6f6f', msg: 'append-only trail opened · exportable',       ms: '38ms',  delay: '1.25s'},
+        { t: '00:05', kind: 'ready',    color: '#35d07f', msg: 'stack live — billing starts now, per second', ms: '',      delay: '1.5s' },
+      ],
+      meters: [
+        { k: 'PROVISION P50', v: '[N]s',  pct: '72%' },
+        { k: 'DATA IN INDIA', v: '100%',  pct: '100%' },
+        { k: 'IDLE COST',     v: '₹0',    pct: '4%'  },
+        { k: 'SLA',           v: '[X]%',  pct: '96%' },
+      ],
+      proof: [
+        { label: '[LOGO — cleared?]' }, { label: '[LOGO]' }, { label: '[LOGO]' }, { label: '[LOGO]' }, { label: '[LOGO]' },
+      ],
+      stack: [
+        { tag: 'GPU',        title: 'On-demand accelerators',  body: 'H100, H200 and B200 by the second, with volumes that persist between sessions.', spec: 'single GPU → 8× SXM NVLink' },
+        { tag: 'INFERENCE',  title: 'Serverless endpoints',    body: 'Open and frontier models behind one API, with per-token accounting you can audit.', spec: 'streaming · OpenAI-compatible' },
+        { tag: 'COMPUTE',    title: 'Shared to bare metal',    body: 'Pinned cores for production traffic, or a full physical host for regulated work.',   spec: '1 – 192 cores · NVMe' },
+        { tag: 'DATA',       title: 'Managed Postgres',        body: 'Primaries and replicas that never leave the region you named. Backups included.',     spec: 'PITR · in-region replicas' },
+        { tag: 'ORCHESTRATE',title: 'Managed Kubernetes',      body: 'Conformant clusters with the control plane operated for you, nodes you can size.',   spec: 'autoscaling · private VPC' },
+        { tag: 'STORAGE',    title: 'S3-compatible objects',   body: 'Versioned buckets with signed URLs, addressed by the tooling you already use.',      spec: 'S3 API · egress metered' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

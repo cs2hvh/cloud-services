@@ -32,13 +32,17 @@ export function normalizeStockStatus(
  * The authoritative value lives in gpu_pricing.markup_pct — every server-side
  * price reads it from there. This constant exists only for the deploy wizard,
  * which quotes client-side from a live inventory row carrying no pricing
- * column. Change this and gpu_pricing together or the quote drifts from what
- * checkout charges.
+ * column, and it had the number hardcoded as 1.25 in three places. Change this
+ * and gpu_pricing together or the quote drifts from what checkout charges.
  *
  * Ported from C:/cloud-services, where it was added alongside the
  * deploy-wizard edit that imports it. That wizard edit reached this repo in
  * 2a0c22f9 and this constant did not, so the import has been broken since the
  * fork point — invisible until npm install made a typecheck possible.
+ *
+ * (Both lanes wrote this comment independently and each recorded something the
+ * other missed: the three hardcoded 1.25s, and the import broken since the
+ * fork. Merged rather than picked, because dropping either loses a fact.)
  */
 export const GPU_MARKUP_PCT = 1.0;
 

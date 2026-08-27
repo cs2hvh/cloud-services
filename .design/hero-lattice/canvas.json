@@ -1,0 +1,24 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 1120, "h": 630, "title": "A · Dolly" },
+    { "file": "Drift.dc.html", "x": 1220, "y": 0, "w": 1120, "h": 630, "title": "B · Drift" },
+    { "file": "Signal.dc.html", "x": 2440, "y": 0, "w": 1120, "h": 630, "title": "C · Signal" }
+  ],
+  "annotations": [
+    {
+      "id": "brief",
+      "x": 0,
+      "y": -190,
+      "w": 620,
+      "text": "Same lattice, three motion flows — pick one.\n\nThe artwork itself is transparent: the canvas is cleared every frame and nothing paints a ground. The dark field behind it is the Backdrop tweak, set to the site's #101013 so you can judge it in place. Switch it to Transparent to see the alpha."
+    },
+    {
+      "id": "tradeoffs",
+      "x": 680,
+      "y": -190,
+      "w": 620,
+      "text": "A · Dolly — pushes in and eases back out. Perfect loop, no seam, reads as depth. Most literal answer to \"forward backward\".\n\nB · Drift — never stops travelling; cubes recycle through the volume. More cinematic, but it can pull the eye off the headline.\n\nC · Signal — camera nearly still, light travels the edges instead. Calmest behind text; least like the reference's sense of motion."
+    }
+  ],
+  "launch": { "view": "canvas" }
+}

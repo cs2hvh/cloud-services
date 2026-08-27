@@ -58,8 +58,8 @@ export default function InferenceHeroSection({
             className="max-w-2xl"
           >
             <h1 className="max-w-3xl text-4xl font-[400] leading-[0.96] tracking-tight text-white sm:text-5xl lg:text-[5.15rem]">
-              <span className="text-white">Every Model,</span>
-              <span className="block text-[#0095FF]">One API.</span>
+              <span className="text-white">Every frontier model,</span>
+              <span className="block text-[#0095FF]">through one endpoint.</span>
             </h1>
 
             <p className="mt-6 max-w-xl text-[15px] leading-8 text-white/62 sm:text-[17px]" style={{ fontFamily: "var(--font-nunito), sans-serif" }}>

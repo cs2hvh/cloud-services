@@ -1,172 +1,130 @@
 /**
- * /api/v2/projects — list and create.
+ * GET /api/v2/projects
  *
- * Reads and writes go through the RLS-scoped client, so "only my team's
- * projects" is enforced by paas RLS rather than by a filter written here that
- * a future route could forget.
+ * The caller's projects, with what each one is currently serving.
+ *
+ * THE FIRST TENANT-FACING v2 ROUTE. Until now every v2 endpoint was either
+ * operator-only or the GitHub webhook, which means a customer could not list
+ * their own apps by any means except a script run by us. Every UI surface needs
+ * this one first.
+ *
+ * RLS-SCOPED, NEVER THE SERVICE ROLE. lib/paas/db.ts bypasses RLS entirely and
+ * is for reconcilers; a route serving a logged-in customer must let the database
+ * decide what they can see. boundary.test.ts fails if this file imports it.
+ *
+ * The filtering is therefore NOT in the query. There is no `.eq("team_id", …)`
+ * below, and adding one would be a second, weaker copy of a rule the database
+ * already enforces — the kind that drifts out of agreement with the policy and
+ * is only noticed when it lets something through.
  */
 
-import { getCaller, resolveTeamId, defaultTeamId } from "../_lib/auth";
-import {
-  json,
-  unauthenticated,
-  notFound,
-  invalid,
-  conflict,
-  fromPostgrestError,
-  apiError,
-} from "../_lib/http";
-import {
-  PROJECT_COLUMNS_WITH_TEAM,
-  toProjectDto,
-  slugify,
-  type ProjectRow,
-} from "../_lib/serialize";
+import { createClient } from "@/lib/supabase/server";
+import { json, unauthenticated, apiError } from "../_lib/http";
+import { createProject } from "./create-route";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+interface ProjectView {
+  ref: string;
+  name: string;
+  slug: string;
+  repo: string | null;
+  productionBranch: string | null;
+  tier: string;
+  instances: number;
+  hostname: string | null;
+  /** null when nothing has ever deployed, which is different from a failed one. */
+  state: string | null;
+  lastDeployedAt: string | null;
+  previews: number;
+}
 
 export async function GET() {
-  const caller = await getCaller();
-  if (!caller) return unauthenticated();
+  const supabase = await createClient();
 
-  const { data, error } = await caller.db
-    .from("projects")
-    .select(PROJECT_COLUMNS_WITH_TEAM)
-    .is("deleted_at", null)
-    .order("created_at", { ascending: false });
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+  if (authError || !user) return unauthenticated();
 
-  if (error) {
-    const mapped = fromPostgrestError(error);
-    if (mapped) return mapped;
-    console.error("[v2/projects] list failed:", error);
-    return apiError("internal", "Could not load projects.", 500);
-  }
+  const db = supabase.schema("paas");
 
-  return json({ projects: (data as ProjectRow[]).map(toProjectDto) });
-}
+  // Three reads, joined in memory. A join per project would be N+1 against
+  // PostgREST, and this list is the first thing a dashboard loads.
+  const [projects, aliases, environments] = await Promise.all([
+    db.from("projects").select("ref,name,slug,repo_full_name,production_branch,tier,instance_count,id").order("created_at"),
+    db.from("aliases").select("project_id,hostname,kind,deployment_id"),
+    db.from("environments").select("project_id,kind"),
+  ]);
 
-interface CreateBody {
-  name?: unknown;
-  team?: unknown;
-  provider?: unknown;
-  repoId?: unknown;
-  repoFullName?: unknown;
-  installationId?: unknown;
-  productionBranch?: unknown;
-  rootDirectory?: unknown;
-  framework?: unknown;
-}
-
-export async function POST(request: Request) {
-  const caller = await getCaller();
-  if (!caller) return unauthenticated();
-
-  let body: CreateBody;
-  try {
-    body = (await request.json()) as CreateBody;
-  } catch {
-    return invalid("Request body must be JSON.");
-  }
-
-  const name = typeof body.name === "string" ? body.name.trim() : "";
-  if (!name) return invalid("A project name is required.", { name: "required" });
-
-  const slug = slugify(name);
-  if (!slug) {
-    return invalid(
-      "Project name must contain at least one letter or number.",
-      { name: "unusable" }
-    );
-  }
-
-  const repoFullName =
-    typeof body.repoFullName === "string" ? body.repoFullName.trim() : "";
-  const repoId = typeof body.repoId === "string" ? body.repoId.trim() : "";
-  if (!repoFullName || !repoId) {
-    return invalid("A source repository is required.", {
-      repoFullName: repoFullName ? "ok" : "required",
-      repoId: repoId ? "ok" : "required",
-    });
-  }
-
-  // Resolve the target team. An explicit ref the caller cannot see is a 404,
-  // not a 403 — probing refs must not confirm which teams exist.
-  let teamId: string | null;
-  if (typeof body.team === "string" && body.team.trim()) {
-    teamId = await resolveTeamId(caller, body.team.trim());
-    if (!teamId) return notFound("Team");
-  } else {
-    teamId = await defaultTeamId(caller);
-    if (!teamId) {
-      return invalid(
-        "Specify which team this project belongs to.",
-        { team: "required" }
-      );
+  // AN ERROR IS NOT AN EMPTY LIST. PostgREST returns `{ data: null, error }` on
+  // failure, and rendering that as "you have no projects" is the exact defect
+  // this codebase keeps finding: a read that could not run, reported as a read
+  // that found nothing. A customer seeing an empty dashboard would reasonably
+  // conclude their apps were gone.
+  //
+  // An empty list AFTER a successful read is genuinely "no projects" — RLS
+  // returning zero rows for someone else's project is the same answer as the
+  // project not existing, and that is deliberate (see _lib/http).
+  for (const r of [projects, aliases, environments]) {
+    if (r.error) {
+      return apiError("internal", "Could not read your projects. Nothing has been changed.", 500);
     }
   }
 
-  const insert = {
-    team_id: teamId,
-    name,
-    slug,
-    provider: typeof body.provider === "string" ? body.provider : "github",
-    repo_id: repoId,
-    repo_full_name: repoFullName,
-    installation_id:
-      typeof body.installationId === "number" ? body.installationId : null,
-    production_branch:
-      typeof body.productionBranch === "string" && body.productionBranch.trim()
-        ? body.productionBranch.trim()
-        : "main",
-    root_directory:
-      typeof body.rootDirectory === "string" && body.rootDirectory.trim()
-        ? body.rootDirectory.trim()
-        : null,
-    framework: typeof body.framework === "string" ? body.framework : null,
-  };
-
-  // `id` is selected here and used only to attach the environment below. It is
-  // never serialized — toProjectDto picks named fields, so it cannot leak.
-  const { data, error } = await caller.db
-    .from("projects")
-    .insert(insert)
-    .select(`id, ${PROJECT_COLUMNS_WITH_TEAM}`)
-    .single();
-
-  if (error) {
-    if (error.code === "23505") {
-      return conflict(`A project named "${slug}" already exists in this team.`);
-    }
-    const mapped = fromPostgrestError(error);
-    if (mapped) return mapped;
-    console.error("[v2/projects] create failed:", error);
-    return apiError("internal", "Could not create the project.", 500);
+  const latest = await db
+    .from("deployments")
+    .select("project_id,state,ready_at,queued_at")
+    .order("queued_at", { ascending: false });
+  if (latest.error) {
+    return apiError("internal", "Could not read deployment state. Nothing has been changed.", 500);
   }
 
-  const project = toProjectDto(data as ProjectRow);
+  const newestByProject = new Map<string, { state: string; at: string | null }>();
+  for (const d of latest.data ?? []) {
+    // Ordered newest-first above, so the first row seen per project wins.
+    if (!newestByProject.has(d.project_id)) {
+      newestByProject.set(d.project_id, { state: d.state, at: d.ready_at ?? d.queued_at ?? null });
+    }
+  }
 
-  // Every project needs somewhere to deploy to. Created here rather than by a
-  // trigger so the failure is visible to the caller instead of leaving a
-  // project that silently cannot deploy.
-  const { error: envError } = await caller.db.from("environments").insert({
-    project_id: (data as { id: string }).id,
-    kind: "production",
-    name: "Production",
+  const previewCount = new Map<string, number>();
+  for (const e of environments.data ?? []) {
+    if (e.kind === "preview") previewCount.set(e.project_id, (previewCount.get(e.project_id) ?? 0) + 1);
+  }
+
+  const productionHost = new Map<string, string>();
+  for (const a of aliases.data ?? []) {
+    // A branch alias is a preview's hostname, never the app's own address.
+    if (a.kind === "branch") continue;
+    if (a.kind === "production" || !productionHost.has(a.project_id)) {
+      productionHost.set(a.project_id, a.hostname);
+    }
+  }
+
+  const view: ProjectView[] = (projects.data ?? []).map((p) => {
+    const newest = newestByProject.get(p.id);
+    return {
+      ref: p.ref,
+      name: p.name,
+      slug: p.slug,
+      repo: p.repo_full_name ?? null,
+      productionBranch: p.production_branch ?? null,
+      tier: p.tier ?? "starter",
+      instances: p.instance_count ?? 1,
+      hostname: productionHost.get(p.id) ?? null,
+      state: newest?.state ?? null,
+      lastDeployedAt: newest?.at ?? null,
+      previews: previewCount.get(p.id) ?? 0,
+    };
   });
 
-  if (envError) {
-    // The project exists; report it, but do not claim the environment landed.
-    console.error("[v2/projects] production environment failed:", envError);
-    return json(
-      {
-        project,
-        warning:
-          "Project created, but its production environment could not be set up. " +
-          "Deployments will fail until it exists.",
-      },
-      201
-    );
-  }
+  return json({ projects: view, count: view.length });
+}
 
-  return json({ project }, 201);
+/** POST /api/v2/projects — create a project from a repository. */
+export async function POST(req: Request) {
+  return createProject(req);
 }

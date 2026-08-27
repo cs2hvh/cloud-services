@@ -26,6 +26,14 @@
  * worker makes with brand-scrub. If those constants ever change, this must
  * change with them.
  */
+interface SshShellStream {
+  on(event: "data" | "close", listener: (chunk: Buffer) => void): void;
+  stderr?: { on(event: "data", listener: (chunk: Buffer) => void): void };
+  write(data: string | Buffer): void;
+  setWindow(rows: number, cols: number, height: number, width: number): void;
+  close(): void;
+}
+
 import { createDecipheriv, pbkdf2Sync } from "crypto";
 import { createClient } from "@supabase/supabase-js";
 // @ts-expect-error ssh2 has no type declarations
@@ -55,6 +63,23 @@ function decryptBlob(blob: string, secretKey: string): string {
     decipher.update(Buffer.from(encrypted, "hex")),
     decipher.final(),
   ]).toString("utf8");
+}
+
+/**
+ * The pty stream ssh2 hands back from `shell()`.
+ *
+ * Declared here rather than typed `any` because the project lints
+ * no-explicit-any as an ERROR, and `next build` gates on lint — so an `any`
+ * typechecks fine locally and then fails the production build. ssh2 ships no
+ * type declarations, so this covers only the surface this module touches.
+ */
+interface SshShellStream {
+  on(event: "data", cb: (chunk: Buffer) => void): void;
+  on(event: "close", cb: () => void): void;
+  stderr?: { on(event: "data", cb: (chunk: Buffer) => void): void };
+  write(data: Buffer): void;
+  /** ssh2's argument order: rows before cols. */
+  setWindow(rows: number, cols: number, height: number, width: number): void;
 }
 
 interface PodRow {
@@ -132,7 +157,7 @@ export async function handleGpuTerminal(
   };
 
   ssh.on("ready", () => {
-    ssh.shell({ term: "xterm-256color", cols: 80, rows: 24 }, (err: Error | undefined, stream: any) => {
+    ssh.shell({ term: "xterm-256color", cols: 80, rows: 24 }, (err: Error | undefined, stream: SshShellStream) => {
       if (err) return fail(clientWs, "Could not open shell", err.message);
 
       console.log(

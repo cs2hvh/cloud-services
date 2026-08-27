@@ -2,7 +2,6 @@
    below, and any @import that lands after expanded rules is a CSS parse
    error (webpack was lenient; Turbopack is spec-strict).
    TODO: self-host Sansation via next/font/local and drop this CDN fetch. */
-@import url("https://fonts.cdnfonts.com/css/sansation");
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -344,4 +343,843 @@ text-align: center;
   100% {
     transform: translateX(0);
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   AhuraSense homepage design system
+   One place for the palette, the notch motif, the mono label, and the
+   scroll-driven parallax planes. Everything on the marketing homepage
+   references these — no more loose hex literals per component.
+   ═══════════════════════════════════════════════════════════════════ */
+:root {
+  --ah-bg: #101013;
+  --ah-bg-2: #0a0a0d;   /* the step down that separates stacked dark sections */
+  --ah-surface: #1a1a1e;
+  --ah-elev: #141419;
+  --ah-ink: #fafaf4;          /* warm cream, not pure white */
+  --ah-muted: #6d6d78;
+  --ah-body: #9a9aa2;   /* body copy — #6d6d78 was only ~4:1 on the page ground */
+  --ah-tile: #1c1c22;    /* mosaic tile — solid, reads against --ah-bg */
+  --ah-tile-hi: #24242c; /* tile hover */
+  --ah-tex: #17171c;     /* empty mosaic cells */
+  --ah-line: #27272b;
+  --ah-line-hi: #474754;
+  --ah-blue: #0095ff;
+  --ah-blue-lt: #7fc7ff;
+  --ah-blue-dp: #1d4ed8;  /* heading highlight; same value as the band's --l-blue */
+  --ah-amber: #f5b324;
+  --ah-green: #35d07f;
+}
+
+/* the notch — lifted from the cluster config card and made a primitive */
+.ah-notch {
+  clip-path: polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px);
+}
+.ah-notch-sm {
+  clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+}
+.ah-notch-lg {
+  clip-path: polygon(13px 0, 100% 0, 100% calc(100% - 13px), calc(100% - 13px) 100%, 0 100%, 0 13px);
+}
+
+/* 11px uppercase, muted, normal tracking */
+.ah-lbl {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  text-transform: uppercase;
+  color: var(--ah-muted);
+  letter-spacing: normal;
+}
+
+/* ── scroll-driven motion ──────────────────────────────────────────
+   These animate the INDEPENDENT translate/rotate/scale properties, not
+   `transform`, so hover transforms still compose on top of a running
+   parallax animation instead of being overridden by it. */
+@keyframes ah-rise   { from { opacity: 0; translate: 0 30px; } to { opacity: 1; translate: 0 0; } }
+@keyframes ah-plane0 { from { translate: 0 30px; } to { translate: 0 -30px; } }
+@keyframes ah-plane1 { from { translate: 0 52px; } to { translate: 0 -52px; } }
+@keyframes ah-plane2 { from { translate: 0 26px; } to { translate: 0 -26px; } }
+@keyframes ah-plane3 { from { translate: 0 78px; } to { translate: 0 -78px; } }
+@keyframes ah-driftA { from { translate: 0 96px;  rotate: -12deg; } to { translate: 0 -96px; rotate: 10deg; } }
+@keyframes ah-driftB { from { translate: 0 -72px; rotate: 14deg; }  to { translate: 0 72px;  rotate: -8deg; } }
+@keyframes ah-mos-in { from { opacity: 0; scale: 0.94; } to { opacity: 1; scale: 1; } }
+@keyframes ah-grow   { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes ah-ping   { 0% { transform: scale(1); opacity: 0.6; } 70%, 100% { transform: scale(4.5); opacity: 0; } }
+@keyframes ah-float  { 0%, 100% { translate: 0 0; } 50% { translate: 0 -9px; } }
+@keyframes ah-pulse  { 0%, 100% { opacity: 0.35; scale: 1; } 50% { opacity: 1; scale: 1.35; } }
+@keyframes ah-bar    { from { transform: scaleY(0.12); } to { transform: scaleY(1); } }
+
+.ah-ping  { animation: ah-ping 2.6s cubic-bezier(0, 0, 0.2, 1) infinite; }
+.ah-float { animation: ah-float 7s ease-in-out infinite; }
+.ah-pulse { animation: ah-pulse 2.4s ease-in-out infinite; }
+.ah-bar   { transform-origin: bottom; animation: ah-bar 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+
+/* Gated: without scroll-driven animation support every element simply
+   renders in its final state rather than staying invisible. */
+@supports (animation-timeline: view()) {
+  .ah-rise {
+    animation: ah-rise linear both;
+    animation-timeline: view();
+    animation-range: entry 5% entry 55%;
+  }
+  .ah-scope { view-timeline-name: --ah-scope; view-timeline-axis: block; }
+  .ah-d0, .ah-d1, .ah-d2, .ah-d3, .ah-drift-a, .ah-drift-b {
+    animation-timeline: --ah-scope;
+    animation-range: entry 0% exit 100%;
+    animation-timing-function: linear;
+    animation-fill-mode: both;
+    will-change: transform;
+  }
+  .ah-d0 { animation-name: ah-plane0; }
+  .ah-d1 { animation-name: ah-plane1; }
+  .ah-d2 { animation-name: ah-plane2; }
+  .ah-d3 { animation-name: ah-plane3; }
+  .ah-drift-a { animation-name: ah-driftA; }
+  .ah-drift-b { animation-name: ah-driftB; }
+  .ah-mos-in {
+    animation: ah-mos-in linear both;
+    animation-timeline: view();
+    animation-range: entry 8% entry 62%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ah-ping, .ah-float, .ah-pulse, .ah-bar,
+  .ah-rise, .ah-d0, .ah-d1, .ah-d2, .ah-d3,
+  .ah-drift-a, .ah-drift-b, .ah-mos-in {
+    animation: none !important;
+    translate: none !important;
+    rotate: none !important;
+    scale: none !important;
+    opacity: 1 !important;
+  }
+}
+
+/* ── mosaic tiles ─────────────────────────────────────────────────
+   Three tones, assigned per tile rather than applied to all of them: most
+   stay dark, two invert to cream, one carries the blue. That colour
+   difference is what gives the grid life — so hover no longer needs a blue
+   wash, it just lifts the surface a step. */
+.ah-tile {
+  --t-bg: #1c1c22;
+  --t-hi: #26262e;
+  --t-title: var(--ah-ink);
+  --t-body: #9a9aa2;
+  --t-meta: var(--ah-blue-lt);
+  --t-ic-bd: #33333d;
+  --t-ic-bg: #101015;
+  --t-ic-fg: var(--ah-blue-lt);
+  --t-sheen: rgba(255, 255, 255, 0.055);
+
+  position: relative;
+  background: var(--t-bg);
+  color: var(--t-title);
+  cursor: pointer;
+  isolation: isolate;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  transition: background 0.22s ease-out, transform 0.22s cubic-bezier(0.2, 0.7, 0.2, 1),
+    box-shadow 0.22s ease-out;
+}
+
+/* cream tiles */
+.ah-tile--light {
+  --t-bg: #f2f1ec;
+  --t-hi: #ffffff;
+  --t-title: #14141a;
+  --t-body: #56565e;
+  --t-meta: #2e62f5;
+  --t-ic-bd: rgba(20, 20, 26, 0.16);
+  --t-ic-bg: rgba(20, 20, 26, 0.05);
+  --t-ic-fg: #14141a;
+  --t-sheen: rgba(20, 20, 26, 0.05);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+/* the single blue tile */
+.ah-tile--blue {
+  --t-bg: #12325e;
+  --t-hi: #17407a;
+  --t-title: #ffffff;
+  --t-body: #b9d3f5;
+  --t-meta: #8fc4ff;
+  --t-ic-bd: rgba(255, 255, 255, 0.28);
+  --t-ic-bg: rgba(255, 255, 255, 0.1);
+  --t-ic-fg: #ffffff;
+  --t-sheen: rgba(255, 255, 255, 0.09);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+/* ambient: a neutral sheen walks tile to tile so the grid always has a
+   pulse somewhere. Opacity only, so hover and the parallax planes are
+   untouched. Each tile carries its phase in --ah-delay. */
+@keyframes ah-tile-live {
+  0%, 84%, 100% { opacity: 0; }
+  90% { opacity: 1; }
+}
+.ah-tile::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(135deg, var(--t-sheen) 0%, transparent 62%);
+  animation: ah-tile-live 13s ease-in-out infinite;
+  animation-delay: var(--ah-delay, 0s);
+}
+
+/* hover: lift the surface a step. No accent wash. */
+.ah-tile:hover {
+  background: var(--t-hi);
+  transform: translateY(-3px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 18px 40px rgba(0, 0, 0, 0.45);
+}
+.ah-tile--light:hover {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 18px 40px rgba(0, 0, 0, 0.5);
+}
+.ah-tile:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ah-bg), 0 0 0 4px var(--ah-blue);
+}
+.ah-tile > * { position: relative; z-index: 1; }
+
+/* tile contents read their colours from the tone */
+.ah-tile-t { color: var(--t-title); }
+.ah-tile-d { color: var(--t-body); }
+.ah-tile-m { color: var(--t-meta); }
+
+@keyframes ah-ic-live {
+  0%, 80%, 100% { opacity: 0.82; }
+  88% { opacity: 1; }
+}
+/* Icons sit bare on the tile. They carry their own pedestal ring, so a
+   plate around them just added a second frame. */
+.ah-tile-ic {
+  transition: opacity 0.22s;
+}
+.ah-tile:hover .ah-tile-ic {
+  animation-play-state: paused;
+}
+
+/* empty cells that build the stepped silhouette */
+@keyframes ah-tex-live {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+.ah-tex {
+  background: var(--ah-tex);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
+  animation: ah-tex-live 11s ease-in-out infinite;
+  animation-delay: var(--ah-delay, 0s);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ah-tile::after, .ah-tile-ic, .ah-tex { animation: none !important; }
+  .ah-tile::after { opacity: 0 !important; }
+  .ah-tex { opacity: 1 !important; }
+}
+
+/* ── GPU rail: subtle hover, nothing that moves layout ───────────── */
+.ah-gpu {
+  transition: background 0.22s ease-out;
+}
+.ah-gpu-line {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 2px;
+  width: 100%;
+  background: var(--ah-blue);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.28s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.ah-gpu:hover .ah-gpu-line {
+  transform: scaleX(1);
+}
+/* Every card answers a hover the same way: fills white, type goes dark.
+   The lead card no longer carries a standing fill, so singling it out for a
+   different hover would read as a bug rather than as emphasis.
+   !important because the card paints its resting colours inline. */
+.ah-gpu:hover {
+  background: #ffffff !important;
+  color: #101013 !important;
+}
+.ah-gpu:hover .ah-lbl {
+  color: rgba(16, 16, 19, 0.55) !important;
+}
+.ah-gpu-price {
+  transition: color 0.22s ease-out;
+}
+.ah-gpu:hover .ah-gpu-price {
+  color: #101013 !important;
+}
+.ah-gpu:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--ah-blue);
+}
+
+/* trailing "view all GPUs" cell */
+.ah-gpu-all {
+  transition: background 0.22s ease-out, color 0.22s ease-out;
+}
+.ah-gpu-all:hover {
+  background: #17171e !important;
+  color: var(--ah-blue-lt) !important;
+  text-shadow: 0 0 10px rgba(127, 199, 255, 0.85), 0 0 22px rgba(0, 149, 255, 0.5);
+}
+.ah-gpu-all-ic {
+  border: 1px solid var(--ah-line-hi);
+  border-radius: 50%;
+  transition: transform 0.28s cubic-bezier(0.2, 0.7, 0.2, 1), border-color 0.22s;
+}
+.ah-gpu-all:hover .ah-gpu-all-ic {
+  transform: translateX(3px);
+  border-color: var(--ah-blue);
+}
+
+/* ── floating navbar ──────────────────────────────────────────────
+   The bar is an island rather than a full-bleed strip: no rule above it,
+   no rule below it, inset to the same gutters as page content so its edges
+   line up with the sections underneath. No clip-path here — the account
+   dropdown is a child, and clipping the bar would clip that too. */
+.ah-nav-float {
+  background: rgba(8, 8, 10, 0.82);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 16px 44px rgba(0, 0, 0, 0.6);
+}
+
+/* ── shared marketing buttons ─────────────────────────────────────
+   Three sections used to answer a hover three different ways. These are the
+   two shapes the dark sections share, so pricing, the closing CTA and any
+   later section stay consistent without restating the rule each time. */
+
+/* outline on dark: blue hairline at rest — the same blue the featured tier
+   card carries — filling white with dark type on hover */
+.ah-btn-outline {
+  background: transparent;
+  border: 1px solid rgba(0, 149, 255, 0.34);
+  color: var(--ah-ink);
+  transition: background 0.2s ease-out, color 0.2s ease-out,
+    border-color 0.2s ease-out, transform 0.2s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.ah-btn-outline:hover {
+  background: #ffffff;
+  border-color: #ffffff;
+  color: #07070a;
+}
+
+/* cream plate on dark that turns blue on hover — the spec-card action */
+.ah-btn-spec {
+  background: var(--ah-ink);
+  color: #0d0d11;
+  transition: background 0.2s ease-out, color 0.2s ease-out;
+}
+.ah-btn-spec:hover {
+  background: var(--ah-blue);
+  color: #ffffff;
+}
+
+/* underlined text link on dark — goes blue on hover */
+.ah-link-blue {
+  color: var(--ah-ink);
+  border-bottom: 1.5px solid var(--ah-ink);
+  transition: color 0.18s ease-out, border-color 0.18s ease-out;
+}
+.ah-link-blue:hover {
+  color: var(--ah-blue);
+  border-bottom-color: var(--ah-blue);
+}
+
+/* ── section headings ─────────────────────────────────────────────
+   One size, one weight, one face, one colour for every section heading
+   below the hero. The page was running four different size ramps, three
+   weights and three different blues; the highlighted clause is now the
+   only thing that varies between them. */
+.ah-h2 {
+  margin: 0;
+  font-size: clamp(2.1rem, 4.6vw, 3.4rem);
+  font-weight: 400;
+  line-height: 1.02;
+  letter-spacing: -0.032em;
+  color: var(--ah-ink);
+}
+/* the deep blue the cream band's heading already used — one highlight colour
+   for every heading now, light ground or dark */
+.ah-h2-hl {
+  color: var(--ah-blue-dp);
+}
+.ah-band-light .ah-h2 { color: var(--l-ink); }
+
+/* ── closing CTA strip ────────────────────────────────────────────
+   Full-bleed white band that closes the page: label left, headline centre,
+   action right. Square edges — no notch on the band itself. */
+.ah-cta-strip {
+  background: #ffffff;
+  color: #0b0b0f;
+  border-radius: 0;
+}
+.ah-cta-strip .ah-lbl { color: #6b6b76; }
+.ah-cta-strip .ah-h2 { color: #0b0b0f; }
+/* the outline button's white fill is invisible on white, so it inverts */
+.ah-cta-strip .ah-btn-outline {
+  border-color: rgba(29, 78, 216, 0.45);
+  color: #0b0b0f;
+}
+.ah-cta-strip .ah-btn-outline:hover {
+  background: #0b0b0f;
+  border-color: #0b0b0f;
+  color: #ffffff;
+}
+
+/* ── light band ───────────────────────────────────────────────────
+   One cream section in the middle of a dark page. It marks the
+   enterprise/sales moment and breaks the vertical rhythm, so the tokens
+   are scoped here rather than added to :root — nothing outside
+   .ah-band-light sees them. */
+.ah-band-light {
+  --l-paper: #f5f3ee;
+  --l-panel: #efece5;
+  --l-ink: #14141a;
+  --l-body: #56565f;
+  --l-muted: #8b8880;
+  --l-line: #ddd9d1;
+  --l-line-hi: #c9c4ba;
+  /* Deeper than --ah-blue: #0095ff only reaches ~2.9:1 on this ground and
+     fails for anything but display type. This clears 5:1. */
+  --l-blue: #1d4ed8;
+  --l-amber: #f5b324;
+
+  background: var(--l-paper);
+  color: var(--l-ink);
+}
+.ah-band-light .ah-lbl { color: var(--l-muted); }
+
+/* the callout that sits above the CTAs */
+.ah-cue {
+  border-left: 3px solid var(--l-amber);
+  padding-left: 14px;
+}
+
+/* benefit cells — hairline grid, no card fills */
+.ah-cell {
+  border-top: 1px solid var(--l-line);
+  border-left: 1px solid var(--l-line);
+  transition: background 0.2s ease-out;
+}
+.ah-cell:hover { background: rgba(29, 78, 216, 0.04); }
+
+/* light-band actions. Scoped names, but they read the --l-* tokens, so they
+   only make sense inside .ah-band-light. */
+.ah-btn-light {
+  background: var(--l-ink);
+  color: var(--l-paper);
+  transition: background 0.2s ease-out, color 0.2s ease-out,
+    transform 0.2s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.ah-btn-light:hover {
+  /* the band's own blue, not --ah-blue: this plate sits on cream, and white
+     type on #0095ff is only ~2.6:1 where on --l-blue it clears 7:1 */
+  background: var(--l-blue);
+  color: #ffffff;
+}
+.ah-link-light {
+  color: var(--l-ink);
+  border-bottom: 1.5px solid var(--l-ink);
+  transition: color 0.18s ease-out, border-color 0.18s ease-out;
+}
+.ah-link-light:hover {
+  color: var(--l-blue);
+  border-bottom-color: var(--l-blue);
+}
+
+/* the rack illustration: a chassis with lit slots, drawn rather than
+   sourced — nothing in public/ matches this object */
+.ah-rack {
+  position: relative;
+  width: 118px;
+  height: 152px;
+  border-radius: 3px;
+  background: linear-gradient(150deg, #2a2c33 0%, #16181d 42%, #0e1014 100%);
+  box-shadow: 0 26px 44px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.09);
+  transform: rotate(-1.5deg);
+}
+.ah-rack::before {
+  content: "";
+  position: absolute;
+  inset: 9px 10px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #0b0d11, #05060a);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+}
+.ah-rack-slots {
+  position: absolute;
+  inset: 16px 18px;
+  display: flex;
+  justify-content: space-between;
+}
+.ah-rack-slots span {
+  width: 4px;
+  border-radius: 1px;
+  animation: ah-slot 4.5s ease-in-out infinite;
+}
+@keyframes ah-slot {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ah-rack-slots span { animation: none !important; opacity: 0.9 !important; }
+}
+
+/* ── compute tiers ────────────────────────────────────────────────
+   Own surface + real gutters. The previous pass separated them with a
+   single shared rule, which made three choices read as one strip. */
+.ah-tier {
+  background: var(--ah-elev);
+  border: 1px solid var(--ah-line);
+  transition: background 0.22s ease-out, border-color 0.22s ease-out,
+    transform 0.22s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.ah-tier:hover {
+  background: #17171e;
+  border-color: var(--ah-line-hi);
+  transform: translateY(-3px);
+}
+.ah-tier[data-featured] {
+  background: #12131a;
+  border-color: rgba(0, 149, 255, 0.34);
+  box-shadow: inset 0 1px 0 rgba(0, 149, 255, 0.22);
+}
+.ah-tier[data-featured]:hover {
+  border-color: rgba(0, 149, 255, 0.55);
+}
+
+/* live dot on each region row */
+@keyframes ah-dot { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+.ah-ping-dot { animation: ah-dot 2.6s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ah-ping-dot { animation: none !important; opacity: 1 !important; }
+}
+
+/* ── platform explorer ────────────────────────────────────────────
+   The reference for this component is a light design where the selected
+   row is black on white. Inverted here: cream on dark. Same move. */
+.ah-topic {
+  background: transparent;
+  color: var(--ah-ink);
+  cursor: pointer;
+  transition: background 0.18s ease-out, color 0.18s ease-out, padding-left 0.18s ease-out;
+}
+.ah-topic:hover:not(.ah-topic-on) {
+  background: #15151b;
+  padding-left: 2.25rem;
+}
+.ah-topic:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--ah-blue);
+}
+.ah-topic-on {
+  background: var(--ah-ink);
+  color: var(--ah-bg-2);
+}
+.ah-topic-on .ah-lbl { color: rgba(10, 10, 13, 0.5); }
+
+/* spec chips inside the detail panel */
+.ah-tag {
+  border: 1px solid var(--ah-line-hi);
+  color: var(--ah-body);
+  background: var(--ah-elev);
+}
+
+/* service switcher */
+.ah-chip {
+  border: 1px solid var(--ah-line-hi);
+  color: var(--ah-body);
+  background: transparent;
+  cursor: pointer;
+  transition: border-color 0.18s, color 0.18s, background 0.18s;
+}
+.ah-chip:hover {
+  border-color: var(--ah-ink);
+  color: var(--ah-ink);
+}
+.ah-chip:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--ah-bg-2), 0 0 0 4px var(--ah-blue);
+}
+.ah-chip-on {
+  background: var(--ah-ink);
+  border-color: var(--ah-ink);
+  color: var(--ah-bg-2);
+}
+.ah-chip-on:hover { color: var(--ah-bg-2); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ah-topic:hover:not(.ah-topic-on) { padding-left: 1.5rem; }
+}
+
+/* ── explorer polish ──────────────────────────────────────────────
+   The panel is keyed on the selection, so this replays on every switch. */
+@keyframes ah-panel-in {
+  from { opacity: 0; translate: 0 10px; }
+  to   { opacity: 1; translate: 0 0; }
+}
+.ah-panel { animation: ah-panel-in 0.42s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.ah-panel h3 { animation: ah-panel-in 0.46s cubic-bezier(0.2, 0.7, 0.2, 1) 0.04s both; }
+.ah-panel p  { animation: ah-panel-in 0.46s cubic-bezier(0.2, 0.7, 0.2, 1) 0.09s both; }
+.ah-panel .ah-tag { animation: ah-panel-in 0.42s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.ah-panel .ah-tag:nth-of-type(1) { animation-delay: 0.13s; }
+.ah-panel .ah-tag:nth-of-type(2) { animation-delay: 0.18s; }
+.ah-panel .ah-tag:nth-of-type(3) { animation-delay: 0.23s; }
+.ah-panel .ah-tag:nth-of-type(4) { animation-delay: 0.28s; }
+
+/* selected chip gets a soft lift rather than just a fill */
+.ah-chip-on {
+  box-shadow: 0 6px 20px rgba(250, 250, 244, 0.13);
+}
+.ah-chip:active { transform: translateY(1px); }
+
+/* selected topic row: a blue edge marks the active item without
+   competing with the cream fill */
+.ah-topic-on { position: relative; }
+.ah-topic-on::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--ah-blue);
+}
+.ah-tag { transition: border-color 0.18s, color 0.18s; }
+.ah-panel:hover .ah-tag { border-color: rgba(0, 149, 255, 0.32); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ah-panel, .ah-panel h3, .ah-panel p, .ah-panel .ah-tag {
+    animation: none !important;
+    opacity: 1 !important;
+    translate: none !important;
+  }
+}
+
+/* ── explorer visual ──────────────────────────────────────────────
+   Three layers behind the service image so the panel has something
+   happening in it without anything flashing: a breathing pool, a ring
+   that turns once every 26s, and a sweep that crosses every 7s. */
+.ah-vis {
+  /* No overflow clip and no inset layers — those drew a visible rectangle
+     behind the art. Only the pool remains, and it is a soft radial. */
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 12rem;
+}
+.ah-vis-pool {
+  position: absolute;
+  left: 50%;
+  top: 54%;
+  width: 116%;
+  height: 106%;
+  translate: -50% -50%;
+  background: radial-gradient(closest-side, rgba(0, 149, 255, 0.24), rgba(0, 149, 255, 0.06) 54%, transparent 74%);
+  animation: ah-vis-breathe 6.5s ease-in-out infinite;
+}
+@keyframes ah-vis-breathe {
+  0%, 100% { opacity: 0.65; scale: 0.96; }
+  50%      { opacity: 1;    scale: 1.04; }
+}
+.ah-vis-img {
+  filter: drop-shadow(0 22px 38px rgba(0, 0, 0, 0.6));
+  animation: ah-float 7s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ah-vis-pool, .ah-vis-img {
+    animation: none !important;
+    translate: -50% -50% !important;
+  }
+  .ah-vis-img { translate: none !important; }
+}
+
+/* ── hero ─────────────────────────────────────────────────────────
+   Background is a CSS scaffold until the render lands. Every layer is
+   absolutely positioned behind the content, so dropping an <Image fill>
+   in at -z-10 replaces the look without touching the layout. */
+.ah-hero {
+  /* The navbar is fixed and overlays this, so only the GPU rail block below
+     needs subtracting — measured at 183px, with 5px of slack. */
+  min-height: max(430px, calc(100svh - 188px));
+  /* flat black. The blue grid and the blue radial wash that used to sit here
+     are gone — the lattice on the right is the only thing on this ground. */
+  background: #000;
+  color: var(--ah-ink);
+}
+.ah-hero-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+/* The drifting cube lattice — the only thing on the hero's black ground.
+   Sits below .ah-hero-vignette so the vignette's left falloff still governs.
+   This mask is the second half of weighting it right: the
+   lattice is already densest around its vanishing point at 71.5%, and this
+   clears the left edge outright so the headline never competes with it. */
+.ah-hero-lattice {
+  mask-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(0, 0, 0, 0.16) 24%,
+    rgba(0, 0, 0, 0.6) 46%,
+    #000 70%
+  );
+  opacity: 0.9;
+}
+/* stacked layout: the copy runs full-width, so pull the lattice back further */
+@media (max-width: 1023px) {
+  .ah-hero-lattice { opacity: 0.55; }
+}
+.ah-hero-vignette {
+  background:
+    linear-gradient(180deg, rgba(7, 7, 10, 0.92) 0%, transparent 26%),
+    linear-gradient(0deg, rgba(7, 7, 10, 0.96) 0%, transparent 40%),
+    linear-gradient(90deg, rgba(7, 7, 10, 0.88) 0%, transparent 42%);
+}
+
+/* headline: solid over outlined, our own face */
+.ah-hero-h1 {
+  font-size: clamp(2.8rem, 8.2vw, 6.5rem);
+  font-weight: 700;
+  line-height: 0.94;
+  letter-spacing: -0.035em;
+  text-transform: uppercase;
+}
+.ah-hero-outline {
+  color: transparent;
+  -webkit-text-stroke: 1.5px rgba(250, 250, 244, 0.85);
+  padding-left: 0.14em;
+}
+@supports not ((-webkit-text-stroke: 1px #000)) {
+  /* no stroke support — fall back to a dimmed solid rather than invisible type */
+  .ah-hero-outline { color: rgba(250, 250, 244, 0.42); }
+}
+
+/* split action box */
+.ah-hero-actions {
+  border: 1px solid var(--ah-line-hi);
+  background: rgba(7, 7, 10, 0.55);
+  backdrop-filter: blur(8px);
+}
+.ah-hero-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 1.05rem 1.6rem;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--ah-ink);
+  white-space: nowrap;
+  transition: background 0.18s ease-out, color 0.18s ease-out,
+    text-shadow 0.18s ease-out, transform 0.2s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.ah-hero-act + .ah-hero-act { border-left: 1px solid var(--ah-line-hi); }
+.ah-hero-act:hover { background: rgba(255, 255, 255, 0.06); }
+/* "Get started" — the type lights up rather than the plate */
+.ah-hero-act:not(.ah-hero-act-alt):hover {
+  text-shadow: 0 0 10px rgba(127, 199, 255, 0.9), 0 0 24px rgba(0, 149, 255, 0.55);
+}
+.ah-hero-act-alt {
+  background: var(--ah-ink);
+  color: #07070a;
+}
+/* "View pricing" — white plate by default, blue with white type on hover,
+   and it lifts clear of the split box it sits in. */
+.ah-hero-act-alt:hover {
+  background: var(--ah-blue);
+  color: #fff;
+  transform: translateY(-2px);
+}
+
+/* ── hero entrance ────────────────────────────────────────────────
+   Words rise out of a clipping mask rather than just fading, so the
+   line reads as arriving from behind the frame. */
+.ah-word-wrap {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: bottom;
+  padding-bottom: 0.06em;
+}
+.ah-word-wrap + .ah-word-wrap { margin-left: 0.26em; }
+.ah-word {
+  display: inline-block;
+  animation: ah-word-in 0.9s cubic-bezier(0.16, 0.84, 0.24, 1) both;
+}
+@keyframes ah-word-in {
+  from { translate: 0 105%; rotate: 2deg; opacity: 0; }
+  to   { translate: 0 0;    rotate: 0deg; opacity: 1; }
+}
+
+@keyframes ah-rise-in {
+  from { opacity: 0; translate: 0 20px; }
+  to   { opacity: 1; translate: 0 0; }
+}
+.ah-rise-in { animation: ah-rise-in 0.8s cubic-bezier(0.16, 0.84, 0.24, 1) both; }
+
+/* the lede sits on its own plate so it stays legible over the render */
+.ah-hero-lede {
+  position: relative;
+  /* The plate is a block in a 1fr grid column, so it used to stretch the whole
+     way across while the copy inside stopped at 34rem — leaving a long empty
+     tail of blur to the right. Capped to the text it backs: 34rem of copy plus
+     the 3.1rem of horizontal padding below. */
+  max-width: 37.1rem;
+  border-left: 2px solid var(--ah-blue-lt);
+  padding: 1.1rem 1.6rem 1.2rem 1.5rem;
+  background: rgba(7, 7, 10, 0.42);
+  backdrop-filter: blur(14px) saturate(120%);
+  -webkit-backdrop-filter: blur(14px) saturate(120%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ah-word, .ah-rise-in {
+    animation: none !important;
+    opacity: 1 !important;
+    translate: none !important;
+    rotate: none !important;
+  }
+}
+
+/* ── explorer autoplay ────────────────────────────────────────────
+   The topic list advances itself, and this bar is the clock that drives
+   it: platform-explorer.tsx listens for this animation's `animationend`
+   and moves to the next topic there. So the fill is never a decoration
+   running next to a separate timer — it IS the timer, which is why it can
+   be paused mid-track (hover, focus, off-screen) without the two drifting.
+
+   Under reduced motion the animation is removed, `animationend` never
+   fires, and autoplay is therefore off — the correct reading of WCAG
+   2.2.2 for content that advances on its own. */
+@keyframes ah-topic-progress {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+.ah-topic-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  transform-origin: left center;
+  background: var(--ah-blue);
+  opacity: 0.85;
+  animation: ah-topic-progress 5.5s linear both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ah-topic-progress { animation: none; display: none; }
 }
