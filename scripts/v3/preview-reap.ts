@@ -156,7 +156,28 @@ const actionable = invisible.filter((x) => x.actionable);
 const resting = invisible.filter((x) => !x.actionable);
 const proven = plan.examined > 0;
 
-const code = !safety.safeToReview
+// A FULLY REAPED FLEET LEGITIMATELY EXAMINES NOTHING.
+//
+// checkReapPlan refuses on EXAMINED-NOTHING — "an empty plan means it could not
+// look, not that nothing is reapable" — and that is the right refusal when the
+// index should have held something. It is the wrong one after a successful
+// reap: the reaper removes the ALIAS and keeps the ENVIRONMENT row, because
+// environments are reused per branch. So once every preview has been reaped
+// there are zero aliases to examine, and the refusal fires forever.
+//
+// Observed exactly that way: four consecutive CronJob runs Failed with exit 2
+// against one reaped preview. A scheduled job that is permanently red BECAUSE
+// IT WORKED is how people learn to ignore it, and the running-pod case it exists
+// to surface would have been ignored with it.
+//
+// The distinguishing signal is not "did we examine anything" but "was there
+// anything that should have been examined". An environment with a running pod
+// and no alias is `actionable` and still raises; an idle one is reaped or never
+// routed, and is not a reason to distrust the run.
+const nothingWasThereToExamine =
+  plan.examined === 0 && actionable.length === 0 && urgent.length === 0;
+
+const code = !safety.safeToReview && !nothingWasThereToExamine
   ? EXIT_UNTRUSTWORTHY
   : urgent.length > 0
     ? EXIT_URGENT
@@ -187,12 +208,18 @@ if (JSON_OUT) {
     console.log(`  cluster unreadable — "running" below is UNKNOWN, not "no".`);
   }
 
-  if (!safety.safeToReview) {
+  if (!safety.safeToReview && !nothingWasThereToExamine) {
     console.log(`\n  THE PLAN IS NOT FIT TO ACT ON. ${safety.refusals.length} refusal(s):\n`);
     for (const r of safety.refusals) {
       console.log(`    ${r.kind.toUpperCase().padEnd(22)} ${r.detail}`);
       if (r.refs.length) console.log(`    ${"".padEnd(22)} ${r.refs.slice(0, 8).join(", ")}`);
     }
+  } else if (!safety.safeToReview) {
+    // The refusal fired only because there was nothing to examine, and there was
+    // nothing to examine because everything has been reaped. Printing "NOT FIT
+    // TO ACT ON" here would disagree with the exit code and, worse, would tell a
+    // reader the reaper is broken at the exact moment it has finished its job.
+    console.log(`\n  Nothing to examine: every preview has been reaped. Not a refusal.`);
   }
 
   if (findings.length) {
