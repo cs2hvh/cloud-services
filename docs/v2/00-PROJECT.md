@@ -108,6 +108,30 @@ behavioural tests replaying confirmed v1 criticals.
 ## 4. What is NOT done
 
 ### Blocks opening signups to untrusted tenants
+- **Origin lockdown — BLOCKED ON A CREDENTIAL WE DO NOT CONTROL** 2026-08-26.
+  The origin NodeBalancer still answers on its public IP, so Cloudflare's WAF
+  and rate limiting can be walked past by anyone who learns the address.
+  - Linode Cloud Firewall `143239782` exists. It **cannot be attached from the
+    Firewalls page** — an LKE-managed NodeBalancer is owned by the cluster and
+    does not appear in that dialog. The user's screenshot showed "No available
+    NodeBalancers", which is the product behaving correctly, not a UI fault.
+    An earlier instruction in this file to attach it there was wrong.
+  - The supported route is the CCM annotation
+    `service.beta.kubernetes.io/linode-loadbalancer-firewall-id` on
+    `ahura-system/traefik`. It was applied. **The CCM tried and was refused:**
+    `SyncLoadBalancerFailed: failed to ensure load balancer: [403] Unauthorized`.
+    The LKE-managed CCM token has no firewall scope.
+  - **The annotation was REMOVED again.** Left in place it puts the Service
+    that fronts every app into a failing reconcile loop, which is a worse
+    exposure than the one it was closing. All 8 hostnames verified 200 after.
+  - Generalised, and the reason this took two wrong attempts: **a control
+    plane that accepts a setting has not applied it.** The PATCH returned 200
+    with the annotation present; the work happens in a controller whose
+    failure is only in the Service's events. Reading back what you wrote
+    confirms the write, never the effect. Same shape as the firewall create
+    that reported "attached" because it printed what it asked for.
+  - Needs the user: either a Linode token with firewall scope for the CCM, or
+    accept Cloudflare-only protection and document the origin IP as known.
 - ~~Tenant isolation unverified~~ — **MEASURED AND FIXED** 2026-08-26 (`ff559b9d`).
   `scripts/v2/isolation-proof.ts` probes from a real tenant namespace under the
   same gVisor RuntimeClass as customer workloads. It found a breach: **a tenant
@@ -392,6 +416,31 @@ behavioural tests replaying confirmed v1 criticals.
 4. **Reserved-hostname list** before any signup path opens.
 5. **Preview deployments** — needs the user's policy decision first.
 6. **Egress limiting and abuse response** — needs Cloudflare plan decision.
+
+---
+
+**Landed 2026-08-26 (later):**
+
+7. ~~**Customers cannot see what they were charged**~~ — **DONE** (`18b01765`).
+   `GET /api/v2/projects/{ref}/usage`. Nothing in `app/` read `project_charges`
+   before this: billing existed and was invisible. Summing lives in
+   `lib/paas/usage.ts` because that is the part that fails quietly — auth and a
+   query fail with a status code, arithmetic produces something that looks like
+   a bill. An unreadable amount is counted, never added: `Number(null)` is 0 and
+   `Number("abc")` is NaN, which survives `Math.round` to serialise as JSON
+   `null` — a blank where a figure belongs, with nothing reporting a fault.
+8. ~~**A push could deploy onto another customer's hostname**~~ — **DONE**
+   (`8ea8bfa8`), found by `cloud-app-v2-a9`. `byRepoFullName` matched on
+   `repo_full_name` alone and took `[0]` from an unordered query. Reachable on
+   GitHub alone — two teams may connect the same public repo. Now
+   `matchingRepo(provider, fullName)` returning a list, and `resolveRepoTarget`
+   which **refuses** rather than tie-breaks: no ordering is right, and the
+   failure was silent — the deploy succeeds, the wrong site changes, the person
+   who pushed sees nothing. Left open: resolving by installation id, which is
+   what would let two teams legitimately share a public repo.
+   - It also caught `webhook-proof` printing `non-production branch DEPLOYS —
+     BUG`. True before previews existed, wrong every run since. **A proof that
+     calls a working feature a bug is how a red line stops being read.**
 
 ---
 
