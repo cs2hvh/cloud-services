@@ -132,6 +132,19 @@ export const SWEEP_JOBS: SweepJob[] = [
     needs: ["k8s"],
     why: "The tenant egress policy denies the control plane's CURRENT address, read from Endpoints at reconcile time. That address moves on an upgrade, rebuild or failover, and every deployed policy then silently stops covering it — nothing fails, the hole just reopens. Indexed by NAMESPACE rather than by policy, so a tenant with no policy at all is visible; walking policies asks whether the policies are correct, walking namespaces asks whether each tenant is protected, and only the second notices an absence.",
   },
+  {
+    name: "meter-apps",
+    script: "scripts/v3/meter-apps.ts",
+    // Hourly, a few minutes past, so the hour it bills has actually begun and
+    // a pod started at :00 is observed rather than raced.
+    schedule: "4 * * * *",
+    needs: ["db", "k8s"],
+    // NOTE: installed WITHOUT --apply, so it reports what it would bill and
+    // charges nothing. Money moving is a decision with a person behind it, and
+    // a sweep that starts deducting the moment it is scheduled is the wrong
+    // shape for that. Flipping it on is one word in this script path.
+    why: "Bills every running v2 app for the hour in progress. Without it, paas.charge_project_hour exists and nothing calls it, which is the same as not having it — every project ran free while usage_samples collected. Refuses to bill at all when the cluster cannot be read: an unreadable cluster is not an empty one, and under-billing is recoverable because the hour is keyed, while over-billing is money taken for work nobody verified.",
+  },
 ];
 
 /** Environment variables each credential set requires. Sourced from the operator's own env. */
