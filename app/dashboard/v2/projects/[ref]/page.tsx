@@ -38,7 +38,6 @@ import {
   ServiceShell,
   Stat,
   StateBadge,
-  buttonClass,
   timeAgo,
 } from "@/components/v2/kit";
 import { DeployButton, EnvEditor } from "./actions";
@@ -49,6 +48,7 @@ import { RuntimeLogs } from "@/components/v2/runtime-logs";
 import { SizingPicker } from "@/components/v2/sizing-picker";
 import { SleepSettings } from "@/components/v2/sleep-settings";
 import { BuildSettings } from "@/components/v2/build-settings";
+import { DeleteProject } from "@/components/v2/delete-project";
 import { PromoteControl } from "@/components/v2/promote-control";
 import { DomainManager } from "@/components/v2/domain-manager";
 
@@ -651,6 +651,21 @@ export default async function ProjectPage({
           projectRef={project.ref}
           rootDirectory={project.root_directory}
           contextRepoRoot={project.build_context_repo_root === true}
+        />
+      </Card>
+
+      {/*
+        Last, and visually separated, because it is the one control on this page
+        that cannot be undone. DELETE used to mark the row and leave the workload
+        running — prj-61de90bd2dae sat for eleven hours with three Deployments
+        still in its namespace — so this had no honest UI to attach to until the
+        route actually tore things down.
+      */}
+      <Card title="Delete this project" subtitle="Permanent, and it takes the running app with it">
+        <DeleteProject
+          projectRef={project.ref}
+          projectName={project.name}
+          hostnames={(aliases.data ?? []).map((a) => a.hostname as string)}
         />
       </Card>
         </div>

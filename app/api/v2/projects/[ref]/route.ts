@@ -14,6 +14,7 @@ import {
   MAX_INSTANCES,
 } from "@/lib/paas/tiers.ts";
 import { getCaller } from "../../_lib/auth";
+import { kube, loadKubeconfig } from "@/lib/paas/k8s/client.ts";
 import {
   json,
   unauthenticated,
@@ -225,7 +226,7 @@ export async function DELETE(_request: Request, { params }: Params) {
     .update({ deleted_at: new Date().toISOString() })
     .eq("ref", ref)
     .is("deleted_at", null)
-    .select("ref")
+    .select("id,ref")
     .maybeSingle();
 
   if (error) {
@@ -236,12 +237,54 @@ export async function DELETE(_request: Request, { params }: Params) {
   }
   if (!data) return notFound("Project");
 
-  // Deliberately not claiming the infrastructure is gone. Teardown is the
-  // reconciler's job and has not run yet — saying "deleted" here is how v1
-  // ended up with billing meters for apps that no longer existed.
+  const projectId = (data as { id: string }).id;
+
+  // DELETE HAS TO ACTUALLY DELETE.
+  //
+  // This used to mark the row and hand the rest to a reconciler. That
+  // reconciler is a script nobody runs on a timer, so the workload simply
+  // stayed: prj-61de90bd2dae was deleted at 08:08 and eleven hours later its
+  // namespace still held three Deployments and four Services. Scaled to zero,
+  // routing nothing — but never removed, and accumulating for every project a
+  // customer has ever discarded.
+  //
+  // Aliases are released BEFORE the workload goes, which is the order
+  // project-teardown uses: a name that is still claimed while its Ingress is
+  // gone is a hostname nobody can re-register and nothing answers.
+  const released = await caller.db
+    .from("aliases")
+    .update({ released_at: new Date().toISOString() })
+    .eq("project_id", projectId)
+    .is("released_at", null);
+  if (released.error) {
+    console.error("[v2/projects/:ref] releasing aliases failed:", released.error);
+  }
+
+  // The namespace takes the Deployments, Services and Ingress with it — the
+  // whole cluster footprint of a project.
+  let tornDown = false;
+  let teardownError: string | null = null;
+  try {
+    const k = kube(
+      loadKubeconfig(process.env.V2_KUBECONFIG ?? "C:/ahura-secrets/kubeconfig-v2-dev.yaml"),
+    );
+    await k.delete(`/api/v1/namespaces/app-${(data as { ref: string }).ref}`, true);
+    tornDown = true;
+  } catch (err) {
+    // The row stays deleted. Reporting success for a teardown that did not
+    // happen is how v1 ended up billing for apps that no longer existed;
+    // reporting failure for a delete that DID happen would have the customer
+    // try again forever. Say exactly what is true of each half.
+    teardownError = (err as Error).message.slice(0, 200);
+    console.error("[v2/projects/:ref] namespace teardown failed:", err);
+  }
+
   return json({
     ref: (data as { ref: string }).ref,
-    status: "marked_for_deletion",
-    note: "Running infrastructure is removed by the reconciler, not by this call.",
+    status: tornDown ? "deleted" : "marked_for_deletion",
+    note: tornDown
+      ? "The project and its running infrastructure have been removed."
+      : "The project is deleted and its names are released, but its workload could not be torn down and will need a sweep.",
+    ...(teardownError ? { teardownError } : {}),
   });
 }
