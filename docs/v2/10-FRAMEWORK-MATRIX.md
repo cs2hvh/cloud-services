@@ -68,6 +68,12 @@ support gap being mistaken for a build gap.
 | 31 | tiangolo/full-stack-fastapi-template | FastAPI, uv, app in `backend/` | REFUSED | at detect | Was recorded as a correct APP-ERR 503. It was actually crash-looping on exit 2 — we had invented its entrypoint |
 | 32 | tiangolo/full-stack-fastapi-template `backend/` | The same repo with our own advice applied | BUILD-ERR | build failed | Its Dockerfile bind-mounts `uv.lock` from the build context, and that file is at the repo ROOT. See the gap below |
 | 33 | pallets/flask | Flask — a LIBRARY | REFUSED | at detect | Previously leased a VM to fail installing itself |
+| 34 | **gohugoio/hugoDocs** | Hugo, real documentation site | **PASS** | **200** | Hugo was not a framework at all before this. Four defects between detection and a served page |
+| 35 | gothinkster/golang-gin-realworld-example-app | Gin, go.mod | FAIL | clone failed | Not diagnosed — the clone itself failed, which is ours to explain. Open |
+| 36 | gothinkster/rails-realworld-example-app | Rails, Gemfile | BUILD-ERR | build failed | Bundler aborts on a 2017 Gemfile against Ruby 3.3. Ruby has the version-pinning gap Node had |
+| 37 | shadcn-ui/taxonomy (with its environment set) | Next.js validating env AT BUILD TIME | BUILD-ERR | build failed | Pushed through THREE platform defects. What remains is the repository's own rot: unpinned Radix drifted and its source no longer typechecks |
+| 38 | github/gitignore | No framework marker at all | REFUSED | at detect | Now says so. It used to be told to connect a GitHub account it does not need |
+| 39 | docker/awesome-compose | Many apps, none at the root | REFUSED | at detect | Same, and it took a second fix — its default branch is `master` |
 | 8 | remix-run/indie-stack | Remix, repo-supplied Dockerfile | APP-ERR | 503 | Built, routed, served. The app wants a database it was not given |
 | 9 | sveltejs/realworld | SvelteKit on `master`, **pnpm** | APP-ERR | 503 | Built, routed, served — **first proof pnpm works end to end**. Branch fallback to `master` also proven |
 
@@ -137,6 +143,28 @@ And one that had nothing to do with package managers:
   answered 503. CRA, Vite, Vue, Angular, Gatsby, Astro and Hugo were all
   affected, and it stayed hidden because everything deployed here before was a
   Node server or a repo-supplied Dockerfile.
+- **the build could not read the project's environment.** Applications that
+  validate configuration during `next build` — @t3-oss/env-nextjs is
+  everywhere — could not be deployed at all, however completely the customer
+  had filled their environment in. Server-side values now arrive through a
+  buildkit secret mount, which is in no image layer, unlike a build arg.
+- **and the last build arg was silently dropped.** The file is written with no
+  trailing newline and `read` returns non-zero on a final unterminated line, so
+  `while IFS= read -r line` never ran its body for it. With one variable that is
+  every variable. Unreachable while buildArgs was hardcoded empty; the first
+  public value ever passed went missing.
+- **an install that runs the repository's own scripts got only the manifest.**
+  `prisma generate` reads prisma/schema.prisma, emits a client with no models,
+  and the build dies much later with a type error in the customer's own source.
+- **Hugo was not a framework.** It was detected as Go (Hugo modules ship a
+  go.mod), then needed npm dependencies for js.Build and Tailwind, then a
+  NEWER node than Debian ships, and finally was routed to port 80 while nginx
+  listened on 8080 — building, publishing and routing successfully while
+  serving nothing.
+- **two public repositories were told to connect a GitHub account.** The flag
+  behind that message reported whether we held a TOKEN, not whether we could
+  read anything, while its own comment claimed otherwise. The inverse of this
+  project's recurring bug: treating observed-empty as could-not-observe.
 - **Python entrypoints were invented, not read.** `gunicorn app:app` for
   Flask and a `wsgi.py` hunt for Django are what a Python app USUALLY looks
   like, not anything found in the repository. When the guess was wrong there
