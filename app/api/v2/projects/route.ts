@@ -20,6 +20,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { json, unauthenticated, apiError } from "../_lib/http";
+import { createProject } from "./create-route";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -121,4 +122,9 @@ export async function GET() {
   });
 
   return json({ projects: view, count: view.length });
+}
+
+/** POST /api/v2/projects — create a project from a repository. */
+export async function POST(req: Request) {
+  return createProject(req);
 }
