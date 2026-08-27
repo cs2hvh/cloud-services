@@ -154,9 +154,17 @@ test("servingPort matches the port the container actually exposes", () => {
   assert.match(df, /EXPOSE 3000/);
 });
 
-test("unknown runtime refuses rather than emitting a broken image", () => {
-  const d = { ...detect(["README.md"]), runtime: "php" as const };
-  assert.throws(() => generateDockerfile(input({ detection: d })), /No generator for runtime/);
+test("a runtime we cannot build refuses rather than emitting a broken image", () => {
+  const d = { ...detect(["README.md"]), runtime: "php" as const, framework: "php" };
+  // Asserting the PROPERTY, not the wording. This used to pin the exact string
+  // `No generator for runtime`, so improving the message — which named our
+  // internals and read like a crash — failed a test that had no quarrel with the
+  // change. What matters is that it refuses, names what it found, and points at
+  // the escape hatch.
+  assert.throws(() => generateDockerfile(input({ detection: d })), (e: unknown) => {
+    const m = (e as Error).message;
+    return m.includes("php") && /Dockerfile/.test(m);
+  });
 });
 
 test("A FROZEN INSTALL IS ONLY CHOSEN WHEN THERE IS A LOCKFILE", () => {
