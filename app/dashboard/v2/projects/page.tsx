@@ -14,14 +14,17 @@
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Boxes, GitBranch, Plug, Plus, Server } from "lucide-react";
+import { Boxes, GitBranch, Plug, Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import {
   Card,
   Empty,
   ExternalLink,
+  ColHead,
   Failed,
   Hero,
+  ListTable,
+  PROJECT_COLUMNS,
   ServiceShell,
   Stat,
   StateBadge,
@@ -162,70 +165,75 @@ export default async function ProjectsPage() {
       ) : null}
 
       {rows.length > 0 ? (
-        <div className="grid gap-3 sm:grid-cols-2">
+        // A TABLE, matching /dashboard/services/compute/vps. Cards were fine for
+        // four projects and stop being fine at forty: a table is scannable down a
+        // column, which is how somebody finds the one app that is failing.
+        //
+        // Grid rather than <table>, exactly as the compute list does, so the
+        // header can be hidden on a phone and each row collapses to a stack. A
+        // real table needs a horizontal scrollbar or a second markup path to do
+        // the same thing.
+        <ListTable
+          head={
+            <div className={`grid ${PROJECT_COLUMNS} gap-3`}>
+              <ColHead>Project</ColHead>
+              <ColHead>Hostname</ColHead>
+              <ColHead>Status</ColHead>
+              <ColHead>Size</ColHead>
+              <ColHead align="right">Last deploy</ColHead>
+            </div>
+          }
+        >
           {rows.map((p) => {
             const state = newest.get(p.id);
             const hostname = host.get(p.id);
             return (
-              // A CARD IS NOT A LINK. The hostname below is its own anchor, and
-              // an <a> inside an <a> is invalid HTML — browsers recover by
-              // splitting them, which is why the click had to be intercepted at
-              // all. The whole-card target is kept with a stretched pseudo
-              // element on the title instead: pure CSS, two real links, no
-              // handler, and it works before hydration.
               <div
                 key={p.ref}
-                className="group relative flex flex-col gap-3 rounded-lg border border-white/[0.07] bg-[#15171c] p-4 transition-colors hover:border-white/[0.14] hover:bg-white/[0.03]"
+                className={`group relative grid ${PROJECT_COLUMNS} items-center gap-3 border-b border-white/[0.04] px-5 py-3 transition-colors last:border-b-0 hover:bg-white/[0.015]`}
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <Link
-                      href={`/dashboard/v2/projects/${p.ref}`}
-                      className="truncate text-sm font-medium text-white/90 after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
-                    >
-                      {p.slug}
-                    </Link>
-                    <p className="mt-0.5 flex items-center gap-1.5 truncate font-mono text-[11px] text-white/40">
-                      <GitBranch className="h-3 w-3 shrink-0" aria-hidden />
-                      {p.repo_full_name}
-                      <span className="text-white/25">·</span>
-                      {p.production_branch}
-                    </p>
-                  </div>
-                  <StateBadge state={state?.state ?? null} className="shrink-0" />
+                {/* Project — the stretched link, so the whole row opens it. */}
+                <div className="min-w-0">
+                  <Link
+                    href={`/dashboard/v2/projects/${p.ref}`}
+                    className="block truncate text-[13px] font-medium text-white/90 after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+                  >
+                    {p.slug}
+                  </Link>
+                  <p className="mt-0.5 flex items-center gap-1.5 truncate font-mono text-[10.5px] text-white/35">
+                    <GitBranch className="h-2.5 w-2.5 shrink-0" aria-hidden />
+                    {p.repo_full_name}
+                    <span className="text-white/20">·</span>
+                    {p.production_branch}
+                  </p>
                 </div>
 
-                {/*
-                  The hostname is the thing people actually came for, so it gets
-                  its own line. Its absence is stated rather than left blank —
-                  nothing has deployed yet, which is not the same as broken.
-                */}
-                <div className="min-w-0">
+                {/* Hostname — above the stretched link so it stays clickable. */}
+                <div className="relative z-10 min-w-0">
                   {hostname ? (
-                    // relative z-10 lifts it above the title's stretched
-                    // ::after, so this link is clickable and the rest of the
-                    // card still opens the project.
-                    <span className="relative z-10">
-                      <ExternalLink href={`https://${hostname}`}>{hostname}</ExternalLink>
-                    </span>
+                    <ExternalLink href={`https://${hostname}`}>{hostname}</ExternalLink>
                   ) : (
-                    <span className="font-mono text-[11px] text-white/30">
-                      No hostname until the first deploy
+                    <span className="font-mono text-[10.5px] text-white/25">
+                      awaiting first deploy
                     </span>
                   )}
                 </div>
 
-                <div className="flex items-center justify-between gap-3 border-t border-white/[0.05] pt-3 text-[11px] text-white/35">
-                  <span className="inline-flex items-center gap-1.5">
-                    <Server className="h-3 w-3" aria-hidden />
-                    {p.tier} ×{p.instance_count}
-                  </span>
-                  <span>{state ? timeAgo(state.at) : "never deployed"}</span>
+                <div>
+                  <StateBadge state={state?.state ?? null} />
+                </div>
+
+                <div className="font-mono text-[11px] text-white/50">
+                  {p.tier} ×{p.instance_count}
+                </div>
+
+                <div className="font-mono text-[11px] text-white/40 md:text-right">
+                  {state ? timeAgo(state.at) : "never"}
                 </div>
               </div>
             );
           })}
-        </div>
+        </ListTable>
       ) : null}
     </ServiceShell>
   );

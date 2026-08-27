@@ -9,6 +9,7 @@
  */
 
 import { checkCustomDomain } from "../../../_lib/domains";
+import { DOMAIN_COLUMNS, toDomainDto, type DomainRow } from "@/lib/paas/domain-view";
 import { paasConfig } from "@/lib/paas/config";
 import { createCustomHostname } from "@/lib/paas/edge/cloudflare";
 
@@ -36,55 +37,10 @@ export const dynamic = "force-dynamic";
 
 type Params = { params: Promise<{ ref: string }> };
 
-interface DomainRow {
-  /** Selected because the issuance update below addresses the row by primary key. */
-  id: string;
-  ref: string;
-  domain: string;
-  state: string;
-  verification_txt: string | null;
-  verified_at: string | null;
-  last_error: string | null;
-  created_at: string;
-}
-
-// ONE STRING LITERAL. supabase-js parses this at the TYPE level to infer the
-// row shape, and it can only do that for a literal — splitting it across a `+`
-// collapses the row to GenericStringError and produces a dozen "property does
-// not exist" errors that every one of them names a perfectly correct column.
-const DOMAIN_COLUMNS =
-  "id, ref, domain, state, verification_txt, verified_at, last_error, created_at";
-
-function toDomainDto(row: DomainRow) {
-  return {
-    ref: row.ref,
-    domain: row.domain,
-    state: row.state,
-    url: `https://${row.domain}`,
-    // `_cf-custom-hostname`, NOT a name of our own invention.
-    //
-    // This said `_ahura-verify.${domain}` — a prefix nothing on Cloudflare's
-    // side has ever heard of. The claim response returned the real record and
-    // this list returned a different one, so a customer following the list
-    // added a TXT that could never verify, and the failure would look like
-    // Cloudflare being slow rather than us giving the wrong instruction.
-    //
-    // The name is DERIVED rather than stored because Cloudflare's ownership
-    // record is deterministic: `_cf-custom-hostname.<hostname>`. Only the value
-    // is unpredictable, and only the value is stored. If Cloudflare ever
-    // changes the prefix this becomes wrong silently, which is why the claim
-    // path returns Cloudflare's own record verbatim and this is the fallback
-    // for rows claimed before issuance ran.
-    verification: row.verification_txt
-      ? { type: "TXT", name: `_cf-custom-hostname.${row.domain}`, value: row.verification_txt }
-      : null,
-    verifiedAt: row.verified_at,
-    lastError: row.last_error,
-    createdAt: row.created_at,
-    /** Honest: nothing serves a custom hostname until SaaS mode is on. */
-    serving: row.state === "active",
-  };
-}
+// The row shape, the column list and the presentation all live in
+// lib/paas/domain-view.ts. They were duplicated in the project page, whose
+// copy selected columns that do not exist — so the Domains tab rendered a
+// read failure against a perfectly readable table.
 
 async function resolveProject(
   caller: NonNullable<Awaited<ReturnType<typeof getCaller>>>,

@@ -30,6 +30,7 @@
 export const SECTION_VALUES = [
   "overview",
   "deployments",
+  "logs",
   "domains",
   "environment",
   "usage",

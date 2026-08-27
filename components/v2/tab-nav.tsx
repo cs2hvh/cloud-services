@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { Activity, Link2, Receipt, Rocket, Settings2, SlidersHorizontal } from "lucide-react";
+import { Activity, Link2, Receipt, Rocket, ScrollText, Settings2, SlidersHorizontal } from "lucide-react";
 import { ServiceTabBar } from "@/components/dashboard/ui/service-tab-bar";
 import { SECTION_VALUES } from "./sections";
 
@@ -41,6 +41,7 @@ import { SECTION_VALUES } from "./sections";
 const ICONS = {
   overview: Activity,
   deployments: Rocket,
+  logs: ScrollText,
   domains: Link2,
   environment: SlidersHorizontal,
   usage: Receipt,
@@ -51,7 +52,7 @@ const ICONS = {
 // the bar and the page disagreeing about which sections exist.
 const SECTIONS = SECTION_VALUES.map((value) => ({
   value,
-  label: value.charAt(0).toUpperCase() + value.slice(1),
+  label: value === "logs" ? "Runtime logs" : value.charAt(0).toUpperCase() + value.slice(1),
   icon: ICONS[value],
 }));
 export function TabNav({ active }: { active: string }) {

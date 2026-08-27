@@ -14,6 +14,7 @@ import { TabNav } from "@/components/v2/tab-nav";
 import { isSection } from "@/components/v2/sections";
 import { createClient } from "@/lib/supabase/server";
 import { summariseCharges } from "@/lib/paas/usage";
+import { DOMAIN_COLUMNS, toDomainDto, type DomainRow } from "@/lib/paas/domain-view";
 import {
   BILLING_HOURS_PER_MONTH,
   clampInstances,
@@ -39,6 +40,7 @@ import {
   timeAgo,
 } from "@/components/v2/kit";
 import { DeployButton, EnvEditor } from "./actions";
+import { RuntimeLogs } from "@/components/v2/runtime-logs";
 // Ported from the parallel dashboard this page replaced. These are the four
 // controls that lane had and this one did not; the routes here won because
 // they are the ones verified end to end against real data.
@@ -108,9 +110,12 @@ export default async function ProjectPage({
     db.from("aliases").select("ref,hostname,kind,deployment_id").eq("project_id", project.id),
     db.from("env_vars").select("key,is_public,updated_at").eq("project_id", project.id).order("key"),
     db.from("environments").select("id,kind,name").eq("project_id", project.id),
+    // Same column list the API uses. This selected `hostname` and `status`,
+    // which are not columns — the table has `domain` and `state` — so the
+    // query errored and the tab reported a read failure on a readable table.
     db
       .from("domains")
-      .select("ref,hostname,status,verified_at,cf_hostname_id,created_at")
+      .select(DOMAIN_COLUMNS)
       .eq("project_id", project.id)
       .order("created_at", { ascending: true }),
     // Read here rather than through /api/v2/projects/{ref}/usage for the same
@@ -402,6 +407,34 @@ export default async function ProjectPage({
         </div>
       ) : null}
 
+      {tab === "logs" ? (
+        <div className="space-y-4">
+          {/*
+            What the app is PRINTING, as opposed to why it built. The API has
+            existed since the platform did and nothing reached it, so the
+            question a customer asks every day after the first deploy had no
+            answer in the product.
+
+            Scoped to the deployment production points at. Runtime logs for a
+            superseded build are almost never what somebody wants, and offering
+            every historical deployment here would bury the one that matters.
+          */}
+          <Card
+            title="Runtime logs"
+            subtitle="Output from the pods currently serving this project"
+          >
+            {latest && production?.deployment_id ? (
+              <RuntimeLogs deploymentRef={latest.ref} />
+            ) : (
+              <Empty title="Nothing is serving yet">
+                Runtime logs come from running pods. Deploy this project and they will appear here;
+                until then the build log on a deployment is the place to look.
+              </Empty>
+            )}
+          </Card>
+        </div>
+      ) : null}
+
       {tab === "settings" ? (
         <div className="space-y-4">
       <Card title="Size" subtitle="What each instance gets, and how many run">
@@ -468,17 +501,13 @@ export default async function ProjectPage({
         ) : (
           <DomainManager
             projectRef={project.ref}
-            domains={(domains.data ?? []).map((d) => ({
-              ref: d.ref,
-              domain: d.hostname,
-              state: d.status,
-              // The DNS record to add is issued by Cloudflare when the custom
-              // hostname is created; until then there is nothing to show and a
-              // fabricated record would send the customer to edit DNS for a
-              // value that will not match.
-              verification: null,
-              lastError: null,
-            }))}
+            // toDomainDto, not a second mapping. The copy here passed
+            // `verification: null` unconditionally and threw away
+            // verification_txt, so even with the columns right the customer
+            // was never shown the TXT record they have to add. A domains page
+            // that lists a domain and cannot tell you how to verify it is
+            // worse than one that admits it is broken.
+            domains={((domains.data ?? []) as unknown as DomainRow[]).map(toDomainDto)}
             customHostnamesEnabled={customHostnamesEnabled}
           />
         )}

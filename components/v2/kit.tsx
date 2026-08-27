@@ -415,3 +415,68 @@ export const heroButtonClass =
   "bg-[linear-gradient(135deg,#0095FF,#0066B3)] shadow-[0_8px_20px_rgba(0,149,255,0.20),inset_0_1px_0_rgba(255,255,255,0.15)] " +
   "hover:bg-[linear-gradient(135deg,#33adff,#0095FF)] hover:-translate-y-px " +
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0095FF]/40";
+
+/* ── list table ─────────────────────────────────────────────────────────── */
+
+/**
+ * A column heading, in the compute list's voice.
+ *
+ * Mono, 10px, wide tracking, uppercase — the same treatment
+ * /dashboard/services/compute/vps uses, so a customer moving between servers
+ * and applications reads the same table twice rather than two designs.
+ */
+export function ColHead({
+  children,
+  align = "left",
+  className,
+}: {
+  children: React.ReactNode;
+  align?: "left" | "right";
+  className?: string;
+}) {
+  return (
+    <span
+      className={cn(
+        V2_MONO,
+        "text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40",
+        align === "right" && "text-right",
+        className,
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+/**
+ * The frame around a grid table.
+ *
+ * A GRID, NOT A <table>, and that is what the compute list does too. The header
+ * is `hidden md:grid` and each row is `grid-cols-1 md:grid-cols-[…]`, so the
+ * whole thing collapses to stacked rows on a phone. A real table cannot do
+ * that without either a horizontal scrollbar or a second markup path.
+ *
+ * `columns` is passed once and applied to both the header and every row by the
+ * caller. Two copies of a grid template is how a column header ends up over the
+ * wrong column.
+ */
+export function ListTable({
+  head,
+  children,
+  empty,
+}: {
+  head: React.ReactNode;
+  children: React.ReactNode;
+  empty?: React.ReactNode;
+}) {
+  return (
+    <div className="overflow-hidden rounded-[6px] border border-white/[0.06] bg-[#111216]">
+      <div className="hidden border-b border-white/[0.06] px-5 py-2.5 md:block">{head}</div>
+      {empty ?? children}
+    </div>
+  );
+}
+
+/** The grid template shared by the projects table's header and rows. */
+export const PROJECT_COLUMNS =
+  "grid-cols-1 md:grid-cols-[minmax(0,1.7fr)_minmax(0,1.4fr)_minmax(0,0.8fr)_minmax(0,0.9fr)_minmax(0,0.8fr)]";
