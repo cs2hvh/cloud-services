@@ -25,40 +25,46 @@ test("an empty engines string is not a constraint", () => {
   assert.equal(resolveNodeVersion({ enginesNode: "   " }).major, DEFAULT_NODE_MAJOR);
 });
 
-/* ── .nvmrc wins, because a developer wrote it to say what they run ───────── */
+/* ── .nvmrc raises the floor and never lowers the ceiling ─────────────────── */
 
-test(".nvmrc pins the major", () => {
-  const c = resolveNodeVersion({ nvmrc: "20.11.0\n" });
-  assert.equal(c.major, 20);
+test("A STALE .nvmrc DOES NOT DRAG THE BUILD BACKWARDS", () => {
+  // sveltejs/realworld ships `.nvmrc` containing 20 while a package in its tree
+  // declares engines.node >=22.12.0. Honouring the file as a hard pin made pnpm
+  // refuse the install outright on a build that had previously served.
+  const c = resolveNodeVersion({ nvmrc: "20\n" });
+  assert.equal(c.major, DEFAULT_NODE_MAJOR);
+  assert.match(c.reason, /pin engines\.node to insist/);
+});
+
+test(".nvmrc can move us to a NEWER major", () => {
+  assert.equal(resolveNodeVersion({ nvmrc: "24\n" }).major, 24);
 });
 
 test(".nvmrc accepts a leading v", () => {
-  assert.equal(resolveNodeVersion({ nvmrc: "v18\n" }).major, 18);
+  assert.equal(resolveNodeVersion({ nvmrc: "v24\n" }).major, 24);
 });
 
-test(".nvmrc OUTRANKS engines, and they are allowed to disagree", () => {
-  const c = resolveNodeVersion({ nvmrc: "18", enginesNode: ">=20" });
+test("ENGINES OUTRANKS .nvmrc, and they are allowed to disagree", () => {
+  // engines is published, and npm and pnpm enforce it. .nvmrc is a local note.
+  const c = resolveNodeVersion({ nvmrc: "24", enginesNode: "^18.17.0" });
   assert.equal(c.major, 18);
 });
 
-test("an alias in .nvmrc falls through instead of guessing", () => {
+test("an alias in .nvmrc is not guessed at", () => {
   // lts/hydrogen is 18, but resolving that needs a table that goes stale.
   assert.equal(majorFromNvmrc("lts/hydrogen"), null);
-  const c = resolveNodeVersion({ nvmrc: "lts/hydrogen", enginesNode: "^20" });
-  assert.equal(c.major, 20);
+  assert.equal(resolveNodeVersion({ nvmrc: "lts/hydrogen" }).major, DEFAULT_NODE_MAJOR);
 });
 
-test("A PIN WE CANNOT HONOUR SAYS SO", () => {
-  // Silently building 16 on 22 is how somebody ends up debugging a runtime
-  // they never chose.
-  const c = resolveNodeVersion({ nvmrc: "16" });
+test("an .nvmrc naming a major we do not offer says so", () => {
+  const c = resolveNodeVersion({ nvmrc: "23" });
   assert.equal(c.major, DEFAULT_NODE_MAJOR);
   assert.match(c.reason, /does not offer/);
 });
 
 /* ── engines ranges ───────────────────────────────────────────────────────── */
 
-test("an exact major is honoured", () => {
+test("an exact major is honoured, including downward", () => {
   assert.equal(resolveNodeVersion({ enginesNode: "18" }).major, 18);
   assert.equal(resolveNodeVersion({ enginesNode: "18.x" }).major, 18);
   assert.equal(resolveNodeVersion({ enginesNode: "^18.17.0" }).major, 18);
@@ -67,8 +73,7 @@ test("an exact major is honoured", () => {
 
 test("A FLOOR IS NOT A TARGET", () => {
   // ">=18" says 18 is the oldest acceptable, not the one they want.
-  const c = resolveNodeVersion({ enginesNode: ">=18" });
-  assert.equal(c.major, DEFAULT_NODE_MAJOR);
+  assert.equal(resolveNodeVersion({ enginesNode: ">=18" }).major, DEFAULT_NODE_MAJOR);
 });
 
 test("a floor above the default moves us up, not down", () => {
@@ -118,9 +123,10 @@ test("a non-string engines.node is ignored rather than coerced", () => {
 /* ── the predicates can actually fail ─────────────────────────────────────── */
 
 test("EVERY BRANCH ABOVE CAN ACTUALLY FAIL", () => {
-  // If resolve always returned the default, most tests here would still pass.
+  // If resolve always returned the default, half these tests would still pass.
   assert.notEqual(resolveNodeVersion({ enginesNode: "18" }).major, DEFAULT_NODE_MAJOR);
-  assert.notEqual(resolveNodeVersion({ nvmrc: "20" }).major, DEFAULT_NODE_MAJOR);
+  assert.notEqual(resolveNodeVersion({ nvmrc: "24" }).major, DEFAULT_NODE_MAJOR);
   // And if it never returned the default, these would fail instead.
   assert.equal(resolveNodeVersion({}).major, DEFAULT_NODE_MAJOR);
+  assert.equal(resolveNodeVersion({ nvmrc: "20" }).major, DEFAULT_NODE_MAJOR);
 });
