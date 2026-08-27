@@ -99,8 +99,16 @@ export const BATCHES: Record<string, Target[]> = {
     { repo: "fastify/fastify-example-todo", note: "Fastify, no lockfile", expect: "app-err" },
   ],
   "node-other": [
-    { repo: "gatsbyjs/gatsby-starter-blog", note: "Gatsby, static output", expect: "serve" },
-    { repo: "facebook/docusaurus", note: "Docusaurus monorepo — a LIBRARY at the root", expect: "refuse" },
+    // Gatsby's own starter cannot install on a current Node: its tree pulls
+    // lmdb-store, whose C++ fails a static assertion against Node 22's V8
+    // headers. Nothing on our side fixes that — the repository would need to
+    // pin an older Node, which we would now honour.
+    { repo: "gatsbyjs/gatsby-starter-blog", note: "Gatsby; its lmdb-store will not compile on Node 22", expect: "build-err" },
+    // The Docusaurus repository root is the monorepo that BUILDS Docusaurus.
+    // Its documentation site — a real Docusaurus site, which is what a customer
+    // would deploy — lives in website/.
+    { repo: "facebook/docusaurus", note: "Docusaurus site inside its own monorepo", root: "website", expect: "serve" },
+    { repo: "facebook/docusaurus", note: "monorepo ROOT — builds a library, not a site", expect: "build-err" },
   ],
 
   /* ── Python ───────────────────────────────────────────────────────────── */

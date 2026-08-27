@@ -57,6 +57,8 @@ support gap being mistaken for a build gap.
 | 20 | withastro/starlight | Workspace root with no build script | REFUSED | at detect | Refused in seconds without leasing a machine. Previously spent a VM to fail on `"/dist": not found` |
 | 21 | **vercel/commerce** | Next.js **pnpm workspace monorepo** | **PASS** | **200** | The monorepo fix proven on a real one. This is the shape that could not install at all a day ago |
 | 22 | shadcn-ui/taxonomy | Next.js that validates env AT BUILD TIME (`@t3-oss/env-nextjs`) | BUILD-ERR | build failed | Its own `env.mjs` throws during `next build` with no `DATABASE_URL`. Found that NO environment variable reached the builder |
+| 23 | gatsbyjs/gatsby-starter-blog | Gatsby, yarn, native deps | BUILD-ERR | build failed | Found TWO gaps: no build toolchain in the image, and Gatsby not detected as a framework at all. Still fails afterwards — its `lmdb-store` cannot compile against Node 22's V8 headers |
+| 24 | facebook/docusaurus (root) | Monorepo root that builds a library, not a site | BUILD-ERR | build failed | Found that Docusaurus was not detected either |
 | 8 | remix-run/indie-stack | Remix, repo-supplied Dockerfile | APP-ERR | 503 | Built, routed, served. The app wants a database it was not given |
 | 9 | sveltejs/realworld | SvelteKit on `master`, **pnpm** | APP-ERR | 503 | Built, routed, served — **first proof pnpm works end to end**. Branch fallback to `master` also proven |
 
@@ -126,6 +128,27 @@ And one that had nothing to do with package managers:
   answered 503. CRA, Vite, Vue, Angular, Gatsby, Astro and Hugo were all
   affected, and it stayed hidden because everything deployed here before was a
   Node server or a repo-supplied Dockerfile.
+- **no native dependency could compile.** sharp, bcrypt, sqlite3 and anything
+  else built through node-gyp ship prebuilt binaries for common platforms and
+  compile from source when none match — and on musl/alpine no match is the
+  NORMAL case. The image had no toolchain, so the install died inside node-gyp
+  with `gyp ERR! stack Error: Could not find any Python installation to use`,
+  which names a missing interpreter rather than a missing compiler. python3,
+  make and g++ now go into the stages that install; the runtime stage still
+  gets neither, so the shipped image carries no compiler.
+- **Gatsby and Docusaurus were not frameworks.** Both fell through to the
+  generic Node branch, which runs `npm start` against a framework that has no
+  server to start. Both build to a directory of static files and want nginx —
+  and NOT the same directory (`public/` vs `build/`), which is why each needs
+  its own rule rather than one shared guess.
+- **the Node version was hardcoded to 22.** A repository pins Node because a
+  native addon has no prebuilt binary for a newer ABI, or a dependency reads a
+  V8 header that has since changed; building those on the newest Node fails
+  with `v8-local-handle.h:269:42: error: static assertion failed: type check`,
+  which names a C++ header rather than a version mismatch. `.nvmrc` and
+  `engines.node` are now both read. `.nvmrc` wins — a developer writes it to
+  say what they actually run — and within `engines` a floor is not a target,
+  so `>=18` builds on 22.
 - **public environment variables reached nothing at all.** A
   `NEXT_PUBLIC_` / `VITE_` / `PUBLIC_` value is read by the bundler and
   written into the JavaScript it emits; no later step can supply it. The
