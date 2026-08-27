@@ -81,8 +81,13 @@ export default async function ProjectPage({ params }: { params: Promise<{ ref: s
     db.from("env_vars").select("key,is_public,updated_at").eq("project_id", project.id).order("key"),
     db.from("environments").select("id,kind,name").eq("project_id", project.id),
     db
+      // The columns are `domain` and `state`. This first read invented
+      // `hostname` and `status`, which typechecked, built, and would have
+      // failed at request time — PostgREST column names are invisible to tsc.
+      // columns.schema.test.ts now scans inline selects like this one, not
+      // just the shared column constants.
       .from("domains")
-      .select("ref,hostname,status,verified_at,cf_hostname_id,created_at")
+      .select("ref,domain,state,verification_txt,verified_at,last_error,created_at")
       .eq("project_id", project.id)
       .order("created_at", { ascending: true }),
   ]);
@@ -407,14 +412,20 @@ export default async function ProjectPage({ params }: { params: Promise<{ ref: s
             projectRef={project.ref}
             domains={(domains.data ?? []).map((d) => ({
               ref: d.ref,
-              domain: d.hostname,
-              state: d.status,
-              // The DNS record to add is issued by Cloudflare when the custom
-              // hostname is created; until then there is nothing to show and a
-              // fabricated record would send the customer to edit DNS for a
-              // value that will not match.
-              verification: null,
-              lastError: null,
+              domain: d.domain,
+              state: d.state,
+              // The real TXT challenge, not null. verification_txt is issued
+              // when the custom hostname is created; while it is null there is
+              // genuinely nothing to add yet, and inventing a record would
+              // send the customer to edit DNS for a value that cannot match.
+              verification: d.verification_txt
+                ? {
+                    type: "TXT",
+                    name: `_ahura-verify.${d.domain}`,
+                    value: d.verification_txt,
+                  }
+                : null,
+              lastError: d.last_error,
             }))}
             customHostnamesEnabled={customHostnamesEnabled}
           />
