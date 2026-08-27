@@ -715,6 +715,49 @@ Two rules:
    and well tested, and it armed a production outage three files away. Nothing
    about the arming change looks dangerous, which is what makes this class hard.
 
+### A comment asserting a guarantee is not the guarantee
+
+`GET /api/v2/github/callback` took `installation_id` from the query string,
+checked it with `listInstallations()`, and bound it to
+`bootstrap_personal_team()` — the CALLER'S team. Its header said:
+
+> Without that check, a caller could claim ANY installation id and gain deploy
+> access to a stranger's repositories.
+
+**The check does not do that.** It proves the installation exists on our App —
+that SOMEBODY installed it. It says nothing about who is asking. So any
+signed-in user who visited that URL with a real but unclaimed installation id
+bound a stranger's GitHub account to their own team and could list and deploy
+that account's repositories. Installation ids are enumerable nine-digit
+integers that appear in webhook payloads and URLs, and one stays unclaimed
+permanently for anyone who installs from GitHub's UI and stops there.
+
+**It had already happened.** The installation on `cs2hvh` was held by team
+`vedendra-singh`, owned by somebody who does not own that GitHub account,
+because their session reached the callback first. Found by the operator
+noticing the two did not match — not by a test, a review, or the comment that
+described the exact attack.
+
+`/api/v2/git/callback` had the same hole behind a better disguise: its one-time
+nonce proves the browser STARTED a flow, not which installation came back, and
+an attacker can start one legitimately.
+
+Fixed in `lib/paas/github/ownership.ts` (tested, 9 cases): the caller's GitHub
+identity must match the account the installation is on. Two rules worth
+keeping:
+
+- **Read `user.identities`, never `user_metadata`.** Metadata is
+  last-writer-wins across providers — the operator's account carries
+  `providers: ["gitlab","github"]`, so someone whose GitLab username matched a
+  GitHub account could have claimed that account's installation.
+- **Two blanks must not compare equal.** A caller with no GitHub identity and
+  an installation whose account GitHub did not name would match under naive
+  equality. Same shape as every other bug in §8.
+
+**Known gap, stated rather than hidden:** org installs cannot be proven this
+way — it needs the user's own OAuth token, which is deliberately not stored
+for GitHub. They are refused by both routes until that exists.
+
 ### A migration invalidates routes no test and no typechecker can see
 
 `20260827090000` made `paas.installations.provider` and `external_id` NOT NULL
