@@ -326,3 +326,39 @@ test("BUN GETS A BUN IMAGE, AND NOTHING ELSE DOES", () => {
     assert.match(out, /FROM node:/, `${packageManager} must use a node image`);
   }
 });
+
+test("PNPM IS ALLOWED TO RUN INSTALL SCRIPTS", () => {
+  // pnpm 10 refuses postinstall scripts by default and does not merely skip
+  // them — it exits non-zero with ERR_PNPM_IGNORED_BUILDS, so the frozen
+  // attempt AND the fallback both fail and the build dies. sharp, bcrypt,
+  // prisma and esbuild all need theirs, which means most real applications
+  // could not build. vercel/next-learn died on bcrypt and sharp.
+  //
+  // npm and yarn run these by default. This restores the behaviour every other
+  // path already has rather than granting anything unusual.
+  const detection = detect(["package.json"], {
+    "package.json": JSON.stringify({ dependencies: { next: "15" }, scripts: { build: "next build" } }),
+  });
+  const out = generateDockerfile(input({ detection, packageManager: "pnpm", hasLockfile: true }))!;
+  const install = out.split("\n").find((l) => l.includes("pnpm install"))!;
+  assert.match(install, /dangerouslyAllowAllBuilds/, "pnpm must be allowed to run install scripts");
+  assert.ok(
+    install.indexOf("dangerouslyAllowAllBuilds") < install.indexOf("pnpm install"),
+    "the setting must be applied BEFORE the install, not after it",
+  );
+});
+
+test("THE FALLBACK IS BOUND TO THE INSTALL, NOT THE WHOLE LINE", () => {
+  // In a shell, `a && b && c || d` runs d when a or b fails too. Unparenthesised,
+  // a failed `corepack enable` would fall through to a loose install of a
+  // package manager that is not there — turning a clear "not found" into a
+  // second, more confusing failure.
+  const detection = detect(["package.json"], {
+    "package.json": JSON.stringify({ dependencies: { next: "15" }, scripts: { build: "next build" } }),
+  });
+  for (const packageManager of ["pnpm", "yarn"] as const) {
+    const out = generateDockerfile(input({ detection, packageManager, hasLockfile: true }))!;
+    const install = out.split("\n").find((l) => l.includes(`${packageManager} install`))!;
+    assert.match(install, /\(.*\|\|.*\)/, `${packageManager}: the fallback must be parenthesised`);
+  }
+});

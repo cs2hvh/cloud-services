@@ -103,12 +103,34 @@ function installCmd(pm: DockerfileInput["packageManager"], production = false, h
   // `||` in a RUN line: the fallback executes only when the frozen attempt
   // exits non-zero, and the step still fails if BOTH fail — a build with no
   // dependencies must never be reported as a success.
-  const attempt = (frozen: string, loose: string) => (hasLockfile ? `${frozen} || ${loose}` : loose);
+  // PARENTHESISED. In a shell, `a && b && c || d` runs d when a or b fails too,
+  // so an unparenthesised fallback would fire after a failed `corepack enable`
+  // and try to run a package manager that is not there. The group binds the
+  // fallback to the install alone.
+  const attempt = (frozen: string, loose: string) =>
+    hasLockfile ? `(${frozen} || ${loose})` : loose;
 
   switch (pm) {
     case "pnpm": {
       const prod = production ? " --prod" : "";
-      return `corepack enable && ${attempt(
+      // POSTINSTALL SCRIPTS MUST RUN, and pnpm 10 refuses them by default.
+      //
+      // It does not merely skip them — it exits non-zero with
+      // ERR_PNPM_IGNORED_BUILDS, so the frozen attempt AND the fallback both
+      // fail and the build dies. sharp, bcrypt, prisma, esbuild and every other
+      // native dependency needs its install script, which means most real
+      // applications could not build. vercel/next-learn died on bcrypt and
+      // sharp.
+      //
+      // npm and yarn run these by default, and so do Vercel and Netlify — this
+      // restores the behaviour every other path already has rather than
+      // granting anything unusual. The build runs in a single-use VM under
+      // gVisor with no registry credentials and no cluster access, which is the
+      // isolation that makes running a stranger's install script acceptable at
+      // all; the alternative is refusing every application with a native
+      // dependency.
+      const allowBuilds = `pnpm config set dangerouslyAllowAllBuilds true`;
+      return `corepack enable && ${allowBuilds} && ${attempt(
         `pnpm install --frozen-lockfile${prod}`,
         `pnpm install --no-frozen-lockfile${prod}`,
       )}`;
