@@ -145,6 +145,25 @@ export const SWEEP_JOBS: SweepJob[] = [
     // shape for that. Flipping it on is one word in this script path.
     why: "Bills every running v2 app for the hour in progress. Without it, paas.charge_project_hour exists and nothing calls it, which is the same as not having it — every project ran free while usage_samples collected. Refuses to bill at all when the cluster cannot be read: an unreadable cluster is not an empty one, and under-billing is recoverable because the hour is keyed, while over-billing is money taken for work nobody verified.",
   },
+  {
+    name: "project-teardown",
+    script: "scripts/v3/project-teardown.ts",
+    schedule: "18 * * * *",
+    needs: ["db", "k8s", "cf"],
+    // REPORT ONLY — installed without --apply. It scales pods down and deletes
+    // DNS records, and a sweep that starts destroying the moment it is
+    // scheduled is the wrong shape for that even when every project it touches
+    // has already been deleted by its owner.
+    why: "A soft-deleted project is INVISIBLE to reconcileAll, which iterates projects.list() and that filters deleted_at=is.null. So its pods keep running, its Ingress keeps routing, its DNS keeps resolving, and once metering is on its owner keeps paying for an app they deleted — v1's $543.17 defect reproduced exactly. Idempotent by construction, so a missed run is self-healing rather than permanent. Database rows are KEPT: build history is what explains a bill.",
+  },
+  {
+    name: "domain-reconcile",
+    script: "scripts/v3/domain-reconcile.ts",
+    schedule: "33 * * * *",
+    needs: ["db", "cf"],
+    // REPORT ONLY, for the same reason.
+    why: "DELETE on a custom domain soft-removes and promises 'the edge configuration is removed by the reconciler'. There was none, so every removed domain left a live Cloudflare custom hostname that nothing would ever clean up. Tears down only — issuance belongs to the claim path, where a customer is waiting and can be told what to add. Orphans are reported and NEVER deleted: a missing row is not proof a hostname is unwanted, and deleting a live custom domain cannot be undone by re-running.",
+  },
 ];
 
 /** Environment variables each credential set requires. Sourced from the operator's own env. */
