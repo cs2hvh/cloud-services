@@ -20,7 +20,15 @@ import {
 import { isPlaceholderSha } from "@/app/api/v2/_lib/deployments";
 import { replicaStates, type ReplicaState } from "@/lib/paas/replicas";
 import { ReplicaBadge } from "@/components/v2/state-badge";
-import { Panel, StateBadge, Empty, Failed, timeAgo } from "../ui";
+import {
+  Card,
+  Empty,
+  Failed,
+  PageHeader,
+  StateBadge,
+  buttonClass,
+  timeAgo,
+} from "@/components/v2/kit";
 import { DeployButton, EnvEditor } from "./actions";
 // Ported from the parallel dashboard this page replaced. These are the four
 // controls that lane had and this one did not; the routes here won because
@@ -60,9 +68,9 @@ export default async function ProjectPage({ params }: { params: Promise<{ ref: s
 
   if (projectError) {
     return (
-      <main className="mx-auto max-w-4xl p-6">
+      <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
         <Failed what="this project" />
-      </main>
+      </div>
     );
   }
   if (!project || project.deleted_at) notFound();
@@ -176,31 +184,36 @@ export default async function ProjectPage({ params }: { params: Promise<{ ref: s
   }
 
   return (
-    <main className="mx-auto max-w-4xl space-y-4 p-6">
-      <header>
-        <Link href="/dashboard/v2/projects" className="text-xs text-neutral-500 hover:underline">
-          ← Projects
-        </Link>
-        <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight">{project.slug}</h1>
-            <p className="mt-0.5 text-xs text-neutral-500">
-              {project.repo_full_name} · {project.production_branch}
-              {project.root_directory ? ` · /${project.root_directory}` : ""}
-            </p>
-          </div>
-          <DeployButton projectRef={project.ref} branch={project.production_branch} />
-        </div>
-      </header>
+    <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
+      <PageHeader
+        title={project.slug}
+        back={{ href: "/dashboard/v2/projects", label: "Projects" }}
+        description={
+          <span className="font-mono text-xs">
+            {project.repo_full_name} · {project.production_branch}
+            {project.root_directory ? ` · /${project.root_directory}` : ""}
+          </span>
+        }
+        actions={<DeployButton projectRef={project.ref} branch={project.production_branch} />}
+      />
 
-      <Panel title="Serving" subtitle="The hostname this project answers on">
+      {/*
+        Two columns, and which side a thing lands on is the point: the left is
+        what you WATCH — where it serves, what deployed, what previews exist —
+        and the right is what you CONFIGURE once and leave alone. Stacked in one
+        column, the settings pushed the deployment list below the fold, which is
+        the thing people open this page to look at.
+      */}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        <div className="space-y-4">
+      <Card title="Serving" subtitle="The hostname this project answers on">
         {production ? (
           <div className="flex flex-wrap items-center justify-between gap-3">
             <a
               href={`https://${production.hostname}`}
               target="_blank"
               rel="noreferrer"
-              className="text-sm text-blue-600 hover:underline dark:text-blue-400"
+              className="text-sm text-sky-300 transition-colors hover:text-sky-200"
             >
               {production.hostname}
             </a>
@@ -247,17 +260,17 @@ export default async function ProjectPage({ params }: { params: Promise<{ ref: s
           </div>
         )}
         {sizing ? (
-          <p className="mt-3 text-xs text-neutral-500">
+          <p className="mt-3 text-xs text-white/40">
             {sizing.label} · {sizing.memory} memory · {sizing.cpu} CPU · ×{project.instance_count}
           </p>
         ) : (
-          <p className="mt-3 text-xs text-red-600 dark:text-red-400">
+          <p className="mt-3 text-xs text-red-300">
             Plan &quot;{project.tier}&quot; is not in the price list — this project cannot be sized. Contact support.
           </p>
         )}
-      </Panel>
+      </Card>
 
-      <Panel
+      <Card
         title="Deployments"
         subtitle={
           deployments.error ? undefined : `${deployments.data?.length ?? 0} most recent`
@@ -268,7 +281,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ ref: s
         ) : (deployments.data ?? []).length === 0 ? (
           <Empty title="Nothing deployed yet">Use Deploy above, or push to {project.production_branch}.</Empty>
         ) : (
-          <ul className="divide-y divide-neutral-200 dark:divide-neutral-800">
+          <ul className="divide-y divide-white/[0.06]">
             {(deployments.data ?? []).map((d) => (
               <li key={d.ref} className="flex items-start justify-between gap-4 py-2 first:pt-0 last:pb-0">
                 <div className="min-w-0">
@@ -287,35 +300,35 @@ export default async function ProjectPage({ params }: { params: Promise<{ ref: s
                     */}
                     <Link
                       href={`/dashboard/v2/projects/${project.ref}/deployments/${d.ref}`}
-                      className="text-xs text-blue-600 hover:underline dark:text-blue-400"
+                      className="text-xs text-sky-300 transition-colors hover:text-sky-200"
                     >
                       <code className="text-xs">
                         {isPlaceholderSha(d.git_sha) ? d.ref : d.git_sha!.slice(0, 7)}
                       </code>
                     </Link>
-                    <span className="text-xs text-neutral-500">{d.git_ref}</span>
-                    <span className="text-xs text-neutral-400">{d.trigger}</span>
+                    <span className="text-xs text-white/40">{d.git_ref}</span>
+                    <span className="text-xs text-white/30">{d.trigger}</span>
                   </div>
                   {d.error_message ? (
-                    <p className="mt-0.5 truncate text-xs text-red-600 dark:text-red-400">{d.error_message}</p>
+                    <p className="mt-0.5 truncate text-xs text-red-300">{d.error_message}</p>
                   ) : null}
                 </div>
                 <div className="flex shrink-0 items-center gap-3">
-                  <span className="text-xs text-neutral-500">{timeAgo(d.ready_at ?? d.queued_at)}</span>
+                  <span className="text-xs text-white/40">{timeAgo(d.ready_at ?? d.queued_at)}</span>
                   <StateBadge state={d.state} />
                 </div>
               </li>
             ))}
           </ul>
         )}
-      </Panel>
+      </Card>
 
-      <Panel
+      <Card
         title="Previews"
         subtitle="Free, Starter-sized, and removed 48 hours after their last push"
       >
         {previewEnvs.length === 0 ? (
-          <p className="text-sm text-neutral-500">
+          <p className="text-sm text-white/40">
             Push any branch other than {project.production_branch} and a preview appears here.
           </p>
         ) : (
@@ -330,21 +343,24 @@ export default async function ProjectPage({ params }: { params: Promise<{ ref: s
                       href={`https://${alias.hostname}`}
                       target="_blank"
                       rel="noreferrer"
-                      className="shrink-0 text-xs text-blue-600 hover:underline dark:text-blue-400"
+                      className="shrink-0 text-xs text-sky-300 transition-colors hover:text-sky-200"
                     >
                       {alias.hostname}
                     </a>
                   ) : (
-                    <span className="shrink-0 text-xs text-neutral-400">building</span>
+                    <span className="shrink-0 text-xs text-white/30">building</span>
                   )}
                 </li>
               );
             })}
           </ul>
         )}
-      </Panel>
+      </Card>
 
-      <Panel title="Size" subtitle="What each instance gets, and how many run">
+        </div>
+
+        <div className="space-y-4">
+      <Card title="Size" subtitle="What each instance gets, and how many run">
         {/*
           Replaces the read-only cpu/memory line this page used to show. Same
           source — lib/paas/tiers — so what the page says and what the pod gets
@@ -380,9 +396,9 @@ export default async function ProjectPage({ params }: { params: Promise<{ ref: s
             deployRequired
           />
         )}
-      </Panel>
+      </Card>
 
-      <Panel title="Sleep" subtitle="Scale to zero when nothing is asking">
+      <Card title="Sleep" subtitle="Scale to zero when nothing is asking">
         {/*
           sweepScheduled={false}: the idle sweep is a script someone runs, not
           a schedule. The panel records the setting and says plainly that
@@ -396,9 +412,9 @@ export default async function ProjectPage({ params }: { params: Promise<{ ref: s
           idleSeconds={project.idle_seconds}
           sweepScheduled={false}
         />
-      </Panel>
+      </Card>
 
-      <Panel title="Custom domains" subtitle="Your own hostname in front of this project">
+      <Card title="Custom domains" subtitle="Your own hostname in front of this project">
         {domains.error ? (
           <Failed what="custom domains" />
         ) : (
@@ -418,9 +434,9 @@ export default async function ProjectPage({ params }: { params: Promise<{ ref: s
             customHostnamesEnabled={customHostnamesEnabled}
           />
         )}
-      </Panel>
+      </Card>
 
-      <Panel title="Environment variables" subtitle="Encrypted at rest, injected at runtime">
+      <Card title="Environment variables" subtitle="Encrypted at rest, injected at runtime">
         {envVars.error ? (
           <Failed what="environment variables" />
         ) : (
@@ -433,7 +449,9 @@ export default async function ProjectPage({ params }: { params: Promise<{ ref: s
             }))}
           />
         )}
-      </Panel>
-    </main>
+      </Card>
+        </div>
+      </div>
+    </div>
   );
 }

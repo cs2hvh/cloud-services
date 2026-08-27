@@ -70,13 +70,13 @@ export function SleepSettings({
       <label className="flex cursor-pointer select-none items-start gap-3">
         <span
           className={`relative mt-[2px] h-[18px] w-[32px] shrink-0 border transition-colors ${
-            on ? "border-[#0095FF]/60 bg-[#0095FF]/25" : "border-white/15 bg-white/[0.04]"
-          }`}
+ on ? "border-[#0095FF]/60 bg-[#0095FF]/25" : "border-white/15 bg-white/[0.04]"
+ }`}
         >
           <span
             className={`absolute top-[2px] h-[12px] w-[12px] transition-all duration-200 ${
-              on ? "left-[16px] bg-[#0095FF]" : "left-[2px] bg-white/40"
-            }`}
+ on ? "left-[16px] bg-[#0095FF]" : "left-[2px] bg-white/40"
+ }`}
           />
         </span>
         <input

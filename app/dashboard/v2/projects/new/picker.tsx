@@ -217,22 +217,22 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
 
   if (loadError && repos === null) {
     return (
-      <div className="rounded border border-red-300 bg-red-50 px-4 py-3 text-sm dark:border-red-900 dark:bg-red-950/40">
-        <p className="font-medium text-red-900 dark:text-red-200">Could not load your repositories.</p>
-        <p className="mt-0.5 text-xs text-red-800 dark:text-red-300">{loadError}</p>
+      <div className="rounded border border-red-500/25 bg-red-500/[0.08] px-4 py-3 text-sm">
+        <p className="font-medium text-red-200">Could not load your repositories.</p>
+        <p className="mt-0.5 text-xs text-red-300/80">{loadError}</p>
       </div>
     );
   }
 
   if (repos === null) {
-    return <p className="text-sm text-neutral-500">Loading your repositories…</p>;
+    return <p className="text-sm text-white/40">Loading your repositories…</p>;
   }
 
   if (connected === false) {
     return (
-      <div className="rounded border border-dashed border-neutral-300 px-4 py-8 text-center dark:border-neutral-700">
+      <div className="rounded border border-dashed border-white/[0.09] px-4 py-8 text-center border-white/[0.09]">
         <p className="text-sm font-medium">No GitHub account connected</p>
-        <p className="mt-1 text-xs text-neutral-500">
+        <p className="mt-1 text-xs text-white/40">
           Install the AhuraSense app on your GitHub account and choose which repositories it can see.
         </p>
         {/*
@@ -244,7 +244,7 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
           team a deploy connection, and the two are meant to be separable:
           people deploy from an org account they did not sign in with.
         */}
-        <p className="mt-3 text-xs text-neutral-500">
+        <p className="mt-3 text-xs text-white/40">
           Signing in with GitHub is not the same thing — that is how you log in.
           This connects a GitHub account to your team so we can read its
           repositories.
@@ -252,7 +252,7 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
         {teamRef ? (
           <a
             href={`/api/v2/git/connect?team=${encodeURIComponent(teamRef)}`}
-            className="mt-4 inline-block rounded bg-neutral-900 px-4 py-2 text-xs font-medium text-white hover:bg-neutral-700 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
+            className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-white px-4 py-2 text-xs font-medium text-black transition-colors hover:bg-white/90"
           >
             Connect GitHub
           </a>
@@ -285,31 +285,31 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
         placeholder="Filter repositories"
-        className="w-full rounded border border-neutral-300 px-3 py-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+        className="w-full rounded border border-white/[0.09] px-3 py-1.5 text-sm border-white/[0.09]"
       />
 
       {shown.length === 0 ? (
-        <p className="text-sm text-neutral-500">
+        <p className="text-sm text-white/40">
           {repos.length === 0
             ? "This installation can see no repositories. Grant it access to one on GitHub."
             : "No repository matches that filter."}
         </p>
       ) : (
-        <ul className="max-h-72 divide-y divide-neutral-200 overflow-y-auto rounded border border-neutral-200 dark:divide-neutral-800 dark:border-neutral-800">
+        <ul className="max-h-72 divide-y divide-white/[0.06] overflow-y-auto rounded border border-white/[0.07] border-white/[0.07]">
           {shown.map((r) => (
             <li key={`${r.installationId}:${r.fullName}`}>
               <button
                 type="button"
                 onClick={() => setChosen(r)}
-                className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-neutral-50 dark:hover:bg-neutral-900 ${
-                  chosen?.fullName === r.fullName ? "bg-neutral-100 dark:bg-neutral-800" : ""
-                }`}
+                className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-white/[0.05] ${
+ chosen?.fullName === r.fullName ? "bg-white/[0.06]" : ""
+ }`}
               >
                 <span className="truncate">
                   {r.fullName}
-                  {r.private ? <span className="ml-2 text-xs text-neutral-500">private</span> : null}
+                  {r.private ? <span className="ml-2 text-xs text-white/40">private</span> : null}
                 </span>
-                <span className="shrink-0 text-xs text-neutral-500">{r.defaultBranch ?? "—"}</span>
+                <span className="shrink-0 text-xs text-white/40">{r.defaultBranch ?? "—"}</span>
               </button>
             </li>
           ))}
@@ -317,9 +317,9 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
       )}
 
       {chosen ? (
-        <div className="space-y-4 rounded border border-neutral-200 p-3 dark:border-neutral-800">
+        <div className="space-y-4 rounded border border-white/[0.07] p-3 border-white/[0.07]">
           <div>
-            <label htmlFor="branch" className="block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+            <label htmlFor="branch" className="block text-xs font-medium text-white/60">
               Production branch
             </label>
             {branchError ? (
@@ -332,20 +332,20 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
                   value={branch}
                   onChange={(e) => setBranch(e.target.value)}
                   placeholder="main"
-                  className="mt-1 w-full rounded border border-neutral-300 px-3 py-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+                  className="mt-1 w-full rounded border border-white/[0.09] px-3 py-1.5 text-sm border-white/[0.09]"
                 />
                 <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
                   Could not list branches ({branchError}) — type one. It is checked when you deploy.
                 </p>
               </>
             ) : branches === null ? (
-              <p className="mt-1 text-sm text-neutral-500">Loading branches…</p>
+              <p className="mt-1 text-sm text-white/40">Loading branches…</p>
             ) : (
               <select
                 id="branch"
                 value={branch}
                 onChange={(e) => setBranch(e.target.value)}
-                className="mt-1 w-full rounded border border-neutral-300 px-3 py-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+                className="mt-1 w-full rounded border border-white/[0.09] px-3 py-1.5 text-sm border-white/[0.09]"
               >
                 {branches.map((b) => (
                   <option key={b} value={b}>
@@ -355,36 +355,36 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
                 ))}
               </select>
             )}
-            <p className="mt-1 text-xs text-neutral-500">
+            <p className="mt-1 text-xs text-white/40">
               Pushes here deploy to production. Every other branch gets a free preview for 48 hours.
             </p>
           </div>
 
           <div>
-            <label htmlFor="root" className="block text-xs font-medium text-neutral-600 dark:text-neutral-400">
-              Root directory <span className="font-normal text-neutral-400">optional</span>
+            <label htmlFor="root" className="block text-xs font-medium text-white/60">
+              Root directory <span className="font-normal text-white/30">optional</span>
             </label>
             <input
               id="root"
               value={rootDirectory}
               onChange={(e) => setRootDirectory(e.target.value)}
               placeholder="apps/web"
-              className="mt-1 w-full rounded border border-neutral-300 px-3 py-1.5 font-mono text-sm dark:border-neutral-700 dark:bg-neutral-900"
+              className="mt-1 w-full rounded border border-white/[0.09] px-3 py-1.5 font-mono text-sm border-white/[0.09]"
             />
-            <p className="mt-1 text-xs text-neutral-500">
+            <p className="mt-1 text-xs text-white/40">
               For a monorepo. Leave blank if the app is at the repository root.
             </p>
           </div>
 
           <div>
-            <label htmlFor="tier" className="block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+            <label htmlFor="tier" className="block text-xs font-medium text-white/60">
               Plan
             </label>
             <select
               id="tier"
               value={tier}
               onChange={(e) => setTier(e.target.value)}
-              className="mt-1 w-full rounded border border-neutral-300 px-3 py-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+              className="mt-1 w-full rounded border border-white/[0.09] px-3 py-1.5 text-sm border-white/[0.09]"
             >
               {tiers.map((t) => (
                 <option key={t.id} value={t.id}>
@@ -395,7 +395,7 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
           </div>
 
           <div>
-            <label htmlFor="instances" className="block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+            <label htmlFor="instances" className="block text-xs font-medium text-white/60">
               Instances
             </label>
             <input
@@ -405,16 +405,16 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
               max={10}
               value={instances}
               onChange={(e) => setInstances(Math.max(1, Math.min(10, Number(e.target.value) || 1)))}
-              className="mt-1 w-24 rounded border border-neutral-300 px-3 py-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+              className="mt-1 w-24 rounded border border-white/[0.09] px-3 py-1.5 text-sm border-white/[0.09]"
             />
-            <p className="mt-1 text-xs text-neutral-500">
+            <p className="mt-1 text-xs text-white/40">
               Copies behind one address. They do not add or remove themselves. Billed per instance.
             </p>
           </div>
 
           <div>
-            <span className="block text-xs font-medium text-neutral-600 dark:text-neutral-400">
-              Environment variables <span className="font-normal text-neutral-400">optional</span>
+            <span className="block text-xs font-medium text-white/60">
+              Environment variables <span className="font-normal text-white/30">optional</span>
             </span>
             {envRows.map((row, i) => (
               <div key={i} className="mt-1 flex gap-2">
@@ -424,7 +424,7 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
                     setEnvRows((rows) => rows.map((r, j) => (j === i ? { ...r, key: e.target.value } : r)))
                   }
                   placeholder="NAME"
-                  className="w-44 rounded border border-neutral-300 px-2 py-1 font-mono text-sm dark:border-neutral-700 dark:bg-neutral-900"
+                  className="w-44 rounded border border-white/[0.09] px-2 py-1 font-mono text-sm border-white/[0.09]"
                 />
                 <input
                   type="password"
@@ -433,12 +433,12 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
                     setEnvRows((rows) => rows.map((r, j) => (j === i ? { ...r, value: e.target.value } : r)))
                   }
                   placeholder="value"
-                  className="min-w-0 flex-1 rounded border border-neutral-300 px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+                  className="min-w-0 flex-1 rounded border border-white/[0.09] px-2 py-1 text-sm border-white/[0.09]"
                 />
                 <button
                   type="button"
                   onClick={() => setEnvRows((rows) => rows.filter((_, j) => j !== i))}
-                  className="text-xs text-red-600 hover:underline dark:text-red-400"
+                  className="text-xs text-red-300 hover:underline"
                 >
                   Remove
                 </button>
@@ -447,11 +447,11 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
             <button
               type="button"
               onClick={() => setEnvRows((rows) => [...rows, { key: "", value: "" }])}
-              className="mt-1 text-xs text-blue-600 hover:underline dark:text-blue-400"
+              className="mt-1 text-xs text-sky-300 transition-colors hover:text-sky-200"
             >
               + Add variable
             </button>
-            <p className="mt-1 text-xs text-neutral-500">
+            <p className="mt-1 text-xs text-white/40">
               Set them now and the first build has them. Otherwise an app that needs config builds
               fine and then crashes on start.
             </p>
@@ -460,7 +460,7 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
       ) : null}
 
       {submitError ? (
-        <p className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+        <p className="rounded border border-red-500/25 bg-red-500/[0.08] px-3 py-2 text-sm text-red-200">
           {submitError}
         </p>
       ) : null}
@@ -469,7 +469,7 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
         type="button"
         onClick={create}
         disabled={!chosen || submitting}
-        className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40 dark:bg-white dark:text-neutral-900"
+        className="rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-40"
       >
         {submitting ? "Creating…" : chosen ? `Create ${chosen.fullName.split("/")[1]}` : "Choose a repository"}
       </button>

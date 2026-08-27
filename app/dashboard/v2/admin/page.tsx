@@ -29,10 +29,10 @@ const mb = (bytes: number) =>
 
 function Panel({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-lg border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-950">
-      <header className="border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
+    <section className="rounded-lg border border-white/[0.07] bg-white border-white/[0.07]">
+      <header className="border-b border-white/[0.07] px-4 py-3 border-white/[0.07]">
         <h2 className="text-sm font-semibold tracking-tight">{title}</h2>
-        {subtitle ? <p className="mt-0.5 text-xs text-neutral-500">{subtitle}</p> : null}
+        {subtitle ? <p className="mt-0.5 text-xs text-white/40">{subtitle}</p> : null}
       </header>
       <div className="p-4">{children}</div>
     </section>
@@ -50,13 +50,13 @@ function Unavailable({ error }: { error: string }) {
 function Stat({ label, value, tone }: { label: string; value: string; tone?: "bad" | "good" }) {
   const colour =
     tone === "bad"
-      ? "text-red-600 dark:text-red-400"
+      ? "text-red-300"
       : tone === "good"
         ? "text-emerald-600 dark:text-emerald-400"
         : "";
   return (
     <div>
-      <div className="text-xs uppercase tracking-wide text-neutral-500">{label}</div>
+      <div className="text-xs uppercase tracking-wide text-white/40">{label}</div>
       <div className={`mt-0.5 font-mono text-lg ${colour}`}>{value}</div>
     </div>
   );
@@ -76,16 +76,16 @@ function Finding({
   cost?: string;
 }) {
   return (
-    <li className="border-t border-neutral-100 py-2.5 first:border-t-0 first:pt-0 dark:border-neutral-900">
+    <li className="border-t border-white/[0.06] py-2.5 first:border-t-0 first:pt-0">
       <div className="flex flex-wrap items-baseline gap-2">
-        <span className="rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide dark:bg-neutral-900">
+        <span className="rounded bg-white/[0.06] px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide">
           {status}
         </span>
         <span className="font-mono text-sm">{label}</span>
-        {cost ? <span className="ml-auto font-mono text-xs text-neutral-500">{cost}</span> : null}
+        {cost ? <span className="ml-auto font-mono text-xs text-white/40">{cost}</span> : null}
       </div>
-      <p className="mt-1 text-xs text-neutral-600 dark:text-neutral-400">{detail}</p>
-      {action ? <p className="mt-1 text-xs text-neutral-500">→ {action}</p> : null}
+      <p className="mt-1 text-xs text-white/60">{detail}</p>
+      {action ? <p className="mt-1 text-xs text-white/40">→ {action}</p> : null}
     </li>
   );
 }
@@ -111,7 +111,7 @@ export default async function OperatorPage() {
     <main className="mx-auto max-w-5xl space-y-6 p-6">
       <header>
         <h1 className="text-xl font-semibold tracking-tight">Platform operations</h1>
-        <p className="mt-1 text-xs text-neutral-500">
+        <p className="mt-1 text-xs text-white/40">
           Live read. Generated {new Date(view.generatedAt).toUTCString()}. Nothing on this page
           changes anything.
         </p>
@@ -145,7 +145,7 @@ export default async function OperatorPage() {
                 <p className="text-xs font-medium">In flight</p>
                 <ul className="mt-1 space-y-1">
                   {queue.inFlight.map((d) => (
-                    <li key={d.deployment} className="font-mono text-xs text-neutral-600 dark:text-neutral-400">
+                    <li key={d.deployment} className="font-mono text-xs text-white/60">
                       {d.state} · {d.project ?? "(no project)"} · {d.deployment} · {d.sha ?? "?"} ·{" "}
                       {d.state === "queued" ? `waiting ${d.waitingSeconds}s` : `running ${d.runningSeconds ?? 0}s`}
                     </li>
@@ -153,7 +153,7 @@ export default async function OperatorPage() {
                 </ul>
               </div>
             ) : (
-              <p className="mt-3 text-xs text-neutral-500">
+              <p className="mt-3 text-xs text-white/40">
                 Nothing in flight. This does NOT prove a worker is running — a stopped queue and an
                 idle one look the same from the database.
               </p>
@@ -167,9 +167,9 @@ export default async function OperatorPage() {
                     .filter((d) => d.state === "error")
                     .slice(0, 6)
                     .map((d) => (
-                      <li key={d.deployment} className="text-xs text-neutral-600 dark:text-neutral-400">
+                      <li key={d.deployment} className="text-xs text-white/60">
                         <span className="font-mono">{d.project ?? "?"}</span> · {d.deployment} ·{" "}
-                        <span className="text-red-600 dark:text-red-400">{d.error ?? d.errorCode ?? "no reason recorded"}</span>
+                        <span className="text-red-300">{d.error ?? d.errorCode ?? "no reason recorded"}</span>
                       </li>
                     ))}
                 </ul>
@@ -218,7 +218,7 @@ export default async function OperatorPage() {
               ))}
             </ul>
             {fleet.drift.findings.length === 0 ? (
-              <p className="text-xs text-neutral-500">No infrastructure and no records.</p>
+              <p className="text-xs text-white/40">No infrastructure and no records.</p>
             ) : null}
           </>
         )}
@@ -233,7 +233,7 @@ export default async function OperatorPage() {
         ) : (
           <>
             {hostnames.drift.claimable > 0 ? (
-              <p className="mb-3 rounded border border-red-300 bg-red-50 p-2 text-xs text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-200">
+              <p className="mb-3 rounded border border-red-500/25 bg-red-500/[0.08] p-2 text-xs text-red-200 dark:bg-red-950">
                 <strong className="font-semibold">
                   {hostnames.drift.claimable} claimable hostname(s).
                 </strong>{" "}
@@ -256,7 +256,7 @@ export default async function OperatorPage() {
                 ))}
             </ul>
 
-            <p className="mt-3 text-xs text-neutral-500">
+            <p className="mt-3 text-xs text-white/40">
               {hostnames.drift.findings.filter((f) => f.status === "foreign").length} record(s) in
               the zone are not the platform&apos;s and are never touched.
             </p>
@@ -330,7 +330,7 @@ export default async function OperatorPage() {
                 value={String(storage.drift.findings.length)}
               />
             </div>
-            <p className="text-xs text-neutral-500">
+            <p className="text-xs text-white/40">
               Reclaimable is <code>image.tar</code> for ready deployments — a transfer artifact
               whose image already lives digest-pinned in the registry — plus artifacts of builds
               that were never published. Build logs are never counted, even orphaned ones: a
@@ -370,7 +370,7 @@ export default async function OperatorPage() {
             ) : null}
 
             <table className="w-full text-left text-xs">
-              <thead className="text-neutral-500">
+              <thead className="text-white/40">
                 <tr>
                   <th className="pb-1 font-medium">deployment</th>
                   <th className="pb-1 font-medium">project</th>
@@ -380,9 +380,9 @@ export default async function OperatorPage() {
               </thead>
               <tbody className="font-mono">
                 {usage.apps.map((a) => (
-                  <tr key={a.appKey} className="border-t border-neutral-100 dark:border-neutral-900">
+                  <tr key={a.appKey} className="border-t border-white/[0.06]">
                     <td className="py-1.5">{a.appKey}</td>
-                    <td className="py-1.5 text-neutral-500">{a.projectRef}</td>
+                    <td className="py-1.5 text-white/40">{a.projectRef}</td>
                     <td className="py-1.5">{a.pods}</td>
                     <td className="py-1.5">{a.restarts}</td>
                   </tr>
@@ -390,7 +390,7 @@ export default async function OperatorPage() {
               </tbody>
             </table>
 
-            <p className="mt-3 text-xs text-neutral-500">
+            <p className="mt-3 text-xs text-white/40">
               Warm fraction is not shown. It is an accumulation over time and cannot be derived
               from one observation — computing it here would either invent a number or repeat
               v1&apos;s defect of metering only when someone opens a page. It appears once the

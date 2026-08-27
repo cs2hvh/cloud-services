@@ -140,10 +140,10 @@ export function SizingPicker({
                   onClick={() => setTier(t.id)}
                   aria-pressed={on}
                   className={`flex items-baseline justify-between gap-3 border px-3.5 py-3 text-left transition-colors disabled:opacity-50 ${
-                    on
-                      ? "border-[#0095FF]/60 bg-[#0095FF]/[0.08]"
-                      : "border-white/[0.1] bg-white/[0.02] hover:border-white/25"
-                  }`}
+ on
+ ? "border-[#0095FF]/60 bg-[#0095FF]/[0.08]"
+ : "border-white/[0.1] bg-white/[0.02] hover:border-white/25"
+ }`}
                 >
                   <span className="min-w-0">
                     <span className="block text-[13.5px] text-white">{t.label}</span>

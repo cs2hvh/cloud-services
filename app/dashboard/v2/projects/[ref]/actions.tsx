@@ -48,12 +48,12 @@ export function DeployButton({ projectRef, branch }: { projectRef: string; branc
         type="button"
         onClick={deploy}
         disabled={busy}
-        className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40 dark:bg-white dark:text-neutral-900"
+        className="rounded-md bg-white px-3.5 py-2 text-sm font-medium text-black transition-colors hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-40"
       >
         {busy ? "Queueing…" : `Deploy ${branch}`}
       </button>
       {message ? (
-        <span className={`text-xs ${failed ? "text-red-600 dark:text-red-400" : "text-neutral-500"}`}>{message}</span>
+        <span className={`text-xs ${failed ? "text-red-300" : "text-white/40"}`}>{message}</span>
       ) : null}
     </div>
   );
@@ -125,9 +125,9 @@ export function EnvEditor({ projectRef, initial }: { projectRef: string; initial
   return (
     <div className="space-y-3">
       {vars.length === 0 ? (
-        <p className="text-sm text-neutral-500">No variables set.</p>
+        <p className="text-sm text-white/40">No variables set.</p>
       ) : (
-        <ul className="divide-y divide-neutral-200 dark:divide-neutral-800">
+        <ul className="divide-y divide-white/[0.06]">
           {vars.map((v) => (
             <li key={v.key} className="flex items-center justify-between gap-3 py-2 first:pt-0">
               <div className="min-w-0">
@@ -142,7 +142,7 @@ export function EnvEditor({ projectRef, initial }: { projectRef: string; initial
                 type="button"
                 onClick={() => remove(v.key)}
                 disabled={busy}
-                className="shrink-0 text-xs text-red-600 hover:underline disabled:opacity-40 dark:text-red-400"
+                className="shrink-0 text-xs text-red-300 hover:underline disabled:opacity-40"
               >
                 Remove
               </button>
@@ -156,7 +156,7 @@ export function EnvEditor({ projectRef, initial }: { projectRef: string; initial
         replace. Saying so avoids the reasonable assumption that a blank field
         means the variable is empty.
       */}
-      <p className="text-xs text-neutral-500">
+      <p className="text-xs text-white/40">
         Values are write-only: they are encrypted on save and never shown again. To change one, set it again.
       </p>
 
@@ -165,27 +165,27 @@ export function EnvEditor({ projectRef, initial }: { projectRef: string; initial
           value={key}
           onChange={(e) => setKey(e.target.value)}
           placeholder="NAME"
-          className="w-44 rounded border border-neutral-300 px-2 py-1 font-mono text-sm dark:border-neutral-700 dark:bg-neutral-900"
+          className="w-44 rounded border border-white/[0.09] px-2 py-1 font-mono text-sm border-white/[0.09]"
         />
         <input
           value={value}
           onChange={(e) => setValue(e.target.value)}
           type="password"
           placeholder="value"
-          className="min-w-0 flex-1 rounded border border-neutral-300 px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+          className="min-w-0 flex-1 rounded border border-white/[0.09] px-2 py-1 text-sm border-white/[0.09]"
         />
         <button
           type="button"
           onClick={save}
           disabled={busy || !key.trim()}
-          className="rounded border border-neutral-300 px-3 py-1 text-sm font-medium disabled:opacity-40 dark:border-neutral-700"
+          className="rounded border border-white/[0.09] px-3 py-1 text-sm font-medium disabled:opacity-40 border-white/[0.09]"
         >
           {busy ? "Saving…" : "Save"}
         </button>
       </div>
 
-      {error ? <p className="text-xs text-red-600 dark:text-red-400">{error}</p> : null}
-      {saved ? <p className="text-xs text-neutral-500">{saved}</p> : null}
+      {error ? <p className="text-xs text-red-300">{error}</p> : null}
+      {saved ? <p className="text-xs text-white/40">{saved}</p> : null}
     </div>
   );
 }

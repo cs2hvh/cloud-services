@@ -12,7 +12,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { TIERS } from "@/lib/paas/tiers";
-import { Panel } from "../ui";
+import { Card } from "@/components/v2/kit";
 import { Picker } from "./picker";
 
 export const dynamic = "force-dynamic";
@@ -28,17 +28,17 @@ export default async function NewProjectPage() {
   return (
     <main className="mx-auto max-w-2xl space-y-4 p-6">
       <header>
-        <Link href="/dashboard/v2/projects" className="text-xs text-neutral-500 hover:underline">
+        <Link href="/dashboard/v2/projects" className="text-xs text-white/40 hover:underline">
           ← Projects
         </Link>
         <h1 className="mt-1 text-xl font-semibold tracking-tight">New project</h1>
-        <p className="mt-0.5 text-xs text-neutral-500">
+        <p className="mt-0.5 text-xs text-white/40">
           Pick a repository. It builds on push to its production branch, and every other branch gets a
           free preview that expires after 48 hours.
         </p>
       </header>
 
-      <Panel title="Repository">
+      <Card title="Repository">
         <Picker
           tiers={TIERS.map((t) => ({
             id: t.id,
@@ -48,7 +48,7 @@ export default async function NewProjectPage() {
             priceUsd: t.priceUsd,
           }))}
         />
-      </Panel>
+      </Card>
     </main>
   );
 }

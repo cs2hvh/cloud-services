@@ -188,10 +188,10 @@ export function EnvEditor({
                 onClick={() => setActiveScope(s.ref)}
                 aria-pressed={s.ref === activeScope}
                 className={`border px-3 py-1.5 text-[12.5px] transition-colors ${
-                  s.ref === activeScope
-                    ? "border-[#0095FF]/55 bg-[#0095FF]/12 text-white"
-                    : "border-white/[0.1] text-white/55 hover:border-white/25 hover:text-white/85"
-                }`}
+ s.ref === activeScope
+ ? "border-[#0095FF]/55 bg-[#0095FF]/12 text-white"
+ : "border-white/[0.1] text-white/55 hover:border-white/25 hover:text-white/85"
+ }`}
               >
                 {s.label}
                 {pending > 0 && (
@@ -231,8 +231,8 @@ export function EnvEditor({
             <div
               key={v.key}
               className={`flex items-center justify-between gap-4 px-4 py-3 ${
-                i > 0 ? "border-t border-white/[0.06]" : ""
-              }`}
+ i > 0 ? "border-t border-white/[0.06]" : ""
+ }`}
             >
               <div className="min-w-0">
                 <p className="m-0 truncate font-mono text-[13px] text-white">

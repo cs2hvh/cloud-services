@@ -14,8 +14,19 @@
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Boxes, GitBranch, Plug, Plus, Server } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { Panel, StateBadge, Empty, Failed, timeAgo } from "./ui";
+import {
+  Card,
+  Empty,
+  ExternalLink,
+  Failed,
+  PageHeader,
+  Stat,
+  StateBadge,
+  buttonClass,
+  timeAgo,
+} from "@/components/v2/kit";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -35,10 +46,13 @@ export default async function ProjectsPage() {
   const { error: bootstrapError } = await db.rpc("bootstrap_personal_team").single();
 
   const [projects, aliases, deployments, installations] = await Promise.all([
-    db.from("projects").select("id,ref,name,slug,repo_full_name,tier,instance_count,production_branch").order("created_at"),
-    db.from("aliases").select("project_id,hostname,kind"),
+    db
+      .from("projects")
+      .select("id,ref,name,slug,repo_full_name,tier,instance_count,production_branch")
+      .order("created_at"),
+    db.from("aliases").select("project_id,hostname,kind,released_at"),
     db.from("deployments").select("project_id,state,ready_at,queued_at").order("queued_at", { ascending: false }),
-    db.from("installations").select("installation_id,account_login,deleted_at"),
+    db.from("installations").select("provider,external_id,account_login,deleted_at"),
   ]);
 
   const readFailed = bootstrapError || projects.error || aliases.error || deployments.error;
@@ -49,29 +63,34 @@ export default async function ProjectsPage() {
   }
   const host = new Map<string, string>();
   for (const a of aliases.data ?? []) {
-    if (a.kind === "branch") continue;
+    // A released alias is a hostname a torn-down project used to hold. Showing
+    // it would offer a link that resolves to nothing.
+    if (a.kind === "branch" || a.released_at) continue;
     if (a.kind === "production" || !host.has(a.project_id)) host.set(a.project_id, a.hostname);
   }
 
   const connected = (installations.data ?? []).filter((i) => !i.deleted_at);
   const rows = projects.data ?? [];
 
+  const live = rows.filter((p) => newest.get(p.id)?.state === "ready").length;
+  const building = rows.filter((p) => {
+    const s = newest.get(p.id)?.state;
+    return s === "queued" || s === "building" || s === "publishing";
+  }).length;
+  const failing = rows.filter((p) => newest.get(p.id)?.state === "error").length;
+
   return (
-    <main className="mx-auto max-w-5xl space-y-4 p-6">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Projects</h1>
-          <p className="mt-0.5 text-xs text-neutral-500">
-            Apps deployed from your repositories. Billed from credits by the hour.
-          </p>
-        </div>
-        <Link
-          href="/dashboard/v2/projects/new"
-          className="rounded bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
-        >
-          New project
-        </Link>
-      </header>
+    <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
+      <PageHeader
+        title="Projects"
+        description="Apps deployed from your repositories, billed from credits by the hour."
+        actions={
+          <Link href="/dashboard/v2/projects/new" className={buttonClass("primary")}>
+            <Plus className="h-4 w-4" aria-hidden />
+            New project
+          </Link>
+        }
+      />
 
       {readFailed ? (
         <Failed
@@ -80,63 +99,111 @@ export default async function ProjectsPage() {
         />
       ) : null}
 
+      {/*
+        Only worth a row of figures once there is something to summarise. On an
+        empty account this would be three zeroes above an empty state, which
+        says nothing and takes the space the next action should have.
+      */}
+      {!readFailed && rows.length > 0 ? (
+        <div className="mb-4 flex flex-wrap gap-6 rounded-lg border border-white/[0.07] bg-[#15171c] px-5 py-4">
+          <Stat label="Projects" value={rows.length} />
+          <Stat label="Live" value={live} tone={live > 0 ? "good" : "default"} />
+          {building > 0 ? <Stat label="Building" value={building} /> : null}
+          <Stat
+            label="Failing"
+            value={failing}
+            tone={failing > 0 ? "bad" : "default"}
+            hint={failing > 0 ? "last deploy errored" : undefined}
+          />
+        </div>
+      ) : null}
+
       {!readFailed && !connected.length ? (
-        <Panel title="Connect GitHub" subtitle="Needed before a repository can be deployed">
-          <p className="text-sm text-neutral-600 dark:text-neutral-400">
-            No GitHub account is connected yet. Install the app to choose which repositories are visible.
+        <Card
+          title="Connect a git provider"
+          subtitle="Needed before a repository can be deployed"
+          icon={Plug}
+          className="mb-4"
+        >
+          <p className="text-sm text-white/60">
+            No account is connected yet. Signing in with GitHub is not the same thing — that is how you log
+            in. This connects an account to your team so we can read its repositories.
           </p>
-        </Panel>
+          <Link href="/dashboard/v2/projects/new" className={buttonClass("secondary", "sm", "mt-3")}>
+            Connect an account
+          </Link>
+        </Card>
       ) : null}
 
       {!readFailed && rows.length === 0 ? (
-        <Empty title="No projects yet">
-          Create one from a repository and it will build, get a hostname, and start serving.
+        <Empty
+          icon={Boxes}
+          title="No projects yet"
+          action={
+            <Link href="/dashboard/v2/projects/new" className={buttonClass("primary", "sm")}>
+              <Plus className="h-3.5 w-3.5" aria-hidden />
+              Create your first project
+            </Link>
+          }
+        >
+          Pick a repository and it will build, get a hostname, and start serving. Every branch other than
+          production gets a free preview that expires after 48 hours.
         </Empty>
       ) : null}
 
       {rows.length > 0 ? (
-        <Panel title={`${rows.length} project${rows.length === 1 ? "" : "s"}`}>
-          <ul className="divide-y divide-neutral-200 dark:divide-neutral-800">
-            {rows.map((p) => {
-              const state = newest.get(p.id);
-              const hostname = host.get(p.id);
-              return (
-                <li key={p.ref} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+        <div className="grid gap-3 sm:grid-cols-2">
+          {rows.map((p) => {
+            const state = newest.get(p.id);
+            const hostname = host.get(p.id);
+            return (
+              <Link
+                key={p.ref}
+                href={`/dashboard/v2/projects/${p.ref}`}
+                className="group flex flex-col gap-3 rounded-lg border border-white/[0.07] bg-[#15171c] p-4 transition-colors hover:border-white/[0.14] hover:bg-white/[0.03]"
+              >
+                <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <Link
-                      href={`/dashboard/v2/projects/${p.ref}`}
-                      className="text-sm font-medium hover:underline"
-                    >
-                      {p.slug}
-                    </Link>
-                    <p className="truncate text-xs text-neutral-500">
-                      {p.repo_full_name} · {p.production_branch} · {p.tier} ×{p.instance_count}
+                    <p className="truncate text-sm font-medium text-white/90">{p.slug}</p>
+                    <p className="mt-0.5 flex items-center gap-1.5 truncate font-mono text-[11px] text-white/40">
+                      <GitBranch className="h-3 w-3 shrink-0" aria-hidden />
+                      {p.repo_full_name}
+                      <span className="text-white/25">·</span>
+                      {p.production_branch}
                     </p>
-                    {hostname ? (
-                      <a
-                        href={`https://${hostname}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-xs text-blue-600 hover:underline dark:text-blue-400"
-                      >
-                        {hostname}
-                      </a>
-                    ) : (
-                      // Distinct from a broken hostname: nothing has deployed,
-                      // so there is nothing to route yet.
-                      <span className="text-xs text-neutral-400">No hostname until the first deploy</span>
-                    )}
                   </div>
-                  <div className="flex shrink-0 items-center gap-3">
-                    <span className="text-xs text-neutral-500">{timeAgo(state?.at ?? null)}</span>
-                    <StateBadge state={state?.state ?? null} />
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </Panel>
+                  <StateBadge state={state?.state ?? null} className="shrink-0" />
+                </div>
+
+                {/*
+                  The hostname is the thing people actually came for, so it gets
+                  its own line. Its absence is stated rather than left blank —
+                  nothing has deployed yet, which is not the same as broken.
+                */}
+                <div className="min-w-0">
+                  {hostname ? (
+                    <span onClick={(e) => e.stopPropagation()}>
+                      <ExternalLink href={`https://${hostname}`}>{hostname}</ExternalLink>
+                    </span>
+                  ) : (
+                    <span className="font-mono text-[11px] text-white/30">
+                      No hostname until the first deploy
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between gap-3 border-t border-white/[0.05] pt-3 text-[11px] text-white/35">
+                  <span className="inline-flex items-center gap-1.5">
+                    <Server className="h-3 w-3" aria-hidden />
+                    {p.tier} ×{p.instance_count}
+                  </span>
+                  <span>{state ? timeAgo(state.at) : "never deployed"}</span>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
       ) : null}
-    </main>
+    </div>
   );
 }

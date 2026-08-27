@@ -49,7 +49,7 @@ export function AutoRefresh({
   if (!active) return null;
 
   return (
-    <p className="text-xs text-neutral-500">
+    <p className="text-xs text-white/40">
       <span className="mr-1.5 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500 align-middle" />
       {label ?? "Live — refreshing every few seconds."}
       {ticks > 0 ? ` Updated ${ticks} time${ticks === 1 ? "" : "s"}.` : ""}
