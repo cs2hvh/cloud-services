@@ -191,18 +191,38 @@ behavioural tests replaying confirmed v1 criticals.
   - When set it is the **only** thing granting admin — the `user_profiles.roles`
     fallback is skipped entirely. **Production needs its own**; setting it here
     does not carry over.
-- **No customer-facing v2 UI exists.** One page (`/dashboard/v2/admin`), all
-  operator-only. No signup, no project creation, no deploy button, no app list.
-  This is the largest remaining piece.
-  - **First tenant-facing API route landed** 2026-08-26 (`108bb833`):
-    `GET /api/v2/projects`, RLS-scoped, the read every UI surface needs first.
-    401 verified live against the running server.
-  - **Everything customer-facing is unverifiable from this session.** Dashboard
-    pages sit behind the auth guard and there is no way to hold a session
-    without signing in, which needs a password. So UI can be *built* here but
-    only its unauthenticated boundary can be *proven* — the same standard the
-    admin routes were held to, and no higher. **Someone with a login should
-    drive the authenticated path.**
+- ~~No customer-facing v2 UI exists~~ — **THE SELF-SERVE PATH IS BUILT AND
+  PROVEN** 2026-08-26. Log in → account bootstrapped → GitHub connected → repo
+  picked → project created → deploy queued → worker builds → env vars set →
+  `v2-ahurasense-task.ahurasense.com` **200**. Every page rendered and clicked
+  through against a real session, including the Deploy button.
+  - Pages: `/dashboard/v2/projects`, `/projects/new`, `/projects/[ref]`.
+  - APIs: `/api/v2/me`, `/repos`, `/projects` (GET+POST),
+    `/projects/[ref]/deployments` (GET+POST), `/projects/[ref]/env`
+    (GET/PUT/DELETE), `/github/callback`.
+  - **ONBOARDING WAS IMPOSSIBLE** and nothing said so. `paas.teams` had no
+    INSERT policy, `team_members` required you to already be an admin of the
+    team you were joining, `projects` required membership. Every route to a
+    first team needed a team you were already in — unnoticed only because every
+    project until now was seeded by SQL. Fixed with
+    `paas.bootstrap_personal_team()`: SECURITY DEFINER, **no arguments** so it
+    can only ever act on `auth.uid()`, idempotent, pinned search_path.
+  - **Connecting GitHub was impossible for two separate reasons that print the
+    same error.** `installations` had no INSERT policy *and* granted
+    `authenticated` SELECT only. GRANT and RLS are independent gates: Postgres
+    reports a missing GRANT as `42501 permission denied for table`, while an RLS
+    refusal reads `new row violates row-level security policy` — same SQLSTATE,
+    near-identical shape. Adding the policy in response to the first error
+    changed nothing, which cost one full round of the loop.
+  - **The first dashboard deploy found a third instance of the default trap**
+    (§8). `deployFromRepo` re-derived the project from
+    `teams.bySlug(teamSlug ?? "ahura-demo")`, correct while scripts were the only
+    caller. A dashboard deploy created a duplicate project in the seed team and
+    split the app in half — deployment in the customer team, alias and DNS in the
+    phantom — and the hostname served **404**. An adopted deployment already
+    knows its project and is now used directly.
+  - Still missing from the UI: build logs, custom-domain self-service, rollback,
+    and delete.
 - ~~Custom domains blocked on certificates~~ — **PROVEN END TO END** 2026-08-26
   on a real third-party domain. `app.ahurasense.ai` → **200**, its own
   certificate (`CN=app.ahurasense.ai`, Google Trust Services), serving content
