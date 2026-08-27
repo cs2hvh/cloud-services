@@ -41,6 +41,19 @@ export interface DockerfileInput {
    * at `npm ci` with a usage message rather than anything about lockfiles.
    */
   hasLockfile?: boolean;
+  /**
+   * Whether this repository is a monorepo workspace.
+   *
+   * The deps stage normally copies only the manifest and the lockfile, so the
+   * dependency layer caches independently of the source. A workspace cannot
+   * install that way: its root dependencies point at sibling packages, and
+   * pnpm answers ERR_PNPM_WORKSPACE_PKG_NOT_FOUND against a directory holding
+   * none of them.
+   *
+   * So a workspace copies the tree first and gives up that caching. Slower
+   * rebuilds are worth more than a monorepo that cannot build at all.
+   */
+  isWorkspace?: boolean;
   /** Keys only — values are passed as --build-arg at build time, never inlined. */
   publicEnvKeys: string[];
   nodeVersion?: string;
@@ -242,7 +255,7 @@ function nodeDockerfile(i: DockerfileInput): string {
 FROM ${baseImage(pm, node)} AS deps
 WORKDIR /app
 RUN apk add --no-cache libc6-compat
-COPY package.json ${pm === "pnpm" ? "pnpm-lock.yaml*" : pm === "yarn" ? "yarn.lock*" : pm === "bun" ? "bun.lock*" : "package-lock.json*"} ./
+${i.isWorkspace ? `# Workspace: the whole tree, because the root's dependencies are siblings.\nCOPY . .` : `COPY package.json ${pm === "pnpm" ? "pnpm-lock.yaml*" : pm === "yarn" ? "yarn.lock*" : pm === "bun" ? "bun.lock*" : "package-lock.json*"} ./`}
 RUN --mount=type=cache,target=/root/.npm ${installCmd(pm, false, i.hasLockfile !== false)}
 
 FROM ${baseImage(pm, node)} AS builder
@@ -286,7 +299,7 @@ COPY ${out} /usr/share/nginx/html
 FROM ${baseImage(pm, node)} AS builder
 WORKDIR /app
 RUN apk add --no-cache libc6-compat
-COPY package.json ${pm === "pnpm" ? "pnpm-lock.yaml*" : pm === "yarn" ? "yarn.lock*" : "package-lock.json*"} ./
+${i.isWorkspace ? `# Workspace: the whole tree, because the root's dependencies are siblings.\nCOPY . .` : `COPY package.json ${pm === "pnpm" ? "pnpm-lock.yaml*" : pm === "yarn" ? "yarn.lock*" : "package-lock.json*"} ./`}
 RUN --mount=type=cache,target=/root/.npm ${installCmd(pm, false, i.hasLockfile !== false)}
 COPY . .
 ${args}RUN ${runCmd(pm, build)}

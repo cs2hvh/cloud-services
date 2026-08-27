@@ -362,3 +362,25 @@ test("THE FALLBACK IS BOUND TO THE INSTALL, NOT THE WHOLE LINE", () => {
     assert.match(install, /\(.*\|\|.*\)/, `${packageManager}: the fallback must be parenthesised`);
   }
 });
+
+test("A WORKSPACE COPIES ITS TREE BEFORE INSTALLING", () => {
+  // The deps stage normally copies only the manifest and the lockfile so the
+  // dependency layer caches independently of the source. A workspace cannot
+  // install that way — its root dependencies point at sibling packages, and
+  // pnpm answers ERR_PNPM_WORKSPACE_PKG_NOT_FOUND against a directory holding
+  // none of them. Found on vitejs/vite.
+  const detection = detect(["package.json"], {
+    "package.json": JSON.stringify({ dependencies: { next: "15" }, scripts: { build: "next build" } }),
+  });
+
+  const mono = generateDockerfile(input({ detection, packageManager: "pnpm", hasLockfile: true, isWorkspace: true }))!;
+  const firstCopy = mono.split("\n").find((l) => l.startsWith("COPY"))!;
+  assert.match(firstCopy, /^COPY \. \.$/, "a workspace must copy the tree before install");
+
+  // And the paired half: a normal repository must KEEP the cheap layer. Copying
+  // everything always would slow every build to fix a minority shape.
+  const single = generateDockerfile(input({ detection, packageManager: "pnpm", hasLockfile: true }))!;
+  const singleCopy = single.split("\n").find((l) => l.startsWith("COPY"))!;
+  assert.match(singleCopy, /package\.json/, "a single-package repo must still copy only its manifest");
+  assert.doesNotMatch(singleCopy, /^COPY \. \.$/, "…and must not copy the whole tree into the deps layer");
+});

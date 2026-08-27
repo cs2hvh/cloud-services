@@ -37,6 +37,10 @@ const UA = "ahuracloud-deploy-v2";
 
 const MARKER_FILES = [
   "Dockerfile", "package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock",
+  // A monorepo manifest. Without probing it the build copied only the root
+  // package.json and pnpm refused: a workspace dependency cannot resolve
+  // against a directory that contains none of the workspace.
+  "pnpm-workspace.yaml",
   // Both bun formats: .lockb is the binary one, .lock the newer text one. Probing
   // only the first made a bun repo look lockfile-less and take the slow path.
   "bun.lockb", "bun.lock",
@@ -392,6 +396,24 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
   // Whether the repository ACTUALLY ships a lockfile, from the marker files
   // detection already read. Every frozen-install flag is a hard error without
   // one, so assuming its presence made any lockfile-less repository unbuildable.
+  // A WORKSPACE NEEDS ITS WHOLE TREE BEFORE INSTALL.
+  //
+  // pnpm-workspace.yaml, or a `workspaces` field in package.json, means the
+  // root's dependencies point at sibling packages. Copying the root manifest
+  // alone and installing gives
+  // ERR_PNPM_WORKSPACE_PKG_NOT_FOUND — the dependency exists, the directory
+  // it lives in does not. Found on vitejs/vite; vercel/commerce, docusaurus
+  // and starlight are the same shape.
+  const rootPackageJson = files.contents["package.json"] ?? "";
+  let declaresWorkspaces = false;
+  try {
+    declaresWorkspaces = Boolean(JSON.parse(rootPackageJson || "{}")?.workspaces);
+  } catch {
+    // An unparseable package.json is not a workspace claim. Detection will
+    // fail on it separately and more clearly than a JSON error here would.
+  }
+  const isWorkspace = files.paths.includes("pnpm-workspace.yaml") || declaresWorkspaces;
+
   const hasLockfile =
     files.paths.includes("package-lock.json") ||
     files.paths.includes("pnpm-lock.yaml") ||
@@ -403,6 +425,7 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
     detection,
     packageManager: pm,
     hasLockfile,
+    isWorkspace,
     // Only public-prefixed keys become build args; runtime values are injected
     // from a Secret and must never enter an image layer.
     publicEnvKeys: [],
