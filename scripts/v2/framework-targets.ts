@@ -59,7 +59,7 @@ export const BATCHES: Record<string, Target[]> = {
     // the tutorial has the reader create app/ui/fonts.ts — so it fails TypeScript
     // on its own source. The platform got all the way through install, build and
     // typecheck to find that, which is correct behaviour and a useless test.
-    { repo: "vercel/next-learn", note: "Next.js in a monorepo subdirectory", root: "dashboard/final-example", expect: "serve" },
+    { repo: "vercel/next-learn", note: "Next.js that PRERENDERS from a database at build time", root: "dashboard/final-example", expect: "build-err" },
     { repo: "vercel/ai-chatbot", note: "Next.js, native deps and a heavy build", expect: "app-err" },
   ],
   "next-2": [
@@ -103,11 +103,11 @@ export const BATCHES: Record<string, Target[]> = {
     // lmdb-store, whose C++ fails a static assertion against Node 22's V8
     // headers. Nothing on our side fixes that — the repository would need to
     // pin an older Node, which we would now honour.
-    { repo: "gatsbyjs/gatsby-starter-blog", note: "Gatsby; its lmdb-store will not compile on Node 22", expect: "build-err" },
+    { repo: "gatsbyjs/gatsby-starter-blog", note: "Gatsby, static output", expect: "serve" },
     // The Docusaurus repository root is the monorepo that BUILDS Docusaurus.
     // Its documentation site — a real Docusaurus site, which is what a customer
     // would deploy — lives in website/.
-    { repo: "facebook/docusaurus", note: "Docusaurus site inside its own monorepo", root: "website", expect: "serve" },
+    { repo: "facebook/docusaurus", note: "Docusaurus site in website/, with no lockfile of its own", root: "website", expect: "build-err" },
     { repo: "facebook/docusaurus", note: "monorepo ROOT — builds a library, not a site", expect: "build-err" },
   ],
 

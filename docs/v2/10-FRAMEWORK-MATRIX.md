@@ -78,6 +78,10 @@ support gap being mistaken for a build gap.
 | 41 | laravel/laravel | Laravel skeleton | REFUSED | at detect | Was detected as **vite-react (static)** — its package.json carries vite and react for the asset pipeline. Now correctly PHP, and refused because PHP has no builder |
 | 42 | symfony/demo | Symfony demo | REFUSED | at detect | Same refusal, in plain words rather than `[dockerfile] No generator for runtime` |
 | 43 | actix/examples | Actix, cargo workspace | REFUSED | at detect | Rust is not detected at all — Cargo.toml is not a marker file |
+| 44 | **gatsbyjs/gatsby-starter-blog** | Gatsby, yarn, native deps | **PASS** | **200** | Was BUILD-ERR. Detecting Gatsby as static rather than as a generic Node server changed the whole path, and it no longer needs the dependency that would not compile |
+| 45 | **vercel/ai-chatbot** | Next.js, native deps, heavy build | **PASS** | **307** | A redirect to sign-in, which is the app working |
+| 46 | vercel/next-learn `dashboard/final-example` | Next.js that PRERENDERS from a database | BUILD-ERR | build failed | `Failed to fetch card data` while prerendering /dashboard. It needs POSTGRES_URL AT BUILD TIME — which the platform can now supply, so this is configuration rather than a defect. Never tested before: the batch runner was broken when this target was chosen |
+| 47 | facebook/docusaurus `website/` | Docusaurus site with no lockfile of its own | BUILD-ERR | build failed | `ERESOLVE` on its own peer dependencies. The monorepo's lockfile is at the root, so the sub-directory falls back to `npm install`, which is strict about peers |
 | 8 | remix-run/indie-stack | Remix, repo-supplied Dockerfile | APP-ERR | 503 | Built, routed, served. The app wants a database it was not given |
 | 9 | sveltejs/realworld | SvelteKit on `master`, **pnpm** | APP-ERR | 503 | Built, routed, served — **first proof pnpm works end to end**. Branch fallback to `master` also proven |
 
@@ -156,6 +160,14 @@ And one that had nothing to do with package managers:
   somewhere, which is true of nearly everything now.
 
 **Deliberate gaps, with reasons.**
+
+- **`npm install --legacy-peer-deps` is NOT used as a fallback.** It would let
+  facebook/docusaurus's `website/` install, and a good number of older
+  repositories with it. It was declined: it turns a hard failure into an
+  install that may be quietly wrong, and npm's ERESOLVE output already names
+  the exact conflicting versions, which is actionable. Vercel fails the same
+  way. Worth revisiting only with the relaxation stated loudly in the build
+  log.
 
 - **PHP has no builder.** Detection recognises it — knowing what something is
   beats calling it unknown — and refuses before leasing a machine, naming the
