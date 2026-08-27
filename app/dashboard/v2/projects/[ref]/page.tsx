@@ -9,12 +9,13 @@
 
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Receipt } from "lucide-react";
+import { Activity, Receipt } from "lucide-react";
 import { TabNav } from "@/components/v2/tab-nav";
 import { isSection } from "@/components/v2/sections";
 import { createClient } from "@/lib/supabase/server";
 import { summariseCharges } from "@/lib/paas/usage";
 import { DOMAIN_COLUMNS, toDomainDto, type DomainRow } from "@/lib/paas/domain-view";
+import { summariseHealth, healthVerdict, humanDuration, type UsageSample } from "@/lib/paas/health";
 import {
   BILLING_HOURS_PER_MONTH,
   clampInstances,
@@ -97,7 +98,7 @@ export default async function ProjectPage({
   }
   if (!project || project.deleted_at) notFound();
 
-  const [deployments, aliases, envVars, environments, domains, charges] = await Promise.all([
+  const [deployments, aliases, envVars, environments, domains, charges, samples] = await Promise.all([
     db
       .from("deployments")
       // image_digest and scaled_to_zero_at feed replicaStates below. Without
@@ -131,6 +132,17 @@ export default async function ProjectPage({
         new Date(Date.now() - 31 * 86_400_000).toISOString(),
       )
       .order("period_start", { ascending: false }),
+    // The health samples sweep-usage-sample has been writing every fifteen
+    // minutes since the platform existed. Nothing had ever read them: the data
+    // behind "is my app healthy" was on disk the whole time with nothing in
+    // front of it.
+    db
+      .from("usage_samples")
+      .select("sampled_at,pod_seconds,warm_seconds,peak_pods,restarts,unobserved_seconds,period_seconds")
+      .eq("project_id", project.id)
+      .gte("sampled_at", new Date(Date.now() - 7 * 86_400_000).toISOString())
+      .order("sampled_at", { ascending: false })
+      .limit(700),
   ]);
 
   // Sizing is derived from the same table that prices it, so what the page says
@@ -250,6 +262,66 @@ export default async function ProjectPage({
 
       {tab === "overview" ? (
         <div className="space-y-4">
+      {/*
+        HEALTH FIRST. Serving tells you where the app is; this tells you
+        whether it has been working, which is the question somebody opens the
+        page to answer at the moment it matters.
+      */}
+      <Card title="Health" subtitle="Sampled every 15 minutes, last 7 days" icon={Activity}>
+        {samples.error ? (
+          <Failed what="health samples" detail="The app is unaffected — this is a monitoring read." />
+        ) : (
+          (() => {
+            const health = summariseHealth((samples.data ?? []) as unknown as UsageSample[]);
+            const verdict = healthVerdict(health);
+            return (
+              <>
+                <div className="flex flex-wrap gap-6">
+                  <Stat
+                    label="Uptime"
+                    // Null renders as a dash, never as 0%. Zero means we
+                    // watched and it was down; a dash means nobody looked.
+                    value={health.uptimePct === null ? "—" : `${health.uptimePct}%`}
+                    tone={
+                      verdict.state === "healthy"
+                        ? "good"
+                        : verdict.state === "degraded"
+                          ? "warn"
+                          : verdict.state === "down"
+                            ? "bad"
+                            : "default"
+                    }
+                    hint="of time we could observe"
+                  />
+                  <Stat label="Serving" value={humanDuration(health.warmSeconds)} hint="at least one pod ready" />
+                  <Stat
+                    label="Restarts"
+                    value={health.restarts}
+                    tone={health.restarts > 0 ? "warn" : "default"}
+                    hint={health.restarts > 0 ? "a crash loop shows up here first" : undefined}
+                  />
+                  <Stat label="Peak pods" value={health.peakPods} hint="most running at once" />
+                </div>
+
+                <p className="mt-3 text-xs text-white/50">{verdict.reason}</p>
+
+                {/*
+                  Said out loud rather than folded into the percentage. Time
+                  nobody measured is OUR gap, and hiding it would let a
+                  sampler outage read as the customer's app being down.
+                */}
+                {health.unobservedSeconds > 0 ? (
+                  <p className="mt-1 text-xs text-white/35">
+                    {humanDuration(health.unobservedSeconds)} of this window could not be measured and is
+                    excluded from the percentage — that is a gap in our sampling, not downtime.
+                  </p>
+                ) : null}
+              </>
+            );
+          })()
+        )}
+      </Card>
+
       <Card title="Serving" subtitle="The hostname this project answers on">
         {production ? (
           <div className="flex flex-wrap items-center justify-between gap-3">
