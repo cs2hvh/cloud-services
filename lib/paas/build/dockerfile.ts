@@ -606,8 +606,15 @@ export function generateDockerfile(input: DockerfileInput): string | null {
     case "ruby":
       return rubyDockerfile(input);
     default:
+      // Said the way a customer needs to hear it. This used to read
+      // `[dockerfile] No generator for runtime "php"`, which names our internals
+      // and reads like a crash rather than a supported answer. Detection is
+      // deliberately allowed to recognise runtimes we cannot build yet — knowing
+      // what something IS beats calling it unknown — so this path is a real
+      // outcome, not an impossible one.
       throw new Error(
-        `[dockerfile] No generator for runtime "${detection.runtime}". Add a Dockerfile to the repository.`,
+        `${detection.framework} is not supported on this platform yet, so there is no build for it. ` +
+          `Add a Dockerfile to the repository and it will be built as-is.`,
       );
   }
 }

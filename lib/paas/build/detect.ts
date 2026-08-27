@@ -139,6 +139,30 @@ export function detectFramework(files: RepoFiles): Detection {
     };
   }
 
+  // COMPOSER OUTRANKS PACKAGE.JSON, and the order is the whole point.
+  //
+  // A PHP application ships a package.json for its asset pipeline — Laravel's
+  // has vite and react in it — and the Node branch below matched that first.
+  // laravel/laravel was detected as `vite-react (static)`: we would have built
+  // its frontend assets and served them as a site, with the application that
+  // owns them left out of the image entirely.
+  //
+  // The signals are not symmetrical. A composer.json says THIS IS A PHP
+  // APPLICATION; a package.json in the same repository says only that it has
+  // JavaScript somewhere, which is true of nearly every web application now.
+if (has(files, "composer.json")) {
+    return {
+      framework: "php",
+      runtime: "php",
+      buildCommand: "composer install --no-dev --optimize-autoloader",
+      startCommand: null,
+      outputDirectory: "public",
+      port: 80,
+      confidence: "likely",
+      reason: "Found composer.json.",
+    };
+  }
+
   const pkg = readPackageJson(files);
 
   // 2. Node frameworks, most specific first.
@@ -429,18 +453,7 @@ export function detectFramework(files: RepoFiles): Detection {
   }
 
   // 7. PHP.
-  if (has(files, "composer.json")) {
-    return {
-      framework: "php",
-      runtime: "php",
-      buildCommand: "composer install --no-dev --optimize-autoloader",
-      startCommand: null,
-      outputDirectory: "public",
-      port: 80,
-      confidence: "likely",
-      reason: "Found composer.json.",
-    };
-  }
+
 
   // 8. Plain static site.
   if (hasAny(files, "index.html", "public/index.html")) {

@@ -332,3 +332,33 @@ test("a Dockerfile still outranks Hugo", () => {
   const d = detectFramework(repo(["Dockerfile", "hugo.toml"], { Dockerfile: "FROM alpine\n" }));
   assert.equal(d.framework, "dockerfile");
 });
+
+// A PHP APPLICATION IS NOT A REACT SPA, though it ships a package.json.
+//
+// Laravel's package.json has vite and react in it for the asset pipeline, and
+// the Node branch matched that first: laravel/laravel was detected as
+// `vite-react (static)`. We would have built its frontend and served that as the
+// site, with the application that owns it left out of the image entirely.
+
+test("composer.json outranks a package.json full of frontend tooling", () => {
+  const d = detectFramework(repo(["composer.json", "package.json"], {
+    "package.json": pkg({ react: "^18.0.0", vite: "^5.0.0" }, { build: "vite build" }),
+    "composer.json": JSON.stringify({ require: { "laravel/framework": "^11.0" } }),
+  }));
+  assert.equal(d.framework, "php");
+  assert.equal(d.runtime, "php");
+});
+
+test("a repository with ONLY package.json is still a Node app", () => {
+  // Otherwise the test above would pass against a detector that called
+  // everything PHP.
+  const d = detectFramework(repo(["package.json"], {
+    "package.json": pkg({ react: "^18.0.0", vite: "^5.0.0" }, { build: "vite build" }),
+  }));
+  assert.notEqual(d.runtime, "php");
+});
+
+test("a Dockerfile still outranks composer.json", () => {
+  const d = detectFramework(repo(["Dockerfile", "composer.json"], { Dockerfile: "FROM php:8.3\n" }));
+  assert.equal(d.framework, "dockerfile");
+});
