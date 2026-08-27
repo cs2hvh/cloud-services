@@ -156,6 +156,13 @@ function projectRow(over: Partial<ProjectRow> = {}): ProjectRow {
     framework: "next",
     scale_to_zero: false,
     idle_seconds: null,
+    // NOT NULL in paas, so they are never null — but they must be PRESENT,
+    // because toProjectDto now resolves them through requireTier, which
+    // refuses an unknown id rather than defaulting. Leaving them out made
+    // every project test throw "unknown tier undefined", which is the
+    // function working correctly against an incomplete fixture.
+    tier: "starter",
+    instance_count: 1,
     created_at: "2026-08-26T10:00:00.000Z",
     updated_at: "2026-08-26T10:00:00.000Z",
     deleted_at: null,

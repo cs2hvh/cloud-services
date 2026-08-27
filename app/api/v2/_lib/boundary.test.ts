@@ -110,15 +110,132 @@ const pathDeclaresNamespace = (file: string) => file.includes("[namespace]");
  * Handlers that can return before resolving a caller. Scans only inside an
  * exported handler body — a `return` in a module-level helper is not an early
  * exit, and a naive version flags it.
+ *
+ * THERE ARE TWO AUTH IDIOMS IN THIS CODEBASE and this predicate must know
+ * both. It originally knew only `getCaller()`, which is this lane's helper.
+ * Merging the deploy lane brought eight handlers using the other one:
+ *
+ *   const supabase = await createClient();
+ *   const { data: { user }, error } = await supabase.auth.getUser();
+ *   if (error || !user) return unauthenticated();
+ *
+ * That is a real gate — it resolves the caller from the session cookie and
+ * refuses when there is none — so flagging it was a FALSE POSITIVE, and it
+ * fired on eight handlers at once when the branches merged.
+ *
+ * The dangerous way to fix that is to accept any file mentioning `getUser`.
+ * Then a handler that calls it, ignores the result and serves data would pass.
+ * So both idioms are matched on the SAME two-part shape they share: obtain a
+ * caller, and have the refusal appear before any other return. `getCaller()`
+ * is paired with its null check by convention; `auth.getUser()` is paired here
+ * with an explicit `!user` refusal, and a handler with the call but no refusal
+ * is still reported.
+ *
+ * Worth saying out loud rather than only encoding: two idioms for the same
+ * security decision is itself a drift risk. One of them should win. Until
+ * that is decided this predicate is the thing keeping both honest.
  */
-function gateViolations(src: string): string[] {
+/**
+ * Does this stretch of source obtain a caller AND refuse when there is none?
+ *
+ * Shared by the handler check and the helper check below, so a helper is held
+ * to exactly the standard a handler is. Defining it once is the point: two
+ * copies of "what counts as a gate" is how one of them quietly gets weaker.
+ */
+function gatesInline(body: string): "caller" | "supabase" | "unrefused" | null {
+  if (body.includes("getCaller()")) return "caller";
+  if (!body.includes("auth.getUser()")) return null;
+  const refuses = ["!user", "!data.user", "!session"].some((n) => body.includes(n));
+  return refuses ? "supabase" : "unrefused";
+}
+
+/**
+ * Functions anywhere in the v2 surface whose own body gates.
+ *
+ * THE THIRD IDIOM is delegation. Four handlers do no auth themselves:
+ *
+ *   export async function POST(req) { return createProject(req); }
+ *   const r = await requireProject(ref); if ("error" in r) return r.error;
+ *
+ * Both are properly authenticated — createProject gates at
+ * create-route.ts:15, requireProject at env/route.ts:46 — but the gate is one
+ * call away and in a DIFFERENT FILE in the first case.
+ *
+ * This is collected rather than allowlisted, and the difference matters. An
+ * allowlist of trusted helper names would be a suppression list: add a name
+ * and the check stops looking. Here a name earns its place only by containing
+ * a gate, checked by the same predicate that checks handlers. A helper that
+ * stops gating drops out of this set on the next run and every handler
+ * delegating to it starts failing.
+ */
+function collectGateHelpers(files: string[], readFile: (f: string) => string): Set<string> {
+  const names = new Set<string>();
+  for (const file of files) {
+    const src = readFile(file);
+    const re = /(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(src)) !== null) {
+      const name = m[1];
+      // Handlers are checked directly; they are not delegation targets.
+      if (["GET", "POST", "PATCH", "PUT", "DELETE"].includes(name)) continue;
+      // Body = from here to the next top-level function, good enough to tell
+      // whether the gate sits inside this one.
+      const rest = src.slice(m.index + m[0].length);
+      const next = rest.search(/\n(?:export\s+)?(?:async\s+)?function\s/);
+      const body = next < 0 ? rest : rest.slice(0, next);
+      if (gatesInline(body) === "caller" || gatesInline(body) === "supabase") {
+        names.add(name);
+      }
+    }
+  }
+  return names;
+}
+
+function gateViolations(src: string, gateHelpers: Set<string> = new Set()): string[] {
   const bad: string[] = [];
   for (const method of ["GET", "POST", "PATCH", "PUT", "DELETE"]) {
     const at = src.indexOf(`export async function ${method}(`);
     if (at < 0) continue;
     const body = src.slice(at);
-    const gate = body.indexOf("getCaller()");
-    const ret = body.indexOf("return ");
+
+    const inline = gatesInline(body);
+    if (inline === "unrefused") {
+      bad.push(`${method}: calls auth.getUser() but never refuses a missing user`);
+      continue;
+    }
+
+    let gate = -1;
+    let gateName: string | null = null;
+    if (inline === "caller") gate = body.indexOf("getCaller()");
+    else if (inline === "supabase") gate = body.indexOf("auth.getUser()");
+    else {
+      // Idiom three: delegation to a helper that has itself been VERIFIED to
+      // gate. Earliest such call wins, so the position check still applies.
+      for (const name of gateHelpers) {
+        const at2 = body.indexOf(`${name}(`);
+        if (at2 >= 0 && (gate < 0 || at2 < gate)) {
+          gate = at2;
+          gateName = name;
+        }
+      }
+    }
+
+    // The FIRST return that is not the delegation itself.
+    //
+    // `export async function POST(req) { return createProject(req); }` has its
+    // return at position 0 and the gate just after it, which reads as
+    // "returns before the gate" and is exactly backwards — that return IS the
+    // gate. So a return whose own statement contains the gate call does not
+    // count as an early exit, while any other return still does.
+    let ret = -1;
+    for (let i = body.indexOf("return "); i >= 0; i = body.indexOf("return ", i + 1)) {
+      const end = body.indexOf(";", i);
+      const statement = body.slice(i, end < 0 ? Math.min(i + 160, body.length) : end);
+      if (gateName && statement.includes(`${gateName}(`)) continue;
+      ret = i;
+      break;
+    }
+
     if (gate < 0) bad.push(`${method}: never resolves a caller`);
     else if (ret >= 0 && ret < gate) bad.push(`${method}: returns before the gate`);
   }
@@ -144,8 +261,30 @@ test("no handler writes the alias as the platform", () => {
   assert.deepEqual(REAL.filter((f) => callsPromoteAndConverge(read(f))), []);
 });
 
+/**
+ * Helpers that gate, collected from the whole surface — including create-route.ts,
+ * which is not a route module and so is not in REAL_ROUTES, but is where
+ * POST /projects actually authenticates.
+ */
+const GATE_HELPERS = collectGateHelpers(REAL, read);
+
+test("the gate-helper set is real, not empty", () => {
+  // If this set silently empties, every delegating handler starts failing —
+  // loudly, which is the safe direction. But an empty set would also mean the
+  // collector had stopped working, and that is worth naming separately from
+  // the handlers it would take down with it.
+  assert.ok(
+    GATE_HELPERS.size >= 2,
+    `collected only ${GATE_HELPERS.size} gate helpers — the collector has stopped working`
+  );
+  assert.ok(GATE_HELPERS.has("requireProject"), "requireProject gates and must be found");
+  assert.ok(GATE_HELPERS.has("createProject"), "createProject gates and must be found");
+});
+
 test("every handler resolves a caller before it can return", () => {
-  const bad = REAL_ROUTES.flatMap((f) => gateViolations(read(f)).map((v) => `${f} ${v}`));
+  const bad = REAL_ROUTES.flatMap((f) =>
+    gateViolations(read(f), GATE_HELPERS).map((v) => `${f} ${v}`)
+  );
   assert.deepEqual(bad, []);
 });
 
@@ -436,6 +575,127 @@ test("every predicate fires on a real violation in a discovered file", () => {
   assert.ok(selectsCiphertext(src), "value_ct select");
   assert.ok(takesNamespaceFromRequest(src), "namespace from params");
   assert.deepEqual(gateViolations(src), ["GET: returns before the gate"]);
+});
+
+// ── the gate predicate knows both idioms, and is not fooled by either ──
+// Widening a security predicate is where one gets quietly disabled, so each
+// of these is a shape that MUST still be caught after the widening.
+
+test("the gate accepts the Supabase idiom done properly", () => {
+  const src = code(`export async function GET(r: Request) {
+    const supabase = await createClient();
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) return unauthenticated();
+    return json({ ok: true });
+  }`);
+  assert.deepEqual(gateViolations(src), [], "a real Supabase gate is not a violation");
+});
+
+test("the gate still catches a handler with NO auth at all", () => {
+  const src = code(`export async function GET() { return json({ secrets: 1 }); }`);
+  assert.deepEqual(gateViolations(src), ["GET: never resolves a caller"]);
+});
+
+test("calling auth.getUser() without refusing is NOT a gate", () => {
+  // The dangerous widening: accepting any file that mentions getUser. This
+  // handler resolves a user, ignores the answer, and serves data anyway.
+  const src = code(`export async function GET() {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    console.log(user);
+    return json({ secrets: 1 });
+  }`);
+  assert.deepEqual(gateViolations(src), [
+    "GET: calls auth.getUser() but never refuses a missing user",
+  ]);
+});
+
+test("the gate still catches a return placed before it", () => {
+  const src = code(`export async function POST(r: Request) {
+    if (r.headers.get("x-skip")) return json({ ok: true });
+    const { data: { user }, error } = await (await createClient()).auth.getUser();
+    if (error || !user) return unauthenticated();
+    return json({ ok: true });
+  }`);
+  assert.deepEqual(gateViolations(src), ["POST: returns before the gate"]);
+});
+
+test("a helper is only trusted if it actually gates", () => {
+  // The delegation idiom is the widening most likely to become a suppression
+  // list. It cannot: a name earns trust by containing a gate, checked by the
+  // same predicate. Here the helper does NOT gate, so the handler delegating
+  // to it is still reported.
+  const helpers = collectGateHelpers(["fake.ts"], () =>
+    code(`async function loadProject(ref: string) { return db.get(ref); }`)
+  );
+  assert.equal(helpers.size, 0, "a helper with no gate must not be collected");
+
+  const handler = code(`export async function GET() {
+    const p = await loadProject("x");
+    return json(p);
+  }`);
+  assert.deepEqual(gateViolations(handler, helpers), ["GET: never resolves a caller"]);
+});
+
+test("a one-line delegating handler is not read as returning early", () => {
+  // `return createProject(req)` puts the return BEFORE the gate call textually
+  // while being the gate call. Reported as "returns before the gate" until the
+  // position check learned to skip the delegating statement.
+  const helpers = collectGateHelpers(["fake.ts"], () =>
+    code(`async function createThing(req: Request) {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error || !user) return unauthenticated();
+      return json({ ok: true });
+    }`)
+  );
+  const handler = code(`export async function POST(req: Request) {
+    return createThing(req);
+  }`);
+  assert.deepEqual(gateViolations(handler, helpers), []);
+});
+
+test("a genuine early return before a delegated gate is still caught", () => {
+  // The other half of that fix: skipping the delegating return must not skip
+  // a real one that precedes it.
+  const helpers = collectGateHelpers(["fake.ts"], () =>
+    code(`async function createThing(req: Request) {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error || !user) return unauthenticated();
+      return json({ ok: true });
+    }`)
+  );
+  const handler = code(`export async function POST(req: Request) {
+    if (req.headers.get("x-skip")) return json({ ok: true });
+    return createThing(req);
+  }`);
+  assert.deepEqual(gateViolations(handler, helpers), ["POST: returns before the gate"]);
+});
+
+test("a helper that does gate is collected and trusted", () => {
+  const helpers = collectGateHelpers(["fake.ts"], () =>
+    code(`async function requireThing(ref: string) {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error || !user) return { error: unauthenticated() };
+      return { ok: true };
+    }`)
+  );
+  assert.ok(helpers.has("requireThing"), "a gating helper must be collected");
+
+  const handler = code(`export async function GET() {
+    const r = await requireThing("x");
+    if ("error" in r) return r.error;
+    return json(r);
+  }`);
+  assert.deepEqual(gateViolations(handler, helpers), []);
+});
+
+test("the getCaller idiom is still enforced unchanged", () => {
+  const good = code(`export async function GET() {
+    const caller = await getCaller();
+    if (!caller) return unauthenticated();
+    return json({ ok: true });
+  }`);
+  assert.deepEqual(gateViolations(good), []);
 });
 
 test("the namespace-from-query form is detected too", () => {
