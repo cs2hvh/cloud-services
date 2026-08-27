@@ -116,6 +116,54 @@ alter table paas.installations add constraint installations_account_shape check 
 alter table paas.installations add constraint installations_external_id_shape
   check (length(external_id) between 1 and 128 and external_id !~ '\s');
 
+-- ── 3b. the credential, for the providers that need one stored ──────────────
+--
+-- GITHUB DOES NOT APPEAR HERE AND THAT ASYMMETRY IS THE POINT. GitHub App
+-- installation tokens are minted per request from a private key and expire in
+-- an hour, so there is nothing durable to keep — github/app.ts holds the key
+-- and this table holds no credential at all. GitLab and Bitbucket are OAuth:
+-- the platform holds a refreshable token for as long as the connection exists.
+--
+-- So connecting GitLab gives us a durable credential to a customer's account
+-- and connecting GitHub does not. A breach of these columns is a different
+-- severity from a breach of paas.env_vars, and the columns are named so nobody
+-- has to infer that.
+--
+-- Ciphertext only. AES-256-GCM, keyed by HKDF from the same master as env vars
+-- but in a SEPARATE context — see lib/paas/providers/credentials.ts. The
+-- separation matters: an env-var ciphertext fed to the connection decrypt is
+-- refused by scheme name rather than failing somewhere less legible.
+alter table paas.installations
+  add column if not exists access_token_ct   bytea,
+  add column if not exists refresh_token_ct  bytea,
+  add column if not exists token_dek_id      text,
+  add column if not exists token_expires_at  timestamptz;
+
+-- A ciphertext without its dek_id is unreadable, and a dek_id without a
+-- ciphertext is a row that looks credentialed and 401s on first use. Neither
+-- half is meaningful alone, so the pair is constrained together.
+alter table paas.installations add constraint installations_token_pair check (
+  (access_token_ct is null and token_dek_id is null)
+  or (access_token_ct is not null and token_dek_id is not null)
+);
+
+-- A refresh token cannot exist without the access token it refreshes.
+alter table paas.installations add constraint installations_refresh_needs_access check (
+  refresh_token_ct is null or access_token_ct is not null
+);
+
+-- NO GRANT IS ADDED FOR THESE COLUMNS, and none is needed: `authenticated` has
+-- SELECT on the table, which is column-blind. That is worth saying out loud
+-- because it means RLS is the ONLY thing standing between a team member and
+-- another team's ciphertext — and the existing policy scopes by team, so it
+-- holds. If a future policy is ever loosened for any reason, these columns are
+-- what it loosens access to.
+--
+-- The ciphertext is useless without the master key, which lives outside every
+-- repo. That is defence in depth, not the defence.
+comment on column paas.installations.access_token_ct is
+  'AES-256-GCM ciphertext. Never a plaintext token. Decrypt via lib/paas/providers/credentials.ts.';
+
 -- ── 4. projects.installation_id follows ─────────────────────────────────────
 
 -- Bare bigint, no FK. Converted so the join survives the first Bitbucket
@@ -147,13 +195,22 @@ create index if not exists projects_connection_idx
 -- accepts only GitHub.
 drop function if exists paas.link_installation(bigint, text, text, text);
 
+-- The token parameters take CIPHERTEXT. Encryption happens in Node before the
+-- call, so the database never receives a plaintext credential — not in a bind
+-- parameter, not in a query log, not in `pg_stat_statements`. A function that
+-- accepted the plaintext and encrypted it in SQL would need the master key in
+-- the database, which is the one place it must not be.
 create or replace function paas.link_installation(
-  p_provider      paas.git_provider,
-  p_external_id   text,
-  p_team_ref      text,
-  p_account_login text,
-  p_account_type  text default null,
-  p_metadata      jsonb default '{}'::jsonb
+  p_provider         paas.git_provider,
+  p_external_id      text,
+  p_team_ref         text,
+  p_account_login    text,
+  p_account_type     text default null,
+  p_metadata         jsonb default '{}'::jsonb,
+  p_access_token_ct  bytea default null,
+  p_refresh_token_ct bytea default null,
+  p_token_dek_id     text default null,
+  p_token_expires_at timestamptz default null
 )
 returns text
 language plpgsql
@@ -196,7 +253,8 @@ begin
   end if;
 
   insert into paas.installations
-      (provider, external_id, installation_id, team_id, account_login, account_type, installed_by, provider_metadata)
+      (provider, external_id, installation_id, team_id, account_login, account_type, installed_by,
+       provider_metadata, access_token_ct, refresh_token_ct, token_dek_id, token_expires_at)
   values (
       p_provider,
       p_external_id,
@@ -205,13 +263,22 @@ begin
       -- raise, and it would raise on the INSERT rather than anywhere a reader
       -- would look for the cause.
       case when p_external_id ~ '^\d+$' then p_external_id::bigint else null end,
-      v_team_id, p_account_login, p_account_type, v_caller, coalesce(p_metadata, '{}'::jsonb))
+      v_team_id, p_account_login, p_account_type, v_caller, coalesce(p_metadata, '{}'::jsonb),
+      p_access_token_ct, p_refresh_token_ct, p_token_dek_id, p_token_expires_at)
   on conflict (provider, external_id) do update
     set team_id           = excluded.team_id,
         account_login     = excluded.account_login,
         account_type      = excluded.account_type,
         provider_metadata = excluded.provider_metadata,
-        deleted_at        = null;
+        deleted_at        = null,
+        -- A re-link that carries no token KEEPS the stored one. GitHub's
+        -- callback fires again on every re-install and sends no credential;
+        -- overwriting with NULL there would silently un-credential a working
+        -- GitLab connection that happened to be re-linked.
+        access_token_ct   = coalesce(excluded.access_token_ct, paas.installations.access_token_ct),
+        refresh_token_ct  = coalesce(excluded.refresh_token_ct, paas.installations.refresh_token_ct),
+        token_dek_id      = coalesce(excluded.token_dek_id, paas.installations.token_dek_id),
+        token_expires_at  = coalesce(excluded.token_expires_at, paas.installations.token_expires_at);
 
   return p_team_ref;
 end;
@@ -258,11 +325,11 @@ $$;
 -- apply to the existing rows — but the FUNCTIONS are new objects with new
 -- signatures, and a new function has no EXECUTE grant at all.
 
-revoke all on function paas.link_installation(paas.git_provider, text, text, text, text, jsonb) from public;
+revoke all on function paas.link_installation(paas.git_provider, text, text, text, text, jsonb, bytea, bytea, text, timestamptz) from public;
 revoke all on function paas.unlink_installation(paas.git_provider, text) from public;
 
-grant execute on function paas.link_installation(paas.git_provider, text, text, text, text, jsonb) to authenticated;
+grant execute on function paas.link_installation(paas.git_provider, text, text, text, text, jsonb, bytea, bytea, text, timestamptz) to authenticated;
 grant execute on function paas.unlink_installation(paas.git_provider, text) to authenticated;
 
-comment on function paas.link_installation(paas.git_provider, text, text, text, text, jsonb) is
+comment on function paas.link_installation(paas.git_provider, text, text, text, text, jsonb, bytea, bytea, text, timestamptz) is
   'Bind a provider connection to a team. SECURITY DEFINER; re-checks admin membership. Idempotent per (provider, external_id).';
