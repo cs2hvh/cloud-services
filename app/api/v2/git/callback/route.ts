@@ -24,6 +24,8 @@ import { cookies } from "next/headers";
 import { listInstallations } from "@/lib/paas/github/app.ts";
 import { getCaller } from "../../_lib/auth";
 import { STATE_COOKIE } from "../../_lib/git-state";
+import { provesInstallationOwnership } from "@/lib/paas/github/ownership";
+import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -92,9 +94,54 @@ export async function GET(request: Request) {
     accountLogin = installation?.account?.login ?? "";
     accountType = installation?.account?.type ?? null;
   } catch (err) {
-    // Non-fatal: the link is still worth recording. A missing login shows as
-    // blank in the UI, which is recoverable; a missing link is not.
+    // Left blank, which now REFUSES below rather than recording. It used to be
+    // treated as non-fatal on the reasoning that a blank login is cosmetic and
+    // a missing link is not — true while the login was only shown in the UI,
+    // and false now that it is what proves the installation is yours.
     console.error("[v2/git/callback] could not read installation account:", err);
+  }
+
+  // OWNERSHIP, and the nonce above does NOT establish it.
+  //
+  // The nonce proves this browser started a flow with us. It says nothing
+  // about WHICH installation came back, and an attacker can start a flow
+  // legitimately — so a valid state plus a victim's unclaimed installation id
+  // bound their GitHub account to the attacker's team. Same hole as
+  // ../github/callback, protected by a lock the attacker holds a key to.
+  //
+  // ORG INSTALLS ARE REFUSED HERE, and that is a known gap rather than a
+  // silent one. Proving somebody administers an org needs their own OAuth
+  // token, which this platform deliberately does not store for GitHub. Until
+  // it does, an org connection cannot be established by any route, and saying
+  // so beats binding one nobody verified.
+  // getCaller() returns only an id and a scoped db handle, so the identity
+  // comes from the auth client directly. It is what GitHub asserted at
+  // sign-in: absent from the request, and not forgeable by editing a URL.
+  //
+  // Read from identities rather than user_metadata ON PURPOSE. Metadata is
+  // last-writer-wins across providers, so a user who signed in with GitLab
+  // most recently carries their GITLAB username there — and someone whose
+  // GitLab name matched a GitHub account could claim that account's
+  // installation. identities keeps one row per provider and cannot confuse
+  // the two.
+  const authed = await createClient();
+  const { data: authUser } = await authed.auth.getUser();
+  const githubLogin = (authUser?.user?.identities ?? [])
+    .filter((i) => i.provider === "github")
+    .map((i) => (i.identity_data as { user_name?: string } | undefined)?.user_name)
+    .find((n): n is string => typeof n === "string" && n.length > 0);
+
+  const ownership = provesInstallationOwnership(githubLogin, accountLogin);
+  if (!ownership.proven) {
+    console.warn(
+      "[v2/git/callback] refused: caller github=" +
+        (githubLogin ?? "(none)") +
+        ", installation " +
+        installationId +
+        " is on " +
+        (accountLogin || "(unknown)"),
+    );
+    return back("error", "ownership_unproven");
   }
 
   // The RPC is SECURITY DEFINER and enforces admin-on-team itself. It also
