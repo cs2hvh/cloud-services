@@ -157,14 +157,24 @@ export default async function ProjectsPage() {
             const state = newest.get(p.id);
             const hostname = host.get(p.id);
             return (
-              <Link
+              // A CARD IS NOT A LINK. The hostname below is its own anchor, and
+              // an <a> inside an <a> is invalid HTML — browsers recover by
+              // splitting them, which is why the click had to be intercepted at
+              // all. The whole-card target is kept with a stretched pseudo
+              // element on the title instead: pure CSS, two real links, no
+              // handler, and it works before hydration.
+              <div
                 key={p.ref}
-                href={`/dashboard/v2/projects/${p.ref}`}
-                className="group flex flex-col gap-3 rounded-lg border border-white/[0.07] bg-[#15171c] p-4 transition-colors hover:border-white/[0.14] hover:bg-white/[0.03]"
+                className="group relative flex flex-col gap-3 rounded-lg border border-white/[0.07] bg-[#15171c] p-4 transition-colors hover:border-white/[0.14] hover:bg-white/[0.03]"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-white/90">{p.slug}</p>
+                    <Link
+                      href={`/dashboard/v2/projects/${p.ref}`}
+                      className="truncate text-sm font-medium text-white/90 after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
+                    >
+                      {p.slug}
+                    </Link>
                     <p className="mt-0.5 flex items-center gap-1.5 truncate font-mono text-[11px] text-white/40">
                       <GitBranch className="h-3 w-3 shrink-0" aria-hidden />
                       {p.repo_full_name}
@@ -182,7 +192,10 @@ export default async function ProjectsPage() {
                 */}
                 <div className="min-w-0">
                   {hostname ? (
-                    <span onClick={(e) => e.stopPropagation()}>
+                    // relative z-10 lifts it above the title's stretched
+                    // ::after, so this link is clickable and the rest of the
+                    // card still opens the project.
+                    <span className="relative z-10">
                       <ExternalLink href={`https://${hostname}`}>{hostname}</ExternalLink>
                     </span>
                   ) : (
@@ -199,7 +212,7 @@ export default async function ProjectsPage() {
                   </span>
                   <span>{state ? timeAgo(state.at) : "never deployed"}</span>
                 </div>
-              </Link>
+              </div>
             );
           })}
         </div>
