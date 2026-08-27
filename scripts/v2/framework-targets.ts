@@ -50,7 +50,11 @@ export const BATCHES: Record<string, Target[]> = {
   /* ── Node: the frameworks most customers arrive with ──────────────────── */
 
   "next-1": [
-    { repo: "vercel/next-learn", note: "Next.js in a monorepo subdirectory", root: "dashboard/starter-example", expect: "serve" },
+    // final-example, NOT starter-example. The starter is deliberately incomplete —
+    // the tutorial has the reader create app/ui/fonts.ts — so it fails TypeScript
+    // on its own source. The platform got all the way through install, build and
+    // typecheck to find that, which is correct behaviour and a useless test.
+    { repo: "vercel/next-learn", note: "Next.js in a monorepo subdirectory", root: "dashboard/final-example", expect: "serve" },
     { repo: "vercel/ai-chatbot", note: "Next.js, native deps and a heavy build", expect: "app-err" },
   ],
   "next-2": [
