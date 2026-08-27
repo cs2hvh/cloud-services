@@ -183,6 +183,37 @@ export function detectFramework(files: RepoFiles): Detection {
       };
     }
 
+    // Gatsby and Docusaurus both fell through to the generic Node branch, which
+    // runs `npm start` against a framework that has no server to start. Both
+    // produce a directory of static files and want nginx, not node — and the
+    // directory is NOT the same one, which is the whole reason each needs its own
+    // rule rather than a shared 'it is static' guess.
+    if (dep(pkg, "gatsby")) {
+      return {
+        framework: "gatsby",
+        runtime: "static",
+        buildCommand: build,
+        startCommand: null,
+        outputDirectory: "public",
+        port: 80,
+        confidence: "certain",
+        reason: 'Found "gatsby"; serving its static output from public/.',
+      };
+    }
+
+    if (dep(pkg, "@docusaurus/core")) {
+      return {
+        framework: "docusaurus",
+        runtime: "static",
+        buildCommand: build,
+        startCommand: null,
+        outputDirectory: "build",
+        port: 80,
+        confidence: "certain",
+        reason: 'Found "@docusaurus/core"; serving its static output from build/.',
+      };
+    }
+
     if (dep(pkg, "astro")) {
       const ssr = /output\s*:\s*["'](server|hybrid)["']/.test(files.contents["astro.config.mjs"] ?? "");
       return {

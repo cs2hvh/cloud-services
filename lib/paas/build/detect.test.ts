@@ -239,3 +239,31 @@ test("no EXPOSE falls back to 3000 and says so", () => {
 test("an out-of-range port is rejected", () => {
   assert.equal(parseExposedPort("EXPOSE 99999"), null);
 });
+
+// GATSBY AND DOCUSAURUS ARE NOT GENERIC NODE APPS.
+//
+// Both fell through to the nodejs branch, which runs `npm start` against a
+// framework that has no server to start. Both build to a directory of static
+// files — and not the SAME directory, which is why each needs its own rule.
+
+test("gatsby is static, served from public/", () => {
+  const d = detectFramework(repo(["package.json"], { "package.json": pkg({ gatsby: "^5.0.0" }, { build: "gatsby build" }) }));
+  assert.equal(d.framework, "gatsby");
+  assert.equal(d.runtime, "static");
+  assert.equal(d.outputDirectory, "public");
+});
+
+test("docusaurus is static, served from build/", () => {
+  const d = detectFramework(repo(["package.json"], { "package.json": pkg({ "@docusaurus/core": "^3.0.0" }, { build: "docusaurus build" }) }));
+  assert.equal(d.framework, "docusaurus");
+  assert.equal(d.runtime, "static");
+  assert.equal(d.outputDirectory, "build");
+});
+
+test("THE TWO OUTPUT DIRECTORIES DO NOT GET CONFUSED", () => {
+  // Copying the wrong one produces an nginx serving an empty root, which looks
+  // like a routing failure rather than a build one.
+  const g = detectFramework(repo(["package.json"], { "package.json": pkg({ gatsby: "^5.0.0" }, { build: "gatsby build" }) }));
+  const d = detectFramework(repo(["package.json"], { "package.json": pkg({ "@docusaurus/core": "^3.0.0" }, { build: "docusaurus build" }) }));
+  assert.notEqual(g.outputDirectory, d.outputDirectory);
+});

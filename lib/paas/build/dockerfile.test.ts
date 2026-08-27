@@ -467,3 +467,48 @@ test("EVERY ONE OF THESE CAN ACTUALLY FAIL", () => {
   });
   assert.ok(withKey.includes("ARG NEXT_PUBLIC_API_URL"), "and one key means one ARG line");
 });
+
+// A NATIVE DEPENDENCY MUST BE ABLE TO COMPILE.
+//
+// sharp, bcrypt, sqlite3 and anything else built through node-gyp fall back to
+// compiling from source when no prebuilt binary matches the platform — which on
+// musl/alpine is the normal case, not the rare one. Without python3 and a C++
+// compiler the install dies inside node-gyp with "Could not find any Python
+// installation to use", which names an interpreter rather than a toolchain.
+// gatsby-starter-blog failed exactly this way.
+
+test("the stage that installs dependencies can compile them", () => {
+  const df = mustGenerate({
+    detection: { framework: "nextjs", runtime: "node", buildCommand: "npm run build", startCommand: "next start", outputDirectory: ".next", port: 3000, confidence: "certain", reason: "t" },
+    packageManager: "npm",
+    hasLockfile: true,
+    publicEnvKeys: [],
+  });
+  const deps = df.slice(df.indexOf("AS deps"), df.indexOf("AS builder"));
+  assert.match(deps, /apk add --no-cache libc6-compat python3 make g\+\+/);
+});
+
+test("THE RUNTIME IMAGE NEVER SHIPS A COMPILER", () => {
+  const df = mustGenerate({
+    detection: { framework: "nextjs", runtime: "node", buildCommand: "npm run build", startCommand: "next start", outputDirectory: ".next", port: 3000, confidence: "certain", reason: "t" },
+    packageManager: "npm",
+    hasLockfile: true,
+    publicEnvKeys: [],
+  });
+  // A compiler in the shipped image is weight and attack surface for a container
+  // whose only job is to run an already-built application.
+  const runner = df.slice(df.indexOf("AS runner"));
+  assert.ok(!runner.includes("g++"), "the runner stage must not install a compiler");
+  assert.ok(!runner.includes("python3"), "the runner stage must not install python");
+});
+
+test("a static build gets the toolchain too", () => {
+  const df = mustGenerate({
+    detection: { framework: "vite", runtime: "static", buildCommand: "npm run build", startCommand: null, outputDirectory: "dist", port: 80, confidence: "certain", reason: "t" },
+    packageManager: "npm",
+    hasLockfile: true,
+    publicEnvKeys: [],
+  });
+  const builder = df.slice(df.indexOf("AS builder"), df.indexOf("nginx"));
+  assert.match(builder, /python3 make g\+\+/);
+});
