@@ -564,3 +564,43 @@ test("the Dockerfile says WHICH reason applied", () => {
   assert.match(workspace, /siblings/);
   assert.match(scripts, /own install script/);
 });
+
+test("EVERYTHING NGINX SERVES IS ROUTED TO 8080", () => {
+  // The container runs as uid 101 and cannot bind a privileged port, so
+  // NGINX_STATIC listens on 8080. A Service pointed at 80 finds nothing there:
+  // the pod runs, never goes Ready, and the platform answers 503 with no
+  // container error to explain it, because nothing crashed. Hugo landed exactly
+  // there — it built, published, routed and served nothing.
+  const nginxRuntimes = [
+    { framework: "vite", runtime: "static" as const, port: 80 },
+    { framework: "hugo", runtime: "hugo" as const, port: 80 },
+  ];
+  for (const r of nginxRuntimes) {
+    const port = servingPort({
+      framework: r.framework,
+      runtime: r.runtime,
+      buildCommand: "b",
+      startCommand: null,
+      outputDirectory: "public",
+      port: r.port,
+      confidence: "certain",
+      reason: "t",
+    });
+    assert.equal(port, 8080, `${r.framework} must be served on 8080`);
+  }
+});
+
+test("a runtime that is NOT nginx keeps its own port", () => {
+  // Otherwise the test above would pass against a function returning 8080 always.
+  const port = servingPort({
+    framework: "nextjs",
+    runtime: "node",
+    buildCommand: "npm run build",
+    startCommand: "start",
+    outputDirectory: ".next",
+    port: 3000,
+    confidence: "certain",
+    reason: "t",
+  });
+  assert.equal(port, 3000);
+});

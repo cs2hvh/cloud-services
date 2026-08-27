@@ -624,5 +624,11 @@ export function runtimeUid(detection: Detection): number {
 }
 
 export function servingPort(detection: Detection): number {
-  return detection.runtime === "static" ? 8080 : detection.port;
+  // ANYTHING NGINX SERVES LISTENS ON 8080, whatever the detection said. The
+  // container runs as uid 101 and cannot bind a privileged port, so NGINX_STATIC
+  // is written to listen on 8080 — and a Service pointed at 80 finds nothing
+  // there. The pod then runs, never goes Ready, and the platform answers 503
+  // with no container error to explain it, because nothing crashed. Hugo landed
+  // exactly there: it built, published and routed, and served nothing.
+  return detection.runtime === "static" || detection.runtime === "hugo" ? 8080 : detection.port;
 }
