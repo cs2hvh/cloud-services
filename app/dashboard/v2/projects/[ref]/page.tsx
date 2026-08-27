@@ -10,6 +10,8 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Receipt } from "lucide-react";
+import { TabNav } from "@/components/v2/tab-nav";
+import { isSection } from "@/components/v2/sections";
 import { createClient } from "@/lib/supabase/server";
 import { summariseCharges } from "@/lib/paas/usage";
 import {
@@ -49,8 +51,19 @@ export const revalidate = 0;
 
 const PROJECT_REF = /^prj-[0-9a-f]{12}$/;
 
-export default async function ProjectPage({ params }: { params: Promise<{ ref: string }> }) {
+
+export default async function ProjectPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ ref: string }>;
+  searchParams: Promise<{ tab?: string }>;
+}) {
   const { ref } = await params;
+  const { tab: requestedTab } = await searchParams;
+  // An unknown tab falls back to overview rather than rendering nothing. A
+  // hand-edited or stale URL should show the page, not a blank one.
+  const tab = isSection(requestedTab) ? requestedTab : "overview";
   const supabase = await createClient();
   const {
     data: { user },
@@ -217,13 +230,19 @@ export default async function ProjectPage({ params }: { params: Promise<{ ref: s
       />
 
       {/*
-        Two columns, and which side a thing lands on is the point: the left is
-        what you WATCH — where it serves, what deployed, what previews exist —
-        and the right is what you CONFIGURE once and leave alone. Stacked in one
-        column, the settings pushed the deployment list below the fold, which is
-        the thing people open this page to look at.
+        Sections, not one long column. This page carries serving state, build
+        history, previews, domains, environment, billing and sizing — stacked,
+        the settings pushed the deployment list below the fold, which is the
+        thing people open the page to look at.
+
+        ServiceTabBar is the same control compute, database, kubernetes and
+        object storage use. Its own header calls it the single source of truth,
+        and a second tab control for v2 would make the newest surface the one
+        that looks like a different product.
       */}
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+      <TabNav active={tab} />
+
+      {tab === "overview" ? (
         <div className="space-y-4">
       <Card title="Serving" subtitle="The hostname this project answers on">
         {production ? (
@@ -288,7 +307,11 @@ export default async function ProjectPage({ params }: { params: Promise<{ ref: s
           </p>
         )}
       </Card>
+        </div>
+      ) : null}
 
+      {tab === "deployments" ? (
+        <div className="space-y-4">
       <Card
         title="Deployments"
         subtitle={
@@ -375,9 +398,10 @@ export default async function ProjectPage({ params }: { params: Promise<{ ref: s
           </ul>
         )}
       </Card>
-
         </div>
+      ) : null}
 
+      {tab === "settings" ? (
         <div className="space-y-4">
       <Card title="Size" subtitle="What each instance gets, and how many run">
         {/*
@@ -432,7 +456,11 @@ export default async function ProjectPage({ params }: { params: Promise<{ ref: s
           sweepScheduled={false}
         />
       </Card>
+        </div>
+      ) : null}
 
+      {tab === "domains" ? (
+        <div className="space-y-4">
       <Card title="Custom domains" subtitle="Your own hostname in front of this project">
         {domains.error ? (
           <Failed what="custom domains" />
@@ -454,7 +482,11 @@ export default async function ProjectPage({ params }: { params: Promise<{ ref: s
           />
         )}
       </Card>
+        </div>
+      ) : null}
 
+      {tab === "environment" ? (
+        <div className="space-y-4">
       <Card title="Environment variables" subtitle="Encrypted at rest, injected at runtime">
         {envVars.error ? (
           <Failed what="environment variables" />
@@ -469,7 +501,11 @@ export default async function ProjectPage({ params }: { params: Promise<{ ref: s
           />
         )}
       </Card>
+        </div>
+      ) : null}
 
+      {tab === "usage" ? (
+        <div className="space-y-4">
       {/*
         Billing existed and nothing showed it. A customer whose balance is drawn
         down with no way to see what for has to take our word for the number,
@@ -551,7 +587,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ ref: s
         )}
       </Card>
         </div>
-      </div>
+      ) : null}
     </div>
   );
 }
