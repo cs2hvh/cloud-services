@@ -299,3 +299,36 @@ test("with no start script at all it falls back to main", () => {
   }));
   assert.equal(d.startCommand, "node app.js");
 });
+
+// A HUGO SITE IS NOT A GO APPLICATION, though it carries the evidence for both.
+//
+// gohugoio/hugoDocs ships a go.mod for Hugo modules and a package.json for
+// tooling. It was detected as Go, so the build ran `go mod download` against a
+// repository containing no Go program and failed where nobody could interpret it.
+
+test("hugo.toml wins over go.mod and package.json", () => {
+  const d = detectFramework(repo(["hugo.toml", "go.mod", "package.json"], {
+    "package.json": pkg({}, { build: "hugo" }),
+    "go.mod": "module github.com/gohugoio/hugoDocs\n",
+  }));
+  assert.equal(d.framework, "hugo");
+  assert.equal(d.runtime, "hugo");
+  assert.equal(d.outputDirectory, "public");
+});
+
+test("a pre-0.110 site is recognised by config.toml WITH archetypes", () => {
+  const d = detectFramework(repo(["config.toml", "archetypes/default.md"]));
+  assert.equal(d.framework, "hugo");
+});
+
+test("CONFIG.TOML ALONE IS NOT A HUGO SITE", () => {
+  // Far too generic — plenty of tools keep one. Claiming Hugo here would send a
+  // Go or Rust repository into a Hugo build for no reason.
+  const d = detectFramework(repo(["config.toml", "go.mod"], { "go.mod": "module x\n" }));
+  assert.notEqual(d.framework, "hugo");
+});
+
+test("a Dockerfile still outranks Hugo", () => {
+  const d = detectFramework(repo(["Dockerfile", "hugo.toml"], { Dockerfile: "FROM alpine\n" }));
+  assert.equal(d.framework, "dockerfile");
+});

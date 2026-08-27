@@ -9,7 +9,7 @@
  * network and no build VM.
  */
 
-export type Runtime = "node" | "python" | "go" | "ruby" | "java" | "php" | "static" | "docker";
+export type Runtime = "node" | "python" | "go" | "ruby" | "java" | "php" | "hugo" | "static" | "docker";
 
 export interface Detection {
   framework: string;
@@ -115,6 +115,27 @@ export function detectFramework(files: RepoFiles): Detection {
       reason: exposed
         ? `Repository contains a Dockerfile; building it as-is, EXPOSE ${exposed}.`
         : "Repository contains a Dockerfile; building it as-is. No EXPOSE found, assuming 3000 — set the port explicitly if that is wrong.",
+    };
+  }
+
+  // HUGO BEFORE EVERYTHING ELSE, because a Hugo site looks like two other
+  // things at once. gohugoio/hugoDocs ships a go.mod (Hugo modules) and a
+  // package.json (tooling), and was detected as a Go application: the build
+  // ran `go mod download` against a repository with no Go program in it and
+  // failed somewhere no customer could interpret.
+  if (
+    hasAny(files, "hugo.toml", "hugo.yaml", "hugo.json", "config/_default/hugo.toml") ||
+    (has(files, "config.toml") && has(files, "archetypes/default.md"))
+  ) {
+    return {
+      framework: "hugo",
+      runtime: "hugo",
+      buildCommand: "hugo --minify",
+      startCommand: null,
+      outputDirectory: "public",
+      port: 80,
+      confidence: "certain",
+      reason: "Found a Hugo configuration; building the site and serving public/.",
     };
   }
 
@@ -464,4 +485,10 @@ export const DETECTION_FILES = [
   // Contents, not just presence: this file's whole purpose is the version
   // written inside it.
   ".nvmrc",
+  // Hugo. hugo.toml is the modern name; a site made before 0.110 still uses
+  // config.toml, which is far too generic on its own — archetypes/default.md
+  // is what `hugo new site` writes and nothing else does, so the pair is the
+  // signal.
+  "hugo.toml", "hugo.yaml", "hugo.json", "config/_default/hugo.toml",
+  "config.toml", "archetypes/default.md",
 ] as const;
