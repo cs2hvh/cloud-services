@@ -61,6 +61,22 @@ export interface DomainRow {
   created_at: string;
 }
 
+/**
+ * What Cloudflare says about a hostname right now.
+ *
+ * The database records what we CLAIMED; only Cloudflare knows whether the
+ * certificate issued and which DCV record it is currently waiting on. Those
+ * rotate, so storing them would hand customers a stale value — worse than
+ * none, because they would add it and then wait for something that can never
+ * validate.
+ */
+export interface LiveHostname {
+  status: string;
+  sslStatus: string;
+  /** The certificate-validation record. Absent once the certificate issues. */
+  dcv: { name: string; value: string } | null;
+}
+
 export interface DomainDto {
   ref: string;
   domain: string;
@@ -73,9 +89,21 @@ export interface DomainDto {
   serving: boolean;
   /** Everything the customer must create at their DNS provider. */
   records: DnsInstruction[];
+  /** Cloudflare's own view, when we could read it. Null means we could not ask. */
+  live: LiveHostname | null;
+  /**
+   * Whether this hostname actually serves traffic yet.
+   *
+   * OWNERSHIP VERIFIED IS NOT A CERTIFICATE. Cloudflare reports status=active
+   * the moment it can prove you own the name, while the certificate can still
+   * be pending_validation — and until that issues the hostname answers
+   * nothing. Treating status alone as ready is what makes a domain look
+   * configured while returning no traffic.
+   */
+  ready: boolean;
 }
 
-export function toDomainDto(row: DomainRow): DomainDto {
+export function toDomainDto(row: DomainRow, live: LiveHostname | null = null): DomainDto {
   return {
     ref: row.ref,
     domain: row.domain,
@@ -125,6 +153,74 @@ export function toDomainDto(row: DomainRow): DomainDto {
             },
           ]
         : []),
+      // THE CERTIFICATE RECORD, which the database does not hold and which was
+      // therefore never shown. Cloudflare verified ownership, reported the
+      // hostname active, and then sat on pending_validation waiting for a TXT
+      // nobody had been told about — so the domain looked configured and served
+      // nothing. It disappears from this list once the certificate issues.
+      ...(live?.dcv
+        ? [
+            {
+              type: "TXT" as const,
+              name: live.dcv.name,
+              value: live.dcv.value,
+              purpose:
+                "Issues the TLS certificate. Until this resolves the domain will not serve, even though it shows as verified.",
+            },
+          ]
+        : []),
     ],
+    live,
+    // Both halves. Ownership alone cannot serve a request.
+    ready: live !== null && live.status === "active" && live.sslStatus === "active",
   };
+}
+
+/**
+ * Cloudflare's current view of these hostnames.
+ *
+ * ONE call for the whole list rather than one per domain: the zone endpoint
+ * returns every custom hostname, and a project with six domains should not make
+ * six round trips on a page render.
+ *
+ * A FAILURE RETURNS AN EMPTY MAP, NOT AN EXCEPTION. Cloudflare being
+ * unreachable must not blank the domains tab — the rows still exist, the CNAME
+ * instruction is still correct, and everything that comes from the database is
+ * still true. What is lost is the certificate status and the DCV record, and
+ * the DTO says so by leaving `live` null rather than inventing a status.
+ */
+export async function liveStateFor(hostnames: readonly string[]): Promise<Map<string, LiveHostname>> {
+  const out = new Map<string, LiveHostname>();
+  if (hostnames.length === 0) return out;
+
+  try {
+    // Imported here rather than at module scope so this file stays importable
+    // from anywhere; only the caller that needs live state pays for the edge
+    // client.
+    const { listCustomHostnames } = await import("./edge/cloudflare.ts");
+    const all = await listCustomHostnames();
+    const wanted = new Set(hostnames.map((h) => h.toLowerCase()));
+
+    for (const ch of all) {
+      const name = String(ch.hostname ?? "").toLowerCase();
+      if (!wanted.has(name)) continue;
+
+      // `validation_records` is where the pending DCV record lives. It empties
+      // once the certificate issues, which is exactly when the instruction
+      // should stop being shown.
+      const record = ch.ssl?.validation_records?.find(
+        (r) => typeof r?.txt_name === "string" && typeof r?.txt_value === "string",
+      );
+
+      out.set(name, {
+        status: String(ch.status ?? "unknown"),
+        sslStatus: String(ch.ssl?.status ?? "unknown"),
+        dcv: record ? { name: String(record.txt_name), value: String(record.txt_value) } : null,
+      });
+    }
+  } catch (e) {
+    console.error("[domain-view] could not read live hostnames:", (e as Error).message.slice(0, 200));
+  }
+
+  return out;
 }

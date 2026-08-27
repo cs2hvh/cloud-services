@@ -14,7 +14,7 @@ import { TabNav } from "@/components/v2/tab-nav";
 import { isSection } from "@/components/v2/sections";
 import { createClient } from "@/lib/supabase/server";
 import { summariseCharges } from "@/lib/paas/usage";
-import { DOMAIN_COLUMNS, toDomainDto, type DomainRow } from "@/lib/paas/domain-view";
+import { DOMAIN_COLUMNS, liveStateFor, toDomainDto, type DomainRow } from "@/lib/paas/domain-view";
 import { summariseHealth, healthVerdict, humanDuration, type UsageSample } from "@/lib/paas/health";
 import {
   BILLING_HOURS_PER_MONTH,
@@ -208,6 +208,15 @@ export default async function ProjectPage({
    * the project is also unrouted, and saying 'deploy it' to somebody whose
    * deploy just failed is the least useful thing on the page.
    */
+  // Cloudflare's live view, merged with the rows. Without it the tab could
+  // show a domain Cloudflare calls verified while its certificate is still
+  // pending — configured-looking and serving nothing.
+  const domainRows = (domains.data ?? []) as unknown as DomainRow[];
+  const liveHostnames = await liveStateFor(domainRows.map((d) => d.domain));
+  const domainDtos = domainRows.map((d) =>
+    toDomainDto(d, liveHostnames.get(d.domain.toLowerCase()) ?? null),
+  );
+
   const emptyExplanation =
     logsTarget?.state === "error"
       ? {
@@ -635,7 +644,7 @@ export default async function ProjectPage({
             // was never shown the TXT record they have to add. A domains page
             // that lists a domain and cannot tell you how to verify it is
             // worse than one that admits it is broken.
-            domains={((domains.data ?? []) as unknown as DomainRow[]).map(toDomainDto)}
+            domains={domainDtos}
             customHostnamesEnabled={customHostnamesEnabled}
           />
         )}

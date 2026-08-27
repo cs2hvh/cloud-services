@@ -9,7 +9,8 @@
  */
 
 import { checkCustomDomain } from "../../../_lib/domains";
-import { DOMAIN_COLUMNS, FALLBACK_ORIGIN, toDomainDto, type DomainRow } from "@/lib/paas/domain-view";
+import { listCustomHostnames, deleteCustomHostname } from "@/lib/paas/edge/cloudflare";
+import { DOMAIN_COLUMNS, FALLBACK_ORIGIN, liveStateFor, toDomainDto, type DomainRow } from "@/lib/paas/domain-view";
 import { paasConfig } from "@/lib/paas/config";
 import { createCustomHostname } from "@/lib/paas/edge/cloudflare";
 
@@ -80,9 +81,15 @@ export async function GET(_request: Request, { params }: Params) {
     return apiError("internal", "Could not load domains.", 500);
   }
 
+  // Cloudflare's own view, merged in. The database records what we CLAIMED;
+  // only Cloudflare knows whether the certificate issued and which DCV record
+  // it is still waiting on — without that the tab reported a verified domain
+  // that served nothing.
+  const liveRows = await liveStateFor((data as DomainRow[]).map((r) => r.domain));
+
   return json({
     project: { ref: project.ref, name: project.name },
-    domains: (data as DomainRow[]).map(toDomainDto),
+    domains: (data as DomainRow[]).map((r) => toDomainDto(r, liveRows.get(r.domain.toLowerCase()) ?? null)),
     // READ, not hardcoded. This was a literal `false`, so enabling the
     // capability changed nothing here while the POST — which does read it —
     // happily called Cloudflare and issued a certificate. One route, two
@@ -266,10 +273,42 @@ export async function DELETE(request: Request, { params }: Params) {
   }
   if (!data) return notFound("Domain");
 
+  // REMOVE IT FROM CLOUDFLARE NOW, not only in the reconciler.
+  //
+  // This used to mark the row and stop, on the reasoning that the sweep would
+  // tear the custom hostname down. That sweep runs in report mode, so nothing
+  // ever did — and the next attempt to add the same domain came back
+  // `409 1406 Duplicate custom hostname found`, which reads as our bug and is.
+  //
+  // Same shape as the alias route: converge inline so the customer sees the
+  // effect immediately, and leave the level-triggered sweep as the backstop
+  // for anything this misses.
+  const removedDomain = (data as { domain: string }).domain;
+  let edgeNote = "Removed from the edge.";
+  try {
+    const matches = await listCustomHostnames(removedDomain);
+    const mine = matches.filter((h) => String(h.hostname).toLowerCase() === removedDomain.toLowerCase());
+    for (const h of mine) await deleteCustomHostname(h.id);
+    if (mine.length === 0) {
+      // Already gone. Not a failure — the row is what we were asked to remove.
+      edgeNote = "No custom hostname existed at the edge; nothing to remove there.";
+    }
+  } catch (e) {
+    // The ROW STAYS REMOVED. A failure here means the edge still holds the
+    // hostname, which the sweep will clear — but the customer must be told,
+    // because until it clears, re-adding the same domain will be refused as a
+    // duplicate and that error would look like nonsense.
+    const detail = (e as Error).message.slice(0, 200);
+    console.error("[v2/domains] edge removal failed:", detail);
+    edgeNote =
+      "The domain was removed here, but the edge configuration could not be deleted yet. " +
+      "Adding this domain again may be refused as a duplicate until it clears.";
+  }
+
   return json({
     ref: (data as { ref: string }).ref,
-    domain: (data as { domain: string }).domain,
-    status: "marked_for_removal",
-    note: "The edge configuration is removed by the reconciler.",
+    domain: removedDomain,
+    status: "removed",
+    note: edgeNote,
   });
 }
