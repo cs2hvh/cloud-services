@@ -48,6 +48,9 @@ support gap being mistaken for a build gap.
 | 11 | **gothinkster/react-redux-realworld-example-app** | CRA SPA on `master`, static/nginx | **PASS** | **200** | Found that EVERY static site crash-looped on a pidfile it could not write |
 | 12 | remix-run/indie-stack | Remix, repo Dockerfile | APP-ERR | 503 | Wants a database |
 | 13 | sveltejs/realworld | SvelteKit, pnpm, `master` | APP-ERR | 503 | Wants a backend. First pnpm app to route |
+| 14 | **nuxt/movies** | Nuxt 3, real application | **PASS** | **200** | Clean run, no fixes needed |
+| 15 | vitejs/vite | pnpm workspace monorepo — expected to refuse | APP-ERR | build failed | Refused, but only after leasing a VM. Found that NO monorepo could install |
+| 16 | gothinkster/vue-realworld-example-app | Vue 2 SPA, bun lockfile | APP-ERR | build failed | The repo's own build is broken — rolldown cannot resolve its `src/main.js` |
 | 8 | remix-run/indie-stack | Remix, repo-supplied Dockerfile | APP-ERR | 503 | Built, routed, served. The app wants a database it was not given |
 | 9 | sveltejs/realworld | SvelteKit on `master`, **pnpm** | APP-ERR | 503 | Built, routed, served — **first proof pnpm works end to end**. Branch fallback to `master` also proven |
 
@@ -117,6 +120,11 @@ And one that had nothing to do with package managers:
   answered 503. CRA, Vite, Vue, Angular, Gatsby, Astro and Hugo were all
   affected, and it stayed hidden because everything deployed here before was a
   Node server or a repo-supplied Dockerfile.
+- **no monorepo could install.** The deps stage copied only the root manifest
+  so the dependency layer could cache; a workspace's root dependencies point
+  at sibling packages, and pnpm answered ERR_PNPM_WORKSPACE_PKG_NOT_FOUND
+  against a directory holding none of them. That is turborepo, nx and
+  pnpm-workspace layouts — a large share of real production repositories.
 
 ---
 
