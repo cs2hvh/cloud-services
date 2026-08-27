@@ -267,3 +267,35 @@ test("THE TWO OUTPUT DIRECTORIES DO NOT GET CONFUSED", () => {
   const d = detectFramework(repo(["package.json"], { "package.json": pkg({ "@docusaurus/core": "^3.0.0" }, { build: "docusaurus build" }) }));
   assert.notEqual(g.outputDirectory, d.outputDirectory);
 });
+
+// A DEV START SCRIPT IS NOT A PRODUCTION ONE.
+//
+// NestJS's `start` is `nest start`, which needs @nestjs/cli — a devDependency
+// the runtime stage prunes. Running it produced a container that exited 1 and
+// restarted three times, visible from outside only as a 503. `start:prod`
+// exists precisely to say how the thing runs in production.
+
+test("start:prod is preferred when the repository offers one", () => {
+  const d = detectFramework(repo(["package.json"], {
+    "package.json": pkg(
+      { "@nestjs/core": "^10.0.0" },
+      { start: "nest start", "start:prod": "node dist/main" },
+    ),
+  }));
+  assert.equal(d.framework, "nestjs");
+  assert.equal(d.startCommand, "start:prod");
+});
+
+test("plain start is still used when that is all there is", () => {
+  const d = detectFramework(repo(["package.json"], {
+    "package.json": pkg({ express: "^4.18.0" }, { start: "node server.js" }),
+  }));
+  assert.equal(d.startCommand, "start");
+});
+
+test("with no start script at all it falls back to main", () => {
+  const d = detectFramework(repo(["package.json"], {
+    "package.json": JSON.stringify({ dependencies: { express: "^4.18.0" }, main: "app.js", scripts: {} }),
+  }));
+  assert.equal(d.startCommand, "node app.js");
+});

@@ -280,7 +280,16 @@ export function detectFramework(files: RepoFiles): Detection {
         framework: name,
         runtime: "node",
         buildCommand: build,
-        startCommand: scripts.start ? "start" : `node ${pkg.main ?? "index.js"}`,
+        // A `start:prod` script exists precisely to say "this is how to run in
+        // production", and for NestJS that distinction is the difference between
+        // running and crash-looping: its `start` is `nest start`, which needs
+        // @nestjs/cli — a devDependency the runtime stage prunes. The container
+        // exited 1 and restarted three times before anyone could see why.
+        startCommand: scripts["start:prod"]
+          ? "start:prod"
+          : scripts.start
+            ? "start"
+            : `node ${pkg.main ?? "index.js"}`,
         outputDirectory: null,
         port: 3000,
         confidence: "certain",
