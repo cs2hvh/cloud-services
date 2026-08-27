@@ -30,7 +30,7 @@ import { reconcileProject, kubeContextFromEnv } from "./reconciler.ts";
 import { teams, projects, environments, deployments, aliases, envVars, type DeploymentRow, type ProjectRow, type AliasRow } from "./db.ts";
 import { decryptEnvValue, pgHexToBytes } from "./secrets.ts";
 import { appHostname } from "./config.ts";
-import { getFileContents, buildCloneUrl, listInstallationRepos } from "./github/client.ts";
+import { getFileContents, getDefaultBranch, buildCloneUrl, listInstallationRepos } from "./github/client.ts";
 import { listInstallations } from "./github/app.ts";
 import { assertLabelAvailable, previewLabel } from "./hostnames.ts";
 import { upsertDnsRecord, listDnsRecords } from "./edge/cloudflare.ts";
@@ -140,24 +140,39 @@ export async function inspectRepo(
   const dir = rootDirectory ? `${rootDirectory.replace(/^\/+|\/+$/g, "")}/` : "";
   const installationId = await installationForRepo(repo);
 
-  // WHETHER WE COULD READ THIS REPOSITORY AT ALL, observed rather than assumed.
+  // THE DEFAULT BRANCH IS ASKED FOR, NOT INFERRED.
   //
-  // These two probes run anyway to pick a default branch, and either one
-  // returning content proves the repository is readable — which is a different
-  // question from whether we hold a token for it, and the one the failure
-  // message downstream actually depends on.
-  const readmeOnMain = await probe(repo, "main", `${dir}README.md`, installationId);
-  const pkgOnMain = await probe(repo, "main", `${dir}package.json`, installationId);
-  let readable = readmeOnMain !== null || pkgOnMain !== null;
+  // This used to probe for README.md and package.json on `main` and fall back to
+  // `master` when neither answered — which is wrong for every repository having
+  // neither file at its root. A Go repository has no package.json, and plenty
+  // have no root README: gothinkster/golang-gin-realworld-example-app has
+  // neither, and was declared `master`.
+  //
+  // The guess then survived long enough to do damage, because
+  // raw.githubusercontent.com STILL SERVES a branch GitHub has renamed —
+  // `master/go.mod` returns 200 on a repository whose only branches are `main`
+  // and two feature branches. Detection succeeded against a ref that does not
+  // exist and the build died at `Remote branch master not found in upstream
+  // origin`, after leasing a machine.
+  const reported = await getDefaultBranch(installationId, repo);
 
-  const branch = explicitBranch ?? (readable ? "main" : "master");
+  // A repository we can name the default branch of is one we can read. That is
+  // a stronger signal than any file probe, and it is the question the refusal
+  // message downstream depends on.
+  let readable = reported !== null;
 
-  // The two probes above only ever looked at `main`. A repository whose default
-  // branch is `master` answers nothing there, so it looked unreadable even when
-  // it is public and perfectly readable — docker/awesome-compose was told to
-  // connect a GitHub account it does not need. One more probe, on the branch we
-  // actually settled on, is the difference between `we could not read this` and
-  // `we read it and there is nothing here`.
+  // Falling back to the old guess only when the API would not answer. `main`
+  // first, because a repository we cannot ask about is far more likely to be new
+  // than to predate the rename.
+  const branch = explicitBranch ?? reported ?? "main";
+
+  // Only when the API would not answer — rate limiting, an outage, a repository
+  // that needs an installation we do not have. A raw read of README.md is a
+  // second, independent way to establish that the repository is readable, and
+  // that distinction is what the refusal message downstream turns on: `we could
+  // not read this` and `we read it and there is nothing here` need different
+  // messages and different fixes. docker/awesome-compose was told to connect a
+  // GitHub account it does not need, because we conflated them.
   if (!readable) {
     readable = (await probe(repo, branch, `${dir}README.md`, installationId)) !== null;
   }
