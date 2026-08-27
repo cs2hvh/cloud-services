@@ -82,6 +82,12 @@ support gap being mistaken for a build gap.
 | 45 | **vercel/ai-chatbot** | Next.js, native deps, heavy build | **PASS** | **307** | A redirect to sign-in, which is the app working |
 | 46 | vercel/next-learn `dashboard/final-example` | Next.js that PRERENDERS from a database | BUILD-ERR | build failed | `Failed to fetch card data` while prerendering /dashboard. It needs POSTGRES_URL AT BUILD TIME — which the platform can now supply, so this is configuration rather than a defect. Never tested before: the batch runner was broken when this target was chosen |
 | 47 | facebook/docusaurus `website/` | Docusaurus site with no lockfile of its own | BUILD-ERR | build failed | `ERESOLVE` on its own peer dependencies. The monorepo's lockfile is at the root, so the sub-directory falls back to `npm install`, which is strict about peers |
+| 48 | **gothinkster/react-redux-realworld-example-app** | CRA, a real SPA | **PASS** | **200** | Re-verified after every static-path change |
+| 49 | **nuxt/movies** | Nuxt 3, real application | **PASS** | **200** | Re-verified |
+| 50 | vitejs/vite | Vite monorepo — a library that looks like a Vite app | BUILD-ERR | build failed | Detected `vite-react (static)`, which is what its own manifest says. Node version resolved from a real range: `engines.node "^20.19.0 \|\| >=22.12.0" allows 22` |
+| 51 | gothinkster/vue-realworld-example-app | Vue 2 SPA | BUILD-ERR | build failed | Its own build is broken upstream |
+| 52 | gothinkster/angular-realworld-example-app | Angular, **bun** | BUILD-ERR | build failed | `Could not resolve "realworld/assets/theme/styles.css"` |
+| 53 | realworld-apps/angular-realworld-example-app | The MAINTAINED copy of the same app, Angular 21 | BUILD-ERR | build failed | Fails identically, and neither manifest declares a package providing that stylesheet — so a clean install cannot. Upstream, and Vercel would fail the same way |
 | 8 | remix-run/indie-stack | Remix, repo-supplied Dockerfile | APP-ERR | 503 | Built, routed, served. The app wants a database it was not given |
 | 9 | sveltejs/realworld | SvelteKit on `master`, **pnpm** | APP-ERR | 503 | Built, routed, served — **first proof pnpm works end to end**. Branch fallback to `master` also proven |
 
@@ -158,6 +164,17 @@ And one that had nothing to do with package managers:
   signals are not symmetrical: composer.json says THIS IS A PHP APPLICATION,
   while a package.json beside it says only that the project has JavaScript
   somewhere, which is true of nearly everything now.
+
+**ANGULAR IS NOT PROVEN.** Both copies of the canonical RealWorld Angular app
+fail on a stylesheet import that no manifest backs, so the Angular path has
+never reached a served page. Chasing it produced one real fix anyway:
+detection records `dist`, which was right until Angular 17 — the CLI now
+writes `dist/<project-name>/browser`, and a Dockerfile COPY cannot glob for a
+name only the customer knows. The static builder now locates the site when it
+is not where the framework promised, and fails loudly when there is none
+rather than shipping an nginx that answers 404 on a build that reported
+success. Verified against a real /bin/sh, and Gatsby re-verified at 200
+afterwards to confirm the untouched case stayed untouched.
 
 **Deliberate gaps, with reasons.**
 

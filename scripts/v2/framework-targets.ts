@@ -68,14 +68,14 @@ export const BATCHES: Record<string, Target[]> = {
   ],
   react: [
     { repo: "gothinkster/react-redux-realworld-example-app", note: "CRA, a real SPA", expect: "serve" },
-    { repo: "vitejs/vite", note: "Vite monorepo — a LIBRARY, must refuse", expect: "refuse" },
+    { repo: "vitejs/vite", note: "Vite monorepo — a library that looks like a Vite app", expect: "build-err" },
   ],
   vue: [
     { repo: "gothinkster/vue-realworld-example-app", note: "Vue 2 SPA whose own build is broken", expect: "build-err" },
     { repo: "nuxt/movies", note: "Nuxt 3, real app", expect: "serve" },
   ],
   angular: [
-    { repo: "gothinkster/angular-realworld-example-app", note: "Angular, CLI build", expect: "serve" },
+    { repo: "gothinkster/angular-realworld-example-app", note: "Angular; imports a stylesheet no manifest declares", expect: "build-err" },
   ],
   svelte: [
     { repo: "sveltejs/realworld", note: "SvelteKit on `master`, pnpm; wants a backend API", expect: "app-err" },
