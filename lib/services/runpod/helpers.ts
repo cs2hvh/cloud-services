@@ -25,6 +25,18 @@ export function normalizeStockStatus(
  * Stored on the pod record at create time and frozen for the pod's life so
  * customers aren't charged a moving rate as upstream prices fluctuate.
  */
+/**
+ * House markup on the provider rate. 1.0 sells GPU capacity at exactly what
+ * RunPod charges us, which is the current product decision.
+ *
+ * The authoritative value lives in gpu_pricing.markup_pct — every server-side
+ * price reads it from there. This constant exists only for the deploy wizard,
+ * which quotes client-side from a live inventory row that carries no pricing
+ * column, and it had the number hardcoded as 1.25 in three places. Change this
+ * and gpu_pricing together or the quote drifts from what checkout charges.
+ */
+export const GPU_MARKUP_PCT = 1.0;
+
 export function computeResalePerHour(args: {
     observedPerHr: number;
     markupPct: number;

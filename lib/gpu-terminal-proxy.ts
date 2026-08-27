@@ -65,6 +65,23 @@ function decryptBlob(blob: string, secretKey: string): string {
   ]).toString("utf8");
 }
 
+/**
+ * The pty stream ssh2 hands back from `shell()`.
+ *
+ * Declared here rather than typed `any` because the project lints
+ * no-explicit-any as an ERROR, and `next build` gates on lint — so an `any`
+ * typechecks fine locally and then fails the production build. ssh2 ships no
+ * type declarations, so this covers only the surface this module touches.
+ */
+interface SshShellStream {
+  on(event: "data", cb: (chunk: Buffer) => void): void;
+  on(event: "close", cb: () => void): void;
+  stderr?: { on(event: "data", cb: (chunk: Buffer) => void): void };
+  write(data: Buffer): void;
+  /** ssh2's argument order: rows before cols. */
+  setWindow(rows: number, cols: number, height: number, width: number): void;
+}
+
 interface PodRow {
   id: number;
   owner_id: string;
