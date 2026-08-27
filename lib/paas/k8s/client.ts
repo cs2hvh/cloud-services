@@ -89,6 +89,16 @@ interface RequestOptions {
   contentType?: string;
   /** Tolerate 404 and return null instead of throwing. */
   allowMissing?: boolean;
+  /**
+   * Extra request headers, merged LAST so a caller can override Accept.
+   *
+   * Needed to reach non-Kubernetes services through the apiserver proxy: the
+   * in-cluster registry serves manifests only for their own media types and
+   * answers `Accept: application/json` with a 404, which reads exactly like a
+   * missing image. That is the wrong answer to the one question rollback asks
+   * before repointing production.
+   */
+  headers?: Record<string, string>;
 }
 
 /**
@@ -164,6 +174,8 @@ export function kube(ctx: KubeContext) {
                   "Content-Length": Buffer.byteLength(payload),
                 }
               : {}),
+            // Last, so an explicit Accept wins over the default above.
+            ...(opts.headers ?? {}),
           },
           timeout: 45_000,
         },
