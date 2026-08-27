@@ -153,7 +153,18 @@ export interface ConnectionIdentity {
   accountType: string | null;
 }
 
-export type Fetcher = (url: string, init?: { headers?: Record<string, string> }) => Promise<{
+/**
+ * The subset of `fetch` these modules use, injected so decisions are testable
+ * without a network.
+ *
+ * `method` and `body` are here because the refresh flow POSTs — a
+ * headers-only shape forced a cast at that call site, and a cast is how a
+ * mistyped body reaches a token endpoint unnoticed.
+ */
+export type Fetcher = (
+  url: string,
+  init?: { method?: string; headers?: Record<string, string>; body?: string },
+) => Promise<{
   ok: boolean;
   status: number;
   json: () => Promise<unknown>;
