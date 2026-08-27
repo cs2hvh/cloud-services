@@ -133,8 +133,8 @@ export const BATCHES: Record<string, Target[]> = {
     { repo: "gothinkster/rails-realworld-example-app", note: "Rails, Gemfile", expect: "app-err" },
   ],
   php: [
-    { repo: "laravel/laravel", note: "Laravel skeleton, composer.json", expect: "app-err" },
-    { repo: "symfony/demo", note: "Symfony demo app", expect: "app-err" },
+    { repo: "laravel/laravel", note: "Laravel skeleton; PHP is unsupported, and its package.json used to fool us", expect: "refuse" },
+    { repo: "symfony/demo", note: "Symfony demo; PHP is unsupported", expect: "refuse" },
   ],
   jvm: [
     { repo: "spring-projects/spring-petclinic", note: "Spring Boot, Maven", expect: "app-err" },

@@ -74,6 +74,10 @@ support gap being mistaken for a build gap.
 | 37 | shadcn-ui/taxonomy (with its environment set) | Next.js validating env AT BUILD TIME | BUILD-ERR | build failed | Pushed through THREE platform defects. What remains is the repository's own rot: unpinned Radix drifted and its source no longer typechecks |
 | 38 | github/gitignore | No framework marker at all | REFUSED | at detect | Now says so. It used to be told to connect a GitHub account it does not need |
 | 39 | docker/awesome-compose | Many apps, none at the root | REFUSED | at detect | Same, and it took a second fix — its default branch is `master` |
+| 40 | **spring-projects/spring-petclinic** | Spring Boot, Maven | **PASS** | **200** | Clean run, no fixes needed. The JVM path was right first time |
+| 41 | laravel/laravel | Laravel skeleton | REFUSED | at detect | Was detected as **vite-react (static)** — its package.json carries vite and react for the asset pipeline. Now correctly PHP, and refused because PHP has no builder |
+| 42 | symfony/demo | Symfony demo | REFUSED | at detect | Same refusal, in plain words rather than `[dockerfile] No generator for runtime` |
+| 43 | actix/examples | Actix, cargo workspace | REFUSED | at detect | Rust is not detected at all — Cargo.toml is not a marker file |
 | 8 | remix-run/indie-stack | Remix, repo-supplied Dockerfile | APP-ERR | 503 | Built, routed, served. The app wants a database it was not given |
 | 9 | sveltejs/realworld | SvelteKit on `master`, **pnpm** | APP-ERR | 503 | Built, routed, served — **first proof pnpm works end to end**. Branch fallback to `master` also proven |
 
@@ -143,6 +147,26 @@ And one that had nothing to do with package managers:
   answered 503. CRA, Vite, Vue, Angular, Gatsby, Astro and Hugo were all
   affected, and it stayed hidden because everything deployed here before was a
   Node server or a repo-supplied Dockerfile.
+- **a PHP application was detected as a React SPA.** Laravel ships a
+  package.json with vite and react in it for its asset pipeline, and the Node
+  branch matched first — we would have built its frontend and served that as
+  the site, with the application that owns it left out of the image. The
+  signals are not symmetrical: composer.json says THIS IS A PHP APPLICATION,
+  while a package.json beside it says only that the project has JavaScript
+  somewhere, which is true of nearly everything now.
+
+**Deliberate gaps, with reasons.**
+
+- **PHP has no builder.** Detection recognises it — knowing what something is
+  beats calling it unknown — and refuses before leasing a machine, naming the
+  Dockerfile escape hatch. Vercel, the benchmark for this work, does not build
+  PHP either. Supporting it properly means php-fpm behind nginx in one image,
+  or Apache with its document root moved to public/, and a non-root uid that
+  neither expects: a real piece of work rather than a missing branch.
+- **Rust is not detected at all.** Cargo.toml is not a marker file, so a Rust
+  repository is refused as having no recognised framework. actix/examples is a
+  cargo workspace and would be refused anyway, but a single-binary Rust
+  service would be too, and that is a gap rather than a judgement.
 - **the default branch was guessed from two files many repositories lack.**
   Detection probed README.md and package.json on `main` and fell back to
   `master`; a Go repository has no package.json, and this one has no root
