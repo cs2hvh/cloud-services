@@ -12,6 +12,7 @@
  * READ-ONLY.
  */
 
+import { EXIT_CANNOT_RUN, EXIT_UNTRUSTWORTHY } from "../../lib/paas/telemetry/exit-codes.ts";
 import { loadKubeconfig, kube } from "../../lib/paas/k8s/client.ts";
 import {
   InvalidTargetError,
@@ -26,7 +27,7 @@ import {
 const [namespace, pod] = process.argv.slice(2).filter((a) => !a.startsWith("--"));
 if (!namespace || !pod) {
   console.error("usage: pod-logs.ts <namespace> <pod> [--tail N] [--previous] [--current]");
-  process.exit(1);
+  process.exit(EXIT_CANNOT_RUN);
 }
 
 const tailIdx = process.argv.indexOf("--tail");
@@ -38,7 +39,7 @@ const tailLines = tailIdx === -1 ? 40 : Number(process.argv[tailIdx + 1]);
 // to encode.
 if (!isValidK8sName(namespace) || !isValidK8sName(pod)) {
   console.error(`refusing: ${!isValidK8sName(namespace) ? "namespace" : "pod"} is not an RFC 1123 name`);
-  process.exit(2);
+  process.exit(EXIT_UNTRUSTWORTHY);
 }
 
 const k = kube(loadKubeconfig(process.env.V2_KUBECONFIG ?? "C:/ahura-secrets/kubeconfig-v2-dev.yaml"));
@@ -49,7 +50,7 @@ const podObj = await k.get<PodLike>(
 );
 if (!podObj) {
   console.error(`no such pod: ${namespace}/${pod}`);
-  process.exit(1);
+  process.exit(EXIT_CANNOT_RUN);
 }
 
 const decision = decidePrevious(podObj);
@@ -65,7 +66,7 @@ try {
 } catch (e) {
   if (e instanceof InvalidTargetError) {
     console.error(e.message);
-    process.exit(2);
+    process.exit(EXIT_UNTRUSTWORTHY);
   }
   throw e;
 }

@@ -36,6 +36,8 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { requireTier } from "../../../../lib/paas/tiers.ts";
+
 const HERE = dirname(fileURLToPath(import.meta.url));
 /** app/api/v2/_lib -> repo root */
 const ROOT = join(HERE, "..", "..", "..", "..");
@@ -177,7 +179,16 @@ test("the customer-facing sizing shape has no cost field", async () => {
   // And it is genuinely populated, so the absence above is not vacuous.
   assert.equal(dto.tier, "standard");
   assert.equal(dto.instanceCount, 3);
-  assert.equal(dto.priceUsd, 57, "19 x 3 — linear, no volume discount");
+
+  // Asserted against the tier table, NOT against a number typed here. This
+  // line originally read `assert.equal(dto.priceUsd, 57)` for Standard at
+  // $19, and it failed the moment the tiers were repriced to $23 — correctly,
+  // but for the wrong reason: it was testing that a price had not changed
+  // rather than that the arithmetic was linear. tiers.test.ts already pins
+  // the table against docs/v2/05-pricing.md, so the price belongs there and
+  // only the multiplication belongs here.
+  const standard = requireTier("standard");
+  assert.equal(dto.priceUsd, standard.priceUsd * 3, "linear — no volume discount");
 });
 
 test("bundled transfer is not multiplied by instance count", async () => {

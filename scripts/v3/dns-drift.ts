@@ -5,16 +5,17 @@
  *   node --env-file=.env --env-file=.env.local scripts/v3/dns-drift.ts
  *   node --env-file=.env --env-file=.env.local scripts/v3/dns-drift.ts --json
  *
- * Exits 1 when something needs a human, 2 when a hostname is CLAIMABLE — a
- * record resolving to our gateway that no Ingress routes. That is not
- * housekeeping: the next Ingress to name it, in any tenant namespace, receives
- * its traffic. It gets its own exit code so a scheduler can page on it
- * differently from ordinary drift.
+ * Exit codes follow the contract in lib/paas/telemetry/exit-codes.ts: 0 clean,
+ * 1 could-not-run, 10 findings, and 11 when a hostname is CLAIMABLE — a record
+ * resolving to our gateway that no Ingress routes. That is not housekeeping:
+ * the next Ingress to name it, in any tenant namespace, receives its traffic,
+ * so it gets a severity of its own that a scheduler can page on separately.
  *
  * READ-ONLY. Reports; never creates or deletes a record. Deleting DNS on the
  * strength of a classification is how a working app goes dark.
  */
 
+import { EXIT_CLEAN, EXIT_FINDINGS, EXIT_URGENT, EXIT_CANNOT_RUN } from "../../lib/paas/telemetry/exit-codes.ts";
 import { db } from "../../lib/paas/db.ts";
 import { paasConfig } from "../../lib/paas/config.ts";
 import { listDnsRecords } from "../../lib/paas/edge/cloudflare.ts";
@@ -35,7 +36,7 @@ const k = kube(ctx);
 
 if (!(await k.healthz())) {
   console.error("cluster unreachable");
-  process.exit(1);
+  process.exit(EXIT_CANNOT_RUN);
 }
 
 // The gateway's own address is the authority on what "points at us" means —
@@ -46,7 +47,7 @@ const svc = await k.get<{ status?: { loadBalancer?: { ingress?: Array<{ ip?: str
 const gatewayIp = svc?.status?.loadBalancer?.ingress?.[0]?.ip;
 if (!gatewayIp) {
   console.error("gateway has no LoadBalancer address — cannot tell which records are ours");
-  process.exit(1);
+  process.exit(EXIT_CANNOT_RUN);
 }
 
 const ingressList = await k.get<{
@@ -68,7 +69,7 @@ const report = reconcileHostnames({
 
 if (JSON_OUT) {
   console.log(JSON.stringify({ gatewayIp, appDomain: paasConfig.appDomain(), ...report }, null, 2));
-  process.exit(report.claimable > 0 ? 2 : report.clean ? 0 : 1);
+  process.exit(report.claimable > 0 ? EXIT_URGENT : report.clean ? EXIT_CLEAN : EXIT_FINDINGS);
 }
 
 const line = "─".repeat(96);
@@ -110,4 +111,4 @@ console.log(
     : `  ${report.findings.filter((f) => f.actionable).length} finding(s) need a human. Nothing was changed.\n`,
 );
 
-process.exit(report.claimable > 0 ? 2 : report.clean ? 0 : 1);
+process.exit(report.claimable > 0 ? EXIT_URGENT : report.clean ? EXIT_CLEAN : EXIT_FINDINGS);

@@ -39,7 +39,9 @@ import {
 } from "./k8s/manifests.ts";
 import { ACTIVATOR_NAME, activatorAliasService } from "./k8s/activator.ts";
 import { appIngress } from "./k8s/gateway.ts";
-import { projects, deployments, aliases, envVars, type ProjectRow, type DeploymentRow, type AliasRow } from "./db.ts";
+import { projects, deployments, aliases, envVars, environments, type ProjectRow, type DeploymentRow, type AliasRow } from "./db.ts";
+import { requireTier, clampInstances, resourcesFor, DEFAULT_TIER } from "./tiers.ts";
+import { PREVIEW_TIER, PREVIEW_INSTANCES } from "./previews.ts";
 import { decryptEnvValue, pgHexToBytes } from "./secrets.ts";
 import { createHash } from "node:crypto";
 
@@ -68,6 +70,21 @@ interface LiveDeployment {
   image: string | null;
   envSecret: string | null;
   envHash: string | null;
+  /**
+   * The pod's actual resources, so a TIER CHANGE is visible as drift.
+   *
+   * Without these the loop compared only image, env secret and env hash — so
+   * resizing an app from Starter to Plus applied correctly (the apply is
+   * unconditional) while reporting "converged", and an operator watching a
+   * resize had no way to tell whether it had taken effect. Applying the right
+   * thing and describing it wrongly is the same dishonest reporting this file
+   * exists to stop; it is only less obvious because the outcome happens to be
+   * correct.
+   */
+  cpuRequest: string | null;
+  cpuLimit: string | null;
+  memRequest: string | null;
+  memLimit: string | null;
 }
 
 /**
@@ -86,7 +103,16 @@ async function liveDeployment(
       replicas?: number;
       template?: {
         metadata?: { annotations?: Record<string, string> };
-        spec?: { containers?: Array<{ image?: string; envFrom?: Array<{ secretRef?: { name?: string } }> }> };
+        spec?: {
+          containers?: Array<{
+            image?: string;
+            envFrom?: Array<{ secretRef?: { name?: string } }>;
+            resources?: {
+              requests?: { cpu?: string; memory?: string };
+              limits?: { cpu?: string; memory?: string };
+            };
+          }>;
+        };
       };
     };
   }>(`/apis/apps/v1/namespaces/${ns}/deployments/${name}`, true);
@@ -97,7 +123,54 @@ async function liveDeployment(
     image: c?.image ?? null,
     envSecret: c?.envFrom?.[0]?.secretRef?.name ?? null,
     envHash: dep.spec?.template?.metadata?.annotations?.["ahura.cloud/env-hash"] ?? null,
+    cpuRequest: c?.resources?.requests?.cpu ?? null,
+    cpuLimit: c?.resources?.limits?.cpu ?? null,
+    memRequest: c?.resources?.requests?.memory ?? null,
+    memLimit: c?.resources?.limits?.memory ?? null,
   };
+}
+
+/**
+ * Compare Kubernetes quantities by VALUE, not by string.
+ *
+ * The API server canonicalises what it stores: `1000m` comes back as `1`, and
+ * `1024Mi` may come back as `1Gi`. Comparing the strings therefore reports drift
+ * between a spec and itself — and because the reconciler rolls pods on drift,
+ * that is not a cosmetic bug: every run would restart every pod, forever, and
+ * the symptom would be an unexplained perpetual rollout rather than an error.
+ *
+ * Observed exactly that way — `sizing changed: 50m/512Mi -> 50m/512Mi` — which
+ * is the kind of nonsense a value comparison makes impossible to write.
+ */
+export function cpuMillis(q: string | null): number | null {
+  if (!q) return null;
+  const m = /^(\d+(?:\.\d+)?)(m?)$/.exec(q.trim());
+  if (!m) return null;
+  return m[2] === "m" ? Number(m[1]) : Math.round(Number(m[1]) * 1000);
+}
+
+const MEM_UNITS: Record<string, number> = {
+  "": 1, Ki: 1024, Mi: 1024 ** 2, Gi: 1024 ** 3, Ti: 1024 ** 4,
+  K: 1e3, M: 1e6, G: 1e9, T: 1e12,
+};
+
+export function memBytes(q: string | null): number | null {
+  if (!q) return null;
+  const m = /^(\d+(?:\.\d+)?)([KMGT]i?)?$/.exec(q.trim());
+  if (!m) return null;
+  const unit = MEM_UNITS[m[2] ?? ""];
+  return unit === undefined ? null : Number(m[1]) * unit;
+}
+
+/** Null on either side means "could not read it", which is never equality. */
+export function sameCpu(a: string | null, b: string | null): boolean {
+  const x = cpuMillis(a), y = cpuMillis(b);
+  return x !== null && y !== null && x === y;
+}
+
+export function sameMem(a: string | null, b: string | null): boolean {
+  const x = memBytes(a), y = memBytes(b);
+  return x !== null && y !== null && x === y;
 }
 
 async function deploymentAnnotation(
@@ -128,6 +201,106 @@ async function scale(
 }
 
 /**
+ * The API server's REAL addresses, for the tenant egress deny list.
+ *
+ * Read from the `kubernetes` Endpoints rather than hardcoded, because this is
+ * cluster-specific and changes when the control plane moves. Hardcoding it would
+ * produce a policy that is correct on this cluster and silently permissive on
+ * the next one — and the failure would be invisible, since the object applies
+ * cleanly either way.
+ *
+ * Returns EMPTY on a failed read, and the caller must treat that as "could not
+ * establish" rather than "there are none". An empty list here does not open
+ * anything that was not already open — the ClusterIP is reachable today — but it
+ * does mean the applied policy is weaker than the one we believe we applied, so
+ * it is reported rather than swallowed.
+ */
+export async function apiServerCidrs(k: ReturnType<typeof kube>): Promise<string[]> {
+  const ep = await k.get<{ subsets?: Array<{ addresses?: Array<{ ip?: string }> }> }>(
+    "/api/v1/namespaces/default/endpoints/kubernetes",
+    true,
+  );
+  const ips = (ep?.subsets ?? []).flatMap((s) => (s.addresses ?? []).map((a) => a.ip)).filter(Boolean) as string[];
+  // /32 so only the endpoint itself is denied, never a range around it.
+  return ips.map((ip) => `${ip}/32`);
+}
+
+/**
+ * Delete Ingresses in this project's namespace whose alias row no longer exists.
+ *
+ * The only deletion this reconciler performs, and it is deliberately the
+ * narrowest one that closes the hole. Three independent gates, each of which
+ * alone would prevent the catastrophic version of this bug:
+ *
+ *   1. Only the project's OWN namespace is listed. Nothing outside it is
+ *      reachable from here even if the label check were wrong.
+ *   2. Only objects carrying `app.kubernetes.io/managed-by: ahura-paas` are
+ *      considered. Anything a human or another controller put in the namespace
+ *      is left alone.
+ *   3. Only objects whose `ahura.cloud/alias` label names a ref absent from the
+ *      alias list are deleted. An Ingress with no alias label is never touched —
+ *      we cannot say what it belongs to, and "unlabelled" is not "orphaned".
+ *
+ * Deployments and Services are NOT collected here. A superseded deployment
+ * scales to zero and is kept, because that object is what makes rollback a
+ * scale-up rather than a rebuild. Zero replicas is where the cost stops, which
+ * is the part that matters; the object costs nothing to keep.
+ */
+export interface RouteObject {
+  metadata?: { name?: string; labels?: Record<string, string> };
+}
+
+/**
+ * Which of these routes no longer have an alias — the decision, separated from
+ * the deletion so it can be tested without a cluster.
+ *
+ * Deliberately returns nothing for an object with no `ahura.cloud/alias` label.
+ * We cannot say what such an object belongs to, and UNLABELLED IS NOT ORPHANED —
+ * treating "I don't know whose this is" as "nobody's" is the same collapse that
+ * runs through every other bug in this codebase, arriving here with a delete
+ * attached.
+ */
+export function orphanedRoutes(items: RouteObject[], knownAliasRefs: Set<string>): Array<{ name: string; aliasRef: string }> {
+  const out: Array<{ name: string; aliasRef: string }> = [];
+  for (const item of items) {
+    const name = item.metadata?.name;
+    const aliasRef = item.metadata?.labels?.["ahura.cloud/alias"];
+    if (!name || !aliasRef) continue;
+    if (knownAliasRefs.has(aliasRef)) continue;
+    out.push({ name, aliasRef });
+  }
+  return out;
+}
+
+async function collectOrphanedRoutes(
+  k: ReturnType<typeof kube>,
+  ns: string,
+  project: ProjectRow,
+  projectAliases: AliasRow[],
+  actions: ReconcileAction[],
+  dry: boolean,
+): Promise<void> {
+  const live = await k.get<{ items?: RouteObject[] }>(
+    `/apis/networking.k8s.io/v1/namespaces/${ns}/ingresses?labelSelector=${encodeURIComponent("app.kubernetes.io/managed-by=ahura-paas")}`,
+    true,
+  );
+  // A namespace that does not exist yet reads as null, which is not an empty
+  // namespace — but for this purpose both mean "nothing of ours to remove".
+  if (!live?.items?.length) return;
+
+  for (const { name, aliasRef } of orphanedRoutes(live.items, new Set(projectAliases.map((a) => a.ref)))) {
+    actions.push({
+      kind: "route",
+      target: name,
+      detail: `alias ${aliasRef} no longer exists — removing route so the hostname stops serving${dry ? " (dry run)" : ""}`,
+    });
+    if (!dry) {
+      await k.raw({ method: "DELETE", path: `/apis/networking.k8s.io/v1/namespaces/${ns}/ingresses/${name}` });
+    }
+  }
+}
+
+/**
  * Converge one project.
  *
  * `dryRun` reports what would change without touching the cluster, so the loop
@@ -144,10 +317,43 @@ export async function reconcileProject(
   const actions: ReconcileAction[] = [];
   const dry = opts.dryRun === true;
 
-  const [projectAliases, ready] = await Promise.all([
+  const [projectAliases, ready, projectEnvs] = await Promise.all([
     aliases.forProject(project.id),
     deployments.readyForProject(project.id),
+    environments.forProject(project.id),
   ]);
+
+  // Which environments are previews, so sizing can differ from the project's
+  // tier. A deployment whose environment is NOT positively known to be a preview
+  // is sized from the project's tier — the direction matters. Sizing a preview
+  // at Pro costs us money for at most the 48h TTL; sizing a Pro production app
+  // at Starter hands a paying customer 512 MB where they bought 4 GB, and their
+  // app OOMs. Losing a little money beats breaking a customer, so the discount
+  // applies only where the preview is established, never where it is assumed.
+  const previewEnvIds = new Set(projectEnvs.filter((e) => e.kind === "preview").map((e) => e.id));
+
+  // ── 0. routes whose alias is gone stop routing ────────────────────────────
+  //
+  // Until reaping existed this loop only ever ADDED routes, which was fine
+  // because nothing was ever removed. It stops being fine the moment a preview
+  // can be deleted: removing the alias row without removing its Ingress leaves
+  // the hostname serving, so a "reaped" preview is still reachable and the
+  // control plane records something untrue. Same shape as the dedupe key —
+  // correct until a feature existed that it predated.
+  //
+  // Runs BEFORE the early returns below. A project whose only alias was just
+  // reaped has nothing ready and nothing targeted, which is exactly the project
+  // whose orphaned route most needs removing.
+  //
+  // WHY AN EMPTY ALIAS LIST IS SAFE TO ACT ON HERE, which is not usually true in
+  // this codebase: `aliases.forProject` THROWS on any database failure rather
+  // than returning []. Reaching this line means the list was genuinely read, so
+  // empty means "this project has no aliases" and not "we could not ask". If
+  // that ever changes to return [] on error, this becomes a loop that deletes
+  // every route on the platform during a database outage — a total outage
+  // caused by the repair loop. Guarded below by ownership and namespace, but
+  // the real guard is that the read fails loudly.
+  await collectOrphanedRoutes(k, ns, project, projectAliases, actions, dry);
 
   if (!ready.length) {
     actions.push({ kind: "noop", target: project.ref, detail: "no ready deployment yet" });
@@ -177,7 +383,7 @@ export async function reconcileProject(
     await k.apply(`/api/v1/namespaces/${ns}`, namespaceManifest(ns, { "ahura.cloud/project": project.ref }));
     await k.apply(
       `/apis/networking.k8s.io/v1/namespaces/${ns}/networkpolicies/tenant-isolation`,
-      tenantNetworkPolicy(ns),
+      tenantNetworkPolicy(ns, await apiServerCidrs(k)),
     );
   }
 
@@ -241,13 +447,41 @@ export async function reconcileProject(
       continue;
     }
 
+    // Resolve the sizing once per deployment. Throws on an unknown tier rather
+    // than substituting a default — see the note at the apply below.
+    //
+    // A preview is Starter-sized and single-instance whatever the project holds
+    // (docs/v2/05-pricing.md §7). Previews are free, so without this the cost of
+    // a free preview would scale with the customer's tier — a Pro Plus app would
+    // hand out free 4 GB containers on every branch, which is the abuse vector
+    // the preview policy exists to close. Forcing it here rather than at the
+    // webhook means it holds for every path that reaches a pod, including a
+    // reconcile of a preview that was recorded before this rule existed.
+    const isPreview = previewEnvIds.has(d.environment_id);
+    const tier = isPreview ? requireTier(PREVIEW_TIER) : requireTier(project.tier ?? DEFAULT_TIER);
+    const instances = isPreview ? PREVIEW_INSTANCES : clampInstances(project.instance_count ?? 1);
+    const tierResources = resourcesFor(tier);
+
     const live = await liveDeployment(k, ns, name);
     const replicas = live?.replicas ?? null;
+    // Sizing counts as drift. It is applied either way — the apply below is
+    // unconditional — but a resize that reports "converged" leaves an operator
+    // unable to tell whether it took effect, which is the same failure as not
+    // applying it, one layer removed.
+    const sizeDrifted =
+      live !== null &&
+      (!sameCpu(live.cpuRequest, tierResources.requests.cpu) ||
+        !sameCpu(live.cpuLimit, tierResources.limits.cpu) ||
+        !sameMem(live.memRequest, tierResources.requests.memory) ||
+        !sameMem(live.memLimit, tierResources.limits.memory) ||
+        (live.replicas > 0 && live.replicas !== instances));
+
     const specDrifted =
       live !== null &&
       (live.image !== image ||
         live.envSecret !== (envSecretRef ?? null) ||
-        live.envHash !== (envHash ?? null));
+        live.envHash !== (envHash ?? null) ||
+        sizeDrifted);
 
     // ALWAYS apply the full spec, not only on first creation.
     //
@@ -320,7 +554,9 @@ export async function reconcileProject(
                     ? `config changed: envFrom ${live!.envSecret ?? "(none)"} -> ${envSecretRef ?? "(none)"} — pods will roll`
                     : live!.envHash !== (envHash ?? null)
                       ? `env values changed (${live!.envHash ?? "none"} -> ${envHash ?? "none"}) — pods will roll`
-                    : `image changed: ${String(live!.image).slice(-19)} -> ${image.slice(-19)}`,
+                    : sizeDrifted
+                      ? `sizing changed: ${live!.cpuRequest ?? "?"}/${live!.memRequest ?? "?"} -> ${tierResources.requests.cpu}/${tierResources.requests.memory} (${tier.label} x${instances}) — pods will roll`
+                      : `image changed: ${String(live!.image).slice(-19)} -> ${image.slice(-19)}`,
               }
             : { kind: "noop" as const, target: name, detail: `converged (${replicas} replica(s))` },
     );
@@ -336,7 +572,20 @@ export async function reconcileProject(
           // restore the port and uid that build actually ran with.
           port: d.container_port ?? 3000,
           runAsUser: d.run_as_user ?? undefined,
-          replicas: 1,
+          // From the PROJECT's tier, not a constant. Until this line, every app
+          // got replicas:1 and the 100m/256Mi defaults regardless of what it was
+          // sold — a customer paying $39 for 4 GB received the same resources as
+          // one paying $5 for 512 MB, and nothing anywhere reported it.
+          //
+          // requireTier throws on an unknown id rather than falling back to the
+          // cheapest: substituting would run a paid tier on another tier's
+          // resources and report success, surfacing days later as an OOM with
+          // nothing linking it to the cause.
+          replicas: instances,
+          cpuRequest: tierResources.requests.cpu,
+          cpuLimit: tierResources.limits.cpu,
+          memRequest: tierResources.requests.memory,
+          memLimit: tierResources.limits.memory,
           envSecretName: envSecretRef,
           envHash,
         }),
@@ -365,10 +614,15 @@ export async function reconcileProject(
   const production = projectAliases.find((a) => a.kind === "production");
   if (production?.deployment_id && byId.has(production.deployment_id)) {
     const target = byId.get(production.deployment_id)!;
-    const svc = await k.get<{ spec?: { selector?: Record<string, string> } }>(
-      `/api/v1/namespaces/${ns}/services/${project.ref}`,
-      true,
-    );
+    // The annotation must declare `ports` as well as `selector`: the port is
+    // read two lines below, and an annotation narrower than the reads it feeds
+    // means the compiler checks nothing about the shape that actually matters.
+    const svc = await k.get<{
+      spec?: {
+        selector?: Record<string, string>;
+        ports?: Array<{ targetPort?: number | string; port?: number; name?: string }>;
+      };
+    }>(`/api/v1/namespaces/${ns}/services/${project.ref}`, true);
     const currently = svc?.spec?.selector?.["ahura.cloud/deployment"];
     const currentPort = svc?.spec?.ports?.[0]?.targetPort;
     const desiredPort = target.container_port ?? 3000;

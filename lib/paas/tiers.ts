@@ -46,13 +46,43 @@ export interface Tier {
   costUsd: number;
 }
 
+/**
+ * REPRICED 2026-08-26 after the densities were MEASURED rather than derived.
+ *
+ * The first table was 19% optimistic on density, and it was optimistic in the
+ * expensive direction: Basic sold BELOW COST at −0.1% and Starter cleared 0.8%.
+ * Two compounding errors, both found by the observability lane running against
+ * the live cluster:
+ *
+ *   1. The kubelet reserves its slice BEFORE any pod schedules — 1.90 GiB of a
+ *      7.76 GiB node, 24.5%, measured on both live nodes. The old table allowed
+ *      "4 GB for system overhead", which described system PODS (really 0.81 GiB)
+ *      and silently omitted the reservation entirely.
+ *
+ *   2. The gVisor sandbox charge is 128Mi, not the 30 MB assumed — and it is
+ *      what the SCHEDULER bills, not what the sentry happens to use at runtime.
+ *      It is declared in our own RuntimeClass and applied to every tenant pod.
+ *
+ * The second dominates at the small tiers, because a fixed per-pod charge is
+ * proportionally largest on the smallest pod: 128Mi is a fifth of a 512Mi pod
+ * and a thirtieth of a 4Gi one. That is why Starter and Basic moved most.
+ *
+ * `costUsd` below is now measured-derived, not estimated. Re-run
+ * `scripts/v3/density-check.ts` after any node-shape or RuntimeClass change; it
+ * reads the overhead from the live cluster rather than from this file, so it
+ * will disagree with these numbers rather than agree with them by construction.
+ *
+ * CAVEAT worth carrying: the 64 GiB shape's density is DERIVED from a formula
+ * anchored to our real 8 GiB nodes, because we do not yet run a g6-standard-16.
+ * Buying one and re-running replaces the derivation with a measurement.
+ */
 export const TIERS: readonly Tier[] = [
-  { id: "starter",  label: "Starter",  cls: "shared",    memoryMib: 512,  vcpu: 1, transferGb: 200,  priceUsd: 5,  priceInr: 449,  costUsd: 4.01 },
-  { id: "basic",    label: "Basic",    cls: "shared",    memoryMib: 1024, vcpu: 1, transferGb: 300,  priceUsd: 9,  priceInr: 799,  costUsd: 7.89 },
-  { id: "standard", label: "Standard", cls: "shared",    memoryMib: 2048, vcpu: 2, transferGb: 500,  priceUsd: 19, priceInr: 1699, costUsd: 15.77 },
-  { id: "plus",     label: "Plus",     cls: "shared",    memoryMib: 4096, vcpu: 2, transferGb: 750,  priceUsd: 39, priceInr: 3499, costUsd: 31.54 },
-  { id: "pro",      label: "Pro",      cls: "dedicated", memoryMib: 2048, vcpu: 1, transferGb: 500,  priceUsd: 29, priceInr: 2599, costUsd: 22.08 },
-  { id: "pro-plus", label: "Pro Plus", cls: "dedicated", memoryMib: 4096, vcpu: 2, transferGb: 1000, priceUsd: 59, priceInr: 5299, costUsd: 47.31 },
+  { id: "starter",  label: "Starter",  cls: "shared",    memoryMib: 512,  vcpu: 1, transferGb: 200,  priceUsd: 7,  priceInr: 649,  costUsd: 4.46 },
+  { id: "basic",    label: "Basic",    cls: "shared",    memoryMib: 1024, vcpu: 1, transferGb: 300,  priceUsd: 12, priceInr: 1099, costUsd: 8.49 },
+  { id: "standard", label: "Standard", cls: "shared",    memoryMib: 2048, vcpu: 2, transferGb: 500,  priceUsd: 23, priceInr: 2099, costUsd: 16.36 },
+  { id: "plus",     label: "Plus",     cls: "shared",    memoryMib: 4096, vcpu: 2, transferGb: 750,  priceUsd: 45, priceInr: 3999, costUsd: 33.97 },
+  { id: "pro",      label: "Pro",      cls: "dedicated", memoryMib: 2048, vcpu: 1, transferGb: 500,  priceUsd: 35, priceInr: 3199, costUsd: 24.53 },
+  { id: "pro-plus", label: "Pro Plus", cls: "dedicated", memoryMib: 4096, vcpu: 2, transferGb: 1000, priceUsd: 69, priceInr: 6199, costUsd: 50.95 },
 ];
 
 export const DEFAULT_TIER = "starter";

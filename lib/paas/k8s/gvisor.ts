@@ -60,9 +60,42 @@ export function gvisorRuntimeClass() {
       ],
     },
     overhead: {
-      // The sentry and gofer are real processes with real cost. Declaring it
-      // lets the scheduler account for them instead of overcommitting nodes.
-      podFixed: { cpu: "80m", memory: "128Mi" },
+      /**
+       * The sentry and gofer are real processes with real cost. Declaring it
+       * lets the scheduler account for them instead of overcommitting nodes.
+       *
+       * 64Mi is MEASURED, not guessed. The previous 128Mi was assumed, and it
+       * set the pod density every price in 05-pricing.md was derived from — so
+       * it was not a spare-capacity decision, it was a pricing input.
+       *
+       * `scripts/v2/sandbox-loadtest.ts` runs one workload twice, sandboxed and
+       * not, both measured externally through cAdvisor so the two readings share
+       * a frame of reference:
+       *
+       *   gvisor  peak 269.3 MiB   runc  peak 227.0 MiB   ->  42.3 MiB
+       *   gvisor  med  253.1 MiB   runc  med  207.8 MiB   ->  45.3 MiB
+       *
+       * The workload holds 192 MiB touched page by page, then loops file I/O
+       * through the gofer and syscalls through the sentry — the two things a
+       * sandbox actually taxes, and the two things idle apps do neither of.
+       * 64Mi is that peak plus 50%, rounded up.
+       *
+       * WHY THE HEADROOM IS NOT OPTIONAL. Under-declaring produces no warning of
+       * any kind: the scheduler simply accepts more pods than the node can hold,
+       * and the kernel OOM-kills whichever allocates next — which may be a
+       * different tenant than the one that caused it. Silent, delayed, and it
+       * lands on the wrong person.
+       *
+       * The cut is reversible because something now watches for it.
+       * `scripts/v3/sandbox-overhead.ts` tracks whole-pod usage against whole
+       * reservation continuously, so pods running hot show up before a node
+       * does. Raise this number back if that report starts climbing.
+       *
+       * Existing pods keep the old overhead until they are recreated; the
+       * change applies at admission, so it rolls in gradually rather than all
+       * at once.
+       */
+      podFixed: { cpu: "80m", memory: "64Mi" },
     },
   };
 }

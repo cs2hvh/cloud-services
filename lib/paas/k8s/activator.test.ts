@@ -49,11 +49,23 @@ test("an awake Ingress carries NO wake annotations", () => {
   // Not empty strings. A null serialises to "" and an empty string is a value
   // that looks like data — the same smell as the '0000000' git sha. Under
   // Server-Side Apply, omitting removes.
+  //
+  // This asserted `annotations === undefined` until the per-tenant rate limit
+  // started populating that block for every route. That was a PROXY for the real
+  // rule and the proxy became wrong while the rule did not: an awake app must
+  // carry no WAKE annotations, which says nothing about annotations in general.
+  // Asserting the absence of the specific keys is what was always meant, and it
+  // cannot be broken by the next thing that legitimately needs an annotation.
   const ing = appIngress({
     aliasRef: "als-1", projectRef: "prj-1", namespace: "app-prj-1",
     hostname: "x.example.com", serviceName: "dpl-1",
   }) as any;
-  assert.equal(ing.metadata.annotations, undefined);
+  const a = ing.metadata.annotations ?? {};
+  assert.ok(!("ahura.cloud/wake-target" in a), "no wake target on an awake app");
+  assert.ok(!("ahura.cloud/wake-port" in a), "no wake port on an awake app");
+  // And specifically not as empty strings, which is the failure the original
+  // test was written to catch.
+  assert.notEqual(a["ahura.cloud/wake-target"], "");
 });
 
 test("a sleeping Ingress names what to wake and on which port", () => {

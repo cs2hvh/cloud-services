@@ -35,7 +35,6 @@ async function traefikCounts(): Promise<Map<string, number> | null> {
     const body = await k.raw<string>({
       method: "GET",
       path: `/api/v1/namespaces/${PAAS_NAMESPACE}/pods/${pod.metadata.name}:8080/proxy/metrics`,
-      raw: true,
     });
     return parseRouterCounts(String(body));
   } catch {

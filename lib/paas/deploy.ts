@@ -21,12 +21,14 @@
 import { detectFramework, detectPackageManager, DETECTION_FILES, type RepoFiles } from "./build/detect.ts";
 import { generateDockerfile, servingPort, runtimeUid } from "./build/dockerfile.ts";
 import { leaseBuildVm, pollBuildResult, destroyBuildVm, type BuildRequest } from "./build/vm.ts";
-import { presign, getObject, r2Keys } from "./build/r2.ts";
+import { presign, getObject, deleteObject, r2Keys } from "./build/r2.ts";
+import { imageIsDurable } from "./build/registry.ts";
 import { kube } from "./k8s/client.ts";
 import { PAAS_NAMESPACE, REGISTRY_PUSH, publisherJob } from "./k8s/manifests.ts";
 import { reconcileProject, kubeContextFromEnv } from "./reconciler.ts";
-import { teams, projects, environments, deployments, aliases, type DeploymentRow, type ProjectRow } from "./db.ts";
+import { teams, projects, environments, deployments, aliases, type DeploymentRow, type ProjectRow, type AliasRow } from "./db.ts";
 import { appHostname } from "./config.ts";
+import { assertLabelAvailable, previewLabel } from "./hostnames.ts";
 import { upsertDnsRecord, listDnsRecords } from "./edge/cloudflare.ts";
 
 const UA = "ahuracloud-deploy-v2";
@@ -55,13 +57,28 @@ async function probe(repo: string, branch: string, path: string): Promise<string
 export async function inspectRepo(
   repo: string,
   rootDirectory?: string | null,
+  /**
+   * Probe THIS branch instead of guessing between main and master.
+   *
+   * A preview builds a feature branch's commit, but detection decides HOW to
+   * build it — framework, package manager, port, Dockerfile. Guessing main here
+   * means a preview gets the right code and the wrong recipe: a branch that adds
+   * a Dockerfile or changes its start script would build as whatever main is.
+   * Silent, and it makes previews untrustworthy for exactly the changes people
+   * open them to review.
+   *
+   * If the named branch has no marker files, detection fails loudly rather than
+   * falling back to main — building the wrong recipe is worse than refusing.
+   */
+  explicitBranch?: string | null,
 ): Promise<{ branch: string; files: RepoFiles }> {
   const dir = rootDirectory ? `${rootDirectory.replace(/^\/+|\/+$/g, "")}/` : "";
   const branch =
-    (await probe(repo, "main", `${dir}README.md`)) !== null ||
+    explicitBranch ??
+    ((await probe(repo, "main", `${dir}README.md`)) !== null ||
     (await probe(repo, "main", `${dir}package.json`)) !== null
       ? "main"
-      : "master";
+      : "master");
 
   const files: RepoFiles = { paths: [], contents: {} };
   for (const f of [...new Set(MARKER_FILES)]) {
@@ -149,6 +166,35 @@ export async function acceptQueuedDeployment(deploymentRef: string): Promise<Enq
   return { deploymentRef, accepted: true };
 }
 
+/**
+ * Which of a project's aliases this build is allowed to repoint.
+ *
+ * THE RULE: A PREVIEW NEVER MOVES A PRODUCTION HOSTNAME.
+ *
+ * Pointing every alias at the new deployment was correct while a project's
+ * hostnames all served the same build — production plus custom domains, where
+ * leaving one behind serves two different builds depending on which URL you
+ * used. It becomes a production outage the moment previews exist: a preview
+ * build would repoint the production alias at itself, so pushing any feature
+ * branch silently replaces production with that branch.
+ *
+ * A preview moves ONLY its own branch alias, matched on the exact hostname, so
+ * two previews of one project cannot move each other either. A production build
+ * moves production and custom domains and leaves every branch alias alone.
+ *
+ * Separated from the deploy path so it is testable without a build, because the
+ * failure it prevents is not one anybody wants to discover from production.
+ */
+export function aliasesToPoint(
+  allAliases: AliasRow[],
+  isPreview: boolean,
+  hostname: string,
+): AliasRow[] {
+  return isPreview
+    ? allAliases.filter((a) => a.kind === "branch" && a.hostname === hostname)
+    : allAliases.filter((a) => a.kind !== "branch");
+}
+
 export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult> {
   const say = opts.onProgress ?? (() => {});
   const k = kube(kubeContextFromEnv());
@@ -162,7 +208,15 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
     );
   }
 
-  const { branch, files } = await inspectRepo(opts.repo, opts.rootDirectory);
+  // Resolve the recorded deployment FIRST when there is one, because its branch
+  // decides what detection should look at. Reading it after detection is what
+  // made every build — preview included — detect against main.
+  const adopted = opts.existingDeploymentRef ? await deployments.byRef(opts.existingDeploymentRef) : null;
+  if (opts.existingDeploymentRef && !adopted) {
+    throw new Error(`deployment ${opts.existingDeploymentRef} not found`);
+  }
+
+  const { branch, files } = await inspectRepo(opts.repo, opts.rootDirectory, adopted?.git_ref ?? null);
   const detection = detectFramework(files);
   const pm = detectPackageManager(files);
   const port = servingPort(detection);
@@ -173,7 +227,29 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
   }
 
   const slug = opts.repo.split("/")[1].toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 38);
-  let project = await projects.bySlug(team.id, slug);
+
+  // AN ADOPTED DEPLOYMENT ALREADY KNOWS ITS PROJECT. Use it, and never re-derive
+  // one from the team slug.
+  //
+  // Re-deriving was correct while scripts were the only caller: they pass no
+  // teamSlug, `ahura-demo` is the seeded team, and the lookup found what they
+  // meant. The dashboard is the second caller, and its projects live in the
+  // customer's OWN team — so the lookup missed, created a duplicate project in
+  // ahura-demo, and split one app across two rows: the deployment stayed with
+  // the customer's project while the alias and DNS were created against the
+  // phantom one. The hostname then served 404, because it pointed at a project
+  // with no ready deployment.
+  //
+  // Observed exactly that way on the first dashboard deploy. Third instance of
+  // the same shape today — a default that fits the only case that exists is a
+  // landmine for the case about to be added (see docs/v2/00-PROJECT.md §8).
+  let project = adopted ? await projects.byId(adopted.project_id) : await projects.bySlug(team.id, slug);
+  if (adopted && !project) {
+    throw new Error(`deployment ${adopted.ref} references project ${adopted.project_id}, which does not exist`);
+  }
+  if (adopted && project) {
+    say("project", `${project.ref} (from the deployment, not re-derived)`);
+  }
   if (!project) {
     project = await projects.create({
       teamId: team.id,
@@ -199,9 +275,8 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
   // than creating a second one. The runtime facts are written now, because the
   // webhook could not know them — it had a commit, not a framework.
   let d: DeploymentRow;
-  if (opts.existingDeploymentRef) {
-    const found = await deployments.byRef(opts.existingDeploymentRef);
-    if (!found) throw new Error(`deployment ${opts.existingDeploymentRef} not found`);
+  if (adopted) {
+    const found = adopted;
     if (found.state !== "queued") {
       // Refusing rather than rebuilding is what stops two workers, or a worker
       // and a retry, from both building one commit.
@@ -341,8 +416,68 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
   });
   say("publish", "ready");
 
+  // ── 3b. reclaim the transfer artifact ─────────────────────────────────────
+  //
+  // image.tar exists to move bytes from a build VM that holds no registry
+  // credentials to a publisher that does. Once skopeo has finished, it is a
+  // second copy of something already stored durably — and nothing was deleting
+  // it, so 8 deployments had left 592 MB, 65% of the bucket, growing with
+  // deploy frequency.
+  //
+  // Deleted HERE rather than by a scheduled reaper, on app-deploy-3's argument:
+  // the reaper's licence to delete comes from a human reading its plan, and an
+  // unattended hourly version is wrong 24 times a day the first time its
+  // classification is wrong. This is the same delete with the safety established
+  // at the one moment it is cheapest to establish — we have just published, and
+  // can read the registry's own storage to confirm it.
+  //
+  // Wrapped whole: a deploy that succeeded must not fail because cleanup did.
+  // A tarball nobody deleted costs a fraction of a cent; a failed deploy costs a
+  // customer their release.
+  try {
+    const durability = await imageIsDurable(project.ref, result.imageDigest!);
+    if (durability.durable) {
+      await deleteObject(r2Keys.imageTar(d.ref));
+      say("reclaim", `image.tar deleted — ${durability.reason}`);
+    } else {
+      // Kept, deliberately and loudly. The reaper will report it later, and a
+      // human decides. Silence here would look identical to a successful
+      // reclaim in the logs.
+      say("reclaim", `image.tar KEPT — ${durability.reason}`);
+    }
+  } catch (err) {
+    say("reclaim", `image.tar KEPT — cleanup failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
   // ── 4. route ──────────────────────────────────────────────────────────────
-  const label = (opts.hostnameLabel ?? `v2-${project.slug}`).slice(0, 40);
+  //
+  // WHICH ENVIRONMENT IS THIS BUILD FOR? Everything below depends on it, and
+  // getting it wrong is not a routing inconvenience — it is production serving
+  // a feature branch.
+  //
+  // Derived from the recorded deployment's environment rather than passed in.
+  // The build worker calls this with only a deployment ref, so an option would
+  // have defaulted, and the default would have been "production" — which is
+  // exactly the bug: a preview build taking the production hostname because
+  // nobody told it otherwise.
+  const buildEnv = d.environment_id ? await environments.byId(d.environment_id) : null;
+  const isPreview = buildEnv?.kind === "preview";
+
+  // A preview's hostname is minted from the branch; production keeps the
+  // project label. `previewLabel` hashes the FULL branch name, so two branches
+  // whose labels truncate to the same prefix still get distinct hostnames.
+  const label = isPreview
+    ? previewLabel(project.slug, d.git_ref ?? buildEnv!.name)
+    : (opts.hostnameLabel ?? `v2-${project.slug}`).slice(0, 40);
+
+  // Refuse names the business already uses. The alias check below only asks
+  // "does another PROJECT hold this?" — it cannot see that `api` and `www` are
+  // live production records in the same zone, because they have no paas.aliases
+  // row. Without this, a tenant could claim the company's own hostname: not a
+  // naming collision but a takeover, and reachable by anyone who can create a
+  // project.
+  assertLabelAvailable(label);
+
   const hostname = appHostname(label);
 
   // Refuse to claim a hostname another project already holds. The unique index
@@ -352,16 +487,35 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
     throw new Error(`hostname ${hostname} is already claimed by another project`);
   }
 
-  const existing = await aliases.forProject(project.id);
-  const production = existing.find((a) => a.kind === "production");
+  const allAliases = await aliases.forProject(project.id);
+  const production = allAliases.find((a) => a.kind === "production");
 
-  // Point EVERY alias of this project at the new deployment. A project can hold
-  // more than one hostname — production plus additional ones — and leaving the
-  // extras pointing at an older deployment would serve two different builds
-  // from the same app depending on which URL you used.
+  // WHICH ALIASES THIS BUILD IS ALLOWED TO MOVE.
+  //
+  // Pointing EVERY alias at the new deployment was right while a project's
+  // hostnames all served the same build: production plus custom domains, where
+  // leaving one behind serves two different builds depending on the URL used.
+  //
+  // It is catastrophically wrong once previews exist. A preview build would
+  // repoint the PRODUCTION alias at itself, so pushing any feature branch
+  // replaces production with that branch. Latent rather than live — no preview
+  // has ever been built — but reachable the moment the webhook started
+  // recording preview deployments, which it now does.
+  //
+  // So the rule is by environment, not by project: a preview moves only its own
+  // branch alias, and a production build moves production and custom domains
+  // while leaving every branch alias alone.
+  const existing = aliasesToPoint(allAliases, isPreview, hostname);
+
   const toPoint = [...existing];
 
-  if (!production) {
+  if (isPreview) {
+    if (!existing.length) {
+      const created = await aliases.create({ projectId: project.id, hostname, kind: "branch" });
+      say("route", `alias ${created.ref} -> ${hostname} (preview of ${d.git_ref ?? buildEnv!.name})`);
+      toPoint.push(created);
+    }
+  } else if (!production) {
     const created = await aliases.create({ projectId: project.id, hostname, kind: "production" });
     say("route", `alias ${created.ref} -> ${hostname} (production)`);
     toPoint.push(created);
@@ -399,6 +553,19 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
       });
       say("dns", `${rec.name} -> ${rec.content} proxied`);
     }
+  } else {
+    // LOUD, because the deploy otherwise reports complete success while leaving
+    // a hostname that resolves to nothing. Everything else here succeeded — the
+    // image published, the alias row exists, the Ingress routes — so the only
+    // symptom is NXDOMAIN, which looks like a DNS problem rather than a deploy
+    // that skipped a step.
+    //
+    // Reachable in the real path, not just in scripts: the build worker reads
+    // the gateway address from the LoadBalancer's status, and that is null while
+    // the address is still being assigned. An absent input silently turning a
+    // step into a no-op is the same failure this codebase keeps finding; here it
+    // ends in an app nobody can reach.
+    say("dns", `SKIPPED — no gateway address given, so ${alias.hostname} will not resolve`);
   }
 
   return {

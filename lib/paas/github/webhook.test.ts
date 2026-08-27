@@ -94,13 +94,31 @@ test("garbage payloads are refused rather than guessed at", () => {
   assert.equal(parsePushEvent(push({ repository: {} })), null);
 });
 
-test("only the production branch deploys, and the reason says why", () => {
-  const e = parsePushEvent(push({ ref: "refs/heads/feature-x" }))!;
-  const d = shouldDeploy(e, "main");
-  assert.equal(d.deploy, false);
-  assert.match((d as { reason: string }).reason, /feature-x/);
+test("the production branch and a feature branch both deploy, as different kinds", () => {
+  // This test previously asserted that non-production branches did NOT deploy.
+  // That was correct while preview policy was undecided; it is now the feature.
+  // The distinction that matters is `kind`, because it decides the hostname,
+  // the resources and whether the result is ever reaped.
+  assert.deepEqual(shouldDeploy(parsePushEvent(push())!, "main"), {
+    deploy: true,
+    kind: "production",
+    branch: "main",
+  });
+  assert.deepEqual(shouldDeploy(parsePushEvent(push({ ref: "refs/heads/feature-x" }))!, "main"), {
+    deploy: true,
+    kind: "preview",
+    branch: "feature-x",
+  });
+});
 
-  assert.deepEqual(shouldDeploy(parsePushEvent(push())!, "main"), { deploy: true, branch: "main" });
+test("a branch deletion is not a deploy, and does not reap either", () => {
+  // Reaping is time-based on purpose. A deletion webhook is a message that can
+  // be missed, and a preview whose only cleanup path is an event nobody
+  // received runs free forever — silently, since the container keeps serving
+  // and the only symptom is a bill.
+  const d = shouldDeploy(parsePushEvent(push({ deleted: true }))!, "main");
+  assert.equal(d.deploy, false);
+  assert.match((d as { reason: string }).reason, /deleted/);
 });
 
 test("a commit message is truncated rather than stored unbounded", () => {

@@ -18,12 +18,9 @@ import { randomBytes } from "node:crypto";
 import { getAppMetadata } from "@/lib/paas/github/app.ts";
 import { getCaller, resolveTeamId } from "../../_lib/auth";
 import { unauthenticated, notFound, invalid, apiError } from "../../_lib/http";
+import { STATE_COOKIE, STATE_TTL_SECONDS } from "../../_lib/git-state";
 
 export const dynamic = "force-dynamic";
-
-export const STATE_COOKIE = "v2_gh_install_state";
-/** Long enough to finish an install, short enough that a leaked state dies. */
-const STATE_TTL_SECONDS = 15 * 60;
 
 export async function GET(request: Request) {
   const caller = await getCaller();

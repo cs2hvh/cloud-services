@@ -397,7 +397,7 @@ export function appService(i: {
 }
 
 /** Default-deny egress except DNS, so a hostile tenant cannot reach the cluster. */
-export function tenantNetworkPolicy(namespace: string) {
+export function tenantNetworkPolicy(namespace: string, apiServerCidrs: string[] = []) {
   return {
     apiVersion: "networking.k8s.io/v1",
     kind: "NetworkPolicy",
@@ -415,12 +415,35 @@ export function tenantNetworkPolicy(namespace: string) {
         { to: [{ namespaceSelector: {} }], ports: [{ protocol: "UDP", port: 53 }, { protocol: "TCP", port: 53 }] },
         // Public internet, but explicitly NOT cluster-internal ranges or the
         // cloud metadata endpoint at 169.254.169.254.
+        //
+        // `apiServerCidrs` is NOT decoration, and the reason is worth keeping.
+        // The Kubernetes service ClusterIP (10.128.0.1) sits inside 10.0.0.0/8
+        // and looks covered by the except list below. It is not: KUBE-PROXY
+        // DNATs THE CLUSTERIP TO THE REAL ENDPOINT BEFORE EGRESS POLICY IS
+        // EVALUATED, and on LKE that endpoint is a PUBLIC address. The policy
+        // therefore sees a public destination and allows it under 0.0.0.0/0.
+        //
+        // Measured, not reasoned about: a busybox pod in a tenant namespace,
+        // under the same gVisor RuntimeClass as real workloads, completed a TCP
+        // connection to 10.128.0.1:443 while cross-tenant traffic to 10.2.0.33
+        // was correctly refused. The private-range block is real for direct
+        // pod-to-pod traffic and does nothing for anything DNAT'd.
+        //
+        // The general lesson, which outlives this fix: AN `except` LIST CANNOT
+        // PROTECT AN ADDRESS THE POLICY NEVER SEES. Any ClusterIP whose endpoint
+        // is public is reachable regardless of what the private ranges say.
         {
           to: [
             {
               ipBlock: {
                 cidr: "0.0.0.0/0",
-                except: ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16"],
+                except: [
+                  "10.0.0.0/8",
+                  "172.16.0.0/12",
+                  "192.168.0.0/16",
+                  "169.254.0.0/16",
+                  ...apiServerCidrs,
+                ],
               },
             },
           ],

@@ -12,6 +12,7 @@
  * READ-ONLY. GETs against the Kubernetes API.
  */
 
+import { EXIT_CANNOT_RUN } from "../../lib/paas/telemetry/exit-codes.ts";
 import { db } from "../../lib/paas/db.ts";
 import { loadKubeconfig, kube } from "../../lib/paas/k8s/client.ts";
 
@@ -26,7 +27,7 @@ console.log(`\nTelemetry probe — ${ctx.server}\n${"─".repeat(84)}`);
 
 if (!(await k.healthz())) {
   console.log("cluster unreachable");
-  process.exit(1);
+  process.exit(EXIT_CANNOT_RUN);
 }
 
 // ── metrics.k8s.io: the precondition for T4 ─────────────────────────────────
@@ -73,7 +74,17 @@ for (const n of tenantNs) {
     `  ${n.metadata.name.padEnd(30)} pods=${pods.length} running=${running} restarts=${restarts}`,
   );
   for (const p of pods) {
-    const cs = p.status?.containerStatuses ?? [];
+    // KubePod in lib/paas/k8s/client.ts does not declare `state` on a
+    // container status, though the API always returns it — that client is the
+    // deploy lane's and this is the only reader that needs the field, so it is
+    // narrowed here rather than widened there.
+    //
+    // Found by the first typecheck this file has ever had. It ran correctly
+    // every time because the DATA was always present; only the type was
+    // missing, which is precisely the class of thing "reviewed by inspection"
+    // cannot catch.
+    type WithState = { ready: boolean; restartCount: number; state?: { waiting?: { reason?: string } } };
+    const cs = (p.status?.containerStatuses ?? []) as WithState[];
     const rc = cs.reduce((s, c) => s + (c.restartCount ?? 0), 0);
     const waiting = cs.find((c) => !c.ready)?.state?.waiting?.reason;
     console.log(
@@ -136,3 +147,4 @@ console.log(`gvisor present                 ${ok(rcs.some((r) => r.metadata.name
 console.log(
   `\n${hasMetricsGroup ? "T4 (metrics) is unblocked." : "T4 (metrics) BLOCKED: metrics-server not installed."}\n`,
 );
+

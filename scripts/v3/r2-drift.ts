@@ -14,6 +14,7 @@
  * deliberately.
  */
 
+import { EXIT_CLEAN, EXIT_FINDINGS } from "../../lib/paas/telemetry/exit-codes.ts";
 import { db } from "../../lib/paas/db.ts";
 import { listObjects } from "../../lib/paas/build/r2.ts";
 import {
@@ -48,7 +49,7 @@ if (JSON_OUT) {
       2,
     ),
   );
-  process.exit(report.clean ? 0 : 1);
+  process.exit(report.clean ? EXIT_CLEAN : EXIT_FINDINGS);
 }
 
 const line = "─".repeat(96);
@@ -91,4 +92,4 @@ console.log(
         `  mapping bug here destroys build logs rather than producing a bad report.\n`,
 );
 
-process.exit(report.clean ? 0 : 1);
+process.exit(report.clean ? EXIT_CLEAN : EXIT_FINDINGS);

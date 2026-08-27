@@ -226,8 +226,38 @@ export interface ProjectRow {
   provider: "github" | "gitlab" | "bitbucket";
   repo_id: string; repo_full_name: string; installation_id: number | null;
   production_branch: string; root_directory: string | null; framework: string | null;
+  /**
+   * Scale-to-zero settings. These columns were added by the scale-to-zero
+   * migration and this type was not updated with them, so `idle-sweep.ts` read
+   * both fields off a type that did not declare either — the reads worked at
+   * runtime because PostgREST returns the columns regardless, and the compiler
+   * had nothing to check them against.
+   *
+   * That is worse than it sounds for these two specifically: the sweep decides
+   * whether to put an app to sleep, and the whole unit-economics argument rests
+   * on it. A rename on either side would have surfaced as an app that silently
+   * stopped being eligible for sleep, with no error anywhere.
+   *
+   * `idle_seconds` is nullable in the schema — null means "use the platform
+   * default", not "zero".
+   */
+  scale_to_zero: boolean;
+  idle_seconds: number | null;
+  /**
+   * Instance sizing. Both NOT NULL with defaults in the schema, so a row always
+   * carries them — the reconciler reads these to build the pod's resources, and
+   * before they existed every app got the same 100m/256Mi regardless of what it
+   * was sold.
+   *
+   * `tier` is a closed set constrained in the database and mirrored in
+   * `lib/paas/tiers.ts`; `tiers.test.ts` asserts that mirror against the priced
+   * document, and `db.schema.test.ts` asserts this interface against the live
+   * columns. Adding a tier means touching all three deliberately.
+   */
+  tier: string;
+  instance_count: number;
 }
-export interface EnvironmentRow { id: string; ref: string; project_id: string; kind: string; name: string }
+export interface EnvironmentRow { id: string; ref: string; project_id: string; kind: string; name: string; created_at: string }
 /**
  * Mirrors the paas.deployment_trigger enum EXACTLY.
  *
@@ -271,6 +301,16 @@ export const projects = {
     (await db.select<ProjectRow>("projects", `select=*&ref=eq.${ref}`))[0] ?? null,
 
   /**
+   * By primary key — for resolving the project a DEPLOYMENT already names.
+   *
+   * The build worker previously re-derived the project from (team slug, repo
+   * slug), which silently created a duplicate in the wrong team when the
+   * deployment came from the dashboard rather than a script.
+   */
+  byId: async (id: string) =>
+    (await db.select<ProjectRow>("projects", `select=*&id=eq.${id}`))[0] ?? null,
+
+  /**
    * Resolve a project from a repository full name, for webhook delivery.
    * Deleted projects are excluded: a push to a repo whose project was removed
    * must not resurrect it.
@@ -303,6 +343,8 @@ export const projects = {
 export const environments = {
   forProject: (projectId: string) =>
     db.select<EnvironmentRow>("environments", `select=*&project_id=eq.${projectId}`),
+  byId: async (id: string) =>
+    (await db.select<EnvironmentRow>("environments", `select=*&id=eq.${id}`))[0] ?? null,
   production: async (projectId: string) =>
     (await db.select<EnvironmentRow>(
       "environments", `select=*&project_id=eq.${projectId}&kind=eq.production`,
@@ -311,6 +353,45 @@ export const environments = {
     (await db.insert<EnvironmentRow>("environments", {
       project_id: input.projectId, kind: input.kind, name: input.name,
     }))[0],
+
+  /**
+   * The preview environment for a branch, created on first sight.
+   *
+   * Named after the RAW branch, not a sanitised label. `unique (project_id,
+   * name)` then means one environment per branch as the database sees it —
+   * `feature/foo` and `feature-foo` stay distinct, where keying on a sanitised
+   * label would silently merge them into one environment serving two branches.
+   * The hostname is where sanitising belongs, and `previewLabel` already carries
+   * a hash of the full branch so the collision cannot reappear there either.
+   *
+   * The insert races: two pushes to a new branch arrive together, both find
+   * nothing, both insert. That unique constraint is what resolves it — the loser
+   * gets a 409 and re-selects the winner's row, rather than both proceeding and
+   * leaving two environments, two aliases, and two pods for one branch.
+   */
+  forBranch: async (projectId: string, branch: string): Promise<EnvironmentRow> => {
+    const existing = await db.select<EnvironmentRow>(
+      "environments",
+      `select=*&project_id=eq.${projectId}&name=eq.${encodeURIComponent(branch)}`,
+    );
+    if (existing[0]) return existing[0];
+
+    try {
+      return (await db.insert<EnvironmentRow>("environments", {
+        project_id: projectId, kind: "preview", name: branch,
+      }))[0];
+    } catch (e) {
+      if (!(e instanceof DbError) || e.status !== 409) throw e;
+      const raced = await db.select<EnvironmentRow>(
+        "environments",
+        `select=*&project_id=eq.${projectId}&name=eq.${encodeURIComponent(branch)}`,
+      );
+      // A 409 means a row exists; if we cannot then read it, something other
+      // than the race is wrong and guessing would be worse than failing.
+      if (!raced[0]) throw e;
+      return raced[0];
+    }
+  },
 };
 
 export const deployments = {
@@ -326,6 +407,36 @@ export const deployments = {
     (await db.select<DeploymentRow>(
       "deployments",
       `select=*&project_id=eq.${projectId}&git_sha=eq.${sha}&order=queued_at.desc&limit=1`,
+    ))[0] ?? null,
+
+  /**
+   * The same question, scoped to one environment — and the correct key now that
+   * previews exist.
+   *
+   * Project+sha was right while every push built production, and became wrong
+   * the moment a second environment could want the same commit. Branching is
+   * exactly that case: `git checkout -b feature-x && git push -u origin
+   * feature-x` sends a push whose sha is the head of the production branch, the
+   * commit already deployed. Deduping on project+sha finds it and answers
+   * "already recorded" — so the preview is never created, and the failure is
+   * silent, because returning 200 to GitHub is what a successful retry looks
+   * like. Not an edge case: it is the first push of every new branch cut from
+   * the production head.
+   *
+   * Same commit, same environment is a retry. Same commit, different
+   * environment is a different deployment.
+   */
+  /** Every deployment recorded in one environment, newest first. */
+  forEnvironment: (environmentId: string) =>
+    db.select<DeploymentRow>(
+      "deployments",
+      `select=*&environment_id=eq.${environmentId}&order=queued_at.desc`,
+    ),
+
+  byEnvironmentAndSha: async (environmentId: string, sha: string) =>
+    (await db.select<DeploymentRow>(
+      "deployments",
+      `select=*&environment_id=eq.${environmentId}&git_sha=eq.${sha}&order=queued_at.desc&limit=1`,
     ))[0] ?? null,
 
   /**

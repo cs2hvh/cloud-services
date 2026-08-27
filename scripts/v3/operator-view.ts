@@ -143,4 +143,30 @@ if (failed(view.usage)) {
   console.log(`  warm fraction: not available from a point-in-time read (needs the sampler)`);
 }
 
+// Last, and deliberately so: it qualifies everything above it. If a sweep has
+// never succeeded, the clean sections are clean partly because nobody looked.
+console.log(`\n${line}\nARE THE OBSERVERS RUNNING`);
+if (failed(view.sweeps)) {
+  console.log(`  unavailable: ${view.sweeps.error}`);
+} else {
+  const r = view.sweeps.report;
+  for (const s of r.sweeps) {
+    const age = s.minutesSinceSuccess === null ? "never" : `${s.minutesSinceSuccess.toFixed(0)}m ago`;
+    console.log(`  ${s.status.toUpperCase().padEnd(16)} ${s.name.padEnd(22)} last success ${age}`);
+  }
+  if (r.unobserved > 0) {
+    console.log(
+      `  ${r.unobserved} sweep(s) have never produced a result — nothing they cover has been observed,\n` +
+        `  so their silence is not evidence that anything above is clean.`,
+    );
+  }
+  if (r.untranslated > 0) {
+    console.log(
+      `  ${r.untranslated} sweep(s) would report a finding to the scheduler as a failure; a green tick\n` +
+        `  among them means only that nothing has been found yet.`,
+    );
+  }
+  if (r.clean) console.log(`  All sweeps running, and a finding from any would survive its exit code.`);
+}
+
 console.log("");

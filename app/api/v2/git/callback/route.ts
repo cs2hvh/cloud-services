@@ -23,7 +23,7 @@ import { cookies } from "next/headers";
 
 import { listInstallations } from "@/lib/paas/github/app.ts";
 import { getCaller } from "../../_lib/auth";
-import { STATE_COOKIE } from "../connect/route";
+import { STATE_COOKIE } from "../../_lib/git-state";
 
 export const dynamic = "force-dynamic";
 
