@@ -24,6 +24,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { listBranches } from "@/lib/paas/github/client";
 import { json, unauthenticated, notFound, invalid, conflict, apiError } from "../../../_lib/http";
+import { affordability, shouldRefuse } from "../../../_lib/afford";
+import { requireTier, hourlyRateUsd, clampInstances } from "@/lib/paas/tiers";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -140,6 +142,24 @@ export async function POST(req: Request, ctx: Ctx) {
   if (!sha) return invalid(`Branch "${branch}" does not exist in ${p.repo_full_name}.`);
 
   const db = supabase.schema("paas");
+
+  // CAN THEY AFFORD IT? Asked before a build VM is leased, because refusing at
+  // this point costs nothing and refusing after a build has run costs a build.
+  // The same check guards the trigger route and the webhook — one balance rule
+  // for three doors, so a new door cannot quietly skip it.
+  let hourly = 0;
+  try {
+    hourly = hourlyRateUsd(requireTier(p.tier), clampInstances(p.instance_count ?? 1));
+  } catch {
+    // Unpriceable is not free. An unknown tier means nobody can say what this
+    // costs, and deploying it anyway is how a mispriced app runs indefinitely.
+    return apiError("internal", `This project has an unknown plan ("${p.tier}") and cannot be priced.`, 500);
+  }
+
+  const afford = await affordability(db, p.id, hourly);
+  if (shouldRefuse(afford)) {
+    return apiError("invalid_request", afford.reason, 402, { billing: afford.state });
+  }
 
   // Environment by KIND for production, by branch name for anything else — the
   // same rule the webhook uses, so a manual deploy of a feature branch lands in
