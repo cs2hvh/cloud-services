@@ -100,8 +100,18 @@ export async function GET(request: Request) {
   // The RPC is SECURITY DEFINER and enforces admin-on-team itself. It also
   // refuses an installation already held by another team, which is what stops
   // two teams both authorizing tokens for each other's repositories.
+  // Provider and external id, not an installation id. The bigint overload was
+  // dropped rather than left callable: a Bitbucket workspace uuid has no bigint
+  // to live in, and an overload that silently accepts only GitHub is worse than
+  // one that is gone — it type-checks and fails on the provider nobody tested.
+  //
+  // NO CREDENTIAL IS SENT, and that asymmetry is deliberate: GitHub App tokens
+  // are minted per request from a private key, so there is nothing durable to
+  // store. The RPC coalesces absent token arguments onto the stored ones, so
+  // this call cannot un-credential a connection either.
   const { error } = await caller.db.rpc("link_installation", {
-    p_installation_id: installationId,
+    p_provider: "github",
+    p_external_id: String(installationId),
     p_team_ref: teamRef,
     p_account_login: accountLogin,
     p_account_type: accountType,

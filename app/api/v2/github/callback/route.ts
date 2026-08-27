@@ -93,6 +93,11 @@ export async function GET(req: Request) {
     .schema("paas")
     .from("installations")
     .insert({
+      // provider and external_id are the identity now, and both are NOT NULL
+      // with no default — omitting them raises 23502 on every connect.
+      // installation_id stays in step while the deprecated column exists.
+      provider: "github",
+      external_id: String(installationId),
       installation_id: installationId,
       team_id: team.id,
       account_login: match.account?.login ?? String(installationId),
