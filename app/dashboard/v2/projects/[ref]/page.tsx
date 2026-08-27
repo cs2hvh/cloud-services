@@ -196,6 +196,40 @@ export default async function ProjectPage({
     (deployments.data ?? []).find((d) => production?.deployment_id && d.ref === latest?.ref) ?? latest;
 
   /**
+   * Why there is no output, when there is no output.
+   *
+   * The API can only report what the cluster shows it — zero pods. It does not
+   * read aliases or the sleep setting, so it cannot tell a build that was never
+   * routed from one asleep on purpose from one whose build failed. Those need
+   * three different actions from the reader, and this page is the only place
+   * that holds all three facts.
+   *
+   * Ordered most-specific first. A failed build is why there is no pod even if
+   * the project is also unrouted, and saying 'deploy it' to somebody whose
+   * deploy just failed is the least useful thing on the page.
+   */
+  const emptyExplanation =
+    logsTarget?.state === "error"
+      ? {
+          what: "The last deployment failed, so nothing was ever started.",
+          action:
+            "Open it under Deployments — the build log says where it stopped. Runtime logs only exist once a container runs.",
+        }
+      : !production
+        ? {
+            what: "This project has no hostname yet, so its build was never routed.",
+            action:
+              "The image is built and waiting. Use Deploy to publish it — that creates the hostname and starts a pod.",
+          }
+        : project.scale_to_zero
+          ? {
+              what: "This project is asleep. Scale to zero is on, so it runs no pods until a request arrives.",
+              action:
+                "Open the site and it will wake, then output appears here. Turn this off under Settings if you want it always warm.",
+            }
+          : null;
+
+  /**
    * Runtime replica status, and the reason it is worth the extra call.
    *
    * A state string alone cannot tell a SLEEPING app from a SUPERSEDED one.
@@ -518,7 +552,7 @@ export default async function ProjectPage({
               that decision in the page is how the two came to disagree.
             */}
             {logsTarget ? (
-              <RuntimeLogs deploymentRef={logsTarget.ref} />
+              <RuntimeLogs deploymentRef={logsTarget.ref} emptyExplanation={emptyExplanation} />
             ) : (
               <Empty title="Nothing deployed yet">
                 Runtime logs come from running pods. Deploy this project and they will appear here;

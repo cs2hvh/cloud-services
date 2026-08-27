@@ -38,7 +38,26 @@ interface Payload {
 
 const REFRESH_MS = 4000;
 
-export function RuntimeLogs({ deploymentRef }: { deploymentRef: string }) {
+/**
+ * `emptyExplanation` is supplied by the PAGE, not the API, and that split is
+ * deliberate.
+ *
+ * The route can only report what the cluster shows it: zero pods. It does not
+ * read aliases or the sleep setting, so it cannot tell a build that was never
+ * routed from one that is asleep on purpose from one whose build failed — and
+ * those need three different actions from the reader. The page holds all three
+ * facts, so the page explains, and the route keeps reporting the observation.
+ *
+ * Both are shown: the observation, then what it means. An empty box that says
+ * only 'no pods' is where somebody files a support ticket.
+ */
+export function RuntimeLogs({
+  deploymentRef,
+  emptyExplanation,
+}: {
+  deploymentRef: string;
+  emptyExplanation?: { what: string; action: string } | null;
+}) {
   const [data, setData] = useState<Payload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -132,9 +151,24 @@ export function RuntimeLogs({ deploymentRef }: { deploymentRef: string }) {
         somebody to support.
       */}
       {pods.length === 0 ? (
-        <p className="rounded border border-dashed border-white/[0.09] px-4 py-6 text-center text-xs text-white/40">
-          {data?.reason ?? "No output. This deployment has no running pods."}
-        </p>
+        <div className="rounded border border-dashed border-white/[0.09] px-4 py-6 text-center">
+          <p className="text-xs text-white/50">
+            {emptyExplanation?.what ??
+              data?.reason ??
+              "No output. This deployment has no running pods."}
+          </p>
+          {emptyExplanation?.action ? (
+            <p className="mx-auto mt-2 max-w-md text-xs text-white/35">{emptyExplanation.action}</p>
+          ) : null}
+          {/*
+            The cluster observation is kept alongside the explanation rather than
+            replaced by it. If the two ever disagree, the reader can see both
+            instead of only the one we guessed.
+          */}
+          {emptyExplanation && data?.reason ? (
+            <p className="mx-auto mt-2 max-w-md font-mono text-[10.5px] text-white/25">{data.reason}</p>
+          ) : null}
+        </div>
       ) : (
         <div className="space-y-3">
           {pods.map((pod) => (
