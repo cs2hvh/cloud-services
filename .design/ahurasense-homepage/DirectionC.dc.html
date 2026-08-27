@@ -1,0 +1,160 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Antic+Didone&family=IBM+Plex+Mono:wght@400;500&family=Open+Sans:wght@400;600&display=swap">
+  <style>
+    body { margin: 0; background: #0b0a09; color: #eae7e1; font-family: "Open Sans", system-ui, sans-serif; }
+    a { color: #c9a227; text-decoration: none; } a:hover { color: #e0b93a; }
+    .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+    .serif { font-family: "Antic Didone", Georgia, serif; }
+    .hair { height: 1px; background: #211f1c; }
+    /* signature motion: a slow ledger settling — restraint as the effect */
+    @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+    @keyframes drawline { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+    .rise { animation: rise .7s cubic-bezier(.2,.7,.2,1) both; }
+    .draw { transform-origin: left; animation: drawline 1.4s cubic-bezier(.2,.7,.2,1) both; }
+  </style>
+</helmet>
+<div style="width: 1280px; background: #0b0a09; box-sizing: border-box;">
+
+  <!-- nav -->
+  <div style="display: flex; align-items: center; justify-content: space-between; padding: 22px 60px; border-bottom: 1px solid #1a1917;">
+    <div class="serif" style="font-size: 21px; letter-spacing: 0.01em;">AhuraCloud</div>
+    <div style="display: flex; gap: 30px; font-size: 12.5px; color: #8b8781; letter-spacing: 0.02em;">
+      <span>Platform</span><span>Sovereignty</span><span>Pricing</span><span>Documentation</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 18px;">
+      <span style="font-size: 12.5px; color: #8b8781;">Sign in</span>
+      <div class="mono" style="font-size: 11px; letter-spacing: 0.1em; color: #0b0a09; background: #eae7e1; padding: 9px 17px;">OPEN ACCOUNT</div>
+    </div>
+  </div>
+
+  <!-- hero -->
+  <div style="padding: 84px 60px 62px;">
+    <div style="display: grid; grid-template-columns: 1fr 340px; gap: 72px; align-items: end;">
+      <div class="rise">
+        <div class="mono" style="font-size: 10.5px; letter-spacing: 0.2em; color: #c9a227; margin-bottom: 30px;">I. &nbsp; SOVEREIGN COMPUTE, FOR INDIA</div>
+
+        <h1 class="serif" style="font-size: 76px; font-weight: 400; letter-spacing: -0.01em; line-height: 1.06; margin: 0 0 26px;">The cloud that<br>cannot be<br>subpoenaed<br>elsewhere.</h1>
+
+        <div class="hair draw" style="max-width: 520px; margin-bottom: 26px;"></div>
+
+        <p style="font-size: 16.5px; line-height: 1.72; color: #a5a09a; max-width: 520px; margin: 0 0 36px;">Inference, GPUs, Kubernetes and managed data, operated end to end inside Indian jurisdiction. Priced in rupees. Audited in the open. Built for institutions that must answer to a regulator, not a status page.</p>
+
+        <div style="display: flex; gap: 26px; align-items: center;">
+          <div class="mono" style="font-size: 11px; letter-spacing: 0.1em; color: #0b0a09; background: #c9a227; padding: 13px 24px;">REQUEST ARCHITECTURE REVIEW</div>
+          <div class="mono" style="font-size: 11px; letter-spacing: 0.1em; color: #eae7e1; border-bottom: 1px solid #3a3733; padding-bottom: 3px;">READ THE RESIDENCY MODEL →</div>
+        </div>
+      </div>
+
+      <!-- ledger panel -->
+      <div class="rise" style="animation-delay: .2s; border-left: 1px solid #211f1c; padding-left: 34px;">
+        <div class="mono" style="font-size: 10px; letter-spacing: 0.18em; color: #6e6a65; margin-bottom: 24px;">POSITION</div>
+        <div style="display: flex; flex-direction: column; gap: 24px;">
+          <sc-for list="{{ledger}}" as="l" hint-placeholder-count="4">
+            <div>
+              <div class="serif" style="font-size: 40px; line-height: 1; color: #eae7e1;">{{l.v}}</div>
+              <div class="mono" style="font-size: 9.5px; letter-spacing: 0.14em; color: #6e6a65; margin-top: 9px;">{{l.k}}</div>
+              <div style="font-size: 11.5px; color: #7d7973; margin-top: 6px; line-height: 1.5;">{{l.note}}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- proof, editorial treatment -->
+  <div style="padding: 30px 60px; border-top: 1px solid #1a1917; border-bottom: 1px solid #1a1917;">
+    <div style="display: flex; align-items: center; gap: 44px;">
+      <span class="mono" style="font-size: 10px; letter-spacing: 0.18em; color: #6e6a65; white-space: nowrap;">IN SERVICE WITH</span>
+      <div style="display: flex; gap: 40px; flex-grow: 1; align-items: center;">
+        <sc-for list="{{proof}}" as="p" hint-placeholder-count="4">
+          <div class="serif" style="font-size: 15px; color: #4a4741; border-bottom: 1px dashed #262320; padding-bottom: 4px;">{{p.label}}</div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <!-- numbered argument -->
+  <div style="padding: 66px 60px 74px;">
+    <div class="mono" style="font-size: 10.5px; letter-spacing: 0.2em; color: #c9a227; margin-bottom: 34px;">II. &nbsp; THE ARGUMENT</div>
+
+    <div style="display: flex; flex-direction: column;">
+      <sc-for list="{{args}}" as="a" hint-placeholder-count="3">
+        <div style="display: grid; grid-template-columns: 96px 1fr 1fr; gap: 44px; padding: 34px 0; border-top: 1px solid #1a1917; align-items: start;">
+          <div class="serif" style="font-size: 44px; color: #302c28; line-height: 1;">{{a.n}}</div>
+          <div>
+            <div class="serif" style="font-size: 26px; line-height: 1.25; color: #eae7e1; margin-bottom: 10px;">{{a.title}}</div>
+            <div class="mono" style="font-size: 10px; letter-spacing: 0.14em; color: #c9a227;">{{a.tag}}</div>
+          </div>
+          <div style="font-size: 14.5px; line-height: 1.75; color: #a5a09a;">{{a.body}}</div>
+        </div>
+      </sc-for>
+      <div style="border-top: 1px solid #1a1917;"></div>
+    </div>
+  </div>
+
+  <!-- pricing posture -->
+  <div style="padding: 0 60px 76px;">
+    <div style="border: 1px solid #211f1c; padding: 44px 48px; background: linear-gradient(135deg, rgba(201,162,39,0.045), transparent 60%);">
+      <div class="mono" style="font-size: 10.5px; letter-spacing: 0.2em; color: #c9a227; margin-bottom: 20px;">III. &nbsp; PRICING POSTURE</div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: start;">
+        <div>
+          <h2 class="serif" style="font-size: 38px; line-height: 1.16; margin: 0 0 16px;">Billed by the second,<br>in your own currency.</h2>
+          <p style="font-size: 15px; line-height: 1.7; color: #a5a09a; margin: 0;">Idle resources cost nothing. Invoices arrive in rupees with GST already applied — no foreign-exchange spread, no dollar statement to reconcile at close.</p>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 0;">
+          <sc-for list="{{price}}" as="p" hint-placeholder-count="4">
+            <div style="display: flex; justify-content: space-between; align-items: baseline; padding: 15px 0; border-bottom: 1px solid #1a1917;">
+              <span style="font-size: 14px; color: #a5a09a;">{{p.k}}</span>
+              <span class="mono" style="font-size: 14px; color: #eae7e1;">{{p.v}}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{"accent":{"editor":"color","default":"#c9a227","options":["#c9a227","#0095FF","#b08d57","#8fa37a"]}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const accent = this.props.accent ?? '#c9a227';
+    return {
+      accent,
+      ledger: [
+        { v: '100%', k: 'DATA RESIDENT IN INDIA', note: 'No cross-border failover path exists.' },
+        { v: '[N]',  k: 'REGIONS IN OPERATION',   note: 'One figure, one source of truth.' },
+        { v: '₹',    k: 'BILLED IN RUPEES',       note: 'GST applied at source.' },
+        { v: '[X]%', k: 'AVAILABILITY COMMITMENT', note: 'Measured as defined in the SLA.' },
+      ],
+      proof: [
+        { label: '[INSTITUTION — cleared?]' }, { label: '[INSTITUTION]' }, { label: '[INSTITUTION]' }, { label: '[INSTITUTION]' },
+      ],
+      args: [
+        { n: '01', tag: 'JURISDICTION', title: 'A hyperscaler cannot promise you this.',
+          body: 'A global provider’s region is a location; its jurisdiction follows its parent company. Ours does not. For a regulated Indian workload that distinction is the entire procurement conversation — and it is the one thing capacity cannot buy.' },
+        { n: '02', tag: 'CONSOLIDATION', title: 'One plane instead of four vendors.',
+          body: 'Teams building AI in India typically assemble a GPU vendor, a database host, a Kubernetes provider and an object store — four contracts, four audit surfaces, four residency stories. Here it is one API, one invoice, one trail.' },
+        { n: '03', tag: 'ECONOMICS', title: 'Granularity that respects the workload.',
+          body: 'Per-second metering means an idle GPU is a stopped meter, not a rounding decision made in your favour once a month. Reserved terms are available where committed capacity is cheaper than elasticity.' },
+      ],
+      price: [
+        { k: 'Metering granularity', v: 'per second' },
+        { k: 'Idle resources',       v: '₹0' },
+        { k: 'Currency',             v: 'INR, GST inc.' },
+        { k: 'Reserved discount',    v: 'up to [N]%' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

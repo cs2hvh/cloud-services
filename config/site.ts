@@ -4,9 +4,9 @@ const SITE_URL =
 
 export const siteConfig = {
   name: "AhuraSense Cloud",
-  title: "AhuraSense Cloud — AI & Cloud Infrastructure Platform",
+  title: "AhuraSense Cloud: AI & Cloud Infrastructure Platform",
   description:
-    "Run serverless AI inference, fine-tune and deploy open & frontier models, and build AI agents with RAG and vector search — on on-demand GPUs, alongside VMs, Kubernetes, and managed databases across 12 global regions. Enterprise-grade, per-token billing, 99.99% uptime SLA.",
+    "Run serverless AI inference, fine-tune and deploy open & frontier models, and build AI agents with RAG and vector search, on on-demand GPUs, alongside VMs, Kubernetes, and managed databases across 15 global regions. Enterprise-grade, per-token billing, 99.99% uptime SLA.",
   url: SITE_URL,
   ogImage: `${SITE_URL}/images/main-page/home-section-1.png`,
   keywords: [

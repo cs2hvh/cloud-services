@@ -2,19 +2,12 @@
 
 import { assetUrl } from "@/lib/asset-url";
 import { useState } from "react";
+import Link from "next/link";
 import Image from "next/image";
 import {
   ArrowRight,
   Globe,
 } from "lucide-react";
-import {
-  IconFlameFilled,
-  IconGaugeFilled,
-  IconCloudDataConnectionFilled,
-  IconGlobeFilled,
-  IconShieldCheckFilled,
-  IconClockFilled,
-} from "@tabler/icons-react";
 import { Container } from "@/components/ui/container";
 import WorldMap from "@/components/ui/worldmap";
 import { AuthAwareServiceCta } from "@/components/services/auth-aware-service-cta";
@@ -46,51 +39,6 @@ interface ComputeCategory {
   isBareMetalCategory?: boolean;
   plans: (VirtualPlan | BareMetalPlan)[];
 }
-
-const HIGHLIGHTS = [
-  {
-    iconNode: <IconFlameFilled size={20} />,
-    accent: "#F59E0B",
-    stat: "5.7 GHz",
-    title: "AMD EPYC and Ryzen 9",
-    desc: "Single-thread and multi-core performance on every plan.",
-  },
-  {
-    iconNode: <IconGaugeFilled size={20} />,
-    accent: "#10B981",
-    stat: "7 GB/s",
-    title: "Enterprise NVMe",
-    desc: "Fast boot, low latency, and high random IOPS.",
-  },
-  {
-    iconNode: <IconCloudDataConnectionFilled size={20} />,
-    accent: "#0095FF",
-    stat: "25 Gbit/s",
-    title: "Premium network",
-    desc: "Redundant uplinks, free inbound traffic on every plan.",
-  },
-  {
-    iconNode: <IconGlobeFilled size={20} />,
-    accent: "#06B6D4",
-    stat: "15 locations",
-    title: "Global footprint",
-    desc: "Americas, Europe, Asia, and Oceania covered.",
-  },
-  {
-    iconNode: <IconShieldCheckFilled size={20} />,
-    accent: "#E11D48",
-    stat: "L3-L7",
-    title: "DDoS protection",
-    desc: "Always-on volumetric and app-layer attack mitigation.",
-  },
-  {
-    iconNode: <IconClockFilled size={20} />,
-    accent: "#8B5CF6",
-    stat: "< 30 sec",
-    title: "Fast provisioning",
-    desc: "IP, SSH, and firewall ready on first boot.",
-  },
-];
 
 const CATEGORY_META: Record<
   string,
@@ -218,6 +166,9 @@ interface ComputePricingSectionProps {
 function isBareMetalPlan(plan: VirtualPlan | BareMetalPlan): plan is BareMetalPlan {
   return "processor" in plan;
 }
+
+/** Rows shown inline. The rest live in the deploy wizard. */
+const PLAN_PREVIEW_COUNT = 10;
 
 function getCategoryMeta(category: ComputeCategory) {
   return (
@@ -388,6 +339,11 @@ export default function ComputePricingSection({
   }
 
   const active = categories.find((category) => category.key === activeKey) ?? categories[0];
+  // Families run 10–33 plans. Dumping all of them turns the section into a
+  // wall of table; the deploy wizard is the right place to browse the full
+  // lineup, so the page shows a representative slice and links out.
+  const previewPlans = active.plans.slice(0, PLAN_PREVIEW_COUNT);
+  const hiddenPlanCount = active.plans.length - previewPlans.length;
   const isBareMetalCategory = !!active.isBareMetalCategory;
   const activeMeta = getCategoryMeta(active);
 
@@ -399,81 +355,12 @@ export default function ComputePricingSection({
 
       <Container>
         <div className="mx-auto max-w-4xl text-center">
-          <h2 className="text-3xl font-[400] leading-[1.05] tracking-tight text-white sm:text-4xl lg:text-5xl">
+          <h2 className="text-3xl font-[400] leading-[1.05] tracking-tight text-white sm:text-4xl lg:text-[3.4rem]">
             Built on <span className="text-[#0095FF]">Next-Gen Hardware</span>, priced for real workloads
           </h2>
           <p className="mx-auto mt-4 max-w-3xl text-sm leading-relaxed text-white/45 lg:text-base">
             Compare CPU families fast, then scan plans with cleaner monthly and hourly pricing.
           </p>
-        </div>
-
-        <div className="mt-14 border border-white/[0.08] bg-white/[0.02]">
-          <div className="grid gap-px bg-white/[0.06] lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-            <div className="bg-[#0a0a0a] p-6 lg:p-8">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/28">
-                Infrastructure Baseline
-              </p>
-              <h3 className="mt-3 text-2xl font-[400] tracking-tight text-white lg:text-3xl">
-                Hardware buyers can trust
-              </h3>
-              <p className="mt-4 max-w-xl text-sm leading-7 text-white/45 lg:text-[15px]">
-                Enterprise AMD and Intel hardware, Gen4 NVMe, and a 25 Gbit/s network — spec-for-spec pricing you can verify.
-              </p>
-
-              <div className="mt-6 flex flex-wrap gap-3">
-                <div className="flex items-center gap-2 border border-white/[0.08] bg-white/[0.03] px-4 py-2">
-                  <Image
-                    src={assetUrl("/images/compute-page/amd.png")}
-                    alt="AMD"
-                    width={60}
-                    height={22}
-                    className="h-auto w-14 object-contain brightness-0 invert opacity-55"
-                  />
-                  <span className="text-[10px] uppercase tracking-[0.16em] text-white/30">EPYC and Ryzen</span>
-                </div>
-                <div className="flex items-center gap-2 border border-white/[0.08] bg-white/[0.03] px-4 py-2">
-                  <Image
-                    src={assetUrl("/images/compute-page/intel.png")}
-                    alt="Intel"
-                    width={52}
-                    height={22}
-                    className="h-auto w-12 object-contain brightness-0 invert opacity-55"
-                  />
-                  <span className="text-[10px] uppercase tracking-[0.16em] text-white/30">Xeon platforms</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid gap-px bg-white/[0.06] sm:grid-cols-2 xl:grid-cols-3">
-              {HIGHLIGHTS.map((highlight) => (
-                <div
-                  key={highlight.title}
-                  className="group bg-[#0a0a0a] p-5 transition-colors duration-200 hover:bg-[#0d0d0d]"
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="flex h-10 w-10 shrink-0 items-center justify-center border transition-all group-hover:brightness-110"
-                      style={{
-                        borderColor: `${highlight.accent}40`,
-                        background: `${highlight.accent}18`,
-                        color: highlight.accent,
-                      }}
-                    >
-                      {highlight.iconNode}
-                    </div>
-                    <span
-                      className="text-xl font-semibold tracking-tight"
-                      style={{ color: highlight.accent }}
-                    >
-                      {highlight.stat}
-                    </span>
-                  </div>
-                  <h4 className="mt-4 text-[15px] font-medium text-white">{highlight.title}</h4>
-                  <p className="mt-2 text-[13px] leading-6 text-white/40">{highlight.desc}</p>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
 
         <div className="mt-14 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -547,8 +434,10 @@ export default function ComputePricingSection({
             </div>
           </div>
 
+          {/* Same slice as the desktop table — otherwise a phone gets all 33
+              plans while a laptop gets 10. */}
           <div className="grid gap-3 p-4 lg:hidden">
-            {active.plans.map((plan, index) =>
+            {previewPlans.map((plan, index) =>
               isBareMetalPlan(plan) ? (
                 <BareMetalPlanCard key={`${active.key}-${plan.processor}`} index={index} plan={plan} />
               ) : (
@@ -573,7 +462,7 @@ export default function ComputePricingSection({
                   </tr>
                 </thead>
                 <tbody>
-                  {active.plans.map((plan, index) => {
+                  {previewPlans.map((plan, index) => {
                     if (!isBareMetalPlan(plan)) {
                       return null;
                     }
@@ -586,7 +475,7 @@ export default function ComputePricingSection({
                         className={`transition-colors duration-150 hover:bg-white/[0.07] ${
                           index % 2 === 1 ? "bg-white/[0.025]" : "bg-transparent"
                         } ${
-                          index < active.plans.length - 1 ? "border-b border-white/[0.06]" : ""
+                          index < previewPlans.length - 1 ? "border-b border-white/[0.06]" : ""
                         }`}
                       >
                         <td className="px-6 py-5">
@@ -645,7 +534,7 @@ export default function ComputePricingSection({
                   </tr>
                 </thead>
                 <tbody>
-                  {active.plans.map((plan, index) => {
+                  {previewPlans.map((plan, index) => {
                     if (isBareMetalPlan(plan)) {
                       return null;
                     }
@@ -656,7 +545,7 @@ export default function ComputePricingSection({
                         className={`transition-colors duration-150 hover:bg-white/[0.07] ${
                           index % 2 === 1 ? "bg-white/[0.025]" : "bg-transparent"
                         } ${
-                          index < active.plans.length - 1 ? "border-b border-white/[0.06]" : ""
+                          index < previewPlans.length - 1 ? "border-b border-white/[0.06]" : ""
                         }`}
                       >
                         <td className="px-6 py-5">
@@ -693,9 +582,47 @@ export default function ComputePricingSection({
               </table>
             )}
           </div>
+
+          {/*
+            Footer bar. States plainly how much of the family is on screen
+            rather than letting the table just stop, and sends people to the
+            wizard for the rest — that is where they can actually filter and
+            deploy, and it always reflects live inventory.
+          */}
+          <div className="flex flex-col gap-3 border-t border-white/[0.08] bg-white/[0.015] px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <p className="m-0 text-[12.5px] text-white/45">
+              {hiddenPlanCount > 0 ? (
+                <>
+                  Showing{" "}
+                  <span className="text-white/75">{previewPlans.length}</span> of{" "}
+                  <span className="text-white/75">{active.plans.length}</span>{" "}
+                  {active.label.toLowerCase()} plans
+                </>
+              ) : (
+                <>
+                  All{" "}
+                  <span className="text-white/75">{active.plans.length}</span>{" "}
+                  {active.label.toLowerCase()} plans shown
+                </>
+              )}
+            </p>
+            <Link
+              href={
+                isBareMetalCategory
+                  ? "/dashboard/services/compute/bare-metal"
+                  : "/dashboard/services/compute/vps"
+              }
+              className="group inline-flex w-fit items-center gap-2 border border-white/[0.14] px-4 py-2.5 text-[12.5px] font-medium text-white transition-colors hover:border-[#0095FF] hover:bg-[#0095FF]/[0.08]"
+            >
+              Explore the full lineup
+              <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true" className="transition-transform group-hover:translate-x-0.5">
+                <path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5" />
+              </svg>
+            </Link>
+          </div>
         </div>
 
-        <div className="relative mt-10">
+        <div className="relative mt-20 lg:mt-24">
           <div className="relative grid gap-8 py-6 lg:grid-cols-[minmax(0,0.5fr)_minmax(0,1.5fr)] lg:items-start lg:gap-12 lg:py-8">
             <div className="pb-2 lg:pr-4">
               <div className="inline-flex items-center gap-2 px-0 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/55">

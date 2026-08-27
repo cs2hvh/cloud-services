@@ -190,3 +190,33 @@ export function costFor(tier: Tier, instances: number): number {
 export function marginPct(tier: Tier): number {
   return Math.round(((tier.priceUsd - tier.costUsd) / tier.priceUsd) * 1000) / 10;
 }
+
+/**
+ * Hours in a billing month, for converting a monthly price to an hourly rate.
+ *
+ * 730 = 365 × 24 ÷ 12, the average month. NOT 720 (a flat 30 days) and not the
+ * actual length of the current month.
+ *
+ * A real-length month would make an app cost 6.5% more in March than in
+ * February for the same uptime, which is indefensible to a customer looking at
+ * two invoices. A flat 720 quietly overcharges by 1.4% every year, because the
+ * hours billed exceed the hours in the year. 730 is what Linode, DigitalOcean
+ * and AWS all use, and matching the convention matters more than the third
+ * decimal place.
+ */
+export const BILLING_HOURS_PER_MONTH = 730;
+
+/**
+ * What one instance of this tier costs for one hour.
+ *
+ * Rounded to six places because that is the scale of `paas.project_charges`.
+ * Rounding here rather than at the database means the number written and the
+ * number computed are the same number — a value that rounds on the way in is a
+ * value nobody can reconcile against a monthly total.
+ */
+export function hourlyRateUsd(tier: Tier, instances = 1): number {
+  if (!Number.isInteger(instances) || instances < 1) {
+    throw new Error(`[paas/tiers] instances must be a positive integer, got ${instances}`);
+  }
+  return Math.round(((tier.priceUsd * instances) / BILLING_HOURS_PER_MONTH) * 1e6) / 1e6;
+}

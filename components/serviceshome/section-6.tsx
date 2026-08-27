@@ -123,7 +123,7 @@ const ServicesHomeSectionSix = ({
                             {eyebrow}
                         </p>
                     )}
-                    <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[48px]">
+                    <h2 className="text-3xl font-[400] leading-[1.05] tracking-tight text-white sm:text-4xl lg:text-[3.4rem]">
                         {heading}
                         {headingAccent && (
                             <>

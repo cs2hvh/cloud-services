@@ -18,6 +18,7 @@ import { createHmac } from "node:crypto";
 import { verifySignature, parsePushEvent, shouldDeploy } from "../../lib/paas/github/webhook.ts";
 import { paasConfig } from "../../lib/paas/config.ts";
 import { projects, environments, deployments, db } from "../../lib/paas/db.ts";
+import { resolveRepoTarget } from "../../lib/paas/repo-target.ts";
 
 const ENQUEUE = process.argv.includes("--enqueue");
 
@@ -65,13 +66,38 @@ const decision = shouldDeploy(push, project.production_branch);
 console.log(`  parsed                ${push.repoFullName}@${push.branch} ${push.sha.slice(0, 7)} by ${push.author}`);
 console.log(`  policy                ${decision.deploy ? "deploy" : `skip — ${(decision as any).reason}`}`);
 
-// 5. a push to another branch must be skipped
+// 5. a push to another branch must deploy AS A PREVIEW — not as production.
+//
+// This printed "DEPLOYS — BUG" for every non-production push, which was right
+// until previews were built and wrong every run since: a proof calling a working
+// feature a bug is how a red line stops being read. The question was never
+// whether a feature branch deploys, it is WHERE — routed as production, the same
+// push replaces the customer’s live site.
 const other = parsePushEvent(JSON.parse(body.replace(`refs/heads/${project.production_branch}`, "refs/heads/some-feature")))!;
-console.log(`  non-production branch ${shouldDeploy(other, project.production_branch).deploy ? "DEPLOYS — BUG" : "skipped"}`);
+const otherDecision = shouldDeploy(other, project.production_branch);
+const previewOk = otherDecision.deploy && otherDecision.kind === "preview";
+console.log(
+  `  non-production branch ${previewOk ? "preview, not production" : `${JSON.stringify(otherDecision)} — BUG`}`,
+);
+
+// The other half of the same claim. A run where BOTH branches route to preview
+// would pass the line above while production never deployed at all.
+const prodDecision = shouldDeploy(push, project.production_branch);
+console.log(
+  `  production branch     ${prodDecision.deploy && prodDecision.kind === "production" ? "production" : `${JSON.stringify(prodDecision)} — BUG`}`,
+);
 
 // 6. project resolution, as the route does it
-const resolved = await projects.byRepoFullName(push.repoFullName);
-console.log(`  repo -> project       ${resolved ? resolved.ref : "NOT FOUND — BUG"}`);
+// Resolved the way the route resolves it, provider and all. A proof that used
+// a looser lookup would go green on a path production does not take.
+const resolved = resolveRepoTarget(
+  await projects.matchingRepo("github", push.repoFullName),
+  push.repoFullName,
+  "github",
+);
+console.log(
+  `  repo -> project       ${resolved.kind === "one" ? resolved.project.ref : `${resolved.kind.toUpperCase()} — ${resolved.reason}`}`,
+);
 
 // 7. idempotency: a retried delivery must not build twice
 const already = await deployments.byProjectAndSha(project.id, push.sha);

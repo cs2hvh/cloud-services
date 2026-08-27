@@ -44,6 +44,31 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  // Everything below was accepted by POST /api/v2/projects from the start and
+  // never offered. The API validated `branch`, `rootDirectory` and `instances`
+  // while the form silently sent the default branch, no subdirectory and one
+  // instance — so a monorepo could not deploy `apps/web` at all, and a project
+  // could not be created on `develop` even though the field existed.
+  const [branches, setBranches] = useState<string[] | null>(null);
+  const [branchError, setBranchError] = useState<string | null>(null);
+  const [branch, setBranch] = useState<string>("");
+  const [rootDirectory, setRootDirectory] = useState("");
+  const [instances, setInstances] = useState(1);
+
+  /**
+   * Environment variables set at CREATION.
+   *
+   * Without this the first deploy of anything needing config fails, and the
+   * customer learns that by watching a build succeed and the app crash. That is
+   * exactly how the first real deploy on this platform went: it built, served a
+   * 500, and the cause was a missing NEXTAUTH_SECRET that could have been typed
+   * here.
+   *
+   * Write-only in the same way the project page is — a value goes in and is
+   * never shown again — so the form holds them only until they are saved.
+   */
+  const [envRows, setEnvRows] = useState<Array<{ key: string; value: string }>>([]);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -69,18 +94,69 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
     };
   }, []);
 
+  /**
+   * Load the chosen repository's branches.
+   *
+   * THREE STATES AGAIN, and the middle one matters most here: if GitHub cannot
+   * be reached the branch list is null, NOT empty. An empty list would render a
+   * dropdown with nothing in it and imply the repository has no branches, which
+   * is never true of a repository you can see.
+   *
+   * The default branch is preselected but not assumed — it stays selectable so
+   * someone deploying `develop` does not have to know the API accepts it.
+   */
+  useEffect(() => {
+    if (!chosen) {
+      setBranches(null);
+      setBranch("");
+      return;
+    }
+    let cancelled = false;
+    setBranches(null);
+    setBranchError(null);
+    setBranch(chosen.defaultBranch ?? "");
+    (async () => {
+      try {
+        const [owner, repo] = chosen.fullName.split("/");
+        const res = await fetch(
+          `/api/v2/git/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branches?installation=${chosen.installationId}`,
+        );
+        if (!res.ok) throw new Error(`Could not list branches (${res.status}).`);
+        const body = await res.json();
+        if (cancelled) return;
+        const names: string[] = (body.branches ?? []).map((b: { name: string }) => b.name);
+        setBranches(names);
+        // Keep the default if it is really there; otherwise fall back to the
+        // first branch rather than leaving a value the repo does not have.
+        if (chosen.defaultBranch && names.includes(chosen.defaultBranch)) setBranch(chosen.defaultBranch);
+        else if (names.length) setBranch(names[0]);
+      } catch (e) {
+        if (!cancelled) setBranchError((e as Error).message);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [chosen]);
+
   async function create() {
     if (!chosen) return;
     setSubmitting(true);
     setSubmitError(null);
     try {
+      const vars = Object.fromEntries(
+        envRows.filter((r) => r.key.trim()).map((r) => [r.key.trim(), r.value]),
+      );
+
       const res = await fetch("/api/v2/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           repo: chosen.fullName,
           installationId: chosen.installationId,
-          branch: chosen.defaultBranch ?? "main",
+          branch: branch || chosen.defaultBranch || "main",
+          rootDirectory: rootDirectory.trim() || undefined,
+          instances,
           tier,
         }),
       });
@@ -91,6 +167,23 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
         setSubmitError(body?.error?.message ?? `Could not create the project (${res.status}).`);
         return;
       }
+
+      // Variables are saved AFTER the project exists, because they are keyed to
+      // it. A failure here must NOT read as a failed creation — the project is
+      // real and the customer is about to be looking at it, so it navigates and
+      // the project page shows what did and did not save.
+      if (Object.keys(vars).length) {
+        try {
+          await fetch(`/api/v2/projects/${body.project.ref}/env`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ vars }),
+          });
+        } catch {
+          // Swallowed deliberately, and only here: the project succeeded.
+        }
+      }
+
       router.push(`/dashboard/v2/projects/${body.project.ref}`);
     } catch (e) {
       setSubmitError((e as Error).message);
@@ -171,23 +264,148 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
         </ul>
       )}
 
-      <div>
-        <label htmlFor="tier" className="block text-xs font-medium text-neutral-600 dark:text-neutral-400">
-          Plan
-        </label>
-        <select
-          id="tier"
-          value={tier}
-          onChange={(e) => setTier(e.target.value)}
-          className="mt-1 w-full rounded border border-neutral-300 px-3 py-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-900"
-        >
-          {tiers.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.label} — {t.memoryMib >= 1024 ? `${t.memoryMib / 1024} GB` : `${t.memoryMib} MB`} RAM, {t.vcpu} vCPU · ${t.priceUsd}/mo
-            </option>
-          ))}
-        </select>
-      </div>
+      {chosen ? (
+        <div className="space-y-4 rounded border border-neutral-200 p-3 dark:border-neutral-800">
+          <div>
+            <label htmlFor="branch" className="block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+              Production branch
+            </label>
+            {branchError ? (
+              // NOT an empty dropdown. A repository you can see always has
+              // branches, so "none" would be a lie about GitHub being
+              // unreachable. The typed field still lets the customer proceed.
+              <>
+                <input
+                  id="branch"
+                  value={branch}
+                  onChange={(e) => setBranch(e.target.value)}
+                  placeholder="main"
+                  className="mt-1 w-full rounded border border-neutral-300 px-3 py-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+                />
+                <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                  Could not list branches ({branchError}) — type one. It is checked when you deploy.
+                </p>
+              </>
+            ) : branches === null ? (
+              <p className="mt-1 text-sm text-neutral-500">Loading branches…</p>
+            ) : (
+              <select
+                id="branch"
+                value={branch}
+                onChange={(e) => setBranch(e.target.value)}
+                className="mt-1 w-full rounded border border-neutral-300 px-3 py-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+              >
+                {branches.map((b) => (
+                  <option key={b} value={b}>
+                    {b}
+                    {b === chosen.defaultBranch ? " (default)" : ""}
+                  </option>
+                ))}
+              </select>
+            )}
+            <p className="mt-1 text-xs text-neutral-500">
+              Pushes here deploy to production. Every other branch gets a free preview for 48 hours.
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="root" className="block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+              Root directory <span className="font-normal text-neutral-400">optional</span>
+            </label>
+            <input
+              id="root"
+              value={rootDirectory}
+              onChange={(e) => setRootDirectory(e.target.value)}
+              placeholder="apps/web"
+              className="mt-1 w-full rounded border border-neutral-300 px-3 py-1.5 font-mono text-sm dark:border-neutral-700 dark:bg-neutral-900"
+            />
+            <p className="mt-1 text-xs text-neutral-500">
+              For a monorepo. Leave blank if the app is at the repository root.
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="tier" className="block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+              Plan
+            </label>
+            <select
+              id="tier"
+              value={tier}
+              onChange={(e) => setTier(e.target.value)}
+              className="mt-1 w-full rounded border border-neutral-300 px-3 py-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+            >
+              {tiers.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.label} — {t.memoryMib >= 1024 ? `${t.memoryMib / 1024} GB` : `${t.memoryMib} MB`} RAM, {t.vcpu} vCPU · ${t.priceUsd}/mo
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label htmlFor="instances" className="block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+              Instances
+            </label>
+            <input
+              id="instances"
+              type="number"
+              min={1}
+              max={10}
+              value={instances}
+              onChange={(e) => setInstances(Math.max(1, Math.min(10, Number(e.target.value) || 1)))}
+              className="mt-1 w-24 rounded border border-neutral-300 px-3 py-1.5 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+            />
+            <p className="mt-1 text-xs text-neutral-500">
+              Copies behind one address. They do not add or remove themselves. Billed per instance.
+            </p>
+          </div>
+
+          <div>
+            <span className="block text-xs font-medium text-neutral-600 dark:text-neutral-400">
+              Environment variables <span className="font-normal text-neutral-400">optional</span>
+            </span>
+            {envRows.map((row, i) => (
+              <div key={i} className="mt-1 flex gap-2">
+                <input
+                  value={row.key}
+                  onChange={(e) =>
+                    setEnvRows((rows) => rows.map((r, j) => (j === i ? { ...r, key: e.target.value } : r)))
+                  }
+                  placeholder="NAME"
+                  className="w-44 rounded border border-neutral-300 px-2 py-1 font-mono text-sm dark:border-neutral-700 dark:bg-neutral-900"
+                />
+                <input
+                  type="password"
+                  value={row.value}
+                  onChange={(e) =>
+                    setEnvRows((rows) => rows.map((r, j) => (j === i ? { ...r, value: e.target.value } : r)))
+                  }
+                  placeholder="value"
+                  className="min-w-0 flex-1 rounded border border-neutral-300 px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+                />
+                <button
+                  type="button"
+                  onClick={() => setEnvRows((rows) => rows.filter((_, j) => j !== i))}
+                  className="text-xs text-red-600 hover:underline dark:text-red-400"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => setEnvRows((rows) => [...rows, { key: "", value: "" }])}
+              className="mt-1 text-xs text-blue-600 hover:underline dark:text-blue-400"
+            >
+              + Add variable
+            </button>
+            <p className="mt-1 text-xs text-neutral-500">
+              Set them now and the first build has them. Otherwise an app that needs config builds
+              fine and then crashes on start.
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       {submitError ? (
         <p className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">

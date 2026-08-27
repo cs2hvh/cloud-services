@@ -59,13 +59,11 @@ export default function InferencePrivateHostingSection() {
             initial={{ opacity: 0, y: 14 }}
             animate={inView ? { opacity: 1, y: 0 } : {}}
             transition={{ duration: 0.6, delay: 0.08, ease: [0.16, 1, 0.3, 1] }}
-            className="text-4xl font-semibold leading-[1.04] tracking-[-0.025em] text-white sm:text-5xl lg:text-[56px]"
+            className="text-3xl font-[400] leading-[1.05] tracking-tight text-white sm:text-4xl lg:text-[3.4rem]"
           >
-            Your model.{" "}
-            <span className="text-white/30">/</span>{" "}
-            <span className="text-[#33adff]">Your GPU.</span>{" "}
-            <span className="text-white/30">/</span>{" "}
-            <span className="block sm:inline">Your data path.</span>
+            Dedicated GPUs,
+            <br />
+            <span className="text-[#33adff]">private by default.</span>
           </motion.h2>
         </div>
 
