@@ -45,6 +45,25 @@ const SERVICE_ROLE_ALLOWED: Array<{ path: string; why: string }> = [
       "never grow a filter taken from the request body to read tenant data on " +
       "behalf of a caller.",
   },
+  {
+    path: "app/api/v2/webhooks/gitlab/route.ts",
+    why:
+      "Same as the GitHub receiver: GitLab cannot present a session, the " +
+      "webhook token is the authentication, and the repository identifies the " +
+      "project. Weaker than GitHub's in one stated way — X-Gitlab-Token is a " +
+      "shared secret compared for equality, not an HMAC over the body, so it " +
+      "authenticates the SENDER and does not bind to the payload. That is " +
+      "GitLab's design and is documented at the verification site rather than " +
+      "treated as equivalent. Same prohibition: never a filter from the body.",
+  },
+  {
+    path: "app/api/v2/webhooks/bitbucket/route.ts",
+    why:
+      "Same as the GitHub receiver. Bitbucket signs with HMAC-SHA256 as GitHub " +
+      "does, under X-Hub-Signature — no -256 suffix, which is the one thing " +
+      "that differs and is why the header name is a named export rather than a " +
+      "literal. Same prohibition: never a filter from the body.",
+  },
 ];
 
 /**
