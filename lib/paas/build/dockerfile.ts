@@ -72,33 +72,85 @@ function argLines(keys: string[]): string {
  *
  * So: reproducible when the repository allows it, buildable regardless.
  */
+/**
+ * How to install dependencies.
+ *
+ * FROZEN FIRST, THEN FALL BACK — and the fallback is not laziness, it is the
+ * only way to survive a lockfile this build did not write.
+ *
+ * A frozen install is the right default: it is reproducible, and it refuses to
+ * silently resolve a different tree from the one the author tested. But it
+ * fails for reasons that have nothing to do with the application:
+ *
+   - the lockfile is a NEWER format than the package manager corepack
+ *     resolves. sveltejs/realworld and vercel/next-learn both died on
+ *     `ERR_PNPM_BROKEN_LOCKFILE ... duplicated mapping key` because corepack
+ *     pulled pnpm 10 for a lockfile written by pnpm 11. Nothing about either
+ *     repository is wrong.
+ *   - the lockfile is genuinely stale against package.json, which a customer
+ *     may not be able to fix on the branch they are deploying.
+ *
+ * Refusing to build either case means the platform supports repositories whose
+ * tooling happens to match ours, which is not support. So: try frozen, and if
+ * it fails, resolve fresh. The build log shows both attempts, so a fallback is
+ * visible rather than silent — somebody reading it can see the lockfile was not
+ * honoured and why.
+ *
+ * With no lockfile at all there is nothing to freeze and only the second form
+ * is attempted, so the log does not carry a failure that was never possible.
+ */
 function installCmd(pm: DockerfileInput["packageManager"], production = false, hasLockfile = true): string {
+  // `||` in a RUN line: the fallback executes only when the frozen attempt
+  // exits non-zero, and the step still fails if BOTH fail — a build with no
+  // dependencies must never be reported as a success.
+  const attempt = (frozen: string, loose: string) => (hasLockfile ? `${frozen} || ${loose}` : loose);
+
   switch (pm) {
-    case "pnpm":
-      return hasLockfile
-        ? `corepack enable && pnpm install --frozen-lockfile${production ? " --prod" : ""}`
-        : `corepack enable && pnpm install --no-frozen-lockfile${production ? " --prod" : ""}`;
-    case "yarn":
-      return hasLockfile
-        ? `corepack enable && yarn install --immutable${production ? " --production" : ""}`
-        : `corepack enable && yarn install${production ? " --production" : ""}`;
-    case "bun":
-      return hasLockfile
-        ? `bun install --frozen-lockfile${production ? " --production" : ""}`
-        : `bun install${production ? " --production" : ""}`;
-    default:
-      if (!hasLockfile) {
-        // `npm install` writes a lockfile inside the image, which is fine —
-        // it is thrown away with the build stage and never committed back.
-        return production ? "npm install --omit=dev" : "npm install";
-      }
-      return production ? "npm ci --omit=dev" : "npm ci";
+    case "pnpm": {
+      const prod = production ? " --prod" : "";
+      return `corepack enable && ${attempt(
+        `pnpm install --frozen-lockfile${prod}`,
+        `pnpm install --no-frozen-lockfile${prod}`,
+      )}`;
+    }
+    case "yarn": {
+      const prod = production ? " --production" : "";
+      return `corepack enable && ${attempt(`yarn install --immutable${prod}`, `yarn install${prod}`)}`;
+    }
+    case "bun": {
+      const prod = production ? " --production" : "";
+      return attempt(`bun install --frozen-lockfile${prod}`, `bun install${prod}`);
+    }
+    default: {
+      // `npm install` writes a lockfile inside the image, which is harmless —
+      // it is thrown away with the build stage and never committed back.
+      const omit = production ? " --omit=dev" : "";
+      return attempt(`npm ci${omit}`, `npm install${omit}`);
+    }
   }
 }
 
+/**
+ * Run a package script — in a stage that may never have seen corepack.
+ *
+ * THE BUILDER IS A FRESH IMAGE. `corepack enable` runs in the deps stage, and
+ * the builder starts from `FROM node:alpine` again, so it inherits nothing but
+ * the node_modules copied into it. `RUN pnpm run build` there fails with
+ * `/bin/sh: pnpm: not found`, and it failed for EVERY pnpm and yarn project —
+ * only npm worked, because npm ships inside node.
+ *
+ * Found on sveltejs/realworld once the lockfile fallback got the install past
+ * its first error and the build reached the next stage.
+ *
+ * corepack is bundled with node, so enabling it again costs a moment and no
+ * network. npm needs nothing.
+ */
 function runCmd(pm: DockerfileInput["packageManager"], script: string): string {
-  if (script.includes(" ")) return script; // already a full command
-  return pm === "npm" ? `npm run ${script}` : `${pm} run ${script}`;
+  const cmd = script.includes(" ") ? script : pm === "npm" ? `npm run ${script}` : `${pm} run ${script}`;
+  // bun is not in the node image at all, so corepack cannot conjure it — that
+  // needs a bun base image and is tracked separately rather than papered over.
+  if (pm === "npm" || pm === "bun") return cmd;
+  return `corepack enable && ${cmd}`;
 }
 
 const NGINX_STATIC = `
@@ -146,7 +198,7 @@ ENV NODE_ENV=production
 ENV PORT=${d.port}
 # Run as the stock non-root 'node' user, never as root.
 RUN addgroup -g 1001 -S app 2>/dev/null || true
-COPY --from=builder --chown=1000:1000 /app ./
+${pm === "pnpm" || pm === "yarn" ? `# corepack while still root: the CMD below invokes ${pm}, and this stage is a\n# fresh image that has never enabled it. Enabling it after USER fails, because\n# corepack writes shims into the node prefix.\nRUN corepack enable\n` : ""}COPY --from=builder --chown=1000:1000 /app ./
 USER 1000:1000
 EXPOSE ${d.port}
 CMD ${start.includes(" ") ? `["sh","-c","${start.replace(/"/g, '\\"')}"]` : `["${pm}","run","${start}"]`}

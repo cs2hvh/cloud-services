@@ -197,3 +197,102 @@ test("the install step is still reproducible by default", () => {
   const out = generateDockerfile(input({ detection, packageManager: "npm" }));
   assert.match(out!, /npm ci/, "no explicit flag means assume a lockfile and stay frozen");
 });
+
+test("A LOCKFILE THIS BUILD DID NOT WRITE MUST NOT BE FATAL", () => {
+  // sveltejs/realworld and vercel/next-learn both died on
+  // ERR_PNPM_BROKEN_LOCKFILE — corepack resolved pnpm 10 for a lockfile written
+  // by pnpm 11. Nothing about either repository is wrong, and refusing them
+  // means supporting only repositories whose tooling happens to match ours.
+  //
+  // So the frozen install is attempted FIRST and a fresh resolve follows it.
+  // Both must be present, in that order, or the guarantee is gone.
+  const detection = detect(["package.json"], {
+    "package.json": JSON.stringify({ dependencies: { express: "4" }, scripts: { start: "node i.js" } }),
+  });
+
+  for (const [packageManager, frozen, loose] of [
+    ["npm", "npm ci", "npm install"],
+    ["pnpm", "pnpm install --frozen-lockfile", "pnpm install --no-frozen-lockfile"],
+    ["yarn", "yarn install --immutable", "yarn install"],
+    ["bun", "bun install --frozen-lockfile", "bun install"],
+  ] as const) {
+    const out = generateDockerfile(input({ detection, packageManager, hasLockfile: true }))!;
+    const install = out.split("\n").find((l) => l.includes(frozen))!;
+    assert.ok(install, `${packageManager}: expected a frozen install line`);
+    assert.ok(
+      install.includes("||"),
+      `${packageManager}: the frozen install must have a fallback, not fail the build`,
+    );
+    assert.ok(
+      install.indexOf(frozen) < install.lastIndexOf(loose),
+      `${packageManager}: frozen must be attempted BEFORE the fresh resolve`,
+    );
+  }
+});
+
+test("with no lockfile there is no failed attempt to fall back FROM", () => {
+  // The paired half. Emitting `npm ci || npm install` with no lockfile would put
+  // a guaranteed failure in every build log, and a log that always contains an
+  // error teaches people to ignore errors.
+  const detection = detect(["package.json"], {
+    "package.json": JSON.stringify({ dependencies: { express: "4" }, scripts: { start: "node i.js" } }),
+  });
+  const out = generateDockerfile(input({ detection, packageManager: "npm", hasLockfile: false }))!;
+  const install = out.split("\n").find((l) => l.includes("npm install"))!;
+  assert.doesNotMatch(install, /npm ci/, "nothing to freeze means no frozen attempt");
+  assert.doesNotMatch(install, /\|\|/, "and therefore nothing to fall back from");
+});
+
+test("EVERY STAGE THAT INVOKES pnpm OR yarn ENABLES COREPACK FIRST", () => {
+  // Each stage is a fresh `FROM node:alpine` and inherits nothing. corepack ran
+  // in deps, so `RUN pnpm run build` in the builder died with
+  // `/bin/sh: pnpm: not found` — for EVERY pnpm and yarn project. Only npm
+  // worked, because npm ships inside node.
+  //
+  // Found on sveltejs/realworld, and there were three stages with the same bug:
+  // deps had it, builder did not, and the runner's CMD invoked the package
+  // manager in a third image that had never seen it either.
+  const detection = detect(["package.json"], {
+    "package.json": JSON.stringify({
+      dependencies: { "@sveltejs/kit": "2" },
+      scripts: { build: "vite build", start: "node build" },
+    }),
+  });
+
+  for (const packageManager of ["pnpm", "yarn"] as const) {
+    const out = generateDockerfile(input({ detection, packageManager, hasLockfile: true }))!;
+
+    for (const stageLine of out.split("\n")) {
+      // Any RUN that invokes the package manager must enable corepack on the
+      // same line — a previous stage having done it proves nothing.
+      if (!new RegExp(`^RUN .*\b${packageManager}\b`).test(stageLine)) continue;
+      assert.match(
+        stageLine,
+        /corepack enable/,
+        `${packageManager}: "${stageLine.slice(0, 70)}" runs the package manager without enabling corepack`,
+      );
+    }
+
+    // And the runner enables it while still root: corepack writes shims into the
+    // node prefix, which fails once USER has dropped privileges.
+    const runner = out.slice(out.lastIndexOf("AS runner"));
+    // ANCHORED TO LINE START. indexOf("USER ") matched the word inside the
+    // comment explaining this very ordering, so the test failed against a
+    // Dockerfile that was correct — a false red is as expensive as a false
+    // green, because the next person distrusts the check rather than the code.
+    const enableIdx = runner.search(/^RUN corepack enable$/m);
+    const userIdx = runner.search(/^USER /m);
+    assert.ok(enableIdx > 0, `${packageManager}: the runner must enable corepack`);
+    assert.ok(enableIdx < userIdx, `${packageManager}: corepack must be enabled BEFORE dropping root`);
+  }
+});
+
+test("npm needs no corepack anywhere", () => {
+  // The paired half. Adding `corepack enable` to every image would slow every
+  // npm build for nothing, and this asserts the fix stayed targeted.
+  const detection = detect(["package.json"], {
+    "package.json": JSON.stringify({ dependencies: { express: "4" }, scripts: { start: "node i.js" } }),
+  });
+  const out = generateDockerfile(input({ detection, packageManager: "npm", hasLockfile: true }))!;
+  assert.doesNotMatch(out, /corepack/, "npm ships with node; enabling corepack is pure cost");
+});
