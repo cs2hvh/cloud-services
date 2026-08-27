@@ -36,7 +36,10 @@ import { upsertDnsRecord, listDnsRecords } from "./edge/cloudflare.ts";
 const UA = "ahuracloud-deploy-v2";
 
 const MARKER_FILES = [
-  "Dockerfile", "package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "bun.lockb",
+  "Dockerfile", "package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock",
+  // Both bun formats: .lockb is the binary one, .lock the newer text one. Probing
+  // only the first made a bun repo look lockfile-less and take the slow path.
+  "bun.lockb", "bun.lock",
   "requirements.txt", "pyproject.toml", "Pipfile", "manage.py", "go.mod", "Gemfile",
   "pom.xml", "build.gradle", "build.gradle.kts", "composer.json", "index.html",
   ...DETECTION_FILES,
@@ -386,9 +389,20 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
 
   // ── 2. build ──────────────────────────────────────────────────────────────
   await deployments.setState(d.ref, { state: "building", startedAt: true });
+  // Whether the repository ACTUALLY ships a lockfile, from the marker files
+  // detection already read. Every frozen-install flag is a hard error without
+  // one, so assuming its presence made any lockfile-less repository unbuildable.
+  const hasLockfile =
+    files.paths.includes("package-lock.json") ||
+    files.paths.includes("pnpm-lock.yaml") ||
+    files.paths.includes("yarn.lock") ||
+    files.paths.includes("bun.lockb") ||
+    files.paths.includes("bun.lock");
+
   const dockerfile = generateDockerfile({
     detection,
     packageManager: pm,
+    hasLockfile,
     // Only public-prefixed keys become build args; runtime values are injected
     // from a Secret and must never enter an image layer.
     publicEnvKeys: [],

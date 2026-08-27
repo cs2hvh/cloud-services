@@ -158,3 +158,42 @@ test("unknown runtime refuses rather than emitting a broken image", () => {
   const d = { ...detect(["README.md"]), runtime: "php" as const };
   assert.throws(() => generateDockerfile(input({ detection: d })), /No generator for runtime/);
 });
+
+test("A FROZEN INSTALL IS ONLY CHOSEN WHEN THERE IS A LOCKFILE", () => {
+  // `npm ci` is a hard error without package-lock.json, and pnpm, yarn and bun
+  // all refuse in their own way. Choosing the frozen form unconditionally meant
+  // no repository without a lockfile could be built at all — a large share of
+  // samples, templates and small projects. Found by deploying
+  // fastify/fastify-example-todo, which died at `npm ci` with a usage message
+  // that never mentions lockfiles.
+  const detection = detect(["package.json"], {
+    "package.json": JSON.stringify({ dependencies: { express: "4" }, scripts: { start: "node i.js" } }),
+  });
+
+  for (const packageManager of ["npm", "yarn", "pnpm", "bun"] as const) {
+    const withLock = generateDockerfile(input({ detection, packageManager, hasLockfile: true }));
+    const without = generateDockerfile(input({ detection, packageManager, hasLockfile: false }));
+    assert.ok(withLock && without, `${packageManager}: expected both Dockerfiles`);
+
+    assert.match(
+      withLock!,
+      /npm ci|--frozen-lockfile|--immutable/,
+      `${packageManager} with a lockfile must install frozen`,
+    );
+    assert.doesNotMatch(
+      without!,
+      /npm ci(?![a-z])|--frozen-lockfile|--immutable/,
+      `${packageManager} without a lockfile must NOT demand one`,
+    );
+  }
+});
+
+test("the install step is still reproducible by default", () => {
+  // The paired half. If a missing lockfile relaxed the install for everyone,
+  // every build would quietly stop being reproducible.
+  const detection = detect(["package.json"], {
+    "package.json": JSON.stringify({ dependencies: { express: "4" }, scripts: { start: "node i.js" } }),
+  });
+  const out = generateDockerfile(input({ detection, packageManager: "npm" }));
+  assert.match(out!, /npm ci/, "no explicit flag means assume a lockfile and stay frozen");
+});

@@ -30,6 +30,17 @@ const SAFE_KEY = /^[A-Za-z_][A-Za-z0-9_]*$/;
 export interface DockerfileInput {
   detection: Detection;
   packageManager: "npm" | "yarn" | "pnpm" | "bun";
+  /**
+   * Whether the repository actually ships a lockfile.
+   *
+   * Every frozen-install flag REQUIRES one — `npm ci` errors outright, and
+   * pnpm, yarn and bun all refuse in their own way. Without this the
+   * generated Dockerfile could not build ANY repository that does not commit
+   * a lockfile, which is a large share of samples, templates and small
+   * projects. Found by deploying fastify/fastify-example-todo, which failed
+   * at `npm ci` with a usage message rather than anything about lockfiles.
+   */
+  hasLockfile?: boolean;
   /** Keys only — values are passed as --build-arg at build time, never inlined. */
   publicEnvKeys: string[];
   nodeVersion?: string;
@@ -49,15 +60,38 @@ function argLines(keys: string[]): string {
   );
 }
 
-function installCmd(pm: DockerfileInput["packageManager"], production = false): string {
+/**
+ * How to install dependencies.
+ *
+ * FROZEN ONLY WHEN THERE IS SOMETHING TO FREEZE. A lockfile makes the build
+ * reproducible and every package manager has a flag to insist on it — and
+ * every one of those flags is a hard error when the file is absent. Choosing
+ * the frozen form unconditionally meant a repository without a lockfile could
+ * not be built at all, and the failure surfaced as an npm usage message that
+ * never mentions lockfiles.
+ *
+ * So: reproducible when the repository allows it, buildable regardless.
+ */
+function installCmd(pm: DockerfileInput["packageManager"], production = false, hasLockfile = true): string {
   switch (pm) {
     case "pnpm":
-      return `corepack enable && pnpm install --frozen-lockfile${production ? " --prod" : ""}`;
+      return hasLockfile
+        ? `corepack enable && pnpm install --frozen-lockfile${production ? " --prod" : ""}`
+        : `corepack enable && pnpm install --no-frozen-lockfile${production ? " --prod" : ""}`;
     case "yarn":
-      return `corepack enable && yarn install --immutable${production ? " --production" : ""}`;
+      return hasLockfile
+        ? `corepack enable && yarn install --immutable${production ? " --production" : ""}`
+        : `corepack enable && yarn install${production ? " --production" : ""}`;
     case "bun":
-      return `bun install --frozen-lockfile${production ? " --production" : ""}`;
+      return hasLockfile
+        ? `bun install --frozen-lockfile${production ? " --production" : ""}`
+        : `bun install${production ? " --production" : ""}`;
     default:
+      if (!hasLockfile) {
+        // `npm install` writes a lockfile inside the image, which is fine —
+        // it is thrown away with the build stage and never committed back.
+        return production ? "npm install --omit=dev" : "npm install";
+      }
       return production ? "npm ci --omit=dev" : "npm ci";
   }
 }
@@ -98,7 +132,7 @@ FROM node:${node}-alpine AS deps
 WORKDIR /app
 RUN apk add --no-cache libc6-compat
 COPY package.json ${pm === "pnpm" ? "pnpm-lock.yaml*" : pm === "yarn" ? "yarn.lock*" : pm === "bun" ? "bun.lock*" : "package-lock.json*"} ./
-RUN --mount=type=cache,target=/root/.npm ${installCmd(pm)}
+RUN --mount=type=cache,target=/root/.npm ${installCmd(pm, false, i.hasLockfile !== false)}
 
 FROM node:${node}-alpine AS builder
 WORKDIR /app
@@ -142,7 +176,7 @@ FROM node:${node}-alpine AS builder
 WORKDIR /app
 RUN apk add --no-cache libc6-compat
 COPY package.json ${pm === "pnpm" ? "pnpm-lock.yaml*" : pm === "yarn" ? "yarn.lock*" : "package-lock.json*"} ./
-RUN --mount=type=cache,target=/root/.npm ${installCmd(pm)}
+RUN --mount=type=cache,target=/root/.npm ${installCmd(pm, false, i.hasLockfile !== false)}
 COPY . .
 ${args}RUN ${runCmd(pm, build)}
 
