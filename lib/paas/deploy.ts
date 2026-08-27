@@ -28,6 +28,8 @@ import { PAAS_NAMESPACE, REGISTRY_PUSH, publisherJob } from "./k8s/manifests.ts"
 import { reconcileProject, kubeContextFromEnv } from "./reconciler.ts";
 import { teams, projects, environments, deployments, aliases, type DeploymentRow, type ProjectRow, type AliasRow } from "./db.ts";
 import { appHostname } from "./config.ts";
+import { getFileContents } from "./github/client.ts";
+import { listInstallations } from "./github/app.ts";
 import { assertLabelAvailable, previewLabel } from "./hostnames.ts";
 import { upsertDnsRecord, listDnsRecords } from "./edge/cloudflare.ts";
 
@@ -40,7 +42,58 @@ const MARKER_FILES = [
   ...DETECTION_FILES,
 ];
 
-async function probe(repo: string, branch: string, path: string): Promise<string | null> {
+/**
+ * Which installation can read this repository?
+ *
+ * Resolved from the owner rather than passed in, so every caller of
+ * inspectRepo gets authenticated reads without threading an id through. Null
+ * means we hold no credential for that account — a different thing from the
+ * repository having no marker files, and reported as such.
+ */
+async function installationForRepo(repo: string): Promise<number | null> {
+  const owner = repo.split("/")[0]?.toLowerCase();
+  if (!owner) return null;
+  try {
+    const found = (await listInstallations()).find(
+      (i) => (i.account?.login ?? "").toLowerCase() === owner,
+    );
+    return found ? Number(found.id) : null;
+  } catch {
+    // Cannot ask. Treated as no credential, and the caller says so rather than
+    // probing anonymously and blaming the repository for the result.
+    return null;
+  }
+}
+
+/**
+ * Read one file, or establish that it is not there.
+ *
+ * THIS USED TO FETCH raw.githubusercontent.com WITH NO CREDENTIAL, and a
+ * private repository answers that with 404 — identical to a file that does not
+ * exist. So every marker probe came back empty, detection concluded the
+ * repository had no package.json or Dockerfile, and the customer was told to
+ * add one they already had. 36 of the operator's own 49 repositories are
+ * private: three quarters of them undeployable, with the blame pointed at
+ * their code.
+ *
+ * Empty is not the same as unknown — the same distinction as everywhere else
+ * in this codebase, in the place a customer meets first.
+ *
+ * getFileContents mints an installation token and, crucially, THROWS on any
+ * status that is not 200 or 404, so a rate limit or a revoked token surfaces
+ * as a failure rather than as an empty repository.
+ */
+async function probe(
+  repo: string,
+  branch: string,
+  path: string,
+  installationId: number | null,
+): Promise<string | null> {
+  if (installationId !== null) {
+    return getFileContents(installationId, repo, path, branch);
+  }
+  // No installation for this owner. Public repositories still resolve, which
+  // keeps the proof scripts working against upstream samples.
   const r = await fetch(`https://raw.githubusercontent.com/${repo}/${branch}/${path}`, {
     headers: { "User-Agent": UA },
   });
@@ -71,23 +124,27 @@ export async function inspectRepo(
    * falling back to main — building the wrong recipe is worse than refusing.
    */
   explicitBranch?: string | null,
-): Promise<{ branch: string; files: RepoFiles }> {
+): Promise<{ branch: string; files: RepoFiles; authenticated: boolean }> {
   const dir = rootDirectory ? `${rootDirectory.replace(/^\/+|\/+$/g, "")}/` : "";
+  const installationId = await installationForRepo(repo);
+
   const branch =
     explicitBranch ??
-    ((await probe(repo, "main", `${dir}README.md`)) !== null ||
-    (await probe(repo, "main", `${dir}package.json`)) !== null
+    ((await probe(repo, "main", `${dir}README.md`, installationId)) !== null ||
+    (await probe(repo, "main", `${dir}package.json`, installationId)) !== null
       ? "main"
       : "master");
 
   const files: RepoFiles = { paths: [], contents: {} };
   for (const f of [...new Set(MARKER_FILES)]) {
-    const body = await probe(repo, branch, `${dir}${f}`);
+    const body = await probe(repo, branch, `${dir}${f}`, installationId);
     if (body === null) continue;
     files.paths.push(f);
     if ((DETECTION_FILES as readonly string[]).includes(f)) files.contents[f] = body;
   }
-  return { branch, files };
+  // Reported so the caller can tell 'read it, found nothing' from 'could not
+  // read it'. Those need different messages and different fixes.
+  return { branch, files, authenticated: installationId !== null };
 }
 
 export interface DeployOptions {
@@ -216,13 +273,28 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
     throw new Error(`deployment ${opts.existingDeploymentRef} not found`);
   }
 
-  const { branch, files } = await inspectRepo(opts.repo, opts.rootDirectory, adopted?.git_ref ?? null);
+  const { branch, files, authenticated } = await inspectRepo(
+    opts.repo,
+    opts.rootDirectory,
+    adopted?.git_ref ?? null,
+  );
   const detection = detectFramework(files);
   const pm = detectPackageManager(files);
   const port = servingPort(detection);
   say("detect", `${detection.framework} (${detection.runtime}) on ${branch}, port ${port}`);
 
   if (detection.framework === "unknown") {
+    // A repository we could not authenticate against looks EXACTLY like one
+    // with no marker files, and telling somebody to add a Dockerfile they
+    // already have is worse than saying nothing. Name the likelier cause.
+    if (!authenticated && files.paths.length === 0) {
+      throw new Error(
+        `cannot read ${opts.repo}: no GitHub App installation covers that account, so a private ` +
+          `repository is indistinguishable from an empty one. Connect the account that owns it and ` +
+          `redeploy. Detection saw no files at all, which is why this is not reported as a missing ` +
+          `framework marker.`,
+      );
+    }
     throw new Error(`cannot determine how to build ${opts.repo}: ${detection.reason}`);
   }
 

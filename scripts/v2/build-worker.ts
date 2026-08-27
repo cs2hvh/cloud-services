@@ -75,10 +75,39 @@ async function buildOne(ref: string): Promise<void> {
     });
     console.log(`[${stamp()}] DEPLOYED ${out.deployment.ref} -> https://${out.hostname}`);
   } catch (e) {
-    // deployFromRepo already records the failure on the row; this is the
-    // operator-visible half. A worker that swallows the error would leave a row
-    // in 'error' with nothing in the log explaining it.
-    console.log(`[${stamp()}] FAILED ${d.ref}: ${(e as Error).message}`);
+    const message = (e as Error).message;
+    console.log(`[${stamp()}] FAILED ${d.ref}: ${message}`);
+
+    // THE ROW MUST LEAVE THE QUEUE, and this used to assume deployFromRepo had
+    // already seen to it. It has not, for every failure before it first writes
+    // `building` — and that includes the most common one a customer hits:
+    // a repository with no recognised framework marker.
+    //
+    // The row stayed `queued`, so the next pass picked it up fifteen seconds
+    // later and failed identically, forever. The dashboard showed `queued` the
+    // whole time with no reason anywhere a customer could see it, because the
+    // only account of it was this log line on somebody's laptop.
+    //
+    // Re-read rather than trusting the row we started with: deployFromRepo may
+    // have recorded a more specific failure already, and overwriting that with
+    // a generic one would replace the useful message with a vaguer one.
+    try {
+      const after = await deployments.byRef(d.ref);
+      if (after && (after.state === "queued" || after.state === "building" || after.state === "publishing")) {
+        await deployments.setState(d.ref, {
+          state: "error",
+          errorCode: "build_failed",
+          errorMessage: message.slice(0, 500),
+        });
+        console.log(`   recorded   ${d.ref} -> error (it would otherwise retry forever)`);
+      }
+    } catch (inner) {
+      // Loud, because the consequence is the retry loop this exists to end.
+      console.log(
+        `   WARNING    could not record the failure on ${d.ref}: ${(inner as Error).message.slice(0, 160)}`,
+      );
+      console.log(`   ${d.ref} may be retried until this is fixed.`);
+    }
   }
 }
 
