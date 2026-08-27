@@ -81,7 +81,7 @@ function CodeTypewriter({
         return l.highlight ? (
           <span
             key={i}
-            className="block rounded-[3px] bg-[#0095FF]/[0.15] -mx-2 px-2 text-white"
+            className="block bg-[#0095FF]/[0.15] -mx-2 px-2 text-white"
           >
             {txt}
             {showCaret && <Caret />}
@@ -189,7 +189,7 @@ function Tile({
       initial={{ opacity: 0, y: 16 }}
       animate={inView ? { opacity: 1, y: 0 } : {}}
       transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1], delay }}
-      className={`group relative overflow-hidden rounded-[10px] border border-white/[0.08] bg-white/[0.015] p-6 transition-all duration-300 hover:border-white/[0.18] hover:bg-white/[0.035] ${className ?? ""}`}
+      className={`ah-notch group relative overflow-hidden border border-white/[0.08] bg-white/[0.015] p-6 transition-all duration-300 hover:border-white/[0.18] hover:bg-white/[0.035] ${className ?? ""}`}
     >
       {/* Soft top-edge highlight — bento staple */}
       <span
@@ -203,7 +203,7 @@ function Tile({
       {/* Hover wash */}
       <span
         aria-hidden
-        className="pointer-events-none absolute -inset-px rounded-[10px] opacity-0 transition-opacity duration-500 group-hover:opacity-100"
+        className="ah-notch pointer-events-none absolute -inset-px opacity-0 transition-opacity duration-500 group-hover:opacity-100"
         style={{
           background:
             "radial-gradient(60% 60% at 50% 0%, rgba(0,149,255,0.10), transparent 70%)",
@@ -245,26 +245,21 @@ export default function InferenceFeaturesSection() {
             "radial-gradient(60% 40% at 50% 0%, rgba(0,149,255,0.30), transparent 70%)",
         }}
       />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-[0.04]"
-        style={{
-          backgroundImage:
-            "linear-gradient(rgba(255,255,255,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.4) 1px, transparent 1px)",
-          backgroundSize: "72px 72px",
-          maskImage:
-            "radial-gradient(ellipse 65% 60% at 50% 35%, black, transparent 75%)",
-          WebkitMaskImage:
-            "radial-gradient(ellipse 65% 60% at 50% 35%, black, transparent 75%)",
-        }}
-      />
+      {/*
+        A 72px section-wide grid used to sit here. The card surfaces are only
+        1.5% white, so it showed straight through them — and once the cards
+        became square it stopped reading as background texture and started
+        reading as a checkerboard printed inside each card. Removed; the
+        radial wash above carries the depth on its own.
+      */}
 
       <Container className="relative z-10">
         {/* Section header */}
         <div className="mx-auto max-w-3xl text-center">
           <h2 className="text-3xl font-[400] leading-[1.05] tracking-tight text-white sm:text-4xl lg:text-[3.4rem]">
-            Production guardrails.{" "}
-            <span className="text-[#0095FF]">Day one.</span>
+            Enterprise controls,
+            <br />
+            <span className="text-[#0095FF]">built in.</span>
           </h2>
           <p className="mt-5 text-[15px] leading-7 text-white/55 sm:text-[16px]">
             Spend caps, BYOK, ZDR, semantic cache, and audit logs — working out of the box.
@@ -291,7 +286,7 @@ export default function InferenceFeaturesSection() {
             </p>
 
             {/* Code preview — diff-style highlight on the changed line */}
-            <div className="mt-6 overflow-hidden rounded-[6px] border border-white/[0.06] bg-black/40 font-mono text-[11px] leading-relaxed">
+            <div className="ah-notch-sm mt-6 overflow-hidden border border-white/[0.06] bg-black/40 font-mono text-[11px] leading-relaxed">
               <div className="flex items-center gap-1.5 border-b border-white/[0.04] px-3 py-1.5">
                 <span className="h-1.5 w-1.5 rounded-full bg-[#ff5f57]" />
                 <span className="h-1.5 w-1.5 rounded-full bg-[#febc2e]" />
@@ -307,7 +302,7 @@ export default function InferenceFeaturesSection() {
               {["OpenAI SDK", "Anthropic SDK", "LangChain", "LlamaIndex", "Vercel AI"].map((t) => (
                 <span
                   key={t}
-                  className="rounded-[3px] border border-white/[0.08] bg-white/[0.02] px-2 py-0.5 font-mono text-[9.5px] uppercase tracking-[0.14em] text-white/55"
+                  className="border border-white/[0.08] bg-white/[0.02] px-2 py-0.5 font-mono text-[9.5px] uppercase tracking-[0.14em] text-white/55"
                 >
                   {t}
                 </span>
@@ -404,7 +399,7 @@ export default function InferenceFeaturesSection() {
             </p>
 
             {/* Cipher line visual — looks like an encrypted payload */}
-            <div className="mt-5 overflow-hidden rounded-[6px] border border-white/[0.06] bg-black/40 p-3 font-mono text-[10px]">
+            <div className="ah-notch-sm mt-5 overflow-hidden border border-white/[0.06] bg-black/40 p-3 font-mono text-[10px]">
               <p className="text-white/35">$ payload (AES-256-GCM)</p>
               <p className="mt-1 break-all">
                 <DecryptText
@@ -421,7 +416,7 @@ export default function InferenceFeaturesSection() {
               {["OpenAI", "Anthropic", "Google", "Mistral"].map((p) => (
                 <span
                   key={p}
-                  className="rounded-[3px] border border-white/[0.08] bg-white/[0.02] px-2 py-1 text-center font-mono text-[9.5px] uppercase tracking-[0.14em] text-white/55"
+                  className="border border-white/[0.08] bg-white/[0.02] px-2 py-1 text-center font-mono text-[9.5px] uppercase tracking-[0.14em] text-white/55"
                 >
                   {p}
                 </span>
@@ -540,7 +535,7 @@ export default function InferenceFeaturesSection() {
 
                 {/* Two inline pills showing the value props */}
                 <div className="mt-4 grid grid-cols-2 gap-2">
-                  <div className="rounded-[5px] border border-white/[0.06] bg-black/30 p-2.5">
+                  <div className="border border-white/[0.06] bg-black/30 p-2.5">
                     <p className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-white/40">
                       Header
                     </p>
@@ -548,7 +543,7 @@ export default function InferenceFeaturesSection() {
                       X-Ahura-Preset:&nbsp;<span className="text-[#33adff]">prod-cheap-first</span>
                     </p>
                   </div>
-                  <div className="rounded-[5px] border border-white/[0.06] bg-black/30 p-2.5">
+                  <div className="border border-white/[0.06] bg-black/30 p-2.5">
                     <p className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-white/40">
                       Webhook signature
                     </p>

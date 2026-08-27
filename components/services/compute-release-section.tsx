@@ -209,7 +209,7 @@ const ComputeReleaseSection = () => {
             <Container className="relative z-10">
                 {/* Header */}
                 <div className="mx-auto max-w-[760px] text-center">
-                    <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[44px]">
+                    <h2 className="text-3xl font-[400] leading-[1.05] tracking-tight text-white sm:text-4xl lg:text-[3.4rem]">
                         Dedicated hardware, on tap
                     </h2>
                     <p className="mx-auto mt-5 max-w-[620px] text-[15px] leading-[1.6] text-white/60 sm:text-[16px]">

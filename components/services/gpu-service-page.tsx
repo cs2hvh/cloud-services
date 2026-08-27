@@ -14,45 +14,11 @@ import { NvidiaLogo } from "@/components/branding/nvidia-logo";
 import { Container } from "@/components/ui/container";
 import PixelBlast from "@/components/hero/pixel-blast";
 import { ClustersSection } from "@/components/clusters-section";
-import type { PublicStock } from "@/lib/catalog/gpu";
+import { GpuLineup } from "@/components/services/gpu-lineup";
+import type { LineupGpu } from "@/components/services/gpu-lineup";
 
 const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
 const BRAND = "#0095FF";
-
-// ─── GPU lineup ────────────────────────────────────────────────
-type GpuRow = {
-    id: string;
-    name: string;
-    arch: string;
-    archTier: "blackwell" | "hopper" | "ampere" | "ada";
-    memory: string;
-    memoryType: string;
-    perfFp8: string;
-    bandwidth: string;
-    /** Live resale price per GPU-hour; null when we have no current reading. */
-    pricePerHour: number | null;
-    /** Live availability. "unknown" when the stock reading is stale. */
-    stock: PublicStock;
-    href: string;
-    featured?: boolean;
-};
-
-
-const ARCH_TONE: Record<GpuRow["archTier"], string> = {
-    blackwell: "#a78bfa",
-    hopper: "#0095FF",
-    ampere: "#4ade80",
-    ada: "#fbbf24",
-};
-
-const STOCK_META: Record<GpuRow["stock"], { color: string; label: string }> = {
-    available: { color: "#4ade80", label: "In stock" },
-    limited: { color: "#fbbf24", label: "Limited" },
-    unavailable: { color: "rgba(255,255,255,0.35)", label: "Out of stock" },
-    // Shown when the reading is older than the freshness window. Claiming
-    // "In stock" from a stale snapshot sends people into a deploy that fails.
-    unknown: { color: "#a78bfa", label: "Check availability" },
-};
 
 // ─── Workload categories (for the cream section) ──────────────
 type Workload = {
@@ -171,114 +137,6 @@ const FAQS = [
 
 // ─── Subcomponents ────────────────────────────────────────────
 
-function GpuCard({ gpu, index }: { gpu: GpuRow; index: number }) {
-    const tone = ARCH_TONE[gpu.archTier];
-    const stock = STOCK_META[gpu.stock];
-    return (
-      <article
-        className={`group relative flex flex-col rounded-[8px] border p-7 transition-all duration-300 hover:-translate-y-1 hover:bg-[#161A1F] hover:shadow-[0_8px_20px_rgba(0,0,0,0.5)] ${
-          gpu.featured
-            ? "border-white/[0.18] bg-[#13161B]"
-            : "border-white/[0.10] bg-[#111316]"
-        }`}
-        style={{
-          boxShadow: gpu.featured
-            ? "inset 0 1px 0 rgba(255,255,255,0.07), 0 12px 32px -12px rgba(0,0,0,0.75)"
-            : "inset 0 1px 0 rgba(255,255,255,0.05), 0 10px 28px -12px rgba(0,0,0,0.65)",
-        }}
-      >
-        {/* Blue left accent — appears on hover */}
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 left-0 w-[2px] rounded-l-[8px] opacity-0 transition-opacity duration-200 group-hover:opacity-100"
-          style={{ background: BRAND }}
-        />
-
-        {/* Header — index + name */}
-        <div className="flex items-start justify-between">
-          <span
-            className={`${MONO} text-[10.5px] tabular-nums text-white/30`}
-          >
-            {String(index + 1).padStart(2, "0")}
-          </span>
-
-          <h3 className="text-[26px] font-semibold leading-none tracking-[-0.02em] text-white">
-            {gpu.name}
-          </h3>
-        </div>
-
-        <p
-          className={`${MONO} mt-2 text-[10.5px] uppercase tracking-[0.16em] text-white/45`}
-        >
-          {gpu.arch} · {gpu.memory} {gpu.memoryType}
-        </p>
-
-        {/* Spec rows */}
-        <ul className="mt-5 space-y-2 border-t border-white/[0.06] pt-4">
-          <li className="flex items-baseline justify-between">
-            <span
-              className={`${MONO} text-[10px] uppercase tracking-[0.16em] text-white/40`}
-            >
-              Performance
-            </span>
-            <span className={`${MONO} text-[12px] tabular-nums text-white/85`}>
-              {gpu.perfFp8}
-            </span>
-          </li>
-          <li className="flex items-baseline justify-between">
-            <span
-              className={`${MONO} text-[10px] uppercase tracking-[0.16em] text-white/40`}
-            >
-              Bandwidth
-            </span>
-            <span className={`${MONO} text-[12px] tabular-nums text-white/85`}>
-              {gpu.bandwidth}
-            </span>
-          </li>
-        </ul>
-
-        {/* Footer — price + stock + CTA */}
-        <div className="mt-6 flex items-end justify-between gap-3 border-t border-white/[0.06] pt-5">
-          <div>
-            <p
-              className={`${MONO} text-[9.5px] font-semibold uppercase tracking-[0.22em] text-white/45`}
-            >
-              From
-            </p>
-            <p
-              className={`${MONO} mt-1 text-[26px] font-bold leading-none tabular-nums text-white`}
-            >
-              {gpu.pricePerHour === null ? "\u2014" : `$${gpu.pricePerHour.toFixed(2)}`}
-              <span className="ml-1 text-[11px] font-normal text-white/55">
-                /GPU·hr
-              </span>
-            </p>
-            <p
-              className={`${MONO} mt-2 inline-flex items-center gap-1.5 text-[9.5px] uppercase tracking-[0.14em]`}
-              style={{ color: stock.color }}
-            >
-              <span
-                className="h-1 w-1 rounded-full"
-                style={{
-                  background: stock.color,
-                  boxShadow: `0 0 4px ${stock.color}`,
-                }}
-              />
-              {stock.label}
-            </p>
-          </div>
-          <Link
-            href={gpu.href}
-            className={`${MONO} inline-flex h-10 items-center justify-center gap-1.5 border border-white/25 bg-transparent px-4 text-[11px] font-semibold uppercase tracking-[0.16em] text-white transition-colors hover:border-white hover:bg-white hover:text-black`}
-          >
-            Deploy
-            <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
-        </div>
-      </article>
-    );
-}
-
 function WorkloadCard({ w, index }: { w: Workload; index: number }) {
     return (
         <article
@@ -337,7 +195,15 @@ function WorkloadCard({ w, index }: { w: Workload; index: number }) {
 
 // ─── Main page ────────────────────────────────────────────────
 
-export function GpuServicePage({ gpus }: { gpus: GpuRow[] }) {
+export function GpuServicePage({
+    gpus,
+    observedAt,
+    stockIsFresh,
+}: {
+    gpus: LineupGpu[];
+    observedAt: string | null;
+    stockIsFresh: boolean;
+}) {
     // The lineup arrives from the server, priced and stocked by lib/catalog/gpu.
     // It used to be a constant in this file with fixed prices and fixed "In
     // stock" strings, which is why this page and the deploy wizard disagreed.
@@ -474,39 +340,18 @@ export function GpuServicePage({ gpus }: { gpus: GpuRow[] }) {
                     className="absolute top-0 left-1/2 h-px w-[60%] -translate-x-1/2 bg-gradient-to-r from-transparent via-white/10 to-transparent"
                 />
                 <Container className="relative z-10">
-                    <div className="mx-auto max-w-[760px] text-center">
-                        <h2 className="text-3xl font-semibold leading-[1.05] tracking-[-0.02em] text-white sm:text-4xl lg:text-[44px]">
-                            Every NVIDIA class,{" "}
-                            <span className="text-[#0095FF]">ready to deploy</span>
+                    <div className="max-w-[760px]">
+                        <h2 className="text-3xl font-[400] leading-[1.05] tracking-tight text-white sm:text-4xl lg:text-[3.4rem]">
+                            The GPU{" "}
+                            <span className="text-[#0095FF]">lineup</span>.
                         </h2>
-                        <p className="mx-auto mt-5 max-w-[600px] text-[15px] leading-[1.6] text-white/60 sm:text-[16px]">
+                        <p className="mt-5 max-w-[560px] text-[15px] leading-[1.6] text-white/60 sm:text-[16px]">
                             {fromPrice === null
-                                ? "From Ada Lovelace inference to Blackwell Ultra B300 for frontier training"
-                                : `From Ada Lovelace inference at $${fromPrice.toFixed(2)} / GPU\u00b7hr to Blackwell Ultra B300 for frontier training`}
-                            {" "}— every node is NVLink-capable, NVMe-backed, and billed by the second.
+                                ? "Pick an architecture, compare the cards in it, deploy by the second."
+                                : `Pick an architecture, compare the cards in it, deploy by the second. From $${fromPrice.toFixed(2)} / GPU·hr.`}
                         </p>
                     </div>
-
-                    <div className="mt-12 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 lg:gap-5">
-                        {gpus.map((gpu, i) => (
-                            <GpuCard key={gpu.id} gpu={gpu} index={i} />
-                        ))}
-                    </div>
-
-                    <div className="mt-10 flex flex-col items-center justify-center gap-3 border-t border-white/[0.08] pt-8 sm:flex-row sm:gap-5">
-                        <p
-                            className={`${MONO} text-[10.5px] uppercase tracking-[0.18em] text-white/45`}
-                        >
-                            Reserved capacity available · 1mo+ commitments
-                        </p>
-                        <Link
-                            href="/dashboard/services/gpu/enterprise"
-                            className={`${MONO} group inline-flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.18em] text-white transition-colors hover:text-[#0095FF]`}
-                        >
-                            Talk to sales
-                            <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-                        </Link>
-                    </div>
+                    <GpuLineup gpus={gpus} observedAt={observedAt} stockIsFresh={stockIsFresh} />
                 </Container>
             </section>
 

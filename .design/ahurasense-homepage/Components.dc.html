@@ -1,0 +1,228 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Open+Sans:wght@400;600&display=swap">
+  <style>
+    body { margin: 0; background: #07080a; color: #e8e8ea; font-family: "Open Sans", system-ui, sans-serif; }
+    a { color: #0095FF; text-decoration: none; } a:hover { color: #4db4ff; }
+    .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+    .disp { font-family: "Sora", system-ui, sans-serif; }
+    .panel { border: 1px solid #17191f; border-radius: 12px; background: #0a0b0e; padding: 26px 26px 28px; }
+    .lbl { font-family: "IBM Plex Mono", monospace; font-size: 9.5px; letter-spacing: 0.14em; color: #5a5a63; }
+
+    /* ── buttons: the premium detail is in the transitions ────── */
+    .btn { font-size: 13.5px; font-weight: 600; border-radius: 8px; padding: 11px 20px; cursor: pointer;
+           transition: transform .12s ease-out, box-shadow .12s ease-out, background .12s ease-out, border-color .12s ease-out;
+           border: 1px solid transparent; display: inline-flex; align-items: center; gap: 8px; height: 42px; box-sizing: border-box; }
+    .btn:active { transform: translateY(1px); }
+    .btn-primary { background: linear-gradient(180deg, #ffffff, #e4e4e8); color: #07080a;
+                   box-shadow: 0 1px 0 rgba(255,255,255,.4) inset, 0 6px 18px rgba(0,0,0,.45); }
+    .btn-primary:hover { box-shadow: 0 1px 0 rgba(255,255,255,.5) inset, 0 10px 28px rgba(0,0,0,.6); transform: translateY(-1px); }
+    .btn-accent { background: linear-gradient(180deg, var(--a), color-mix(in oklab, var(--a) 82%, black)); color: #fff;
+                  box-shadow: 0 1px 0 rgba(255,255,255,.22) inset, 0 6px 22px color-mix(in oklab, var(--a) 34%, transparent); }
+    .btn-accent:hover { transform: translateY(-1px); box-shadow: 0 1px 0 rgba(255,255,255,.3) inset, 0 12px 34px color-mix(in oklab, var(--a) 46%, transparent); }
+    .btn-ghost { background: rgba(255,255,255,.03); border-color: #26282f; color: #d4d4d9; }
+    .btn-ghost:hover { background: rgba(255,255,255,.06); border-color: #3a3d46; }
+    .btn-quiet { background: transparent; color: #9a9aa2; padding-left: 4px; padding-right: 4px; }
+    .btn-quiet:hover { color: #fff; }
+    .btn:focus-visible { outline: none; box-shadow: 0 0 0 2px #07080a, 0 0 0 4px var(--a); }
+
+    /* ── card with a hairline that lights on hover ────────────── */
+    .card { position: relative; border: 1px solid #191b22; border-radius: 11px; background: linear-gradient(180deg, #0c0d11, #090a0d);
+            padding: 22px; transition: border-color .18s ease-out, transform .18s ease-out; overflow: hidden; }
+    .card::after { content: ""; position: absolute; inset: 0; border-radius: 11px; pointer-events: none;
+                   background: radial-gradient(240px 120px at 20% 0%, color-mix(in oklab, var(--a) 16%, transparent), transparent 70%);
+                   opacity: 0; transition: opacity .18s ease-out; }
+    .card:hover { border-color: #2b2f3a; transform: translateY(-2px); }
+    .card:hover::after { opacity: 1; }
+    .card .arrow { transition: transform .18s ease-out; }
+    .card:hover .arrow { transform: translateX(3px); }
+
+    /* ── stat tile ────────────────────────────────────────────── */
+    .stat { border-left: 1px solid #191b22; padding: 0 20px; }
+    .stat:first-child { border-left: none; padding-left: 0; }
+
+    /* ── input with a real focus ring ──────────────────────────── */
+    .inp { width: 100%; box-sizing: border-box; background: #0c0d11; border: 1px solid #24262e; border-radius: 8px;
+           padding: 11px 13px; color: #e8e8ea; font-size: 13.5px; font-family: inherit; height: 42px;
+           transition: border-color .12s ease-out, box-shadow .12s ease-out; }
+    .inp::placeholder { color: #55575f; }
+    .inp:focus { outline: none; border-color: var(--a); box-shadow: 0 0 0 3px color-mix(in oklab, var(--a) 22%, transparent); }
+
+    /* ── badges ───────────────────────────────────────────────── */
+    .badge { font-family: "IBM Plex Mono", monospace; font-size: 9.5px; letter-spacing: 0.12em;
+             border-radius: 4px; padding: 3px 8px; border: 1px solid; display: inline-flex; align-items: center; gap: 5px; }
+    @keyframes livePulse { 0%,100% { opacity: .45; } 50% { opacity: 1; } }
+    .dot { width: 5px; height: 5px; border-radius: 50%; animation: livePulse 2.2s ease-in-out infinite; }
+
+    /* ── nav item underline that grows from left ───────────────── */
+    .nav-i { position: relative; font-size: 13.5px; color: #9a9aa2; padding-bottom: 4px; transition: color .12s ease-out; }
+    .nav-i::after { content: ""; position: absolute; left: 0; bottom: 0; height: 1px; width: 100%; background: var(--a);
+                    transform: scaleX(0); transform-origin: left; transition: transform .18s cubic-bezier(.2,.7,.2,1); }
+    .nav-i:hover { color: #fff; }
+    .nav-i:hover::after { transform: scaleX(1); }
+
+    /* ── the before/after ─────────────────────────────────────── */
+    .stock { font-size: 14px; font-weight: 500; border-radius: 6px; padding: 0 16px; height: 36px;
+             display: inline-flex; align-items: center; background: #e4e4e7; color: #18181b;
+             box-shadow: 0 1px 2px rgba(0,0,0,.05); border: none; }
+  </style>
+</helmet>
+<div style="width: 1280px; padding: 52px 52px 64px; box-sizing: border-box; --a: {{accent}};">
+
+  <div style="display: flex; align-items: baseline; gap: 16px; margin-bottom: 10px;">
+    <span class="mono" style="font-size: 11px; letter-spacing: 0.18em; color: {{accent}};">C — COMPONENT DNA</span>
+    <div style="flex-grow: 1; height: 1px; background: linear-gradient(90deg, #22242c, transparent);"></div>
+  </div>
+  <h1 class="disp" style="font-size: 42px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.1; margin: 16px 0 12px;">Where premium actually lives</h1>
+  <p style="max-width: 730px; font-size: 15px; line-height: 1.65; color: #9a9aa2; margin: 0 0 40px;">Not in the hero — in the 40 small components a visitor touches. Everything here responds: hover the buttons, cards and nav, tab into the input. That responsiveness is the difference your eye reads as "expensive", and it is the layer your codebase currently has none of.</p>
+
+  <!-- before / after -->
+  <div class="panel" style="margin-bottom: 20px;">
+    <div class="lbl" style="margin-bottom: 20px;">THE GAP — YOUR BUTTON TODAY vs. THE SAME BUTTON DESIGNED</div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 34px;">
+      <div>
+        <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 16px;">
+          <button class="stock">Get Started</button>
+          <span class="mono" style="font-size: 10.5px; color: #ff6b6b;">STOCK SHADCN — UNMODIFIED</span>
+        </div>
+        <div class="mono" style="font-size: 11px; line-height: 1.8; color: #6a6a73;">h-9 · rounded-md (6px)<br>shadow-xs · bg-primary<br>hover: opacity 90%<br>no press state · no focus ring</div>
+      </div>
+      <div>
+        <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 16px;">
+          <button class="btn btn-primary">Start building
+            <svg class="arrow" viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5"/></svg>
+          </button>
+          <span class="mono" style="font-size: 10.5px; color: #35d07f;">DESIGNED</span>
+        </div>
+        <div class="mono" style="font-size: 11px; line-height: 1.8; color: #6a6a73;">42px · radius 8px<br>gradient fill + inset highlight<br>hover: lift 1px, shadow deepens<br>press: settles 1px · focus: 2px ring</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+    <!-- buttons -->
+    <div class="panel">
+      <div class="lbl" style="margin-bottom: 20px;">BUTTONS — 4 WEIGHTS, ONE GEOMETRY</div>
+      <div style="display: flex; flex-wrap: wrap; gap: 11px; margin-bottom: 22px;">
+        <button class="btn btn-primary">Start building</button>
+        <button class="btn btn-accent">Deploy</button>
+        <button class="btn btn-ghost">Talk to engineering</button>
+        <button class="btn btn-quiet">View pricing →</button>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 11px;">
+        <button class="btn btn-ghost" style="height: 34px; padding: 0 14px; font-size: 12.5px;">Small</button>
+        <button class="btn btn-ghost" style="height: 42px; width: 42px; padding: 0; justify-content: center;">
+          <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.5" y="2.5" width="11" height="11" rx="2"/><path d="M6 8h4M8 6v4"/></svg>
+        </button>
+        <button class="btn btn-ghost" style="opacity: .42; cursor: not-allowed;">Disabled</button>
+      </div>
+      <div class="mono" style="font-size: 10.5px; color: #5a5a63; margin-top: 20px;">Tab into these — the focus ring is a 2px offset halo, not a browser outline.</div>
+    </div>
+
+    <!-- badges + nav -->
+    <div class="panel">
+      <div class="lbl" style="margin-bottom: 20px;">BADGES &amp; STATUS</div>
+      <div style="display: flex; flex-wrap: wrap; gap: 9px; margin-bottom: 28px;">
+        <span class="badge" style="color: #35d07f; border-color: #1d4d35; background: rgba(53,208,127,.07);"><span class="dot" style="background: #35d07f;"></span>IN-REGION</span>
+        <span class="badge" style="color: #7fc9ff; border-color: #143a52; background: rgba(0,149,255,.07);">SOVEREIGN</span>
+        <span class="badge" style="color: #ffc46b; border-color: #4d3a17; background: rgba(255,196,107,.07);">RESERVED</span>
+        <span class="badge" style="color: #9a9aa2; border-color: #26282f;">GA</span>
+        <span class="badge" style="color: #ff9b9b; border-color: #4d1f1f; background: rgba(255,107,107,.07);">DEPRECATED</span>
+      </div>
+      <div class="lbl" style="margin-bottom: 18px;">NAV — UNDERLINE GROWS FROM LEFT</div>
+      <div style="display: flex; gap: 26px; margin-bottom: 22px;">
+        <sc-for list="{{nav}}" as="n" hint-placeholder-count="4"><span class="nav-i">{{n}}</span></sc-for>
+      </div>
+      <div class="lbl" style="margin-bottom: 14px;">INPUT — FOCUS IS A RING, NOT A COLOR SWAP</div>
+      <input class="inp" placeholder="search 400+ TLDs, or a region code">
+    </div>
+  </div>
+
+  <!-- cards -->
+  <div class="panel" style="margin-bottom: 20px;">
+    <div class="lbl" style="margin-bottom: 20px;">SERVICE CARD — HAIRLINE LIGHTS, SHEEN FOLLOWS, ARROW ADVANCES</div>
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 14px;">
+      <sc-for list="{{cards}}" as="c" hint-placeholder-count="3">
+        <div class="card">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+            <span class="mono" style="font-size: 9.5px; letter-spacing: 0.13em; color: {{accent}};">{{c.tag}}</span>
+            <svg class="arrow" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="{{accent}}" stroke-width="1.4"><path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5"/></svg>
+          </div>
+          <div class="disp" style="font-size: 16.5px; font-weight: 600; margin-bottom: 8px;">{{c.title}}</div>
+          <div style="font-size: 13px; line-height: 1.6; color: #8a8a93; margin-bottom: 18px;">{{c.body}}</div>
+          <div class="mono" style="font-size: 10.5px; color: #6a6a73; border-top: 1px solid #191b22; padding-top: 13px;">{{c.spec}}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- stat row + tokens -->
+  <div style="display: grid; grid-template-columns: 1.15fr 1fr; gap: 20px;">
+    <div class="panel">
+      <div class="lbl" style="margin-bottom: 22px;">FIGURE ROW — MONO NUMERALS, HAIRLINE DIVIDERS, BASIS UNDER EACH</div>
+      <div style="display: flex;">
+        <sc-for list="{{stats}}" as="s" hint-placeholder-count="4">
+          <div class="stat" style="flex-grow: 1;">
+            <div class="disp" style="font-size: 30px; font-weight: 300; color: #fff; line-height: 1; letter-spacing: -0.02em;">{{s.v}}</div>
+            <div class="mono" style="font-size: 9px; letter-spacing: 0.13em; color: #5a5a63; margin-top: 9px;">{{s.k}}</div>
+            <div style="font-size: 10.5px; color: #6a6a73; margin-top: 7px; line-height: 1.45;">{{s.note}}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="lbl" style="margin-bottom: 20px;">TOKENS THIS SHEET IS BUILT FROM</div>
+      <div style="display: flex; flex-direction: column;">
+        <sc-for list="{{tokens}}" as="t" hint-placeholder-count="7">
+          <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 18px; padding: 9px 0; border-bottom: 1px solid #17191f;">
+            <span class="mono" style="font-size: 11px; color: #8a8a93;">{{t.k}}</span>
+            <span class="mono" style="font-size: 11px; color: #d4d4d9; text-align: right;">{{t.v}}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="margin-top: 16px; font-size: 12px; line-height: 1.6; color: #7a7a83;">Seven values. Define these in <span class="mono">:root</span> and every component above becomes a consequence rather than a decision.</div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{"accent":{"editor":"color","default":"#0095FF","options":["#0095FF","#00d4ff","#c9a227","#35d07f"]}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const accent = this.props.accent ?? '#0095FF';
+    return {
+      accent,
+      nav: ['Products', 'Solutions', 'Pricing', 'Docs'],
+      cards: [
+        { tag: 'GPU',       title: 'On-demand accelerators', body: 'H100, H200 and B200 by the second, with volumes that persist between sessions.', spec: 'single GPU → 8× SXM NVLink' },
+        { tag: 'INFERENCE', title: 'Serverless endpoints',   body: 'Open and frontier models behind one API, with per-token accounting you can audit.', spec: 'streaming · OpenAI-compatible' },
+        { tag: 'DATA',      title: 'Managed Postgres',       body: 'Primaries and replicas that never leave the region you named.',                    spec: 'PITR · in-region replicas' },
+      ],
+      stats: [
+        { v: '[N]',  k: 'REGIONS',       note: 'Live regions only, one source.' },
+        { v: '100%', k: 'DATA IN INDIA', note: 'No cross-border failover path.' },
+        { v: '[N]s', k: 'PROVISION P50', note: 'Measured median, not best case.' },
+        { v: '[X]%', k: 'SLA',           note: 'As defined on /sla.' },
+      ],
+      tokens: [
+        { k: '--brand-500',   v: accent },
+        { k: '--radius-md',   v: '8px' },
+        { k: '--control-h',   v: '42px / 34px' },
+        { k: '--border',      v: '#17191f → #2b2f3a hover' },
+        { k: '--surface',     v: '#0a0b0e / #0c0d11' },
+        { k: '--ease-out',    v: 'cubic-bezier(.2,.7,.2,1)' },
+        { k: '--dur-hover',   v: '120ms' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

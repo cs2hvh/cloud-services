@@ -208,7 +208,7 @@ export default function HomePopup() {
                       "0 10px 30px -10px rgba(0,149,255,0.65), inset 0 1px 0 rgba(255,255,255,0.18)",
                   }}
                 >
-                  Contact sales — secure yours
+                  Contact sales to secure yours
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                 </Link>
                 <Link

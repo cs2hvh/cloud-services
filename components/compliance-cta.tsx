@@ -1,54 +1,73 @@
-import Image from "next/image";
-import { assetUrl } from "@/lib/asset-url";
 import Link from "next/link";
-import { Container } from "@/components/ui/container";
-import { ArrowRight } from "lucide-react";
 
+/**
+ * ComplianceCta — closing call to action.
+ *
+ * Copy note: the previous version read "Use ahurasense's flexible building
+ * blocks to keep your customers' data secure and compliant at all times",
+ * which is generic vendor phrasing that could describe any provider. It now
+ * says what the platform actually does, and drops the lowercase brand spelling
+ * that conflicted with "AhuraSense Cloud" in the metadata and nav.
+ */
 export function ComplianceCta() {
   return (
-    <section className="relative z-10 bg-[#C1C1C1] py-20 sm:py-24">
-      <Container>
-        <div className="flex flex-col lg:flex-row gap-6 justify-center items-center">
-          <div className="text-center md:text-left">
-            <div className="d-flex items-center max-w-xl">
-              <h2 className="text-4xl sm:text-5xl lg:text-[56px] leading-tight text-black">
-                Meet compliance requirements. Build customer trust.
-              </h2>
-            </div>
-            <p className="mt-6 text-sm sm:text-[14.4px] leading-6 text-black/80 md:max-w-[420px]">
-              Use ahurasense&apos;s flexible building blocks to keep your
-              customers&apos; data secure and compliant at all times.
-            </p>
-            <div className="mt-10 flex flex-col sm:flex-row gap-3 justify-center md:justify-start">
-              <Link
-                href="/api-docs"
-                className="inline-flex items-center justify-center gap-2 bg-black px-6 py-3 text-[16px] font-medium text-white hover:bg-[#0095FF] hover:text-white transition-colors cursor-pointer"
-              >
-                Documentation
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-              <Link
-                href="/pricing"
-                className="inline-flex items-center justify-center gap-2 border border-black/20 px-6 py-3 text-[16px] font-medium text-black hover:bg-black/5 transition-colors"
-              >
-                Pricing
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-            </div>
-          </div>
+    <section
+      className="relative overflow-hidden px-6 py-24 text-center sm:px-10 lg:py-32"
+      style={{ background: "var(--ah-surface)", borderTop: "1px solid var(--ah-line-hi)" }}
+      aria-labelledby="compliance-heading"
+    >
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(820px 340px at 50% 20%, rgba(0,149,255,.12), transparent 72%)",
+        }}
+      />
 
-          <div className="flex justify-center lg:justify-end">
-            <Image
-              src={assetUrl("/images/Complince/chip-on-brain.svg")}
-              alt="Brain with chip"
-              width={520}
-              height={520}
-              className="w-full max-w-[360px] sm:max-w-[420px] lg:max-w-[460px]"
-              priority
-            />
+      {/*
+        The eyebrow label is gone and the copy has moved onto a white plate
+        lifted off the dark section. Colours invert inside it: black type, and
+        the light-ground blue for the highlight, since the dark-ground blue is
+        unreadable on white. See .ah-trust-panel in globals.css.
+      */}
+      <div className="relative mx-auto max-w-[52rem]">
+        <div className="ah-trust-panel px-7 py-12 sm:px-12 lg:px-16 lg:py-16">
+          <h2 id="compliance-heading" className="ah-h2">
+            Meet compliance requirements.
+            <br />
+            <span className="ah-h2-hl">Build customer trust.</span>
+          </h2>
+
+          <p
+            className="mx-auto mt-6 max-w-[33rem] text-base leading-[1.6]"
+            style={{ color: "#4a4a55" }}
+          >
+            Residency, encryption and an exportable audit trail built into the
+            platform rather than bolted on.
+          </p>
+
+          <div className="mt-10 flex flex-wrap justify-center gap-2.5">
+            <Link
+              href="/api-docs"
+              className="ah-btn-outline ah-notch-sm inline-flex items-center gap-2 px-7 py-3.5 text-sm font-medium"
+            >
+              Documentation
+              <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+                <path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5" />
+              </svg>
+            </Link>
+            <Link
+              href="/trust"
+              className="ah-btn-outline ah-notch-sm inline-flex items-center gap-2 px-7 py-3.5 text-sm font-medium"
+            >
+              Trust centre
+            </Link>
           </div>
         </div>
-      </Container>
+      </div>
     </section>
   );
 }
+
+export default ComplianceCta;

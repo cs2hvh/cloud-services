@@ -1,0 +1,183 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700&family=IBM+Plex+Mono:wght@400;500&family=Open+Sans:wght@400;600&display=swap">
+  <style>
+    body { margin: 0; background: #06070a; color: #e8e8ea; font-family: "Open Sans", system-ui, sans-serif; }
+    a { color: #0095FF; text-decoration: none; } a:hover { color: #4db4ff; }
+    .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+    .disp { font-family: "Sora", system-ui, sans-serif; }
+    /* signature motion: packets tracing the sovereign backbone */
+    @keyframes dash { to { stroke-dashoffset: -240; } }
+    @keyframes pulse { 0%,100% { opacity: .25; r: 2.5; } 50% { opacity: 1; r: 4; } }
+    @keyframes sweep { 0% { transform: translateX(-100%); } 100% { transform: translateX(220%); } }
+    .flow { stroke-dasharray: 4 10; animation: dash 6s linear infinite; }
+    .node { animation: pulse 3.4s ease-in-out infinite; }
+    .scan { animation: sweep 7s ease-in-out infinite; }
+    .grid-bg {
+      background-image: linear-gradient(#12141a 1px, transparent 1px), linear-gradient(90deg, #12141a 1px, transparent 1px);
+      background-size: 44px 44px;
+    }
+  </style>
+</helmet>
+<div style="width: 1280px; background: #06070a; box-sizing: border-box;">
+
+  <!-- nav -->
+  <div style="display: flex; align-items: center; justify-content: space-between; padding: 20px 48px; border-bottom: 1px solid #12141a;">
+    <div style="display: flex; align-items: center; gap: 36px;">
+      <div class="disp" style="font-size: 16px; font-weight: 700; letter-spacing: -0.01em;">AhuraCloud</div>
+      <div style="display: flex; gap: 24px; font-size: 13px; color: #8a8a93;">
+        <span>Products</span><span>Solutions</span><span>Pricing</span><span>Docs</span>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <span style="font-size: 13px; color: #8a8a93;">Log in</span>
+      <div style="font-size: 13px; font-weight: 600; color: #06070a; background: #ffffff; padding: 8px 16px; border-radius: 6px;">Start building</div>
+    </div>
+  </div>
+
+  <!-- hero -->
+  <div class="grid-bg" style="position: relative; padding: 76px 48px 64px; overflow: hidden;">
+    <div style="position: absolute; inset: 0; background: radial-gradient(900px 420px at 22% 8%, rgba(0,149,255,0.13), transparent 70%);"></div>
+
+    <div style="position: relative; display: grid; grid-template-columns: 1fr 470px; gap: 56px; align-items: center;">
+      <div>
+        <div style="display: inline-flex; align-items: center; gap: 9px; border: 1px solid #143a52; border-radius: 999px; padding: 5px 13px; margin-bottom: 26px; background: rgba(0,149,255,0.06);">
+          <span style="width: 5px; height: 5px; border-radius: 50%; background: #35d07f;"></span>
+          <span class="mono" style="font-size: 10.5px; letter-spacing: 0.13em; color: #7fc9ff;">SOVEREIGN BY ARCHITECTURE — NOT BY POLICY</span>
+        </div>
+
+        <h1 class="disp" style="font-size: 62px; font-weight: 600; letter-spacing: -0.035em; line-height: 1.04; margin: 0 0 22px;">Your AI stack.<br>Your GPUs.<br><span style="color: {{accent}};">Your jurisdiction.</span></h1>
+
+        <p style="font-size: 16.5px; line-height: 1.62; color: #9a9aa2; max-width: 480px; margin: 0 0 32px;">Inference, fine-tuning, GPUs, Kubernetes and managed data — one control plane, every byte resident in India. Billed by the second in INR, with GST on the invoice.</p>
+
+        <div style="display: flex; gap: 12px; margin-bottom: 34px;">
+          <div style="font-size: 14px; font-weight: 600; color: #06070a; background: #ffffff; padding: 12px 22px; border-radius: 7px;">Start building</div>
+          <div style="font-size: 14px; font-weight: 600; color: #d4d4d9; border: 1px solid #26262e; padding: 12px 22px; border-radius: 7px;">Talk to engineering</div>
+        </div>
+
+        <div style="display: flex; gap: 28px;">
+          <sc-for list="{{heroStats}}" as="s" hint-placeholder-count="3">
+            <div>
+              <div class="mono" style="font-size: 19px; color: #ffffff;">{{s.v}}</div>
+              <div class="mono" style="font-size: 9.5px; letter-spacing: 0.13em; color: #5a5a63; margin-top: 5px;">{{s.k}}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <!-- signature visual: the sovereign backbone -->
+      <div style="position: relative; border: 1px solid #16181f; border-radius: 12px; background: #08090d; padding: 20px; overflow: hidden;">
+        <div style="position: absolute; top: 0; left: 0; width: 34%; height: 1px; background: linear-gradient(90deg, transparent, {{accent}}, transparent);" class="scan"></div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <span class="mono" style="font-size: 10px; letter-spacing: 0.13em; color: #5a5a63;">SOVEREIGN BACKBONE</span>
+          <span class="mono" style="font-size: 10px; color: #35d07f;">● IN-REGION</span>
+        </div>
+        <svg viewBox="0 0 420 300" style="width: 100%; display: block;">
+          <!-- stylised india spine, not a literal map -->
+          <path d="M150 30 L250 30 L300 90 L280 170 L210 260 L140 190 L120 100 Z" fill="none" stroke="#16181f" stroke-width="1"/>
+          <path class="flow" d="M210 42 L160 104" fill="none" stroke="{{accent}}" stroke-width="1.2"/>
+          <path class="flow" d="M160 104 L262 118" fill="none" stroke="{{accent}}" stroke-width="1.2"/>
+          <path class="flow" d="M262 118 L196 196" fill="none" stroke="{{accent}}" stroke-width="1.2"/>
+          <path class="flow" d="M196 196 L160 104" fill="none" stroke="#1d4d6b" stroke-width="1"/>
+          <path class="flow" d="M210 42 L262 118" fill="none" stroke="#1d4d6b" stroke-width="1"/>
+          <sc-for list="{{pops}}" as="p" hint-placeholder-count="4">
+            <circle class="node" cx="{{p.x}}" cy="{{p.y}}" r="3" fill="{{accent}}"/>
+            <text x="{{p.lx}}" y="{{p.ly}}" fill="#7a7a83" font-size="9" font-family="IBM Plex Mono, monospace">{{p.code}}</text>
+          </sc-for>
+        </svg>
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; margin-top: 14px; padding-top: 14px; border-top: 1px solid #16181f;">
+          <sc-for list="{{legend}}" as="l" hint-placeholder-count="3">
+            <div>
+              <div class="mono" style="font-size: 13px; color: #d4d4d9;">{{l.v}}</div>
+              <div class="mono" style="font-size: 9px; letter-spacing: 0.1em; color: #5a5a63; margin-top: 3px;">{{l.k}}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- proof band -->
+  <div style="padding: 26px 48px; border-top: 1px solid #12141a; border-bottom: 1px solid #12141a; background: #07080b;">
+    <div style="display: flex; align-items: center; gap: 40px;">
+      <span class="mono" style="font-size: 10px; letter-spacing: 0.13em; color: #5a5a63; white-space: nowrap;">RUNNING IN PRODUCTION AT</span>
+      <div style="display: flex; gap: 34px; flex-grow: 1;">
+        <sc-for list="{{proof}}" as="p" hint-placeholder-count="5">
+          <div style="font-size: 13px; color: #4a4a53; border: 1px dashed #22242c; border-radius: 5px; padding: 7px 16px;">{{p.label}}</div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <!-- residency section -->
+  <div style="padding: 60px 48px 68px;">
+    <div style="display: flex; align-items: baseline; gap: 16px; margin-bottom: 26px;">
+      <span class="mono" style="font-size: 10.5px; letter-spacing: 0.16em; color: {{accent}};">DATA RESIDENCY</span>
+      <div style="flex-grow: 1; height: 1px; background: linear-gradient(90deg, #1c1e26, transparent);"></div>
+    </div>
+    <h2 class="disp" style="font-size: 36px; font-weight: 600; letter-spacing: -0.025em; margin: 0 0 16px; max-width: 640px;">Where your data sits is an architecture decision, not a checkbox.</h2>
+    <p style="font-size: 15.5px; line-height: 1.65; color: #9a9aa2; max-width: 620px; margin: 0 0 40px;">Every region, replica, backup and inference log stays inside Indian borders. No cross-border failover, no foreign subprocessor holding your keys.</p>
+
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 1px; background: #16181f; border: 1px solid #16181f; border-radius: 11px; overflow: hidden;">
+      <sc-for list="{{cards}}" as="c" hint-placeholder-count="3">
+        <div style="padding: 26px 24px 28px; background: #0a0b0f;">
+          <div class="mono" style="font-size: 9.5px; letter-spacing: 0.14em; color: {{accent}}; margin-bottom: 14px;">{{c.tag}}</div>
+          <div class="disp" style="font-size: 17px; font-weight: 600; margin-bottom: 10px; line-height: 1.3;">{{c.title}}</div>
+          <div style="font-size: 13.5px; line-height: 1.62; color: #8a8a93;">{{c.body}}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{"accent":{"editor":"color","default":"#0095FF","options":["#0095FF","#00d4ff","#35d07f","#ff9f45"]}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const accent = this.props.accent ?? '#0095FF';
+    return {
+      accent,
+      heroStats: [
+        { v: '[N]s', k: 'P50 PROVISION' },
+        { v: '100%', k: 'DATA IN INDIA' },
+        { v: '₹ / sec', k: 'BILLING GRANULARITY' },
+      ],
+      pops: [
+        { x: 210, y: 42,  lx: 220, ly: 40,  code: 'DEL' },
+        { x: 160, y: 104, lx: 116, ly: 100, code: 'AMD' },
+        { x: 262, y: 118, lx: 272, ly: 116, code: 'BLR' },
+        { x: 196, y: 196, lx: 206, ly: 208, code: 'BOM' },
+      ],
+      legend: [
+        { v: '[N]', k: 'REGIONS' },
+        { v: '[N]', k: 'EDGE POPS' },
+        { v: '0', k: 'CROSS-BORDER HOPS' },
+      ],
+      proof: [
+        { label: '[LOGO — cleared?]' },
+        { label: '[LOGO]' },
+        { label: '[LOGO]' },
+        { label: '[LOGO]' },
+        { label: '[LOGO]' },
+      ],
+      cards: [
+        { tag: 'RESIDENCY', title: 'Pinned at the region, enforced in the API',
+          body: 'A resource cannot be created outside the region you name, and replication targets are validated against an in-country allowlist — not left to operator discipline.' },
+        { tag: 'BILLING', title: 'INR-native, GST on every invoice',
+          body: 'Priced and charged in rupees with tax handled at source. No FX spread, no reconciling a dollar invoice against a rupee ledger at month end.' },
+        { tag: 'CONTROL', title: 'Your keys, your audit trail',
+          body: 'Credentials encrypted with keys you rotate, and an append-only audit log you can export. [Confirm which certifications you can actually name here.]' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

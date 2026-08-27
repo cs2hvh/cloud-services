@@ -1,193 +1,112 @@
 "use client";
 
 import WorldMap from "@/components/ui/worldmap";
-import { Container } from "@/components/ui/container";
-import { motion } from "motion/react";
-import Image from "next/image";
+import { RegionFlag } from "@/components/ui/region-flag";
 
-const POP_LOCATIONS = [
-  { lat: 37.7749, lng: -122.4194, label: "San Francisco" },
-  { lat: 40.7128, lng: -74.006, label: "New York" },
-  { lat: 34.0522, lng: -118.2437, label: "Los Angeles" },
-  { lat: -23.5505, lng: -46.6333, label: "Sao Paulo" },
-  { lat: 51.5074, lng: -0.1278, label: "London" },
-  { lat: 48.8566, lng: 2.3522, label: "Paris" },
-  { lat: 50.1109, lng: 8.6821, label: "Frankfurt" },
-  { lat: 52.3676, lng: 4.9041, label: "Amsterdam" },
-  { lat: 59.3293, lng: 18.0686, label: "Stockholm" },
-  { lat: 40.4168, lng: -3.7038, label: "Madrid" },
-  { lat: 19.076, lng: 72.8777, label: "Mumbai" },
-  { lat: 25.2048, lng: 55.2708, label: "Dubai" },
-  { lat: 1.3521, lng: 103.8198, label: "Singapore" },
-  { lat: 35.6762, lng: 139.6503, label: "Tokyo" },
-  { lat: -33.8688, lng: 151.2093, label: "Sydney" },
+/**
+ * GlobalNetworkSection — map + a single location strip.
+ *
+ * Kept deliberately short. The previous version stacked a full-width map, a
+ * four-tile figure block and a three-column index of all 15 regions, which made
+ * the network the tallest section on the page for what is essentially one fact:
+ * where we run. The map is capped, the figures collapse to one line, and the
+ * index is a wrapped strip.
+ *
+ * Content decisions carried forward:
+ *
+ * 1. REGION COUNT is derived from LOCATIONS, not restated, so the number and
+ *    the list cannot drift apart (the site previously said 12 in the hero and
+ *    15 here while listing 15 cities).
+ *
+ * 2. LATENCY AND SLA FIGURES ARE ABSENT ON PURPOSE. The old block advertised
+ *    "<20ms Avg Latency" and "99.99% Uptime SLA" with nothing defining how
+ *    either is measured. Put them back once there is a measured p50 and /sla
+ *    defines the basis — and cite the basis alongside the number.
+ */
+
+type Location = {
+  city: string;
+  /** ISO alpha-2, passed straight to RegionFlag so no lookup is needed. */
+  code: string;
+  lat: number;
+  lng: number;
+};
+
+const LOCATIONS: Location[] = [
+  { city: "Mumbai", code: "in", lat: 19.076, lng: 72.8777 },
+  { city: "Singapore", code: "sg", lat: 1.3521, lng: 103.8198 },
+  { city: "Dubai", code: "ae", lat: 25.2048, lng: 55.2708 },
+  { city: "Tokyo", code: "jp", lat: 35.6762, lng: 139.6503 },
+  { city: "Sydney", code: "au", lat: -33.8688, lng: 151.2093 },
+  { city: "London", code: "gb", lat: 51.5074, lng: -0.1278 },
+  { city: "Frankfurt", code: "de", lat: 50.1109, lng: 8.6821 },
+  { city: "Amsterdam", code: "nl", lat: 52.3676, lng: 4.9041 },
+  { city: "Paris", code: "fr", lat: 48.8566, lng: 2.3522 },
+  { city: "Madrid", code: "es", lat: 40.4168, lng: -3.7038 },
+  { city: "Stockholm", code: "se", lat: 59.3293, lng: 18.0686 },
+  { city: "New York", code: "us", lat: 40.7128, lng: -74.006 },
+  { city: "San Francisco", code: "us", lat: 37.7749, lng: -122.4194 },
+  { city: "Los Angeles", code: "us", lat: 34.0522, lng: -118.2437 },
+  { city: "São Paulo", code: "br", lat: -23.5505, lng: -46.6333 },
 ];
 
-const STATS = [
-  { value: "15", label: "Global Regions" },
-  { value: "30+", label: "PoP Locations" },
-  { value: "<20ms", label: "Avg Latency" },
-  { value: "99.99%", label: "Uptime SLA" },
-];
+/** Single source of truth — the hero and compute strip quote this same number. */
+export const REGION_COUNT = LOCATIONS.length;
 
-const REGIONS = [
-  {
-    continent: "Americas",
-    locations: [
-      { city: "San Francisco", flag: "us" },
-      { city: "Los Angeles", flag: "us" },
-      { city: "New York", flag: "us" },
-      { city: "Sao Paulo", flag: "br" },
-    ],
-  },
-  {
-    continent: "Europe",
-    locations: [
-      { city: "London", flag: "gb" },
-      { city: "Paris", flag: "fr" },
-      { city: "Frankfurt", flag: "de" },
-      { city: "Amsterdam", flag: "nl" },
-      { city: "Stockholm", flag: "se" },
-      { city: "Madrid", flag: "es" },
-    ],
-  },
-  {
-    continent: "Asia",
-    locations: [
-      { city: "Mumbai", flag: "in" },
-      { city: "Dubai", flag: "ae" },
-      { city: "Singapore", flag: "sg" },
-      { city: "Tokyo", flag: "jp" },
-    ],
-  },
-  {
-    continent: "Oceania",
-    locations: [
-      { city: "Sydney", flag: "au" },
-    ],
-  },
-];
+const COUNTRY_COUNT = new Set(LOCATIONS.map((l) => l.code)).size;
 
 export default function GlobalNetworkSection() {
   return (
-    <section className="relative z-10 py-16 lg:py-24">
-      {/* Background */}
-      <div className="absolute inset-0 -z-10 pointer-events-none overflow-hidden">
-        <div className="absolute inset-0 bg-black" />
-
-        {/* Top/bottom fade */}
-        <div className="absolute top-0 left-0 right-0 h-48 bg-gradient-to-b from-black to-transparent" />
-        <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-black to-transparent" />
-
-        {/* Top divider */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[60%] h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-      </div>
-
-      <Container>
-        {/* Header */}
-        <motion.div
-          className="text-center mb-8 lg:mb-10"
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-50px" }}
-          transition={{ duration: 0.6, ease: [0.25, 0.4, 0.25, 1] as const }}
-        >
-          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-[400] tracking-tight leading-tight text-white">
-            Global Network Infrastructure
-          </h2>
-          <p className="mt-3 lg:mt-4 mx-auto max-w-2xl text-xs sm:text-sm leading-relaxed text-white/50 px-4">
-            Strategically placed data centers and PoP locations across 15 regions
-            deliver sub-20ms latency to 95% of the world&apos;s internet users.
-          </p>
-        </motion.div>
-
-        {/* Map */}
-        <motion.div
-          className="relative"
-          initial={{ opacity: 0, y: 24 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-50px" }}
-          transition={{ duration: 0.6, delay: 0.15, ease: [0.25, 0.4, 0.25, 1] as const }}
-        >
-          <WorldMap locations={POP_LOCATIONS} />
-        </motion.div>
-
-        {/* Stats Row */}
-        <motion.div
-          className="mt-6 lg:mt-8 grid grid-cols-2 sm:grid-cols-4 gap-px bg-white/[0.06]"
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-50px" }}
-          transition={{ duration: 0.6, delay: 0.25, ease: [0.25, 0.4, 0.25, 1] as const }}
-        >
-          {STATS.map((stat) => (
-            <div
-              key={stat.label}
-              className="bg-black p-5 sm:p-6 text-center transition-colors duration-300 hover:bg-white/[0.03]"
+    <section
+      className="px-6 py-16 sm:px-10 lg:px-12 lg:py-20"
+      style={{ background: "var(--ah-bg)" }}
+      aria-labelledby="network-heading"
+    >
+      <div className="mx-auto max-w-[1704px]">
+        <div className="mb-10 flex flex-wrap items-end justify-between gap-6">
+          <div>
+            <h2
+              id="network-heading"
+              className="ah-rise ah-h2"
             >
-              <div className="text-2xl sm:text-3xl font-semibold text-[#0095FF]">
-                {stat.value}
-              </div>
-              <div className="mt-1 text-[11px] sm:text-xs text-white/35 tracking-wide uppercase">
-                {stat.label}
-              </div>
-            </div>
-          ))}
-        </motion.div>
-
-        {/* Locations by continent */}
-        <motion.div
-          className="mt-8 lg:mt-10"
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true, margin: "-50px" }}
-          transition={{ duration: 0.6, delay: 0.35, ease: [0.25, 0.4, 0.25, 1] as const }}
-        >
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-white/[0.06]">
-            {REGIONS.map((region) => (
-              <div
-                key={region.continent}
-                className="bg-black p-5 sm:p-6"
-              >
-                {/* Continent header */}
-                <div className="flex items-center gap-2 mb-4">
-                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-white/30" />
-                  <h4 className="text-[11px] font-semibold text-white/40 uppercase tracking-[0.14em]">
-                    {region.continent}
-                  </h4>
-                  <span className="ml-auto text-[10px] text-white/20">
-                    {region.locations.length} PoPs
-                  </span>
-                </div>
-
-                {/* Location list */}
-                <ul className="space-y-2">
-                  {region.locations.map((loc) => (
-                    <li key={loc.city} className="flex items-center gap-2.5 group">
-                      {/* Live status dot */}
-                      <span className="relative flex h-1.5 w-1.5 shrink-0">
-                        <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400/40 animate-ping" style={{ animationDuration: "2.5s" }} />
-                        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400/70" />
-                      </span>
-                      <Image
-                        src={`https://flagcdn.com/w40/${loc.flag}.png`}
-                        alt={loc.flag}
-                        width={16}
-                        height={11}
-                        className="rounded-[1px] shrink-0 opacity-70"
-                        unoptimized
-                      />
-                      <span className="text-[12px] text-white/55 group-hover:text-white/80 transition-colors">
-                        {loc.city}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
+              Global <span className="ah-h2-hl">infrastructure</span>
+            </h2>
           </div>
-        </motion.div>
-      </Container>
+
+          <div className="ah-lbl flex items-center gap-2.5" style={{ color: "var(--ah-body)" }}>
+            <span style={{ color: "var(--ah-blue-lt)" }}>{REGION_COUNT} regions</span>
+            <span style={{ color: "var(--ah-line-hi)" }}>·</span>
+            <span>{COUNTRY_COUNT} countries</span>
+            <span style={{ color: "var(--ah-line-hi)" }}>·</span>
+            <span>In-region residency</span>
+          </div>
+        </div>
+
+        {/* capped so the map informs rather than dominates */}
+        <div className="relative mx-auto max-w-[980px]">
+          <div className="relative">
+            <WorldMap
+              locations={LOCATIONS.map((l) => ({ lat: l.lat, lng: l.lng, label: l.city }))}
+              dotColor="var(--ah-blue)"
+            />
+          </div>
+        </div>
+
+        {/* one wrapped strip instead of a three-column index */}
+        <div
+          className="mt-10 flex flex-wrap items-center gap-x-7 gap-y-3.5 pt-7"
+          style={{ borderTop: "1px solid var(--ah-line)" }}
+        >
+          {LOCATIONS.map((l) => (
+            <span key={l.city} className="inline-flex items-center gap-2">
+              <RegionFlag code={l.code} size={17} className="shrink-0" />
+              <span className="text-[13px]" style={{ color: "var(--ah-body)" }}>
+                {l.city}
+              </span>
+            </span>
+          ))}
+        </div>
+      </div>
     </section>
   );
 }
