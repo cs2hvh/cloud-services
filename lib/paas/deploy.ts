@@ -468,6 +468,21 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
   }
   const isWorkspace = files.paths.includes("pnpm-workspace.yaml") || declaresWorkspaces;
 
+  // AND WHETHER INSTALLING RUNS A SCRIPT OF THE REPOSITORY'S OWN.
+  //
+  // `prisma generate` is the commonest postinstall there is, and it reads
+  // prisma/schema.prisma — a file the manifest-only deps stage has not copied.
+  // It then emits a client with no models in it, and the build dies much later
+  // with a type error in the application's own source. Nothing in that message
+  // points back at the install.
+  let installRunsRepoScripts = false;
+  try {
+    const scripts = JSON.parse(rootPackageJson || "{}")?.scripts ?? {};
+    installRunsRepoScripts = Boolean(scripts.postinstall || scripts.prepare);
+  } catch {
+    // Already handled where the workspace claim is read.
+  }
+
   const hasLockfile =
     files.paths.includes("package-lock.json") ||
     files.paths.includes("pnpm-lock.yaml") ||
@@ -538,6 +553,7 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
     hasLockfile,
     nodeVersion: String(nodeChoice.major),
     isWorkspace,
+    installRunsRepoScripts,
     // Only public-prefixed keys become build args; runtime values are injected
     // from a Secret and must never enter an image layer.
     publicEnvKeys: Object.keys(publicEnv),

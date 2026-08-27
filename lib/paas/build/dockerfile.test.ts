@@ -512,3 +512,55 @@ test("a static build gets the toolchain too", () => {
   const builder = df.slice(df.indexOf("AS builder"), df.indexOf("nginx"));
   assert.match(builder, /python3 make g\+\+/);
 });
+
+// AN INSTALL THAT RUNS THE REPOSITORY'S OWN SCRIPTS NEEDS THE REPOSITORY.
+//
+// `prisma generate` is the commonest postinstall there is and it reads
+// prisma/schema.prisma, which the manifest-only deps stage has not copied. It
+// then emits a client with no models, and the build dies much later with a type
+// error in the application's own source — pointing nowhere near the cause.
+
+test("a postinstall makes the deps stage copy the whole tree", () => {
+  const df = mustGenerate({
+    detection: { framework: "nextjs", runtime: "node", buildCommand: "npm run build", startCommand: "next start", outputDirectory: ".next", port: 3000, confidence: "certain", reason: "t" },
+    packageManager: "npm",
+    hasLockfile: true,
+    publicEnvKeys: [],
+    installRunsRepoScripts: true,
+  });
+  const deps = df.slice(df.indexOf("AS deps"), df.indexOf("AS builder"));
+  assert.match(deps, /^COPY \. \.$/m);
+  assert.ok(!/^COPY package\.json/m.test(deps), "the manifest-only copy must be gone");
+});
+
+test("WITHOUT ONE, THE DEPENDENCY LAYER STILL CACHES", () => {
+  // The whole-tree copy costs cache granularity, so it must not be the default.
+  const df = mustGenerate({
+    detection: { framework: "nextjs", runtime: "node", buildCommand: "npm run build", startCommand: "next start", outputDirectory: ".next", port: 3000, confidence: "certain", reason: "t" },
+    packageManager: "npm",
+    hasLockfile: true,
+    publicEnvKeys: [],
+  });
+  const deps = df.slice(df.indexOf("AS deps"), df.indexOf("AS builder"));
+  assert.match(deps, /^COPY package\.json/m);
+});
+
+test("the Dockerfile says WHICH reason applied", () => {
+  const workspace = mustGenerate({
+    detection: { framework: "nextjs", runtime: "node", buildCommand: "npm run build", startCommand: "next start", outputDirectory: ".next", port: 3000, confidence: "certain", reason: "t" },
+    packageManager: "pnpm",
+    hasLockfile: true,
+    publicEnvKeys: [],
+    isWorkspace: true,
+  });
+  const scripts = mustGenerate({
+    detection: { framework: "nextjs", runtime: "node", buildCommand: "npm run build", startCommand: "next start", outputDirectory: ".next", port: 3000, confidence: "certain", reason: "t" },
+    packageManager: "pnpm",
+    hasLockfile: true,
+    publicEnvKeys: [],
+    installRunsRepoScripts: true,
+  });
+  // Two causes with the same symptom; the build log should not conflate them.
+  assert.match(workspace, /siblings/);
+  assert.match(scripts, /own install script/);
+});

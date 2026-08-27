@@ -54,6 +54,25 @@ export interface DockerfileInput {
    * rebuilds are worth more than a monorepo that cannot build at all.
    */
   isWorkspace?: boolean;
+  /**
+   * Whether installing runs a script of the repository's own.
+   *
+   * A `postinstall` or `prepare` can read anything in the tree, and the
+   * commonest one in the world — `prisma generate` — reads
+   * prisma/schema.prisma. The deps stage copies only the manifest, so that
+   * script either fails or, worse, succeeds against nothing: Prisma emits a
+   * client with no models in it and the build dies much later with
+   *
+   *     Type error: Module '@prisma/client' has no exported member 'Post'
+   *
+   * which points at the application's own source and not at the install that
+   * caused it. shadcn-ui/taxonomy failed exactly this way.
+   *
+   * Such a repository gives up dependency-layer caching, for the same reason
+   * a workspace does: correctness first, and a slower rebuild is worth more
+   * than a build that cannot succeed.
+   */
+  installRunsRepoScripts?: boolean;
   /** Keys only — values are passed as --build-arg at build time, never inlined. */
   publicEnvKeys: string[];
   nodeVersion?: string;
@@ -275,6 +294,24 @@ function buildRun(cmd: string): string {
   );
 }
 
+/**
+ * Whether the dependency stage has to copy the whole repository first.
+ *
+ * Normally it copies the manifest and the lockfile alone, so the dependency
+ * layer caches independently of the source. Two things make that impossible,
+ * and both are common enough that guessing wrong breaks real applications.
+ */
+function needsWholeTree(i: DockerfileInput): boolean {
+  return Boolean(i.isWorkspace) || Boolean(i.installRunsRepoScripts);
+}
+
+/** Said in the Dockerfile, so the reason survives into the build log. */
+function wholeTreeReason(i: DockerfileInput): string {
+  return i.isWorkspace
+    ? "Workspace: the whole tree, because the root's dependencies are siblings."
+    : "This repository runs its own install script, which reads files outside package.json.";
+}
+
 const BUILD_TOOLCHAIN = "RUN apk add --no-cache libc6-compat python3 make g++";
 
 const NGINX_STATIC = `
@@ -307,7 +344,7 @@ function nodeDockerfile(i: DockerfileInput): string {
 FROM ${baseImage(pm, node)} AS deps
 WORKDIR /app
 ${BUILD_TOOLCHAIN}
-${i.isWorkspace ? `# Workspace: the whole tree, because the root's dependencies are siblings.\nCOPY . .` : `COPY package.json ${pm === "pnpm" ? "pnpm-lock.yaml*" : pm === "yarn" ? "yarn.lock*" : pm === "bun" ? "bun.lock*" : "package-lock.json*"} ./`}
+${needsWholeTree(i) ? `# ${wholeTreeReason(i)}\nCOPY . .` : `COPY package.json ${pm === "pnpm" ? "pnpm-lock.yaml*" : pm === "yarn" ? "yarn.lock*" : pm === "bun" ? "bun.lock*" : "package-lock.json*"} ./`}
 RUN --mount=type=cache,target=/root/.npm ${installCmd(pm, false, i.hasLockfile !== false)}
 
 FROM ${baseImage(pm, node)} AS builder
@@ -351,7 +388,7 @@ COPY ${out} /usr/share/nginx/html
 FROM ${baseImage(pm, node)} AS builder
 WORKDIR /app
 ${BUILD_TOOLCHAIN}
-${i.isWorkspace ? `# Workspace: the whole tree, because the root's dependencies are siblings.\nCOPY . .` : `COPY package.json ${pm === "pnpm" ? "pnpm-lock.yaml*" : pm === "yarn" ? "yarn.lock*" : "package-lock.json*"} ./`}
+${needsWholeTree(i) ? `# ${wholeTreeReason(i)}\nCOPY . .` : `COPY package.json ${pm === "pnpm" ? "pnpm-lock.yaml*" : pm === "yarn" ? "yarn.lock*" : "package-lock.json*"} ./`}
 RUN --mount=type=cache,target=/root/.npm ${installCmd(pm, false, i.hasLockfile !== false)}
 COPY . .
 ${args}${buildRun(runCmd(pm, build))}
