@@ -21,10 +21,12 @@ import {
   Empty,
   ExternalLink,
   Failed,
-  PageHeader,
+  Hero,
+  ServiceShell,
   Stat,
   StateBadge,
   buttonClass,
+  heroButtonClass,
   timeAgo,
 } from "@/components/v2/kit";
 
@@ -80,14 +82,22 @@ export default async function ProjectsPage() {
   const failing = rows.filter((p) => newest.get(p.id)?.state === "error").length;
 
   return (
-    <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
-      <PageHeader
-        title="Projects"
-        description="Apps deployed from your repositories, billed from credits by the hour."
-        actions={
-          <Link href="/dashboard/v2/projects/new" className={buttonClass("primary")}>
-            <Plus className="h-4 w-4" aria-hidden />
-            New project
+    <ServiceShell>
+      {/*
+        The same statement the services pages open with, and the same shell
+        underneath it. v2 was a centred column on the flat dashboard
+        background, so the space either side read as dead margin rather than
+        as a measured column — the services pages are barely wider, but their
+        background is full bleed and the content sits on top of it.
+      */}
+      <Hero
+        lead="Deploy and operate"
+        accent="application workloads"
+        description="Repository-backed deployments with live build status, previews on every branch, and one-click rollback."
+        action={
+          <Link href="/dashboard/v2/projects/new" className={heroButtonClass}>
+            <Plus className="h-3.5 w-3.5" aria-hidden />
+            Deploy application
           </Link>
         }
       />
@@ -217,6 +227,6 @@ export default async function ProjectsPage() {
           })}
         </div>
       ) : null}
-    </div>
+    </ServiceShell>
   );
 }

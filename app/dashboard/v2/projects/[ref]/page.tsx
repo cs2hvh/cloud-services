@@ -32,6 +32,7 @@ import {
   Empty,
   Failed,
   PageHeader,
+  ServiceShell,
   Stat,
   StateBadge,
   buttonClass,
@@ -87,9 +88,9 @@ export default async function ProjectPage({
 
   if (projectError) {
     return (
-      <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
+      <ServiceShell>
         <Failed what="this project" />
-      </div>
+      </ServiceShell>
     );
   }
   if (!project || project.deleted_at) notFound();
@@ -216,7 +217,7 @@ export default async function ProjectPage({
   }
 
   return (
-    <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
+    <ServiceShell>
       <PageHeader
         title={project.slug}
         back={{ href: "/dashboard/v2/projects", label: "Projects" }}
@@ -588,6 +589,6 @@ export default async function ProjectPage({
       </Card>
         </div>
       ) : null}
-    </div>
+    </ServiceShell>
   );
 }

@@ -306,3 +306,112 @@ export function timeAgo(iso: string | null | undefined): string {
   if (hours < 48) return `${hours}h ago`;
   return `${Math.round(hours / 24)}d ago`;
 }
+
+/* ── page shell ─────────────────────────────────────────────────────────── */
+
+export const V2_MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+export const V2_ACCENT = "#0095FF";
+export const V2_SERIF: React.CSSProperties = {
+  fontFamily: "var(--font-nunito), system-ui, sans-serif",
+};
+
+/**
+ * The page frame every v2 surface sits in.
+ *
+ * WHY IT IS NOT JUST A max-w WRAPPER. The v2 pages were a centred column on the
+ * dashboard's flat background, so the space either side read as dead margin —
+ * "spaces on left and right unlike other services". The service pages are the
+ * same width; what makes them feel edge to edge is that the BACKGROUND is
+ * full bleed and the content column sits on top of it. Two soft accent glows
+ * and a 28px dot grid, exactly as /dashboard/services/apps renders them, so the
+ * eye reads one continuous surface rather than a card floating in a gap.
+ *
+ * Wider than the services pages on purpose: max-w-7xl rather than 6xl. This
+ * lane's pages carry two-up project cards and dense deployment tables, and the
+ * extra column is the difference between two cards per row and two cards per
+ * row with room to breathe.
+ *
+ * The background is pointer-events-none and z-0 so it can never intercept a
+ * click meant for the content above it.
+ */
+export function ServiceShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="relative min-h-full bg-[#08090b] text-white">
+      <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+        <div
+          className="absolute -right-[200px] -top-[300px] h-[800px] w-[800px] blur-[60px]"
+          style={{ background: "radial-gradient(circle, rgba(0,149,255,0.07), transparent 60%)" }}
+        />
+        <div
+          className="absolute -bottom-[400px] -left-[200px] h-[700px] w-[700px] blur-[70px]"
+          style={{ background: "radial-gradient(circle, rgba(0,149,255,0.04), transparent 60%)" }}
+        />
+        <div
+          className="absolute inset-0"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at 1px 1px, rgba(255,255,255,0.018) 1px, transparent 0)",
+            backgroundSize: "28px 28px",
+          }}
+        />
+      </div>
+      <div className="relative z-10 mx-auto w-full max-w-7xl px-6 py-8 sm:px-10 sm:py-10">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The big statement at the top of a section's landing page.
+ *
+ * Matches /dashboard/services/apps: a large tracking-tight line with the second
+ * half set in the serif face and the accent colour, a mono sub-line, and the
+ * one primary action. The split is `lead` + `accent` rather than a parsed
+ * string because guessing where to break a sentence is how you get a heading
+ * that reads correctly in English and nowhere else.
+ */
+export function Hero({
+  lead,
+  accent,
+  description,
+  action,
+}: {
+  lead: string;
+  accent: string;
+  description?: React.ReactNode;
+  action?: React.ReactNode;
+}) {
+  return (
+    <header className="mb-10 sm:mb-14">
+      <div className="max-w-2xl">
+        <h1 className="text-[34px] font-semibold leading-[1.04] tracking-[-0.03em] text-white sm:text-[52px]">
+          {lead}{" "}
+          <span style={{ ...V2_SERIF, color: V2_ACCENT }} className="font-normal">
+            {accent}
+          </span>
+          <span className="text-white/55">.</span>
+        </h1>
+        {description ? (
+          <p className={`${V2_MONO} mt-4 max-w-md text-[11.5px] leading-relaxed text-white/45`}>
+            {description}
+          </p>
+        ) : null}
+        {action ? <div className="mt-6 flex flex-wrap items-center gap-2">{action}</div> : null}
+      </div>
+    </header>
+  );
+}
+
+/**
+ * The primary call to action, in the accent gradient the services pages use.
+ *
+ * A class rather than a component with hover handlers: the services page drives
+ * its hover from onMouseEnter/onMouseLeave, which makes that button unusable
+ * from a server component. CSS does the same job and works before hydration.
+ */
+export const heroButtonClass =
+  "inline-flex h-10 items-center gap-2 rounded-[5px] px-4 text-[11.5px] font-semibold uppercase tracking-[0.14em] text-white transition-all " +
+  "bg-[linear-gradient(135deg,#0095FF,#0066B3)] shadow-[0_8px_20px_rgba(0,149,255,0.20),inset_0_1px_0_rgba(255,255,255,0.15)] " +
+  "hover:bg-[linear-gradient(135deg,#33adff,#0095FF)] hover:-translate-y-px " +
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0095FF]/40";
