@@ -51,6 +51,7 @@ support gap being mistaken for a build gap.
 | 14 | **nuxt/movies** | Nuxt 3, real application | **PASS** | **200** | Clean run, no fixes needed |
 | 15 | vitejs/vite | pnpm workspace monorepo — expected to refuse | APP-ERR | build failed | Refused, but only after leasing a VM. Found that NO monorepo could install |
 | 16 | gothinkster/vue-realworld-example-app | Vue 2 SPA, bun lockfile | APP-ERR | build failed | The repo's own build is broken — rolldown cannot resolve its `src/main.js` |
+| 17 | gothinkster/angular-realworld-example-app | Angular, **bun** | APP-ERR | build failed | The repo imports `realworld/assets/theme/styles.css` and has no such dependency. Confirmed bun detection was CORRECT — the repo really does ship `bun.lock` |
 | 8 | remix-run/indie-stack | Remix, repo-supplied Dockerfile | APP-ERR | 503 | Built, routed, served. The app wants a database it was not given |
 | 9 | sveltejs/realworld | SvelteKit on `master`, **pnpm** | APP-ERR | 503 | Built, routed, served — **first proof pnpm works end to end**. Branch fallback to `master` also proven |
 
@@ -131,6 +132,12 @@ And one that had nothing to do with package managers:
 ## Still to cover
 
 Ordered by how likely a customer is to bring one.
+
+**Angular still needs a target.** Both gothinkster Angular and Vue repositories
+fail on their own source, so neither proves anything about the framework. They
+did prove one thing worth keeping: both ship `bun.lock`, the platform detected
+bun correctly, and bun installed and reached the build step — which is the
+closest bun has come to being exercised.
 
 **Node**: Next.js (app router, pages router, standalone output), Remix, Nuxt,
 SvelteKit, Astro, Vite SPA, Create React App, Angular, Express, Fastify, NestJS,
