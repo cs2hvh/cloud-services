@@ -166,11 +166,36 @@ export function certCovers(packs: CertificatePack[], hostname: string): boolean 
 
 // ── Cloudflare for SaaS: customer domains ───────────────────────────────────
 
+/**
+ * A DNS record the customer must add. Cloudflare returns two distinct kinds and
+ * they are not interchangeable:
+ *
+ *   OWNERSHIP  proves the domain is theirs, to US. Often stops being required
+ *              once the CNAME into our zone resolves, because Cloudflare treats
+ *              that as proof in itself.
+ *   DCV        proves it to the CERTIFICATE AUTHORITY. Always required, and the
+ *              certificate does not issue without it.
+ *
+ * Typed rather than `unknown[]` because the caller reads these fields and hands
+ * them to a customer to copy into their DNS. An `unknown` here means every read
+ * is a cast, and a cast is where a renamed field stops being noticed.
+ */
+export interface DcvRecord {
+  txt_name?: string;
+  txt_value?: string;
+  http_url?: string;
+  http_body?: string;
+  status?: string;
+}
+
 export interface CustomHostname {
   id: string;
   hostname: string;
   status: string;
-  ssl: { status: string; method: string; validation_records?: unknown[] };
+  ssl: { status: string; method: string; validation_records?: DcvRecord[] };
+  /** Present until the hostname is verified; absent once the CNAME satisfies it. */
+  ownership_verification?: { type?: string; name?: string; value?: string };
+  ownership_verification_http?: { http_url?: string; http_body?: string };
   verification_errors?: string[];
 }
 

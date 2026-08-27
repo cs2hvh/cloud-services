@@ -9,6 +9,9 @@
  */
 
 import { checkCustomDomain } from "../../../_lib/domains";
+import { paasConfig } from "@/lib/paas/config";
+import { createCustomHostname } from "@/lib/paas/edge/cloudflare";
+
 import { getCaller } from "../../../_lib/auth";
 import {
   json,
@@ -20,11 +23,22 @@ import {
   apiError,
 } from "../../../_lib/http";
 
+/**
+ * Where a customer CNAMEs their domain — the zone-level Cloudflare for SaaS
+ * fallback origin. ONE record serves every customer domain and adding a
+ * customer does not change it. It does NOT decide which app answers: the
+ * Ingress does that off the Host header, exactly as for an *.ahurasense.com
+ * hostname. The fallback only gets the request into the cluster.
+ */
+const FALLBACK_ORIGIN = "fallback.ahurasense.com";
+
 export const dynamic = "force-dynamic";
 
 type Params = { params: Promise<{ ref: string }> };
 
 interface DomainRow {
+  /** Selected because the issuance update below addresses the row by primary key. */
+  id: string;
   ref: string;
   domain: string;
   state: string;
@@ -34,8 +48,12 @@ interface DomainRow {
   created_at: string;
 }
 
+// ONE STRING LITERAL. supabase-js parses this at the TYPE level to infer the
+// row shape, and it can only do that for a literal — splitting it across a `+`
+// collapses the row to GenericStringError and produces a dozen "property does
+// not exist" errors that every one of them names a perfectly correct column.
 const DOMAIN_COLUMNS =
-  "ref, domain, state, verification_txt, verified_at, last_error, created_at";
+  "id, ref, domain, state, verification_txt, verified_at, last_error, created_at";
 
 function toDomainDto(row: DomainRow) {
   return {
@@ -43,8 +61,22 @@ function toDomainDto(row: DomainRow) {
     domain: row.domain,
     state: row.state,
     url: `https://${row.domain}`,
+    // `_cf-custom-hostname`, NOT a name of our own invention.
+    //
+    // This said `_ahura-verify.${domain}` — a prefix nothing on Cloudflare's
+    // side has ever heard of. The claim response returned the real record and
+    // this list returned a different one, so a customer following the list
+    // added a TXT that could never verify, and the failure would look like
+    // Cloudflare being slow rather than us giving the wrong instruction.
+    //
+    // The name is DERIVED rather than stored because Cloudflare's ownership
+    // record is deterministic: `_cf-custom-hostname.<hostname>`. Only the value
+    // is unpredictable, and only the value is stored. If Cloudflare ever
+    // changes the prefix this becomes wrong silently, which is why the claim
+    // path returns Cloudflare's own record verbatim and this is the fallback
+    // for rows claimed before issuance ran.
     verification: row.verification_txt
-      ? { type: "TXT", name: `_ahura-verify.${row.domain}`, value: row.verification_txt }
+      ? { type: "TXT", name: `_cf-custom-hostname.${row.domain}`, value: row.verification_txt }
       : null,
     verifiedAt: row.verified_at,
     lastError: row.last_error,
@@ -94,10 +126,18 @@ export async function GET(_request: Request, { params }: Params) {
   return json({
     project: { ref: project.ref, name: project.name },
     domains: (data as DomainRow[]).map(toDomainDto),
-    customHostnamesEnabled: false,
-    note:
-      "Custom domains can be claimed but will not serve traffic: Cloudflare " +
-      "for SaaS is not enabled on this zone.",
+    // READ, not hardcoded. This was a literal `false`, so enabling the
+    // capability changed nothing here while the POST — which does read it —
+    // happily called Cloudflare and issued a certificate. One route, two
+    // answers to the same question: the claim told the customer their domain
+    // was pending verification and this list told them the feature was off.
+    //
+    // A flag that cannot turn on is not a flag, and the tell was that turning
+    // it on changed the behaviour of one handler and not the other.
+    customHostnamesEnabled: paasConfig.acmEnabled(),
+    note: paasConfig.acmEnabled()
+      ? "Add the DNS records returned when the domain was claimed. The certificate issues once they resolve."
+      : "Custom domains can be claimed but will not serve traffic: Cloudflare for SaaS is not enabled on this zone.",
   });
 }
 
@@ -155,17 +195,85 @@ export async function POST(request: Request, { params }: Params) {
     return apiError("internal", "Could not add the domain.", 500);
   }
 
-  return json(
-    {
-      domain: toDomainDto(data as DomainRow),
-      status: "claimed_not_serving",
-      note:
-        "The claim is recorded, but this domain will not serve traffic until " +
-        "Cloudflare for SaaS is enabled on the zone.",
-      action: "Enable Cloudflare for SaaS, then re-verify.",
-    },
-    201
-  );
+  const row = data as DomainRow;
+
+  if (!paasConfig.acmEnabled()) {
+    return json(
+      {
+        domain: toDomainDto(row),
+        status: "claimed_not_serving",
+        note:
+          "The claim is recorded, but this domain will not serve traffic until " +
+          "Cloudflare for SaaS is enabled on the zone.",
+        action: "Enable Cloudflare for SaaS, then re-verify.",
+      },
+      201
+    );
+  }
+
+  // Ask Cloudflare to issue. The claim above is already durable, so a failure
+  // here leaves a retryable row rather than losing the customer's domain.
+  try {
+    const ch = await createCustomHostname(row.domain);
+    const dcv = (ch.ssl?.validation_records ?? [])
+      .filter((r) => r.txt_name && r.txt_value)
+      .map((r) => ({ type: "TXT" as const, name: r.txt_name!, value: r.txt_value! }));
+
+    const ownership =
+      ch.ownership_verification?.name && ch.ownership_verification?.value
+        ? [
+            {
+              type: "TXT" as const,
+              name: ch.ownership_verification.name,
+              value: ch.ownership_verification.value,
+            },
+          ]
+        : [];
+
+    await caller.db
+      .from("domains")
+      .update({
+        cf_hostname_id: ch.id,
+        // Stored so a later poll can ask whether the customer added what we
+        // asked for, rather than re-deriving it and hoping the two match.
+        verification_txt: dcv[0]?.value ?? ch.ownership_verification?.value ?? null,
+        last_error: null,
+      })
+      .eq("id", row.id);
+
+    return json(
+      {
+        domain: toDomainDto({ ...row, cf_hostname_id: ch.id } as DomainRow),
+        status: "pending_verification",
+        // The CNAME is what actually routes traffic, and Cloudflare accepts it
+        // as ownership proof too — which is why the ownership TXT often stops
+        // being required once it resolves. Both are returned rather than
+        // guessing which one the customer will manage to add.
+        records: [
+          ...ownership,
+          ...dcv,
+          { type: "CNAME" as const, name: row.domain, value: FALLBACK_ORIGIN },
+        ],
+        note: "Add these records at your DNS provider. The certificate issues automatically once they resolve.",
+      },
+      201
+    );
+  } catch (e) {
+    const message = (e as Error).message.slice(0, 300);
+    await caller.db.from("domains").update({ last_error: message }).eq("id", row.id);
+    console.error("[v2/domains] issuance failed:", message);
+    return json(
+      {
+        domain: toDomainDto(row),
+        status: "claimed_issuance_failed",
+        // The claim is KEPT deliberately. Releasing it would free the domain
+        // for another tenant to claim while this customer is mid-setup.
+        note: "The domain is claimed, but the certificate request failed. It can be retried.",
+        error: message,
+      },
+      201
+    );
+  }
 }
 
 export async function DELETE(request: Request, { params }: Params) {
