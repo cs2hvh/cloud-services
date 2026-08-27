@@ -45,6 +45,9 @@ support gap being mistaken for a build gap.
 | 6 | fastify/fastify-example-todo | Fastify, no lockfile | APP-ERR | 503 | Built, routed, served — the app wants a database. Found the `npm ci` gap |
 | 7 | vercel/next-learn `dashboard/starter-example` | Next.js in a monorepo subdirectory | APP-ERR | build failed | The starter is DELIBERATELY incomplete — the tutorial has the reader create `app/ui/fonts.ts`, so it fails TypeScript on its own source. The platform reached install, build and typecheck to find that. Target switched to `final-example` |
 | 10 | **vercel/ai-chatbot** | Next.js, pnpm, native deps, heavy build | **PASS** | **307** | A large real application, end to end. Found three of the four pnpm defects on the way |
+| 11 | **gothinkster/react-redux-realworld-example-app** | CRA SPA on `master`, static/nginx | **PASS** | **200** | Found that EVERY static site crash-looped on a pidfile it could not write |
+| 12 | remix-run/indie-stack | Remix, repo Dockerfile | APP-ERR | 503 | Wants a database |
+| 13 | sveltejs/realworld | SvelteKit, pnpm, `master` | APP-ERR | 503 | Wants a backend. First pnpm app to route |
 | 8 | remix-run/indie-stack | Remix, repo-supplied Dockerfile | APP-ERR | 503 | Built, routed, served. The app wants a database it was not given |
 | 9 | sveltejs/realworld | SvelteKit on `master`, **pnpm** | APP-ERR | 503 | Built, routed, served — **first proof pnpm works end to end**. Branch fallback to `master` also proven |
 
@@ -104,6 +107,16 @@ would have passed against a generated template:
   and the runner could not start the app
 - pnpm 10 refuses install scripts and exits non-zero, which kills any project
   with a native dependency — sharp, bcrypt, prisma, esbuild
+
+And one that had nothing to do with package managers:
+
+- **every static site crash-looped.** The nginx runtime rewrote its pidfile path
+  by literal (`/var/run/nginx.pid`); nginx 1.27 ships `/run/nginx.pid`, so the
+  substitution matched nothing and uid 101 could not write it. nginx logs a
+  clean startup and *then* dies, so the pod read as Running and the platform
+  answered 503. CRA, Vite, Vue, Angular, Gatsby, Astro and Hugo were all
+  affected, and it stayed hidden because everything deployed here before was a
+  Node server or a repo-supplied Dockerfile.
 
 ---
 
