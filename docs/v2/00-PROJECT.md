@@ -664,6 +664,39 @@ Two rules:
    and well tested, and it armed a production outage three files away. Nothing
    about the arming change looks dangerous, which is what makes this class hard.
 
+### A migration invalidates routes no test and no typechecker can see
+
+`20260827090000` made `paas.installations.provider` and `external_id` NOT NULL
+and dropped the `link_installation(bigint, …)` overload. Both were correct. Both
+would have broken GitHub connect — the only working provider — on the user's own
+installation flow:
+
+- `app/api/v2/git/callback` passed `p_installation_id`. **PostgREST resolves an
+  RPC by argument NAME**, so after the drop the call resolved to no function at
+  all.
+- `app/api/v2/github/callback` inserted without the two new NOT NULL columns —
+  `23502` on every connect.
+
+**Nothing mechanical connects the two.** The schema is not in the type system, so
+`tsc` sees nothing; no test exercises the write, so the suite stays green; and
+the lane that wrote the migration did not own the routes it invalidated. All
+three checks passed on a tree that could not connect a GitHub account.
+
+The habit that catches it: **before making a column NOT NULL or dropping a
+function overload, grep for every writer of that table or function across the
+whole repo — not just the lane's own tree.** Then fix the callers BEFORE
+applying, so there is never a window where the deployed code is wrong against
+the live schema.
+
+Related, and the reason the `else false` line in that migration is not a
+stylistic preference: **a CHECK constraint whose expression evaluates to NULL
+ADMITS the row.** Measured, not reasoned — a temp table with
+`check (case x when 'known' then v = 'ok' end)` accepted
+`('unmatched-provider', 'obviously-invalid-value')`. A `CASE` with no `ELSE`
+returns NULL for anything unmatched, so adding a fourth `git_provider` would
+silently switch that constraint off for it: still listed, still green,
+enforcing nothing.
+
 ### The tools themselves lie, and that is a different problem
 
 Two tools reported success while failing, in the same hour:
