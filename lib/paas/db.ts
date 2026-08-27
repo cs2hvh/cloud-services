@@ -256,6 +256,15 @@ export interface ProjectRow {
    */
   tier: string;
   instance_count: number;
+  /**
+   * When the FIRST charge failed for lack of credit, or null.
+   *
+   * NULL means "never failed", and it is the only value that means that — a
+   * blank or unparseable value is `unknown` to `lib/paas/arrears.ts`, which
+   * neither suspends nor resumes. Set once by `paas.mark_arrears`, cleared by a
+   * successful `paas.charge_project_hour`.
+   */
+  arrears_since: string | null;
 }
 export interface EnvironmentRow { id: string; ref: string; project_id: string; kind: string; name: string; created_at: string }
 /**

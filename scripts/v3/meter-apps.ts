@@ -36,6 +36,7 @@ import { EXIT_CLEAN, EXIT_FINDINGS, EXIT_URGENT, EXIT_CANNOT_RUN } from "../../l
 import { db, projects, deployments, type ProjectRow } from "../../lib/paas/db.ts";
 import { loadKubeconfig, kube } from "../../lib/paas/k8s/client.ts";
 import { requireTier, hourlyRateUsd, clampInstances } from "../../lib/paas/tiers.ts";
+import { assessArrears, shouldSuspend, GRACE_HOURS, type ArrearsVerdict } from "../../lib/paas/arrears.ts";
 
 const KUBECONFIG = process.env.V2_KUBECONFIG ?? "C:/ahura-secrets/kubeconfig-v2-dev.yaml";
 const APPLY = process.argv.includes("--apply");
@@ -46,10 +47,12 @@ type Verdict = "charged" | "already-charged" | "insufficient" | "no-payer" | "in
 
 interface Billed {
   project: string;
+  projectId: string;
   tier: string;
   instances: number;
   amount: number;
   verdict: Verdict | "would-charge";
+  arrears: ArrearsVerdict;
 }
 
 const line = () => console.log("─".repeat(96));
@@ -133,7 +136,11 @@ async function main(): Promise<void> {
     }
 
     if (!APPLY) {
-      billed.push({ project: p.ref, tier: tierId, instances, amount, verdict: "would-charge" });
+      billed.push({
+        project: p.ref, projectId: p.id, tier: tierId, instances, amount,
+        verdict: "would-charge",
+        arrears: assessArrears(p.arrears_since, NOW),
+      });
       continue;
     }
 
@@ -145,7 +152,36 @@ async function main(): Promise<void> {
         p_tier: tierId,
         p_instances: instances,
       })) as unknown as Verdict;
-      billed.push({ project: p.ref, tier: tierId, instances, amount, verdict });
+      // MARK ARREARS ON FAILURE, in its own statement. The charge function
+      // rolls its own exception block back, so a write inside it would vanish —
+      // and without a start time the grace window can never begin, which means
+      // an unpaid app is never overdue no matter how long it runs.
+      //
+      // mark_arrears is once-only by construction (`is null` in its WHERE), so
+      // calling it every hour cannot restart the clock.
+      if (verdict === "insufficient") {
+        try {
+          await db.rpc("mark_arrears", { p_project_id: p.id, p_at: NOW.toISOString() });
+        } catch (e) {
+          problems.push(`${p.ref}: could not record arrears (${(e as Error).message.slice(0, 80)})`);
+        }
+      }
+
+      // Re-read rather than reuse the row: charge_project_hour CLEARS arrears on
+      // success, and mark_arrears may have just set them. The row fetched before
+      // the charge is stale in both directions.
+      let arrearsSince = p.arrears_since;
+      try {
+        const fresh = await projects.byRef(p.ref);
+        arrearsSince = fresh?.arrears_since ?? null;
+      } catch {
+        // Keep the pre-charge value rather than inventing one.
+      }
+
+      billed.push({
+        project: p.ref, projectId: p.id, tier: tierId, instances, amount, verdict,
+        arrears: assessArrears(arrearsSince, NOW),
+      });
     } catch (e) {
       problems.push(`${p.ref}: charge failed (${(e as Error).message.slice(0, 120)})`);
     }
@@ -186,16 +222,44 @@ async function main(): Promise<void> {
 
   if (insufficient.length) {
     console.log(`\n  ${insufficient.length} project(s) OUT OF CREDIT and still running:`);
-    for (const b of insufficient) console.log(`    ${b.project}  needed $${b.amount.toFixed(6)}`);
-    console.log(`  Not suspended here. Stopping a customer's app is a decision with a person`);
-    console.log(`  behind it, and a metering sweep is the wrong place to make it.`);
+    for (const b of insufficient) {
+      console.log(`    ${b.project.padEnd(20)} needed $${b.amount.toFixed(6)}  ${b.arrears.reason}`);
+    }
+  }
+
+  // WHO IS PAST GRACE, reported separately from "out of credit" because they are
+  // different facts: failing this hour is a payment hiccup, failing for three
+  // days is an app nobody is paying for. Collapsing them would put a customer
+  // whose card expired an hour ago in the same list as one who left.
+  const overdue = billed.filter((x) => shouldSuspend(x.arrears));
+  const unknownArrears = billed.filter((x) => x.arrears.state === "unknown");
+
+  if (overdue.length) {
+    console.log(`\n  ${overdue.length} project(s) PAST THE ${GRACE_HOURS}h GRACE WINDOW:`);
+    for (const b of overdue) console.log(`    ${b.project.padEnd(20)} ${b.arrears.reason}`);
+    console.log(`  NOT SUSPENDED. Stopping a customer's app is destructive and public, and a`);
+    console.log(`  metering sweep is the wrong place to decide it. When suspension does land it`);
+    console.log(`  scales to zero and never deletes — a suspended app has to come back exactly`);
+    console.log(`  as it was the moment the balance is topped up.`);
+  }
+
+  if (unknownArrears.length) {
+    // Surfaced rather than silently skipped. These are never suspended, which is
+    // right, but a growing count here means something is corrupting the column
+    // and the silence would be the only symptom.
+    console.log(`\n  ${unknownArrears.length} project(s) with an UNREADABLE arrears timestamp — never suspended:`);
+    for (const b of unknownArrears) console.log(`    ${b.project.padEnd(20)} ${b.arrears.reason}`);
   }
 
   if (!APPLY) {
     console.log(`\n  DRY RUN — nothing was charged. Re-run with --apply.`);
   }
 
-  process.exitCode = noPayer.length ? EXIT_URGENT : insufficient.length || problems.length ? EXIT_FINDINGS : EXIT_CLEAN;
+  process.exitCode = noPayer.length
+    ? EXIT_URGENT
+    : overdue.length || insufficient.length || problems.length || unknownArrears.length
+      ? EXIT_FINDINGS
+      : EXIT_CLEAN;
 }
 
 await main();
