@@ -183,10 +183,14 @@ behavioural tests replaying confirmed v1 criticals.
   - Reached via `next dev`, which compiles per route — so the `GPU_MARKUP_PCT`
     error that blocks `next build` never compiles unless the GPU wizard is
     visited. `next build` is still blocked; the app is still runnable.
-- **`ADMIN_EMAILS` is not set**, and the server says so at startup: operator
-  authorization falls back to `user_profiles.roles`, *"which is weaker: it is
-  data a compromised account may be able to reach, and it guards fleet cost,
-  cluster ids and every tenant's name."* Must be set before production.
+- ~~`ADMIN_EMAILS` is not set~~ — **SET** 2026-08-26 to the operator address, in
+  `.env.local` (gitignored). The startup warning is gone **and the guard still
+  runs**: `/api/v2/admin/fleet` still returns 404 unauthenticated, so
+  `getOperator()` executed and simply had nothing to warn about. Absence of a
+  warning from a check that never ran would have proven nothing.
+  - When set it is the **only** thing granting admin — the `user_profiles.roles`
+    fallback is skipped entirely. **Production needs its own**; setting it here
+    does not carry over.
 - **No customer-facing v2 UI exists.** One page (`/dashboard/v2/admin`), all
   operator-only. No signup, no project creation, no deploy button, no app list.
   This is the largest remaining piece.
