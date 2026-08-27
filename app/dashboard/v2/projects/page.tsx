@@ -32,6 +32,7 @@ import {
   heroButtonClass,
   timeAgo,
 } from "@/components/v2/kit";
+import { AutoRefresh } from "@/components/v2/auto-refresh";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -104,6 +105,14 @@ export default async function ProjectsPage() {
           </Link>
         }
       />
+
+      {/*
+        The list is where somebody watches a fleet come up. `building` is
+        already computed for the summary row, so following it costs nothing.
+      */}
+      <div className="-mt-3 mb-4">
+        <AutoRefresh active={building > 0} label={`${building} deploying — this list is updating itself.`} />
+      </div>
 
       {readFailed ? (
         <Failed

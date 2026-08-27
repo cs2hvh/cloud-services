@@ -11,6 +11,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Activity, Receipt } from "lucide-react";
 import { TabNav } from "@/components/v2/tab-nav";
+import { AutoRefresh } from "@/components/v2/auto-refresh";
 import { isSection } from "@/components/v2/sections";
 import { createClient } from "@/lib/supabase/server";
 import { summariseCharges } from "@/lib/paas/usage";
@@ -217,6 +218,13 @@ export default async function ProjectPage({
     toDomainDto(d, liveHostnames.get(d.domain.toLowerCase()) ?? null),
   );
 
+  // Live while ANY deployment is moving, not only the newest. A rollback or a
+  // second push leaves an older row building, and a page that stopped
+  // refreshing because the top row settled would freeze mid-build.
+  const anyInFlight = (deployments.data ?? []).some(
+    (d) => d.state === "queued" || d.state === "building" || d.state === "publishing",
+  );
+
   const emptyExplanation =
     logsTarget?.state === "error"
       ? {
@@ -310,6 +318,15 @@ export default async function ProjectPage({
         that looks like a different product.
       */}
       <TabNav active={tab} />
+
+      {/*
+        Deploying is the one time somebody sits on this page waiting, and it
+        was the one time the page did not move. It stops on its own the
+        moment nothing is in flight.
+      */}
+      <div className="-mt-2 mb-4">
+        <AutoRefresh active={anyInFlight} label="Deploying — this page is updating itself." />
+      </div>
 
       {tab === "overview" ? (
         <div className="space-y-4">
