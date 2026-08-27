@@ -9,8 +9,13 @@
 
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { Receipt } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { summariseCharges } from "@/lib/paas/usage";
 import {
+  BILLING_HOURS_PER_MONTH,
+  clampInstances,
+  hourlyRateUsd,
   requireTier,
   resourcesFor,
   TIERS,
@@ -25,6 +30,7 @@ import {
   Empty,
   Failed,
   PageHeader,
+  Stat,
   StateBadge,
   buttonClass,
   timeAgo,
@@ -75,7 +81,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ ref: s
   }
   if (!project || project.deleted_at) notFound();
 
-  const [deployments, aliases, envVars, environments, domains] = await Promise.all([
+  const [deployments, aliases, envVars, environments, domains, charges] = await Promise.all([
     db
       .from("deployments")
       // image_digest and scaled_to_zero_at feed replicaStates below. Without
@@ -93,6 +99,19 @@ export default async function ProjectPage({ params }: { params: Promise<{ ref: s
       .select("ref,hostname,status,verified_at,cf_hostname_id,created_at")
       .eq("project_id", project.id)
       .order("created_at", { ascending: true }),
+    // Read here rather than through /api/v2/projects/{ref}/usage for the same
+    // reason as everything else on this page: a server render taking an HTTP
+    // round trip to its own process adds a failure mode and an auth hop for
+    // nothing. Both paths sum with summariseCharges, so they cannot disagree.
+    db
+      .from("project_charges")
+      .select("period_start,amount_usd,tier,instances")
+      .eq("project_id", project.id)
+      .gte(
+        "period_start",
+        new Date(Date.now() - 31 * 86_400_000).toISOString(),
+      )
+      .order("period_start", { ascending: false }),
   ]);
 
   // Sizing is derived from the same table that prices it, so what the page says
@@ -448,6 +467,87 @@ export default async function ProjectPage({ params }: { params: Promise<{ ref: s
               updatedAt: v.updated_at,
             }))}
           />
+        )}
+      </Card>
+
+      {/*
+        Billing existed and nothing showed it. A customer whose balance is drawn
+        down with no way to see what for has to take our word for the number,
+        and the first time they doubt it there is nothing to point at.
+
+        EVERY FIGURE IS SUMMED FROM THE ROWS, never recomputed from the tier.
+        The rows record what was actually taken, including the tier at the time,
+        so re-deriving from today's tier would restate history the moment
+        somebody resized — and the restated figure would disagree with the
+        balance for reasons nobody could trace.
+      */}
+      <Card title="Usage" subtitle="Charged by the hour, last 31 days" icon={Receipt}>
+        {charges.error ? (
+          // NOT an empty bill. Rendering a failed read as "you have been charged
+          // nothing" is the one direction a billing panel must never fail in.
+          <Failed what="your usage" detail="This is a display problem, not a billing one." />
+        ) : (
+          (() => {
+            const summary = summariseCharges(charges.data ?? []);
+            let monthly: number | null = null;
+            try {
+              const t = requireTier(project.tier);
+              monthly =
+                Math.round(
+                  hourlyRateUsd(t, clampInstances(project.instance_count ?? 1)) *
+                    BILLING_HOURS_PER_MONTH *
+                    100,
+                ) / 100;
+            } catch {
+              // An unpriceable tier shows no projection rather than a guessed
+              // one. A projection based on the cheapest plan understates a bill.
+              monthly = null;
+            }
+            return (
+              <>
+                <div className="flex flex-wrap gap-6">
+                  <Stat
+                    label="Charged"
+                    value={`${summary.totalUsd.toFixed(4)}`}
+                    hint={`${summary.hoursBilled} hour${summary.hoursBilled === 1 ? "" : "s"} billed`}
+                  />
+                  {monthly !== null ? (
+                    <Stat
+                      label="At this size"
+                      value={`${monthly.toFixed(2)}`}
+                      hint="per month if it never sleeps"
+                    />
+                  ) : null}
+                </div>
+
+                {summary.unreadable > 0 ? (
+                  <p className="mt-3 text-xs text-amber-300">
+                    {summary.unreadable} charge row(s) could not be read and are excluded from the total
+                    above. Please contact support before relying on this figure.
+                  </p>
+                ) : null}
+
+                {summary.hoursBilled === 0 ? (
+                  <p className="mt-3 text-xs text-white/40">
+                    Nothing charged yet. Metering runs hourly and only bills hours the app was actually
+                    running — an app asleep or stopped costs nothing.
+                  </p>
+                ) : (
+                  <ul className="mt-3 space-y-1">
+                    {summary.byDay.slice(0, 7).map((d) => (
+                      <li key={d.day} className="flex items-baseline justify-between gap-3 text-xs">
+                        <span className="font-mono text-white/50">{d.day}</span>
+                        <span className="text-white/30">{d.hours}h</span>
+                        <span className="font-mono tabular-nums text-white/70">
+                          ${d.amountUsd.toFixed(4)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            );
+          })()
         )}
       </Card>
         </div>
