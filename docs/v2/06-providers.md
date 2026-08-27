@@ -76,6 +76,7 @@ keys; an env-var ciphertext fed to this decrypt is refused **by scheme name**.
 | `providers/types.ts` | The normalised shape all three flatten to |
 | `providers/credentials.ts` | Token encryption at rest, and refresh timing |
 | `providers/oauth.ts` | Signed state, token exchange, identity |
+| `providers/refresh.ts` | Refreshing an OAuth token before it strands a build |
 | `providers/policy.ts` | Deploy decision + **provider-scoped** project lookup |
 | `providers/adapter.ts` | Repos for a team, failures kept separate |
 | `providers/hooks.ts` | Webhook registration |
@@ -149,9 +150,17 @@ unmatched provider and **a CHECK constraint passes on NULL**, so a fourth
 
 ## 5. Not done
 
-- **Token refresh is not wired.** `needsRefresh` and the refresh-token column
-  exist; nothing calls the refresh endpoint yet. Until it does, a GitLab
-  connection stops working when its access token expires.
+- **Token refresh exists but nothing calls it.** `providers/refresh.ts` does the
+  exchange for both providers; no caller invokes it yet, so a GitLab connection
+  still stops working roughly two hours after it is made.
+
+  Whoever wires it must respect the one rule the module is built around:
+  **both providers rotate the refresh token and invalidate the old one**, so a
+  refresh that succeeds remotely and fails to persist locally leaves a dead
+  connection that only re-authorisation fixes. `refreshToken` returns the new
+  pair rather than writing it, precisely so the write happens where it can fail
+  loudly. Persist before use, and treat a failed refresh as *the old credential
+  is still worth trying* rather than as a dead connection.
 - **`ensureHook` is not called from project create.** The module and its tests
   exist; the create path (deploy lane) has to invoke it.
 - **The branches route** — `/api/v2/git/repos/[owner]/[repo]/branches` — still
