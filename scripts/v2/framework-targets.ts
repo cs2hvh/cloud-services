@@ -119,7 +119,7 @@ export const BATCHES: Record<string, Target[]> = {
     // The same repository with the advice our refusal gives actually applied. If
     // "set the root directory to it" does not work, the refusal is a dead end
     // dressed as a suggestion.
-    { repo: "tiangolo/full-stack-fastapi-template", note: "FastAPI with the root directory set, as we advise", root: "backend", expect: "app-err" },
+    { repo: "tiangolo/full-stack-fastapi-template", note: "FastAPI from backend/; its Dockerfile wants the ROOT as context", root: "backend", expect: "build-err" },
     { repo: "pallets/flask", note: "Flask — a LIBRARY, must refuse", expect: "refuse" },
   ],
 

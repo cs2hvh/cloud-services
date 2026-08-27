@@ -64,6 +64,10 @@ support gap being mistaken for a build gap.
 | 27 | gothinkster/node-express-realworld-example-app | Express + Prisma API | BUILD-ERR | build failed | Their `Dockerfile:17` is `COPY dist/api api` — it expects a build that already happened. A CI-only Dockerfile, not ours |
 | 28 | **nestjs/typescript-starter** | NestJS, TypeScript build | **PASS** | **200** | Only after a fix. It crash-looped first, and finding out why is what the pod diagnostics were built for |
 | 29 | fastify/fastify-example-todo | Fastify, no lockfile | APP-ERR | 503 | Wants configuration. The no-lockfile path holds |
+| 30 | gothinkster/django-realworld-example-app | Django, requirements.txt | BUILD-ERR | build failed | `ModuleNotFoundError: django.utils.six.moves` — removed in Django 3.0. The repository is older than its own dependencies |
+| 31 | tiangolo/full-stack-fastapi-template | FastAPI, uv, app in `backend/` | REFUSED | at detect | Was recorded as a correct APP-ERR 503. It was actually crash-looping on exit 2 — we had invented its entrypoint |
+| 32 | tiangolo/full-stack-fastapi-template `backend/` | The same repo with our own advice applied | BUILD-ERR | build failed | Its Dockerfile bind-mounts `uv.lock` from the build context, and that file is at the repo ROOT. See the gap below |
+| 33 | pallets/flask | Flask — a LIBRARY | REFUSED | at detect | Previously leased a VM to fail installing itself |
 | 8 | remix-run/indie-stack | Remix, repo-supplied Dockerfile | APP-ERR | 503 | Built, routed, served. The app wants a database it was not given |
 | 9 | sveltejs/realworld | SvelteKit on `master`, **pnpm** | APP-ERR | 503 | Built, routed, served — **first proof pnpm works end to end**. Branch fallback to `master` also proven |
 
@@ -133,6 +137,22 @@ And one that had nothing to do with package managers:
   answered 503. CRA, Vite, Vue, Angular, Gatsby, Astro and Hugo were all
   affected, and it stayed hidden because everything deployed here before was a
   Node server or a repo-supplied Dockerfile.
+- **Python entrypoints were invented, not read.** `gunicorn app:app` for
+  Flask and a `wsgi.py` hunt for Django are what a Python app USUALLY looks
+  like, not anything found in the repository. When the guess was wrong there
+  was no good failure: one spent a build machine failing to install itself,
+  the other built, routed and then crash-looped on exit 2 — reaching the
+  customer as a 503 with no cause, and sitting in this matrix as a correct
+  app error. Both are now refused in a second, naming the fix.
+
+**Still open — the build context cannot be separated from the root
+directory.** Setting a root directory makes it the Docker build context, which
+is the usual PaaS meaning and right for most repositories. A monorepo whose
+Dockerfile is written to be built from the REPO root with
+`-f backend/Dockerfile` cannot express that: `tiangolo/full-stack-fastapi-
+template` bind-mounts `uv.lock`, which lives one level above its Dockerfile.
+Supporting it means a second setting — Dockerfile path, separate from context
+— which is what Railway and Render offer and Vercel does not.
 - **NestJS ran its DEV start script and crash-looped.** `nest start` needs
   @nestjs/cli, a devDependency the runtime stage prunes, so the container
   exited 1 and restarted — which from outside is a 503 and nothing else.
