@@ -157,10 +157,6 @@ const CLOUD_INIT_LINES: string[] = [
   "echo '--- clone ---'",
   "@@CREDENTIAL_BLOCK@@",
   "sudo -u builder git -c protocol.version=2 clone --depth=1 --branch '@@GIT_REF@@' '@@CLONE_URL@@' /home/builder/src || fail 'git clone failed'",
-  "# The credential is not needed past this point.",
-  "rm -f /home/builder/.git-credentials",
-  "sudo -u builder git config --global --unset credential.helper 2>/dev/null || true",
-  "",
   // Build the commit we were ASKED for, not whatever the branch points at now.
   //
   // A webhook records the sha from the push event, then the worker builds some
@@ -185,6 +181,23 @@ const CLOUD_INIT_LINES: string[] = [
   "  sudo -u builder git -C /home/builder/src checkout --detach FETCH_HEAD \\",
   "    || fail 'requested commit could not be checked out'",
   "fi",
+  "",
+  // THE CREDENTIAL DIES HERE, NOT AFTER THE CLONE.
+  //
+  // It used to be removed on the line after `git clone`, with a comment saying
+  // it was not needed past that point. The commit fetch above needs it: a
+  // shallow clone of the branch, then `git fetch origin <sha>`, is two
+  // authenticated operations against a private repository. Removing the
+  // credential between them left the fetch anonymous, and the build died with
+  // 'requested commit could not be fetched' on a commit that plainly existed.
+  //
+  // Still before the Docker build, which is the property that matters: no
+  // credential may exist while a layer is being written, because layers are
+  // pushed to a registry and served.
+  "# The credential is not needed past this point — the clone AND the commit",
+  "# fetch are both done.",
+  "rm -f /home/builder/.git-credentials",
+  "sudo -u builder git config --global --unset credential.helper 2>/dev/null || true",
   "",
   "cd '/home/builder/src@@ROOT_DIR@@' || fail 'root directory not found in repository'",
   // Capture the sha rather than only printing it. Recording what a build

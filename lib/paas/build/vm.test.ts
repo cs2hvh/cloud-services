@@ -47,11 +47,28 @@ test("the token is delivered via a credential file, base64, never a shell token"
   assert.doesNotMatch(out, new RegExp(secret), "raw token must not appear in the rendered script");
 });
 
-test("the credential is removed immediately after the clone", () => {
+test("THE CREDENTIAL OUTLIVES THE COMMIT FETCH, AND DIES BEFORE THE BUILD", () => {
+  // It used to be removed on the line after `git clone`, and the commit fetch
+  // below it then ran anonymously — so a private repository failed with
+  // 'requested commit could not be fetched' on a commit that existed. Cloning
+  // and fetching a specific sha are TWO authenticated operations.
+  //
+  // Both bounds asserted. Removing it too early breaks private builds;
+  // removing it too late puts a credential on disk while Docker is writing
+  // layers that get pushed to a registry and served.
   const out = renderCloudInit(req({ gitToken: "ghs_x" }), URLS);
-  const rmIdx = out.indexOf("rm -f /home/builder/.git-credentials");
   const cloneIdx = out.indexOf("clone --depth=1");
-  assert.ok(rmIdx > cloneIdx, "credential file must be deleted after the clone, not before");
+  const fetchIdx = out.indexOf("fetch --depth=1 origin");
+  const rmIdx = out.indexOf("rm -f /home/builder/.git-credentials");
+  // buildctl, not docker — naming the wrong command made this bound silently
+  // skip, which is a guard that passes by not running.
+  const buildIdx = out.indexOf("buildctl build");
+
+  assert.ok(cloneIdx > 0 && fetchIdx > 0 && rmIdx > 0, "all three steps must be present");
+  assert.ok(rmIdx > cloneIdx, "credential must outlive the clone");
+  assert.ok(rmIdx > fetchIdx, "credential must outlive the commit fetch — this is the regression");
+  assert.ok(buildIdx > 0, "the build command must be present, or the bound below proves nothing");
+  assert.ok(rmIdx < buildIdx, "credential must be gone before any layer is built");
 });
 
 test("a public repo never CREATES a credential, though cleanup still runs", () => {
