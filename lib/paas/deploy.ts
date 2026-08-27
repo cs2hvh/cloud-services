@@ -26,7 +26,8 @@ import { imageIsDurable } from "./build/registry.ts";
 import { kube } from "./k8s/client.ts";
 import { PAAS_NAMESPACE, REGISTRY_PUSH, publisherJob } from "./k8s/manifests.ts";
 import { reconcileProject, kubeContextFromEnv } from "./reconciler.ts";
-import { teams, projects, environments, deployments, aliases, type DeploymentRow, type ProjectRow, type AliasRow } from "./db.ts";
+import { teams, projects, environments, deployments, aliases, envVars, type DeploymentRow, type ProjectRow, type AliasRow } from "./db.ts";
+import { decryptEnvValue, pgHexToBytes } from "./secrets.ts";
 import { appHostname } from "./config.ts";
 import { getFileContents, buildCloneUrl, listInstallationRepos } from "./github/client.ts";
 import { listInstallations } from "./github/app.ts";
@@ -445,6 +446,34 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
     files.paths.includes("bun.lockb") ||
     files.paths.includes("bun.lock");
 
+  // PUBLIC ENVIRONMENT VARIABLES HAVE TO REACH THE BUILD, because nothing
+  // downstream can supply them.
+  //
+  // A NEXT_PUBLIC_ / VITE_ / PUBLIC_ value is read by the bundler and written
+  // into the JavaScript it emits. There is no later step that can inject it:
+  // by the time the container starts, the bundle is already written.
+  //
+  // The reconciler knows this and deliberately leaves public keys OUT of the
+  // runtime Secret, on the stated grounds that they are "already baked into the
+  // image as build args". Nothing baked them. This call site passed an empty
+  // key list and empty build args, so a customer who set NEXT_PUBLIC_API_URL
+  // got it in neither place and the value simply disappeared — the build
+  // succeeded, the page loaded, and the fetch went to `undefined`.
+  const publicEnv: Record<string, string> = {};
+  try {
+    for (const row of await envVars.listForSync(project.id, d.environment_id)) {
+      if (!row.is_public) continue;
+      publicEnv[row.key] = decryptEnvValue(project.ref, row.key, pgHexToBytes(row.value_ct), row.dek_id);
+    }
+  } catch (e) {
+    // A value we cannot decrypt must stop the build. Continuing bakes a missing
+    // key into the bundle, and that failure surfaces in someone's browser with
+    // nothing pointing back to here.
+    throw new Error(
+      `cannot read the public environment for ${project.ref}: ${(e as Error).message}`,
+    );
+  }
+
   const dockerfile = generateDockerfile({
     detection,
     packageManager: pm,
@@ -452,7 +481,7 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
     isWorkspace,
     // Only public-prefixed keys become build args; runtime values are injected
     // from a Secret and must never enter an image layer.
-    publicEnvKeys: [],
+    publicEnvKeys: Object.keys(publicEnv),
   });
 
   // A CLONE CREDENTIAL, for the same reason detection needed one.
@@ -500,7 +529,10 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
     dockerfile,
     rootDirectory: opts.rootDirectory ?? null,
     imageName: `${project.ref}:${d.ref}`,
-    buildArgs: {},
+    // Values for the ARG lines the Dockerfile just declared. These are public by
+    // definition — they end up readable in the shipped JavaScript either way — so
+    // a build arg is the right carrier. A secret must never travel this path.
+    buildArgs: publicEnv,
   };
 
   const vm = await leaseBuildVm(req, { record: true });

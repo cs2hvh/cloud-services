@@ -30,7 +30,7 @@ export default defineConfig({
     // tests/e2e holds Playwright specs; vitest cannot run them (they import
     // @playwright/test and need a live server), so they only ever show up as
     // phantom failures. `npm run test:e2e` is their runner.
-    exclude: ['node_modules', '.next', 'coverage', 'tests/e2e'],
+    exclude: ['node_modules', '.next', 'coverage', 'tests/e2e', '.claude/**'],
   },
   resolve: {
     alias: {

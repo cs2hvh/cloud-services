@@ -308,6 +308,16 @@ export function renderCloudInit(
         "[ -f Dockerfile ] || fail 'repository was detected as Dockerfile-based but none was found'",
       ].join("\n");
 
+  // ONE BUILD ARG PER LINE, so a newline inside a value is not a formatting
+  // wrinkle — it is a second build arg the customer did not ask for and the
+  // Dockerfile never declared. Refuse rather than truncate: a silently dropped
+  // public value gets baked into the bundle as `undefined` and fails later, in
+  // a browser, with nothing pointing back at this line.
+  for (const [k, v] of Object.entries(req.buildArgs ?? {})) {
+    if (/[\r\n]/.test(k) || /[\r\n]/.test(v)) {
+      throw new Error(`[paas/build] build arg ${JSON.stringify(k)} contains a newline, which cannot be encoded`);
+    }
+  }
   const buildArgsB64 = b64(
     Object.entries(req.buildArgs ?? {})
       .map(([k, v]) => `${k}=${v}`)

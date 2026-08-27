@@ -55,6 +55,8 @@ support gap being mistaken for a build gap.
 | 18 | **withastro/astro** `examples/blog` | Astro through OUR Dockerfile — no lockfile, inside a monorepo | **PASS** | **200** | Astro proven end to end. Served at `v2-astro.ahurasense.com`, then torn down |
 | 19 | satnaing/astro-paper | Astro blog shipping its own Dockerfile | BUILD-ERR | build failed | Their Dockerfile, not ours: `pnpm install --frozen-lockfile` under pnpm 10 stops on `ERR_PNPM_IGNORED_BUILDS`. Proves the docker path, says nothing about Astro |
 | 20 | withastro/starlight | Workspace root with no build script | REFUSED | at detect | Refused in seconds without leasing a machine. Previously spent a VM to fail on `"/dist": not found` |
+| 21 | **vercel/commerce** | Next.js **pnpm workspace monorepo** | **PASS** | **200** | The monorepo fix proven on a real one. This is the shape that could not install at all a day ago |
+| 22 | shadcn-ui/taxonomy | Next.js that validates env AT BUILD TIME (`@t3-oss/env-nextjs`) | BUILD-ERR | build failed | Its own `env.mjs` throws during `next build` with no `DATABASE_URL`. Found that NO environment variable reached the builder |
 | 8 | remix-run/indie-stack | Remix, repo-supplied Dockerfile | APP-ERR | 503 | Built, routed, served. The app wants a database it was not given |
 | 9 | sveltejs/realworld | SvelteKit on `master`, **pnpm** | APP-ERR | 503 | Built, routed, served — **first proof pnpm works end to end**. Branch fallback to `master` also proven |
 
@@ -124,6 +126,23 @@ And one that had nothing to do with package managers:
   answered 503. CRA, Vite, Vue, Angular, Gatsby, Astro and Hugo were all
   affected, and it stayed hidden because everything deployed here before was a
   Node server or a repo-supplied Dockerfile.
+- **public environment variables reached nothing at all.** A
+  `NEXT_PUBLIC_` / `VITE_` / `PUBLIC_` value is read by the bundler and
+  written into the JavaScript it emits; no later step can supply it. The
+  reconciler knew that and deliberately left public keys OUT of the runtime
+  Secret, on the stated grounds that they were "already baked into the image
+  as build args" — but `deploy.ts` passed `publicEnvKeys: []` and
+  `buildArgs: {}`, so nothing baked them. A customer who set
+  `NEXT_PUBLIC_API_URL` got it in neither place: the build succeeded, the page
+  loaded, and the fetch went to `undefined`. Both are now passed, and a build
+  arg carrying a newline is refused rather than silently forging a second one.
+- **the v2 test suite was never run by any script.** `lib/paas/**/*.test.ts`
+  are `node:test` files; `npm test` is vitest with `include: tests/**`. 998
+  tests — including every regression guard written during this sweep — sat
+  unrun while the suite reported green. `npm run test:paas` now runs them.
+  Adding them to vitest's globs is NOT the fix: vitest imports the file,
+  node:test executes at import, and the results land outside vitest's
+  reporting while still failing the process.
 - **the batch runner never ran.** `framework-batch.ts` uses a top-level await,
   which tsx cannot compile to CommonJS, so it died in the transform before
   reaching a single repository — and because the run was piped, the pipeline's

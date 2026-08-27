@@ -384,3 +384,86 @@ test("A WORKSPACE COPIES ITS TREE BEFORE INSTALLING", () => {
   assert.match(singleCopy, /package\.json/, "a single-package repo must still copy only its manifest");
   assert.doesNotMatch(singleCopy, /^COPY \. \.$/, "…and must not copy the whole tree into the deps layer");
 });
+
+// generateDockerfile returns null for a repository that supplies its own
+// Dockerfile. None of these cases are that, and a null here would mean the
+// generator stopped doing its job — so say so rather than testing `null`.
+function mustGenerate(input: DockerfileInput): string {
+  const df = generateDockerfile(input);
+  assert.ok(df !== null, "expected a generated Dockerfile, got null");
+  return df;
+}
+
+// PUBLIC ENVIRONMENT VARIABLES REACHING THE BUILD.
+//
+// The reconciler leaves public keys OUT of the runtime Secret because they are
+// supposed to be baked in here. For a long time nothing baked them: deploy.ts
+// passed an empty key list, so a customer's NEXT_PUBLIC_ value reached neither
+// the bundle nor the container and simply vanished. These fail if that wiring
+// is removed again.
+
+test("a public key becomes an ARG and an ENV", () => {
+  const df = mustGenerate({
+    detection: { framework: "nextjs", runtime: "node", buildCommand: "npm run build", startCommand: "next start", outputDirectory: ".next", port: 3000, confidence: "certain", reason: "t" },
+    packageManager: "npm",
+    hasLockfile: true,
+    publicEnvKeys: ["NEXT_PUBLIC_API_URL"],
+  });
+  assert.match(df, /^ARG NEXT_PUBLIC_API_URL$/m);
+  assert.match(df, /^ENV NEXT_PUBLIC_API_URL=\$NEXT_PUBLIC_API_URL$/m);
+});
+
+test("the value is declared BEFORE the build, or the bundler cannot read it", () => {
+  const df = mustGenerate({
+    detection: { framework: "nextjs", runtime: "node", buildCommand: "npm run build", startCommand: "next start", outputDirectory: ".next", port: 3000, confidence: "certain", reason: "t" },
+    packageManager: "npm",
+    hasLockfile: true,
+    publicEnvKeys: ["NEXT_PUBLIC_API_URL"],
+  });
+  const env = df.indexOf("ENV NEXT_PUBLIC_API_URL");
+  const build = df.indexOf("npm run build");
+  assert.ok(env >= 0 && build >= 0, "both lines must exist");
+  assert.ok(env < build, "the ENV must come first");
+});
+
+test("A KEY THAT IS NOT PUBLIC NEVER ENTERS A LAYER", () => {
+  const df = mustGenerate({
+    detection: { framework: "nextjs", runtime: "node", buildCommand: "npm run build", startCommand: "next start", outputDirectory: ".next", port: 3000, confidence: "certain", reason: "t" },
+    packageManager: "npm",
+    hasLockfile: true,
+    publicEnvKeys: ["DATABASE_URL", "NEXT_PUBLIC_OK"],
+  });
+  // Anyone who can pull the image can read its build args.
+  assert.ok(!df.includes("DATABASE_URL"), "a secret must not appear in the Dockerfile");
+  assert.match(df, /^ARG NEXT_PUBLIC_OK$/m);
+});
+
+test("a key that could break out of the ARG line is dropped", () => {
+  const df = mustGenerate({
+    detection: { framework: "nextjs", runtime: "node", buildCommand: "npm run build", startCommand: "next start", outputDirectory: ".next", port: 3000, confidence: "certain", reason: "t" },
+    packageManager: "npm",
+    hasLockfile: true,
+    publicEnvKeys: ["NEXT_PUBLIC_A B", "NEXT_PUBLIC_GOOD"],
+  });
+  assert.ok(!df.includes("NEXT_PUBLIC_A B"));
+  assert.match(df, /^ARG NEXT_PUBLIC_GOOD$/m);
+});
+
+test("EVERY ONE OF THESE CAN ACTUALLY FAIL", () => {
+  // Without this, a generator that emitted nothing at all would pass three of
+  // the four tests above.
+  const df = mustGenerate({
+    detection: { framework: "nextjs", runtime: "node", buildCommand: "npm run build", startCommand: "next start", outputDirectory: ".next", port: 3000, confidence: "certain", reason: "t" },
+    packageManager: "npm",
+    hasLockfile: true,
+    publicEnvKeys: [],
+  });
+  assert.ok(!df.includes("ARG NEXT_PUBLIC"), "no keys means no ARG lines");
+  const withKey = mustGenerate({
+    detection: { framework: "nextjs", runtime: "node", buildCommand: "npm run build", startCommand: "next start", outputDirectory: ".next", port: 3000, confidence: "certain", reason: "t" },
+    packageManager: "npm",
+    hasLockfile: true,
+    publicEnvKeys: ["NEXT_PUBLIC_API_URL"],
+  });
+  assert.ok(withKey.includes("ARG NEXT_PUBLIC_API_URL"), "and one key means one ARG line");
+});

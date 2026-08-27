@@ -63,7 +63,7 @@ export const BATCHES: Record<string, Target[]> = {
     { repo: "vercel/ai-chatbot", note: "Next.js, native deps and a heavy build", expect: "app-err" },
   ],
   "next-2": [
-    { repo: "shadcn-ui/taxonomy", note: "Next.js app router, Prisma postinstall", expect: "app-err" },
+    { repo: "shadcn-ui/taxonomy", note: "Next.js app router, validates env AT BUILD TIME", expect: "build-err" },
     { repo: "vercel/commerce", note: "Next.js monorepo, pnpm workspaces", expect: "app-err" },
   ],
   react: [
