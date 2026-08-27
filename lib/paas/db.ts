@@ -233,6 +233,12 @@ export interface ProjectRow {
    */
   build_context_repo_root?: boolean;
   /**
+   * Soft delete. A project is never removed outright: its aliases have to be
+   * released and its namespace torn down first, and a row that vanished before
+   * that left a hostname routing to nothing with no record of what owned it.
+   */
+  deleted_at?: string | null;
+  /**
    * Scale-to-zero settings. These columns were added by the scale-to-zero
    * migration and this type was not updated with them, so `idle-sweep.ts` read
    * both fields off a type that did not declare either — the reads worked at

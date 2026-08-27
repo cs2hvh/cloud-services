@@ -436,6 +436,23 @@ WORKDIR /src
 RUN apt-get update \\
  && apt-get install -y --no-install-recommends ca-certificates curl \\
  && rm -rf /var/lib/apt/lists/*
+# Node comes from the official image, not from apt.
+#
+# Hugo pipes reach for it — js.Build resolves imports out of node_modules, and
+# PostCSS and Tailwind are ordinary in a theme. Debian bookworm ships Node 18,
+# and the Tailwind integration integration invokes node with --permission, which is a
+# Node 20 flag, so the build died with
+#
+#     /usr/bin/node: bad option: --permission
+#
+# after installing dependencies perfectly well. Copying /usr/local from a
+# node image pins the version instead of inheriting whatever the distribution
+# froze, and both images are bookworm so the libc matches.
+COPY --from=node:22-bookworm-slim /usr/local/bin/node /usr/local/bin/node
+COPY --from=node:22-bookworm-slim /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \\
+ && ln -sf /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx \\
+ && node --version && npm --version
 # The checksum is not pinned because the tag is: GitHub release assets are
 # immutable once published, so ${HUGO_VERSION} names exactly one file.
 RUN curl -sSLf -o /tmp/hugo.tar.gz \\
@@ -444,6 +461,10 @@ RUN curl -sSLf -o /tmp/hugo.tar.gz \\
  && rm /tmp/hugo.tar.gz \\
  && hugo version
 COPY . .
+# Tested at build time rather than decided at generation time: plenty of Hugo
+# sites have no package.json at all, and the ones that do fail deep inside a
+# template render, saying it could not resolve an import, rather than at install.
+RUN if [ -f package.json ]; then (npm ci || npm install); fi
 ${args}${buildRun(build)}
 
 ${NGINX_STATIC}
