@@ -59,6 +59,11 @@ support gap being mistaken for a build gap.
 | 22 | shadcn-ui/taxonomy | Next.js that validates env AT BUILD TIME (`@t3-oss/env-nextjs`) | BUILD-ERR | build failed | Its own `env.mjs` throws during `next build` with no `DATABASE_URL`. Found that NO environment variable reached the builder |
 | 23 | gatsbyjs/gatsby-starter-blog | Gatsby, yarn, native deps | BUILD-ERR | build failed | Found TWO gaps: no build toolchain in the image, and Gatsby not detected as a framework at all. Still fails afterwards — its `lmdb-store` cannot compile against Node 22's V8 headers |
 | 24 | facebook/docusaurus (root) | Monorepo root that builds a library, not a site | BUILD-ERR | build failed | Found that Docusaurus was not detected either |
+| 25 | sveltejs/realworld | SvelteKit, pnpm, `master` | APP-ERR | 503 | Wants a backend. **Caught a regression I had just introduced**: honouring `.nvmrc` as a hard pin broke a repository that had been serving |
+| 26 | remix-run/indie-stack | Remix with a repo-supplied Dockerfile | APP-ERR | 503 | Wants a database |
+| 27 | gothinkster/node-express-realworld-example-app | Express + Prisma API | BUILD-ERR | build failed | Their `Dockerfile:17` is `COPY dist/api api` — it expects a build that already happened. A CI-only Dockerfile, not ours |
+| 28 | **nestjs/typescript-starter** | NestJS, TypeScript build | **PASS** | **200** | Only after a fix. It crash-looped first, and finding out why is what the pod diagnostics were built for |
+| 29 | fastify/fastify-example-todo | Fastify, no lockfile | APP-ERR | 503 | Wants configuration. The no-lockfile path holds |
 | 8 | remix-run/indie-stack | Remix, repo-supplied Dockerfile | APP-ERR | 503 | Built, routed, served. The app wants a database it was not given |
 | 9 | sveltejs/realworld | SvelteKit on `master`, **pnpm** | APP-ERR | 503 | Built, routed, served — **first proof pnpm works end to end**. Branch fallback to `master` also proven |
 
@@ -128,6 +133,19 @@ And one that had nothing to do with package managers:
   answered 503. CRA, Vite, Vue, Angular, Gatsby, Astro and Hugo were all
   affected, and it stayed hidden because everything deployed here before was a
   Node server or a repo-supplied Dockerfile.
+- **NestJS ran its DEV start script and crash-looped.** `nest start` needs
+  @nestjs/cli, a devDependency the runtime stage prunes, so the container
+  exited 1 and restarted — which from outside is a 503 and nothing else.
+  `start:prod` exists precisely to say how a project runs in production and is
+  now preferred for server frameworks.
+- **a 503 was the end of the investigation, not the start of one.** The probe
+  reported `APP-ERR 503` and then deleted the project, so the pod was gone
+  before anyone could ask why — and 503 covers a crash loop, a readiness probe
+  that never passes, and an image that will not pull, which have different
+  owners. It now prints pod phase, waiting reason, exit code and restart count
+  before tearing down. `KubePod` had to grow `state` and `lastState` to carry
+  it; in a crash loop the current state is Waiting and the reason it died is in
+  the previous one. The UI reads the same type.
 - **no native dependency could compile.** sharp, bcrypt, sqlite3 and anything
   else built through node-gyp ship prebuilt binaries for common platforms and
   compile from source when none match — and on musl/alpine no match is the

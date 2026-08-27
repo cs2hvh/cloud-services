@@ -485,7 +485,12 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
     enginesNode: enginesNodeFrom(rootPackageJson),
     nvmrc: files.contents[".nvmrc"] ?? null,
   });
-  say("detect", `node ${nodeChoice.major} — ${nodeChoice.reason}`);
+  // Only where it means something. The choice is computed for every runtime
+  // because it is cheap, but announcing "node 22" while building a Django app
+  // is a false statement in a log the customer reads.
+  if (detection.runtime === "node" || detection.runtime === "static") {
+    say("detect", `node ${nodeChoice.major} — ${nodeChoice.reason}`);
+  }
 
   const dockerfile = generateDockerfile({
     detection,

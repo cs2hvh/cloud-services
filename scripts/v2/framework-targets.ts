@@ -94,7 +94,7 @@ export const BATCHES: Record<string, Target[]> = {
     { repo: "remix-run/indie-stack", note: "Remix with a repo-supplied Dockerfile", expect: "app-err" },
   ],
   "node-backend": [
-    { repo: "gothinkster/node-express-realworld-example-app", note: "Express + Prisma API", expect: "app-err" },
+    { repo: "gothinkster/node-express-realworld-example-app", note: "Express + Prisma; its Dockerfile expects a build that already happened", expect: "build-err" },
     { repo: "nestjs/typescript-starter", note: "NestJS, TypeScript build", expect: "serve" },
     { repo: "fastify/fastify-example-todo", note: "Fastify, no lockfile", expect: "app-err" },
   ],
