@@ -152,6 +152,22 @@ async function main(): Promise<number> {
     onProgress: (s, detail) => {
       if (/^\d+s$/.test(detail) || detail === "…") return;
       if (s === "detect" || s === "build" || s === "route" || s === "dns") stage = s;
+      // LEARN THE PROJECT AS SOON AS IT IS NAMED, not from the return value.
+      //
+      // deployFromRepo reports the project long before it finishes, and a build
+      // that throws never returns at all — so cleanup knew nothing about exactly
+      // the runs that needed cleaning. One batch of three left three projects,
+      // three namespaces and three DNS records behind.
+      if (s === "project") {
+        const m = /(prj-[0-9a-f]{12})/.exec(detail);
+        if (m) builtRef = m[1];
+      }
+      // Same for the build VM: the lease is logged before anything can go
+      // wrong, and an unreaped VM bills and blocks the next build's label.
+      if (s === "deployment" || s === "build") {
+        const m = /(dpl-[0-9a-f]{12})/.exec(detail);
+        if (m) deploymentRefs.add(m[1]);
+      }
       console.log(`   ${s.padEnd(10)} ${detail}`);
     },
   });
