@@ -9,7 +9,7 @@
  */
 
 import { checkCustomDomain } from "../../../_lib/domains";
-import { DOMAIN_COLUMNS, toDomainDto, type DomainRow } from "@/lib/paas/domain-view";
+import { DOMAIN_COLUMNS, FALLBACK_ORIGIN, toDomainDto, type DomainRow } from "@/lib/paas/domain-view";
 import { paasConfig } from "@/lib/paas/config";
 import { createCustomHostname } from "@/lib/paas/edge/cloudflare";
 
@@ -31,7 +31,8 @@ import {
  * Ingress does that off the Host header, exactly as for an *.ahurasense.com
  * hostname. The fallback only gets the request into the cluster.
  */
-const FALLBACK_ORIGIN = "fallback.ahurasense.com";
+// FALLBACK_ORIGIN now lives in lib/paas/domain-view.ts, so the list and the UI
+// can name it too — the CNAME is the record that actually carries traffic.
 
 export const dynamic = "force-dynamic";
 

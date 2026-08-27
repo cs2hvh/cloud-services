@@ -16,12 +16,28 @@ import { StateBadge } from "@/components/v2/state-badge";
  * habit of showing capabilities it did not have is what this avoids.
  */
 
+export interface DnsInstruction {
+  type: "CNAME" | "TXT";
+  name: string;
+  value: string;
+  purpose: string;
+}
+
 export interface DomainSummary {
   ref: string;
   domain: string;
   state: string;
   verification: { type: string; name: string; value: string } | null;
   lastError: string | null;
+  /**
+   * Every record the customer has to create.
+   *
+   * This used to show only the ownership TXT, which tells somebody how to
+   * PROVE they own a domain and nothing about how to make it serve. The CNAME
+   * is the record that actually carries traffic and it is deterministic, so
+   * there was never a reason to withhold it.
+   */
+  records?: DnsInstruction[];
 }
 
 export function DomainManager({
@@ -88,7 +104,10 @@ export function DomainManager({
       )}
 
       {domains.length === 0 ? (
-        <Empty title="No custom domains." />
+        <Empty title="No custom domains yet.">
+          Add one below and we will show you the exact DNS records to create. You keep your domain
+          where it is — nothing needs to move.
+        </Empty>
       ) : (
         <div className="border border-white/[0.09]">
           {domains.map((d, i) => (
@@ -113,14 +132,37 @@ export function DomainManager({
                 </button>
               </div>
 
-              {d.verification && (
-                <div className="mt-2 border border-white/[0.07] bg-black/25 px-3 py-2">
+              {/*
+                THE WHOLE RECORD SET, not just the ownership TXT. A customer
+                shown only the TXT has been told how to prove they own the
+                domain and nothing about how to make it answer.
+
+                Each record says what it is FOR. "Add a CNAME" without a reason
+                is a instruction people put off; "this is what routes traffic"
+                is one they act on.
+              */}
+              {(d.records?.length ?? 0) > 0 && (
+                <div className="mt-2 border border-white/[0.07] bg-black/25 px-3 py-2.5">
                   <p className="m-0 text-[11.5px] uppercase tracking-[0.1em] text-white/30">
-                    Add this DNS record to verify
+                    Add these records at your DNS provider
                   </p>
-                  <p className="m-0 mt-1 break-all font-mono text-[12px] text-white/70">
-                    {d.verification.type} {d.verification.name} ={" "}
-                    {d.verification.value}
+                  <div className="mt-2 space-y-2.5">
+                    {d.records!.map((r) => (
+                      <div key={`${r.type}:${r.name}`}>
+                        <div className="flex flex-wrap items-baseline gap-x-2 font-mono text-[12px]">
+                          <span className="rounded border border-white/[0.12] px-1.5 py-0.5 text-[10px] text-white/50">
+                            {r.type}
+                          </span>
+                          <span className="break-all text-white/70">{r.name}</span>
+                          <span className="text-white/25">→</span>
+                          <span className="break-all text-white/90">{r.value}</span>
+                        </div>
+                        <p className="m-0 mt-0.5 text-[11px] text-white/35">{r.purpose}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="m-0 mt-2.5 text-[11px] text-white/30">
+                    The certificate issues automatically once these resolve. DNS can take a few minutes.
                   </p>
                 </div>
               )}

@@ -19,6 +19,28 @@
  */
 
 /**
+ * Where a customer points their domain.
+ *
+ * ONE zone-level Cloudflare for SaaS fallback origin serves every customer
+ * domain; it only gets the request into the cluster, and the custom hostname
+ * record decides which project answers.
+ *
+ * It lived in the API route, which meant the list — and therefore the UI — had
+ * no way to say where to CNAME. The customer was shown an ownership TXT and
+ * nothing about the record that actually routes traffic.
+ */
+export const FALLBACK_ORIGIN = "fallback.ahurasense.com";
+
+/** One DNS record a customer has to create. */
+export interface DnsInstruction {
+  type: "CNAME" | "TXT";
+  name: string;
+  value: string;
+  /** Why this record exists, in the customer's terms. */
+  purpose: string;
+}
+
+/**
  * ONE STRING LITERAL. supabase-js parses this at the TYPE level to infer the
  * row shape, and it can only do that for a literal — splitting it across a `+`
  * collapses the row to GenericStringError and produces a dozen "property does
@@ -49,6 +71,8 @@ export interface DomainDto {
   lastError: string | null;
   createdAt: string;
   serving: boolean;
+  /** Everything the customer must create at their DNS provider. */
+  records: DnsInstruction[];
 }
 
 export function toDomainDto(row: DomainRow): DomainDto {
@@ -79,5 +103,28 @@ export function toDomainDto(row: DomainRow): DomainDto {
     createdAt: row.created_at,
     /** Honest: nothing serves a custom hostname until SaaS mode is on. */
     serving: row.state === "active",
+    // THE CNAME IS ALWAYS INCLUDED, the TXT only once Cloudflare has issued
+    // one. The CNAME is the record that actually carries traffic and it is
+    // deterministic, so there is never a reason to withhold it — a customer
+    // shown only an ownership TXT has been told how to prove they own a domain
+    // and not how to make it serve anything.
+    records: [
+      {
+        type: "CNAME" as const,
+        name: row.domain,
+        value: FALLBACK_ORIGIN,
+        purpose: "Routes traffic to the platform. Cloudflare also accepts this as proof of ownership.",
+      },
+      ...(row.verification_txt
+        ? [
+            {
+              type: "TXT" as const,
+              name: `_cf-custom-hostname.${row.domain}`,
+              value: row.verification_txt,
+              purpose: "Proves you own the domain. Often unnecessary once the CNAME resolves.",
+            },
+          ]
+        : []),
+    ],
   };
 }
