@@ -130,8 +130,29 @@ behavioural tests replaying confirmed v1 criticals.
     failure is only in the Service's events. Reading back what you wrote
     confirms the write, never the effect. Same shape as the firewall create
     that reported "attached" because it printed what it asked for.
-  - Needs the user: either a Linode token with firewall scope for the CCM, or
-    accept Cloudflare-only protection and document the origin IP as known.
+  - **A token for the CCM is NOT the fix, and asking for one was wrong.** The
+    CCM runs in Linode's MANAGED control plane — there is no deployment in
+    kube-system and no Linode credential in the cluster to replace. The only
+    Linode API token here (`kube-system/linode`) is mounted by the CSI driver
+    alone; `ccm-user-token-…` is a Kubernetes ServiceAccount token, which is
+    how the CCM talks TO the apiserver, not to Linode.
+  - **The path that works needs no new token.** The Linode API lists the
+    LKE NodeBalancer (`id=2437817`, `172.236.185.23`) to the token we already
+    hold, even though the Firewalls page hides it. Attaching is one call:
+    `POST /v4/networking/firewalls/143239782/devices`
+    `{"id": 2437817, "type": "nodebalancer"}`.
+  - Firewall `143239782` is ready and verified against Cloudflare's live list:
+    inbound DROP, ACCEPT 80/443 from all 15 published v4 and 7 v6 ranges, with
+    nothing missing and nothing extra. It is attached to NOTHING — the label
+    says `UNATTACHED-cf-only-origin` so the state is legible from the console.
+  - **DEFERRED BY THE USER 2026-08-26**, and it blocks nothing: no part of
+    build, deploy, or serve consults it. The standing cost is that anyone who
+    learns the origin IP bypasses the WAF and rate limiting.
+  - Before attaching, confirm nothing at the origin needs port 80 from outside
+    Cloudflare. Traefik carries no ACME arguments and serves from the
+    `traefik-tls` secret, so HTTP-01 renewal does not appear to be in play —
+    but that was being checked when this was deferred, so check it rather than
+    trust this line.
 - ~~Tenant isolation unverified~~ — **MEASURED AND FIXED** 2026-08-26 (`ff559b9d`).
   `scripts/v2/isolation-proof.ts` probes from a real tenant namespace under the
   same gVisor RuntimeClass as customer workloads. It found a breach: **a tenant
