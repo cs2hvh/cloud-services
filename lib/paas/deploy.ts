@@ -47,6 +47,9 @@ const MARKER_FILES = [
   // only the first made a bun repo look lockfile-less and take the slow path.
   "bun.lockb", "bun.lock",
   "requirements.txt", "pyproject.toml", "Pipfile", "manage.py", "go.mod", "Gemfile",
+  // Anything that could be the module a Python server is started from. Their
+  // presence is the whole signal — no contents needed.
+  "app.py", "main.py", "wsgi.py", "asgi.py", "application.py", "server.py", "run.py",
   "pom.xml", "build.gradle", "build.gradle.kts", "composer.json", "index.html",
   ...DETECTION_FILES,
 ];
@@ -305,6 +308,31 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
       );
     }
     throw new Error(`cannot determine how to build ${opts.repo}: ${detection.reason}`);
+  }
+
+  // A PYTHON PROJECT WHOSE ENTRYPOINT WE WOULD BE INVENTING.
+  //
+  // The Python start commands are guesses dressed as certainties:
+  // `gunicorn app:app` for Flask, and a wsgi.py hunt for Django. Neither is
+  // read from the repository — they are what a Python app USUALLY looks like.
+  // When the guess is wrong there is no good failure: pallets/flask spent a
+  // build machine to fail installing itself, and tiangolo/full-stack-fastapi-
+  // template built, published, routed, and then crash-looped on exit 2, which
+  // reaches the customer as a 503 with no cause attached.
+  //
+  // Both are the same shape — a repository whose application is not at the
+  // root — and both have the same answer, which we can give in a second
+  // instead of in four minutes. If none of the usual entrypoints is at the
+  // root, we do not know how to start this and should say so.
+  const PYTHON_ENTRYPOINTS = [
+    "manage.py", "app.py", "main.py", "wsgi.py", "asgi.py", "application.py", "server.py", "run.py",
+  ];
+  if (detection.runtime === "python" && !PYTHON_ENTRYPOINTS.some((f) => files.paths.includes(f))) {
+    throw new Error(
+      `detected ${detection.framework} in ${opts.repo}, but none of ${PYTHON_ENTRYPOINTS.join(", ")} is at ` +
+        `the root, so there is no module to start. If the application lives in a subdirectory, set the ` +
+        `root directory to it; if this is a library rather than an application, it cannot be deployed.`,
+    );
   }
 
   // A STATIC FRAMEWORK WITH NOTHING TO BUILD AND NOTHING TO SERVE.

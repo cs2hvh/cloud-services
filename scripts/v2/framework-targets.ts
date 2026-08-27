@@ -114,8 +114,12 @@ export const BATCHES: Record<string, Target[]> = {
   /* ── Python ───────────────────────────────────────────────────────────── */
 
   python: [
-    { repo: "gothinkster/django-realworld-example-app", note: "Django, requirements.txt", expect: "app-err" },
-    { repo: "tiangolo/full-stack-fastapi-template", note: "FastAPI, Poetry/uv", expect: "app-err" },
+    { repo: "gothinkster/django-realworld-example-app", note: "Django so old its own deps import django.utils.six", expect: "build-err" },
+    { repo: "tiangolo/full-stack-fastapi-template", note: "FastAPI in backend/ — root has no entrypoint", expect: "refuse" },
+    // The same repository with the advice our refusal gives actually applied. If
+    // "set the root directory to it" does not work, the refusal is a dead end
+    // dressed as a suggestion.
+    { repo: "tiangolo/full-stack-fastapi-template", note: "FastAPI with the root directory set, as we advise", root: "backend", expect: "app-err" },
     { repo: "pallets/flask", note: "Flask — a LIBRARY, must refuse", expect: "refuse" },
   ],
 
