@@ -28,7 +28,7 @@ import { PAAS_NAMESPACE, REGISTRY_PUSH, publisherJob } from "./k8s/manifests.ts"
 import { reconcileProject, kubeContextFromEnv } from "./reconciler.ts";
 import { teams, projects, environments, deployments, aliases, type DeploymentRow, type ProjectRow, type AliasRow } from "./db.ts";
 import { appHostname } from "./config.ts";
-import { getFileContents } from "./github/client.ts";
+import { getFileContents, buildCloneUrl, listInstallationRepos } from "./github/client.ts";
 import { listInstallations } from "./github/app.ts";
 import { assertLabelAvailable, previewLabel } from "./hostnames.ts";
 import { upsertDnsRecord, listDnsRecords } from "./edge/cloudflare.ts";
@@ -394,9 +394,42 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
     publicEnvKeys: [],
   });
 
+  // A CLONE CREDENTIAL, for the same reason detection needed one.
+  //
+  // BuildRequest has carried a `gitToken` field documented "private
+  // repositories only" since it was written, and nothing ever set it. The VM
+  // cloned anonymously, so a private repository failed at `git clone` with no
+  // more detail than that — after leasing a Linode and paying for it.
+  //
+  // SCOPED TO THIS ONE REPOSITORY. buildCloneUrl mints a token restricted to
+  // the repository ids it is given, so a build VM that leaks its credential
+  // leaks access to the repository it was already building rather than to
+  // every repository the installation can see — 49 of them, in the case that
+  // found this.
+  //
+  // The numeric id has to be looked up: paas.projects.repo_id holds the full
+  // name despite its name, so it cannot be used for scoping.
+  let gitToken: string | null = null;
+  const buildInstallationId = await installationForRepo(opts.repo);
+  if (buildInstallationId !== null) {
+    const visible = await listInstallationRepos(buildInstallationId);
+    const match = visible.find((r) => r.full_name.toLowerCase() === opts.repo.toLowerCase());
+    if (!match) {
+      // Refuse before leasing a VM. Proceeding would spend money to reach a
+      // clone failure whose real cause — the installation cannot see this
+      // repository — appears nowhere in the build log.
+      throw new Error(
+        `the connected GitHub installation cannot see ${opts.repo}. Grant it access to that ` +
+          `repository and redeploy.`,
+      );
+    }
+    gitToken = (await buildCloneUrl(buildInstallationId, { id: match.id, full_name: match.full_name })).token;
+  }
+
   const req: BuildRequest = {
     deploymentRef: d.ref,
     cloneUrl: `https://github.com/${opts.repo}.git`,
+    gitToken,
     gitRef: branch,
     // Build the commit the ROW records, when it records one. A webhook-created
     // deployment knows its sha from the push event, and the branch may have
