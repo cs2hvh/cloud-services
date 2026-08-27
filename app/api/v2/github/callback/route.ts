@@ -6,11 +6,34 @@
  * become deployable.
  *
  * THE INSTALLATION ID IN THE QUERY IS ATTACKER-CONTROLLED. It arrives on a URL
- * the user's browser was told to visit, and anyone can type one. So it is never
- * trusted as proof of anything — it is checked against GitHub with our own App
- * credentials before a row is written. Without that check, a caller could claim
- * ANY installation id and gain deploy access to a stranger's repositories,
- * because the row is what later mints tokens.
+ * the user's browser was told to visit, and anyone can type one.
+ *
+ * THIS ROUTE USED TO CLAIM THAT CHECKING THE ID AGAINST GITHUB WAS ENOUGH. IT
+ * IS NOT, AND THE GAP WAS REAL. `listInstallations()` proves the installation
+ * exists on OUR App — that SOMEBODY installed it. It says nothing about who is
+ * asking. The team was then taken from `bootstrap_personal_team()`, the
+ * CALLER'S own, so any signed-in user who visited this URL with a real but
+ * unclaimed installation id bound a stranger's GitHub account to their team
+ * and could list and deploy that stranger's repositories. Installation ids are
+ * enumerable nine-digit integers that appear in webhook payloads and URLs, and
+ * an installation stays unclaimed for as long as nobody finishes the flow —
+ * permanently, for anyone who installs from GitHub's own UI and stops there.
+ *
+ * It was not theoretical: the installation on `cs2hvh` ended up held by a team
+ * owned by somebody who does not own that GitHub account, because their
+ * session reached this callback first.
+ *
+ * SO OWNERSHIP IS NOW PROVEN, NOT ASSUMED. The caller's own GitHub identity —
+ * the one they signed in with, which Supabase holds and the caller cannot
+ * forge — must match the account the installation is on. That covers the
+ * personal case exactly.
+ *
+ * It does NOT cover an org install, where the account is the org and the
+ * caller is an admin of it: proving that needs the user's own OAuth token,
+ * which this platform deliberately does not store for GitHub. Those go through
+ * /api/v2/git/connect instead, whose one-time nonce cookie proves the round
+ * trip. Refusing here is not a dead end, it is a redirect to the flow that can
+ * actually establish what this one cannot.
  *
  * ALREADY CLAIMED BY SOMEONE ELSE is a refusal, not an update. GitHub lets one
  * installation exist per account, and if a different team already holds it,
@@ -23,6 +46,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { listInstallations } from "@/lib/paas/github/app";
+import { provesInstallationOwnership } from "@/lib/paas/github/ownership";
 import { unauthenticated, invalid, notFound, conflict, apiError } from "../../_lib/http";
 
 export const dynamic = "force-dynamic";
@@ -50,8 +74,8 @@ export async function GET(req: Request) {
     return invalid("installation_id is missing or not a number.");
   }
 
-  // The account must exist as far as OUR App is concerned. This is the check
-  // that stops a typed-in id becoming access to someone else's repositories.
+  // Necessary, not sufficient: this only establishes the installation is one of
+  // ours. Ownership is checked below, and that is the part that matters.
   let match;
   try {
     const installations = await listInstallations();
@@ -64,6 +88,40 @@ export async function GET(req: Request) {
     // Deliberately the same answer as "does not exist", so probing ids tells
     // the caller nothing.
     return notFound("Installation");
+  }
+
+  // OWNERSHIP. The caller signed in with GitHub, so Supabase holds the identity
+  // GitHub asserted about them; it is not user-supplied and cannot be forged by
+  // editing a URL. An installation on `cs2hvh` may only be claimed by the
+  // person who signs in as `cs2hvh`.
+  const githubLogin = (user.identities ?? [])
+    .filter((i) => i.provider === "github")
+    .map((i) => (i.identity_data as { user_name?: string } | null)?.user_name)
+    .find((n): n is string => typeof n === "string" && n.length > 0);
+
+  const installedOn = match.account?.login ?? null;
+
+  // The rule lives in lib/paas/github/ownership.ts and is tested there,
+  // including that two blanks do not compare equal.
+  const ownership = provesInstallationOwnership(githubLogin, installedOn);
+
+  if (!ownership.proven) {
+    // NOT a generic error. The two reasons a legitimate person lands here are
+    // an org install and signing in with something other than GitHub, and both
+    // are fixed by going through the connect flow — so say which, and send
+    // them there rather than leaving them at a wall.
+    console.warn(
+      `[v2/github/callback] refused: caller github=${githubLogin ?? "(none)"} ` +
+        `installation ${installationId} is on ${installedOn ?? "(unknown)"}`,
+    );
+    return back(DASHBOARD, {
+      error: ownership.code,
+      detail:
+        ownership.reason +
+        (ownership.code === "different-account"
+          ? " If that is an organisation you administer, connect it from the New project page instead."
+          : " Connect from the New project page instead."),
+    });
   }
 
   const { data: team, error: teamError } = await supabase
