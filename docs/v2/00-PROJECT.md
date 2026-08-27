@@ -154,9 +154,29 @@ behavioural tests replaying confirmed v1 criticals.
     `calico, host-local, portmap` — **no bandwidth plugin**, so those annotations
     would apply cleanly and shape nothing. Adding it on LKE is the open question,
     since node config is not exposed.
-- **Origin is reachable directly**, bypassing both Cloudflare and the
-  `CF-Connecting-IP` rate limit (such requests share one bucket). Restricting the
-  origin to Cloudflare's published ranges is the complementary control.
+- **Origin is reachable directly — confirmed wide open.**
+  `curl -k -H "Host: v2-docker.ahurasense.com" https://172.236.185.23/` returns
+  **200**, and so does plain HTTP on port 80. That bypasses Cloudflare entirely:
+  no WAF, no DDoS protection, no TLS on the `:80` path, and the per-tenant rate
+  limit is defeated because a direct request carries no `CF-Connecting-IP`, so
+  every such request shares one bucket.
+  - **IP filtering at Traefik CANNOT close this**, which is the non-obvious part.
+    The Service is `externalTrafficPolicy: Cluster` behind a Linode NodeBalancer
+    in TCP mode, so the source is SNAT-ed: Traefik logs `172.236.163.199` and
+    `10.2.0.1` — node and cluster addresses — for *every* request, whether it
+    came via Cloudflare or not. An `ipAllowList` of Cloudflare's ranges would
+    match nothing useful and would refuse everything.
+  - Three ways to actually close it, none free:
+    **(a)** a Linode Cloud Firewall on the NodeBalancer restricting 80/443 to
+    Cloudflare's 15 v4 + 7 v6 ranges — sees the true source, but it is a network
+    change on an account with other production servers;
+    **(b)** proxy protocol (`linode-loadbalancer-proxy-protocol: v2` plus Traefik
+    `trustedIPs`) so Traefik sees real client IPs — in-cluster, and it breaks all
+    ingress if the two sides disagree;
+    **(c)** Cloudflare Authenticated Origin Pulls (mTLS), needing origin
+    certificate configuration.
+  - **Not attempted.** Each changes working production networking and (a) touches
+    the wider Linode account. *User decision.*
 - No crypto-mining heuristics, no abuse response.
 - **Free-plan Cloudflare**: per-tenant WAF is Enterprise-only; 1 rate-limit rule.
 - ~~No reserved-hostname list~~ — **DONE** (`e70a5506`). A tenant could have
