@@ -19,6 +19,7 @@ import {
 } from "@/app/api/v2/_lib/deployments";
 import { Notice } from "@/components/v2/notice";
 import { StateBadge, Timestamp, Duration } from "@/components/v2/state-badge";
+import { AutoRefresh } from "@/components/v2/auto-refresh";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +63,11 @@ export default async function DeploymentPage({ params }: Params) {
   // Authorization already happened above; only now is R2 touched.
   let log: string | null = null;
   let logNotice: string | null = null;
+  // Terminal or not. Drives both the polling and what an empty log means:
+  // nothing yet on a running build is normal, nothing on a finished one is a
+  // fact about the build.
+  const inFlight = d.state === "queued" || d.state === "building" || d.state === "publishing";
+
   let logError = false;
   try {
     const bytes = await getObject(r2Keys.buildLog(d.ref));
@@ -148,9 +154,18 @@ export default async function DeploymentPage({ params }: Params) {
         />
       </dl>
 
-      <h2 className="m-0 mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/40">
-        Build log
-      </h2>
+      <div className="mb-3 flex items-baseline justify-between gap-4">
+        <h2 className="m-0 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/40">
+          Build log
+        </h2>
+        {/*
+          The page is a server snapshot and a build takes minutes, so without
+          this the first thing somebody sees on their first deploy is an empty
+          log with no way to tell whether that means working, broken, or done.
+          It stops itself the moment the deployment reaches a terminal state.
+        */}
+        <AutoRefresh active={inFlight} />
+      </div>
 
       {logError ? (
         <Notice tone="blocked" title="Could not read the build log.">
@@ -161,9 +176,15 @@ export default async function DeploymentPage({ params }: Params) {
           title={
             d.state === "queued" || !d.timing.startedAt
               ? "The build has not started yet."
-              : "No build log was stored for this deployment."
+              : inFlight
+                ? "The build machine has not sent anything yet."
+                : "No build log was stored for this deployment."
           }
-        />
+        >
+          {inFlight
+            ? "Output is scrubbed of credentials on the build machine before it is sent, so the first lines appear a few seconds in. This page is updating itself."
+            : null}
+        </Notice>
       ) : (
         <>
           {logNotice && (

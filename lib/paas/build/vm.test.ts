@@ -92,10 +92,15 @@ test("a clone URL carrying credentials is REFUSED, not cleaned up downstream", (
 });
 
 test("the log is scrubbed before upload, and scrubbing precedes the PUT", () => {
+  // Matched `sed -E -i` until streaming landed. The flag was the thing that had
+  // to go — an in-place edit truncates a file tee is appending to — so this now
+  // asserts the PROPERTY it always meant: a redaction pass exists, and it is
+  // defined before anything is uploaded.
   const out = renderCloudInit(req(), URLS);
-  const sedIdx = out.indexOf("sed -E -i");
+  const sedIdx = out.indexOf("sed -E");
   const putIdx = out.indexOf(URLS.logPut);
   assert.ok(sedIdx !== -1, "expected a redaction pass");
+  assert.ok(putIdx !== -1, "expected the log to be uploaded somewhere");
   assert.ok(sedIdx < putIdx, "redaction must happen BEFORE the log is uploaded");
 });
 
@@ -141,4 +146,55 @@ test("a sha that is not a commit is REFUSED at render time", () => {
       `expected refusal for ${JSON.stringify(bad)}`,
     );
   }
+});
+
+test("THE LOG IS NEVER EDITED IN PLACE, because tee holds it open", () => {
+  // `sed -i` replaces the file's inode. The build's stdout is piped through
+  // `tee` into that file, so an in-place edit mid-build leaves tee writing to
+  // an unlinked inode and every subsequent line disappears. It was safe while
+  // redaction ran exactly once after all output; streaming puts it on a timer,
+  // and this is the assertion that stops it coming back.
+  const out = renderCloudInit(req({ gitToken: "ghs_x" }), URLS);
+  assert.doesNotMatch(out, /sed -E -i/, "redaction must write a copy, never edit in place");
+  assert.match(out, /redact_log\(\) \{/, "redaction must be a reusable function");
+  assert.doesNotMatch(
+    out,
+    /--data-binary @\/var\/log\/ahura-build\.log/,
+    "the RAW log must never be uploaded — only the scrubbed copy",
+  );
+});
+
+test("live log chunks are scrubbed BEFORE they leave the machine", () => {
+  // Streaming raw output and redacting afterwards publishes the credential and
+  // then tidies up after it. Every periodic upload runs the same redaction the
+  // final one does.
+  const out = renderCloudInit(req({ gitToken: "ghs_x" }), URLS);
+  const streamBody = out.slice(out.indexOf("stream_log() {"), out.indexOf("finish() {"));
+  const redactIdx = streamBody.indexOf("redact_log");
+  const putIdx = streamBody.indexOf("curl -sS -X PUT");
+  assert.ok(redactIdx > 0 && putIdx > 0, "the streamer must both redact and upload");
+  assert.ok(redactIdx < putIdx, "redaction must precede the upload in every iteration");
+});
+
+test("the streamer is killed before the final upload, not after", () => {
+  // A periodic upload racing the final one can land after it and replace a
+  // complete log with a stale snapshot. The symptom would be a truncated log
+  // on a build that finished perfectly — unreproducible and blamed on storage.
+  const out = renderCloudInit(req({ gitToken: "ghs_x" }), URLS);
+  const killIdx = out.indexOf('kill "$STREAM_PID"');
+  const finalPut = out.lastIndexOf("--data-binary @/tmp/ahura-build.clean");
+  assert.ok(killIdx > 0, "the streamer must be stopped explicitly");
+  assert.ok(finalPut > 0, "there must still be a final upload");
+  assert.ok(killIdx < finalPut, "kill must come before the last upload");
+});
+
+test("the streamer starts before the slow setup, not after it", () => {
+  // apt and buildkit take the first minute or two. A machine that dies during
+  // setup must still leave an explanation, which it cannot do if streaming
+  // only begins once the build proper starts.
+  const out = renderCloudInit(req(), URLS);
+  const startIdx = out.indexOf("stream_log &");
+  const aptIdx = out.indexOf("apt-get update");
+  assert.ok(startIdx > 0 && aptIdx > 0, "both steps must be present");
+  assert.ok(startIdx < aptIdx, "streaming must start before apt");
 });

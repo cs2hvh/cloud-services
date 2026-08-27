@@ -98,8 +98,49 @@ const CLOUD_INIT_LINES: string[] = [
   "STATUS=failure",
   "DIGEST=''",
   "ERR=''",
+  "STREAM_PID=''",
+  "",
+  // Scrub into a COPY, never in place.
+  //
+  // `sed -i` replaces the file's inode. The build's stdout is held open by the
+  // `tee` above, so editing in place mid-build leaves tee writing to an
+  // unlinked file and every later line vanishes. That was safe while this ran
+  // exactly once, after all output; it is not safe on a timer, and streaming
+  // needs a timer.
+  "redact_log() {",
+  "  sed -E \\",
+  "    -e 's#(https?://)[^/@[:space:]]+:[^/@[:space:]]+@#\\1[REDACTED]@#g' \\",
+  "    -e 's#(x-access-token|ghs_|ghp_|github_pat_)[A-Za-z0-9_]+#\\1[REDACTED]#g' \\",
+  "    -e 's#([?&](X-Amz-Signature|X-Amz-Credential|X-Amz-Security-Token)=)[^&[:space:]]+#\\1[REDACTED]#g' \\",
+  "    /var/log/ahura-build.log > /tmp/ahura-build.clean 2>/dev/null || true",
+  "}",
+  "",
+  // LIVE LOGS. The whole scrubbed file is re-PUT every few seconds to the same
+  // key, so a reader always sees the build so far and the last write wins.
+  //
+  // Re-uploading everything rather than appending chunks is deliberate: R2 has
+  // no append, and a chunked scheme would have to survive a lost chunk, an
+  // out-of-order chunk and a reader joining halfway. A build log is tens of
+  // kilobytes — the bandwidth is not worth a protocol.
+  //
+  // EVERY BYTE IS SCRUBBED BEFORE IT LEAVES, on the same pass the final upload
+  // uses. Streaming raw output and redacting later would publish the
+  // credential and then tidy up after it.
+  "stream_log() {",
+  "  while :; do",
+  "    sleep 5",
+  "    redact_log",
+  "    curl -sS -X PUT --data-binary @/tmp/ahura-build.clean \\",
+  "      -H 'Content-Type: text/plain' '@@LOG_PUT@@' >/dev/null 2>&1 || true",
+  "  done",
+  "}",
   "",
   "finish() {",
+  // Stop the streamer FIRST. A periodic upload racing the final one can land
+  // after it and replace a complete log with a stale snapshot — the failure
+  // would be an apparently truncated log for a build that finished fine.
+  "  [ -n \"$STREAM_PID\" ] && kill \"$STREAM_PID\" 2>/dev/null || true",
+  "  wait \"$STREAM_PID\" 2>/dev/null || true",
   "  date -u +%FT%TZ",
   '  echo "=== finishing: status=$STATUS ==="',
   "  # Belt and braces. The credential-helper approach means git has no secret to",
@@ -107,13 +148,9 @@ const CLOUD_INIT_LINES: string[] = [
   "  # LOOKS like a credential is scrubbed before it leaves the VM. Defence in",
   "  # depth: the source fix is what matters, this is what catches the case we",
   "  # did not think of.",
-  "  sed -E -i \\",
-  "    -e 's#(https?://)[^/@[:space:]]+:[^/@[:space:]]+@#\\1[REDACTED]@#g' \\",
-  "    -e 's#(x-access-token|ghs_|ghp_|github_pat_)[A-Za-z0-9_]+#\\1[REDACTED]#g' \\",
-  "    -e 's#([?&](X-Amz-Signature|X-Amz-Credential|X-Amz-Security-Token)=)[^&[:space:]]+#\\1[REDACTED]#g' \\",
-  "    /var/log/ahura-build.log 2>/dev/null || true",
+  "  redact_log",
   "  # Upload the log first so a failure is always explainable.",
-  "  curl -sS -X PUT --data-binary @/var/log/ahura-build.log \\",
+  "  curl -sS -X PUT --data-binary @/tmp/ahura-build.clean \\",
   "    -H 'Content-Type: text/plain' '@@LOG_PUT@@' || true",
   "  python3 - <<'PYEOF' > /tmp/meta.json",
   "import json, os",
@@ -132,6 +169,10 @@ const CLOUD_INIT_LINES: string[] = [
   "}",
   "export STATUS DIGEST ERR GIT_SHA",
   "trap finish EXIT",
+  // Started before apt and buildkit, so a machine that dies during setup still
+  // has an explanation in the log rather than nothing at all.
+  "stream_log &",
+  "STREAM_PID=$!",
   "",
   'fail() { ERR="$1"; STATUS=failure; export ERR STATUS; echo "ERROR: $1"; exit 1; }',
   "",
