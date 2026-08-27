@@ -63,9 +63,41 @@ export interface BuildRequest {
   /** null when the repository supplies its own Dockerfile. */
   dockerfile: string | null;
   rootDirectory?: string | null;
+  /**
+   * Build a REPOSITORY-SUPPLIED Dockerfile with the repository root as the
+   * Docker context, rather than the root directory.
+   *
+   * Setting a root directory normally makes that directory the context, which
+   * is what Vercel means by it and right for almost every repository. It
+   * cannot express a monorepo whose Dockerfile is committed in a subdirectory
+   * but written to be built from the repository root — `docker build
+   * -f backend/Dockerfile .`. tiangolo/full-stack-fastapi-template is exactly
+   * that: its backend/Dockerfile bind-mounts a uv.lock one level above itself,
+   * so no choice of root directory can put that file in the context.
+   *
+   * Has no effect on a Dockerfile we GENERATE, which always expects the
+   * application directory as its context because that is where its manifest
+   * is. Honouring it there would COPY the wrong package.json.
+   */
+  buildContextRepoRoot?: boolean;
   imageName: string;
   /** Public-prefixed build args only. Server secrets never reach a build. */
   buildArgs?: Record<string, string>;
+  /**
+   * Server-side environment for the BUILD, delivered through a buildkit secret
+   * mount rather than a build arg.
+   *
+   * The distinction is not cosmetic. A build arg is recorded in the image and
+   * readable by anyone who can pull it; a secret mount exists only for the
+   * lifetime of the RUN that asks for it and is in no layer afterwards.
+   *
+   * This exists because plenty of real applications validate their
+   * configuration at BUILD time — @t3-oss/env-nextjs throws during `next build`
+   * when DATABASE_URL is missing, and a Django collectstatic can need the same.
+   * Without this those cannot be deployed at all, however correctly the
+   * customer has filled in their environment.
+   */
+  buildSecrets?: Record<string, string>;
 }
 
 export interface BuildResult {
@@ -143,6 +175,7 @@ const CLOUD_INIT_LINES: string[] = [
   "  wait \"$STREAM_PID\" 2>/dev/null || true",
   "  date -u +%FT%TZ",
   '  echo "=== finishing: status=$STATUS ==="',
+  "  rm -f /tmp/ahura-secrets.env 2>/dev/null || true",
   "  # Belt and braces. The credential-helper approach means git has no secret to",
   "  # print, but this log is published to team members, so anything that even",
   "  # LOOKS like a credential is scrubbed before it leaves the VM. Defence in",
@@ -256,9 +289,30 @@ const CLOUD_INIT_LINES: string[] = [
   "echo '--- Dockerfile ---'",
   'cat "$DOCKERFILE"',
   "",
+  // The server-side environment for the build. 0600, and NOT in the build
+  // context, so no COPY can pull it into a layer by accident — buildkit mounts
+  // it into the one RUN that asks for it and it is gone afterwards.
+  //
+  // Values are NOT scrubbed from the build log, which is a decision rather than
+  // an omission. The patterns in redact_log exist for OUR credentials — a git
+  // token or an R2 signature would otherwise reach a customer who should never
+  // see it. These values belong to the project whose team reads this log, and
+  // blanking every 8-character string that happens to match one turns a
+  // readable build log into confetti. Vercel behaves the same way: your own
+  // environment appears in your own build output if your build prints it.
+  "echo '@@BUILD_SECRETS_B64@@' | base64 -d > /tmp/ahura-secrets.env",
+  "chmod 600 /tmp/ahura-secrets.env",
+  "",
   "echo '@@BUILD_ARGS_B64@@' | base64 -d > /tmp/buildargs.env",
   "BUILD_ARG_FLAGS=''",
-  "while IFS= read -r line; do",
+  // `|| [ -n "$line" ]` IS LOad-BEARING. The file is written without a trailing
+  // newline, and `read` returns non-zero on a final line that has none — so the
+  // loop body never runs for it and the last build arg is silently dropped. With
+  // one variable that is ALL of them. It stayed hidden while buildArgs was
+  // hardcoded empty; the first public value ever passed went missing, and the
+  // build failed inside the customer's own env validation with no sign that we
+  // were the reason.
+  "while IFS= read -r line || [ -n \"$line\" ]; do",
   '  [ -z "$line" ] && continue',
   '  BUILD_ARG_FLAGS="$BUILD_ARG_FLAGS --opt build-arg:$line"',
   "done < /tmp/buildargs.env",
@@ -274,6 +328,9 @@ const CLOUD_INIT_LINES: string[] = [
   "  --local dockerfile=. \\",
   '  --opt filename="$DOCKERFILE" \\',
   "  $BUILD_ARG_FLAGS \\",
+  // Not `required=true`: a project with no server-side environment is the
+  // normal case, and the Dockerfile sources the mount only if it exists.
+  "  --secret id=ahura-env,src=/tmp/ahura-secrets.env \\",
   "  --output type=oci,dest=/tmp/image.tar,name='@@IMAGE_NAME@@' \\",
   "  --metadata-file /tmp/buildkit-meta.json || fail 'image build failed'",
   "",
@@ -298,14 +355,24 @@ export function renderCloudInit(
 ): string {
   const b64 = (s: string) => Buffer.from(s, "utf8").toString("base64");
 
+  const rootDir = req.rootDirectory ? `/${req.rootDirectory.replace(/^\/+|\/+$/g, "")}` : "";
+
+  // Only for a Dockerfile the repository supplies. Ours is generated against
+  // the application directory and would COPY the wrong manifest from a
+  // repository-root context.
+  const repoRootContext = Boolean(req.buildContextRepoRoot) && req.dockerfile === null && rootDir !== "";
+  // Build FROM the repository root, pointing -f at the Dockerfile inside it.
+  const contextDir = repoRootContext ? "" : rootDir;
+  const dockerfilePath = repoRootContext ? `${rootDir.replace(/^\//, "")}/Dockerfile` : null;
+
   const dockerfileBlock = req.dockerfile
     ? [
         `echo '${b64(req.dockerfile)}' | base64 -d > Dockerfile.ahura || fail 'could not write Dockerfile'`,
         "DOCKERFILE=Dockerfile.ahura",
       ].join("\n")
     : [
-        "DOCKERFILE=Dockerfile",
-        "[ -f Dockerfile ] || fail 'repository was detected as Dockerfile-based but none was found'",
+        `DOCKERFILE=${dockerfilePath ?? "Dockerfile"}`,
+        `[ -f "$DOCKERFILE" ] || fail 'repository was detected as Dockerfile-based but none was found'`,
       ].join("\n");
 
   // ONE BUILD ARG PER LINE, so a newline inside a value is not a formatting
@@ -324,7 +391,21 @@ export function renderCloudInit(
       .join("\n"),
   );
 
-  const rootDir = req.rootDirectory ? `/${req.rootDirectory.replace(/^\/+|\/+$/g, "")}` : "";
+  // WRITTEN AS SHELL, NOT AS KEY=VALUE, because the build sources this file.
+  // A value containing a space, a quote or a newline is ordinary in a
+  // connection string, and `KEY=value` unquoted would silently truncate it at
+  // the first space — producing a build that fails somewhere far away with a
+  // configuration error nobody can trace back to here.
+  for (const k of Object.keys(req.buildSecrets ?? {})) {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(k)) {
+      throw new Error(`[paas/build] build secret ${JSON.stringify(k)} is not a usable shell name`);
+    }
+  }
+  const buildSecretsB64 = b64(
+    Object.entries(req.buildSecrets ?? {})
+      .map(([k, v]) => `export ${k}='${v.replace(/'/g, `'\\''`)}'`)
+      .join("\n"),
+  );
 
   // Refuse to render a URL carrying credentials. This is the class of mistake
   // that publishes a token to every team member via the build log, so it fails
@@ -356,9 +437,10 @@ export function renderCloudInit(
     "@@GIT_SHA@@": req.gitSha ?? "HEAD",
     "@@CLONE_URL@@": req.cloneUrl,
     "@@CREDENTIAL_BLOCK@@": credentialBlock,
-    "@@ROOT_DIR@@": rootDir,
+    "@@ROOT_DIR@@": contextDir,
     "@@DOCKERFILE_BLOCK@@": dockerfileBlock,
     "@@BUILD_ARGS_B64@@": buildArgsB64,
+    "@@BUILD_SECRETS_B64@@": buildSecretsB64,
     "@@IMAGE_NAME@@": req.imageName,
   };
 
@@ -387,7 +469,6 @@ export function renderCloudInit(
   }
   return out;
 }
-
 
 export interface LeasedVm {
   linodeId: number;

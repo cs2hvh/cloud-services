@@ -63,6 +63,7 @@ interface PatchBody {
   name?: unknown;
   productionBranch?: unknown;
   rootDirectory?: unknown;
+  buildContextRepoRoot?: unknown;
   framework?: unknown;
   scaleToZero?: unknown;
   idleSeconds?: unknown;
@@ -115,6 +116,13 @@ export async function PATCH(request: Request, { params }: Params) {
       });
     }
     patch.production_branch = branch;
+  }
+
+  if (typeof body.buildContextRepoRoot === "boolean") {
+    // Only meaningful alongside a root directory and a repository-supplied
+    // Dockerfile; harmless otherwise, and refusing the combination here would
+    // mean rejecting a setting the customer is about to make true.
+    patch.build_context_repo_root = body.buildContextRepoRoot;
   }
 
   if (body.rootDirectory === null || typeof body.rootDirectory === "string") {

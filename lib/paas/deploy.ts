@@ -489,10 +489,22 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
   // got it in neither place and the value simply disappeared — the build
   // succeeded, the page loaded, and the fetch went to `undefined`.
   const publicEnv: Record<string, string> = {};
+  // AND THE SERVER-SIDE ENVIRONMENT, WHICH THE BUILD ALSO NEEDS.
+  //
+  // Not everything is configured at boot. @t3-oss/env-nextjs validates during
+  // `next build` and throws when DATABASE_URL is missing; a Next.js page that
+  // reads a secret during static generation needs it before the container
+  // exists at all. shadcn-ui/taxonomy could not be deployed here for exactly
+  // that reason, no matter how completely its environment was filled in.
+  //
+  // These travel as a buildkit SECRET MOUNT, never as a build arg: a build arg
+  // is recorded in the image and readable by anyone who can pull it.
+  const buildSecrets: Record<string, string> = {};
   try {
     for (const row of await envVars.listForSync(project.id, d.environment_id)) {
-      if (!row.is_public) continue;
-      publicEnv[row.key] = decryptEnvValue(project.ref, row.key, pgHexToBytes(row.value_ct), row.dek_id);
+      const value = decryptEnvValue(project.ref, row.key, pgHexToBytes(row.value_ct), row.dek_id);
+      if (row.is_public) publicEnv[row.key] = value;
+      else buildSecrets[row.key] = value;
     }
   } catch (e) {
     // A value we cannot decrypt must stop the build. Continuing bakes a missing
@@ -575,11 +587,18 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
     gitSha: d.git_sha ?? "HEAD",
     dockerfile,
     rootDirectory: opts.rootDirectory ?? null,
+    // A monorepo whose Dockerfile is committed in a subdirectory but written to
+    // be built from the repository root — `docker build -f sub/Dockerfile .` —
+    // cannot be expressed by a root directory alone: the files it needs are
+    // outside every candidate context.
+    buildContextRepoRoot: project.build_context_repo_root === true,
     imageName: `${project.ref}:${d.ref}`,
     // Values for the ARG lines the Dockerfile just declared. These are public by
     // definition — they end up readable in the shipped JavaScript either way — so
     // a build arg is the right carrier. A secret must never travel this path.
     buildArgs: publicEnv,
+    // Mounted for the build step only, and in no layer afterwards.
+    buildSecrets,
   };
 
   const vm = await leaseBuildVm(req, { record: true });

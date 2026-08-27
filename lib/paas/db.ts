@@ -227,6 +227,12 @@ export interface ProjectRow {
   repo_id: string; repo_full_name: string; installation_id: number | null;
   production_branch: string; root_directory: string | null; framework: string | null;
   /**
+   * Build a repository-supplied Dockerfile from the repository root rather
+   * than from root_directory. Only meaningful when root_directory is set and
+   * the repository brings its own Dockerfile.
+   */
+  build_context_repo_root?: boolean;
+  /**
    * Scale-to-zero settings. These columns were added by the scale-to-zero
    * migration and this type was not updated with them, so `idle-sweep.ts` read
    * both fields off a type that did not declare either — the reads worked at

@@ -198,3 +198,101 @@ test("the streamer starts before the slow setup, not after it", () => {
   assert.ok(startIdx > 0 && aptIdx > 0, "both steps must be present");
   assert.ok(startIdx < aptIdx, "streaming must start before apt");
 });
+
+/* ── build-time environment ───────────────────────────────────────────────── */
+//
+// Applications that validate configuration during the BUILD — @t3-oss/env-nextjs
+// throws inside `next build` when DATABASE_URL is missing — could not be
+// deployed here at all, however completely the customer filled in their
+// environment. These travel as a buildkit secret mount, never as a build arg:
+// an arg is recorded in the image and readable by anyone who can pull it.
+
+function decodeSecretsFile(out: string): string {
+  const line = out.split("\n").find((l) => l.includes("ahura-secrets.env") && l.includes("base64 -d"));
+  assert.ok(line, "expected a line materialising the secrets file");
+  const b64 = /echo '([A-Za-z0-9+/=]*)'/.exec(line!)?.[1] ?? "";
+  return Buffer.from(b64, "base64").toString("utf8");
+}
+
+test("the build gets a secret mount, not a build arg", () => {
+  const out = renderCloudInit(req({ buildSecrets: { DATABASE_URL: "postgres://u:p@h/db" } }), URLS);
+  assert.match(out, /--secret id=ahura-env,src=\/tmp\/ahura-secrets\.env/);
+  // If this ever became a build arg it would be baked into the image.
+  assert.doesNotMatch(out, /build-arg:DATABASE_URL/);
+});
+
+test("A SECRET VALUE IS NEVER A SHELL TOKEN", () => {
+  // The build sources this file. An unquoted value would be split at the first
+  // space, and a connection string with a space in the password is ordinary.
+  const out = renderCloudInit(req({ buildSecrets: { PASS: "a b c" } }), URLS);
+  assert.equal(decodeSecretsFile(out), "export PASS='a b c'");
+});
+
+test("a value containing a quote survives the round trip", () => {
+  const out = renderCloudInit(req({ buildSecrets: { PASS: "it's" } }), URLS);
+  // sh has no escape inside single quotes, so the only way to include one is to
+  // close, emit an escaped quote, and reopen: '\''. Built here rather than
+  // written as a literal, because a literal of this is unreadable in every
+  // direction at once.
+  const closeEscapeReopen = "'" + "\\" + "'" + "'";
+  assert.equal(decodeSecretsFile(out), `export PASS='it${closeEscapeReopen}s'`);
+});
+
+test("A NEWLINE IN A VALUE CANNOT FORGE ANOTHER VARIABLE", () => {
+  const out = renderCloudInit(req({ buildSecrets: { A: "one\nexport B=two" } }), URLS);
+  const file = decodeSecretsFile(out);
+  // The property that matters is that the newline stays INSIDE the quotes, so sh
+  // reads one assignment. Counting lines that begin with `export` does NOT test
+  // that — the customer's own value legitimately contains that text, and a file
+  // that had genuinely broken out would look identical by that measure.
+  assert.equal(file, "export A='one\nexport B=two'");
+  assert.ok(file.startsWith("export A='"), "the value must open quoted");
+  assert.ok(file.endsWith("'"), "and stay quoted to the end");
+});
+test("a key that is not a shell name is refused outright", () => {
+  assert.throws(
+    () => renderCloudInit(req({ buildSecrets: { "NOT A NAME": "x" } }), URLS),
+    /not a usable shell name/,
+  );
+  assert.throws(() => renderCloudInit(req({ buildSecrets: { "A;rm -rf /": "x" } }), URLS), /shell name/);
+});
+
+test("the secrets file is locked down and removed", () => {
+  const out = renderCloudInit(req({ buildSecrets: { A: "12345678" } }), URLS);
+  assert.match(out, /chmod 600 \/tmp\/ahura-secrets\.env/);
+  assert.match(out, /rm -f \/tmp\/ahura-secrets\.env/);
+});
+
+test("a project with no server-side environment still builds", () => {
+  // The mount is not `required=true` and the Dockerfile tests for the file, so
+  // the empty case has to be the safe one — it is by far the most common.
+  const out = renderCloudInit(req(), URLS);
+  assert.equal(decodeSecretsFile(out), "");
+  assert.match(out, /--secret id=ahura-env/);
+});
+
+test("EVERY ASSERTION ABOVE CAN ACTUALLY FAIL", () => {
+  // Without this, a renderer that emitted an empty secrets file always would
+  // pass most of the tests above.
+  const out = renderCloudInit(req({ buildSecrets: { TOKEN: "abcd1234" } }), URLS);
+  assert.notEqual(decodeSecretsFile(out), "");
+  assert.match(decodeSecretsFile(out), /TOKEN/);
+});
+
+test("THE LAST BUILD ARG IS NOT DROPPED", () => {
+  // The build-args file is written without a trailing newline, and `read`
+  // returns non-zero on a final line that has none — so a plain
+  // `while read -r line` never runs its body for that line. With one variable
+  // that is every variable. Confirmed against a real /bin/sh:
+  //
+  //   printf 'A=1\nB=2' | while IFS= read -r l; do echo "$l"; done      -> A=1
+  //   printf 'A=1\nB=2' | while IFS= read -r l || [ -n "$l" ]; do ...   -> A=1 B=2
+  //
+  // It stayed invisible while buildArgs was hardcoded empty. The first public
+  // value ever passed went missing, and the build failed inside the customer's
+  // own env validation with nothing pointing at us.
+  const out = renderCloudInit(req({ buildArgs: { NEXT_PUBLIC_URL: "https://x" } }), URLS);
+  const loop = out.split("\n").find((l) => l.includes("while IFS= read -r line"));
+  assert.ok(loop, "expected the build-arg loop");
+  assert.match(loop!, /\|\| \[ -n "\$line" \]/, "the loop must read a final unterminated line");
+});

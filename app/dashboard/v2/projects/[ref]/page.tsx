@@ -48,6 +48,7 @@ import { RuntimeLogs } from "@/components/v2/runtime-logs";
 // they are the ones verified end to end against real data.
 import { SizingPicker } from "@/components/v2/sizing-picker";
 import { SleepSettings } from "@/components/v2/sleep-settings";
+import { BuildSettings } from "@/components/v2/build-settings";
 import { PromoteControl } from "@/components/v2/promote-control";
 import { DomainManager } from "@/components/v2/domain-manager";
 
@@ -86,7 +87,7 @@ export default async function ProjectPage({
     // GenericStringError and produced fifteen "property does not exist"
     // errors that all looked like the columns were wrong.
     // scale_to_zero and idle_seconds were added here for the sleep control.
-    .select("id,ref,name,slug,repo_full_name,production_branch,tier,instance_count,scale_to_zero,idle_seconds,root_directory,deleted_at")
+    .select("id,ref,name,slug,repo_full_name,production_branch,tier,instance_count,scale_to_zero,idle_seconds,root_directory,build_context_repo_root,deleted_at")
     .eq("ref", ref)
     .maybeSingle();
 
@@ -644,6 +645,14 @@ export default async function ProjectPage({
           sweepScheduled={false}
         />
       </Card>
+
+      <Card title="Build" subtitle="Where the build reads your repository from">
+        <BuildSettings
+          projectRef={project.ref}
+          rootDirectory={project.root_directory}
+          contextRepoRoot={project.build_context_repo_root === true}
+        />
+      </Card>
         </div>
       ) : null}
 
@@ -671,7 +680,7 @@ export default async function ProjectPage({
 
       {tab === "environment" ? (
         <div className="space-y-4">
-      <Card title="Environment variables" subtitle="Encrypted at rest, injected at runtime">
+      <Card title="Environment variables" subtitle="Encrypted at rest, available to the build and the container">
         {envVars.error ? (
           <Failed what="environment variables" />
         ) : (

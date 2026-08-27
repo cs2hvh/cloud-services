@@ -246,6 +246,35 @@ function runCmd(pm: DockerfileInput["packageManager"], script: string): string {
  * gets a compiler — it does not need one, and shipping one enlarges both the
  * image and its attack surface.
  */
+/**
+ * The build step, with the project's server-side environment available to it.
+ *
+ * Plenty of real applications validate configuration at BUILD time rather than
+ * at boot: @t3-oss/env-nextjs throws during `next build` when DATABASE_URL is
+ * missing, Django's collectstatic can need the same, and a Next.js page that
+ * reads a secret during static generation needs it before the container ever
+ * exists. Without this those cannot be deployed at all, however correctly the
+ * customer filled in their environment — shadcn-ui/taxonomy failed exactly
+ * here.
+ *
+ * A SECRET MOUNT, NOT A BUILD ARG. A build arg is recorded in the image and
+ * readable by anyone who can pull it. A secret mount exists for the lifetime of
+ * this one RUN and appears in no layer.
+ *
+ * THE FILE IS TESTED FOR, NOT JUST SOURCED. `.` is a special builtin, and in
+ * dash and ash — which is what /bin/sh is on alpine — sourcing a file that does
+ * not exist EXITS THE SHELL, `|| true` or no `|| true`. A project with no
+ * server-side environment is the normal case, so that path has to be the safe
+ * one.
+ */
+function buildRun(cmd: string): string {
+  return (
+    "RUN --mount=type=secret,id=ahura-env,target=/run/secrets/ahura-env \\\n" +
+    "    if [ -f /run/secrets/ahura-env ]; then . /run/secrets/ahura-env; fi; " +
+    cmd
+  );
+}
+
 const BUILD_TOOLCHAIN = "RUN apk add --no-cache libc6-compat python3 make g++";
 
 const NGINX_STATIC = `
@@ -285,7 +314,7 @@ FROM ${baseImage(pm, node)} AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-${args}${build ? `RUN ${runCmd(pm, build)}` : "# no build step for this framework"}
+${args}${build ? buildRun(runCmd(pm, build)) : "# no build step for this framework"}
 
 FROM ${baseImage(pm, node)} AS runner
 WORKDIR /app
@@ -325,7 +354,7 @@ ${BUILD_TOOLCHAIN}
 ${i.isWorkspace ? `# Workspace: the whole tree, because the root's dependencies are siblings.\nCOPY . .` : `COPY package.json ${pm === "pnpm" ? "pnpm-lock.yaml*" : pm === "yarn" ? "yarn.lock*" : "package-lock.json*"} ./`}
 RUN --mount=type=cache,target=/root/.npm ${installCmd(pm, false, i.hasLockfile !== false)}
 COPY . .
-${args}RUN ${runCmd(pm, build)}
+${args}${buildRun(runCmd(pm, build))}
 
 ${NGINX_STATIC}
 COPY --from=builder /app/${out} /usr/share/nginx/html
