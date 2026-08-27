@@ -495,6 +495,42 @@ behavioural tests replaying confirmed v1 criticals.
 
 ---
 
+**Framework sweep — running, 2026-08-27.** Full table in
+`docs/v2/10-FRAMEWORK-MATRIX.md`; it is the artefact, this is the summary.
+
+Proven serving, end to end, then torn down: Next.js (including a **pnpm
+workspace monorepo**, `vercel/commerce`), Nuxt 3, CRA, Astro. Package
+managers: npm and pnpm proven; yarn and bun both install correctly and have
+only ever failed downstream of install.
+
+What the sweep found that no template would have:
+
+- no repository without a lockfile could build; every frozen-install flag is a
+  hard error without one
+- **every static site crash-looped**, on an nginx pidfile substitution that
+  matched a path nginx no longer uses — hidden because everything deployed
+  until then was a Node server or a repo-supplied Dockerfile
+- no monorepo could install; the deps stage copied only the root manifest
+- no native dependency could compile: no python3, make or g++ in the image, so
+  anything falling back from a prebuilt binary died inside node-gyp
+- public environment variables reached NOTHING — not the bundle, not the
+  container — because the reconciler skipped them as already baked in and
+  nothing baked them
+- Gatsby and Docusaurus were not detected at all, and ran as generic Node apps
+  with no server to start
+- the Node major was hardcoded to 22 and every pin a repository offered was
+  ignored
+
+**And one regression I caused and then caught**, which is the argument for
+keeping green targets in the sweep instead of retiring them: honouring
+`.nvmrc` as a hard pin broke `sveltejs/realworld`, which had been serving.
+Its `.nvmrc` says 20 while a package in its tree demands `>=22.12.0`.
+`engines.node` is published and enforced; `.nvmrc` is a local note that goes
+stale silently. So engines decides, including downward, and `.nvmrc` may only
+raise the floor.
+
+---
+
 ## 6. Scheduling design — and why it is not one CronJob
 
 `app-deploy-3` raised this and it changed the design. `scripts/v3/drift-sweep.ts`
@@ -819,6 +855,26 @@ Two tools reported success while failing, in the same hour:
   two v3 scripts, intermittently, after one had already been reported as
   passing. Use `process.exitCode` and return; wrap the body in `main()` if a
   top-level return would be needed (it is a syntax error in a module).
+
+- **`tsx` cannot compile a top-level `await` to CommonJS, and the script dies
+  in the transform.** `framework-batch.ts` had one. It never reached a single
+  repository — and because the run was piped, the pipeline's exit code was
+  reported instead of the script's, so it read as a clean sweep of every
+  target. The same file runs correctly under
+  `node --experimental-strip-types`, which is how its own child process is
+  spawned; that is why the probe worked and the batch around it did not.
+  **Two independent green signals, and neither one had run anything.**
+
+- **A test glob that matches none of your tests is indistinguishable from a
+  passing suite.** `npm test` is vitest with `include: ['tests/**']`, and all
+  998 deploy-v2 tests live beside their code in `lib/paas/**` as `node:test`
+  files. No script ran them. Every regression guard written during the
+  framework sweep — including ones written specifically because a bug had
+  already shipped once — sat unrun while the suite reported green. Fixed by
+  `npm run test:paas`, NOT by adding `lib/**` to vitest's globs: vitest imports
+  the file, node:test executes at import time, and the results land outside
+  vitest's reporting while still failing the process. That was tried first and
+  produced 4 reported tests out of 998.
 
 These are worth separating from the guard failures above. A broken guard is our
 code and we can fix it. A tool that reports success while doing nothing is the
