@@ -21,7 +21,7 @@
 import { detectFramework, detectPackageManager, DETECTION_FILES, type RepoFiles } from "./build/detect.ts";
 import { generateDockerfile, servingPort, runtimeUid } from "./build/dockerfile.ts";
 import { leaseBuildVm, pollBuildResult, destroyBuildVm, type BuildRequest } from "./build/vm.ts";
-import { presign, getObject, deleteObject, r2Keys } from "./build/r2.ts";
+import { presign, deleteObject, r2Keys } from "./build/r2.ts";
 import { imageIsDurable } from "./build/registry.ts";
 import { kube } from "./k8s/client.ts";
 import { PAAS_NAMESPACE, REGISTRY_PUSH, publisherJob } from "./k8s/manifests.ts";
@@ -303,6 +303,30 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
       );
     }
     throw new Error(`cannot determine how to build ${opts.repo}: ${detection.reason}`);
+  }
+
+  // A STATIC FRAMEWORK WITH NOTHING TO BUILD AND NOTHING TO SERVE.
+  //
+  // The static Dockerfile has two shapes: build then copy the output, or — when
+  // there is no build script — copy a pre-built directory straight out of the
+  // repository. The second is right for a plain HTML site and wrong for
+  // everything else, and when it is wrong Docker fails with
+  //
+  //     failed to calculate checksum of ref …: "/dist": not found
+  //
+  // which says nothing a customer can act on. withastro/starlight hit exactly
+  // this: a workspace root whose build scripts live in its packages, so the
+  // root has no build command and no dist to copy.
+  //
+  // An index.html at the root means it really is a pre-built site and the copy
+  // is correct. Without one, refusing here costs nothing — the build was going
+  // to fail a minute later with a worse message and a leased machine.
+  if (detection.runtime === "static" && !detection.buildCommand && !files.paths.includes("index.html")) {
+    throw new Error(
+      `detected ${detection.framework} in ${opts.repo}, but the repository has no build script and no ` +
+        `index.html to serve as-is. If this is a monorepo, set the root directory to the app that ` +
+        `builds; if it is a plain static site, commit an index.html at that root.`,
+    );
   }
 
   const slug = opts.repo.split("/")[1].toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 38);

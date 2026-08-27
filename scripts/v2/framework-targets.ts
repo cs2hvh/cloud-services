@@ -76,8 +76,14 @@ export const BATCHES: Record<string, Target[]> = {
     { repo: "sveltejs/realworld", note: "SvelteKit on `master`, pnpm", expect: "serve" },
   ],
   astro: [
-    { repo: "satnaing/astro-paper", note: "Astro blog, real content build", expect: "serve" },
-    { repo: "withastro/starlight", note: "Astro docs monorepo", expect: "app-err" },
+    // Astro through OUR generated Dockerfile. astro-paper ships its own, so it
+    // proves the docker path and says nothing about Astro detection; starlight is
+    // a workspace root whose build scripts live in its packages, so it has no root
+    // build command and nothing to serve. An example inside the Astro monorepo is
+    // the only one of the three that exercises detect -> build -> nginx.
+    { repo: "withastro/astro", note: "Astro via our Dockerfile, no lockfile, inside a monorepo", root: "examples/blog", expect: "serve" },
+    { repo: "satnaing/astro-paper", note: "Astro blog shipping its own Dockerfile", expect: "app-err" },
+    { repo: "withastro/starlight", note: "workspace root with no build script — must refuse", expect: "refuse" },
   ],
   remix: [
     { repo: "remix-run/indie-stack", note: "Remix with a repo-supplied Dockerfile", expect: "app-err" },

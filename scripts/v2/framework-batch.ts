@@ -117,31 +117,38 @@ function runProbe(t: Target): Promise<{ code: number; verdict: string; http: str
   });
 }
 
-const results: Array<{ repo: string; note: string; verdict: string; http: string }> = [];
+// tsx compiles this to CommonJS, where a top-level await is a syntax error, so the
+// run lives in an async entrypoint. Without it the batch died before deploying
+// anything and still exited 0 — a green run that tested nothing.
+async function main() {
+  const results: Array<{ repo: string; note: string; verdict: string; http: string }> = [];
 
-console.log(`\nBatch ${batchName ?? "ad hoc"} — ${targets.length} repository(ies), one at a time`);
-console.log("═".repeat(84));
+  console.log(`\nBatch ${batchName ?? "ad hoc"} — ${targets.length} repository(ies), one at a time`);
+  console.log("═".repeat(84));
 
-for (const t of targets) {
-  console.log(`\n▶ ${t.repo}  (${t.note})`);
-  const r = await runProbe(t);
-  results.push({ repo: t.repo, note: t.note, verdict: r.verdict, http: r.http });
+  for (const t of targets) {
+    console.log(`\n▶ ${t.repo}  (${t.note})`);
+    const r = await runProbe(t);
+    results.push({ repo: t.repo, note: t.note, verdict: r.verdict, http: r.http });
+  }
+
+  console.log("\n" + "═".repeat(84));
+  console.log("  Summary — paste into docs/v2/10-FRAMEWORK-MATRIX.md\n");
+  for (const r of results) {
+    console.log(`  | ${r.repo} | ${r.note} | ${r.verdict} | ${r.http} |`);
+  }
+
+  const bad = results.filter((r) => r.verdict === "FAIL");
+  console.log(
+    `\n  ${results.filter((r) => r.verdict === "PASS").length} served, ` +
+      `${results.filter((r) => r.verdict === "APP-ERR").length} app-error, ${bad.length} platform failure(s).`,
+  );
+  if (bad.length) {
+    console.log(`\n  Platform failures to diagnose — these are the point of the run:`);
+    for (const r of bad) console.log(`    ${r.repo} (${r.note})`);
+  }
+
+  process.exit(bad.length ? EXIT_FINDINGS : EXIT_CLEAN);
 }
 
-console.log("\n" + "═".repeat(84));
-console.log("  Summary — paste into docs/v2/10-FRAMEWORK-MATRIX.md\n");
-for (const r of results) {
-  console.log(`  | ${r.repo} | ${r.note} | ${r.verdict} | ${r.http} |`);
-}
-
-const bad = results.filter((r) => r.verdict === "FAIL");
-console.log(
-  `\n  ${results.filter((r) => r.verdict === "PASS").length} served, ` +
-    `${results.filter((r) => r.verdict === "APP-ERR").length} app-error, ${bad.length} platform failure(s).`,
-);
-if (bad.length) {
-  console.log(`\n  Platform failures to diagnose — these are the point of the run:`);
-  for (const r of bad) console.log(`    ${r.repo} (${r.note})`);
-}
-
-process.exit(bad.length ? EXIT_FINDINGS : EXIT_CLEAN);
+void main();
