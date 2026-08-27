@@ -22,6 +22,7 @@
  */
 
 import { db } from "../db.ts";
+import { BUILD_TIMEOUT_MS } from "../build/vm.ts";
 import { paasConfig } from "../config.ts";
 import { listObjects } from "../build/r2.ts";
 import { listDnsRecords } from "../edge/cloudflare.ts";
@@ -443,6 +444,137 @@ export interface OperatorView {
  * one unreachable dependency must not blank the page. If Cloudflare is down,
  * the cost figures still render and say so.
  */
+/** One deployment, as an operator needs to read it. */
+export interface QueueEntry {
+  deployment: string;
+  project: string | null;
+  projectName: string | null;
+  state: string;
+  trigger: string;
+  branch: string;
+  sha: string | null;
+  queuedAt: string;
+  startedAt: string | null;
+  readyAt: string | null;
+  waitingSeconds: number | null;
+  runningSeconds: number | null;
+  hasImage: boolean;
+  errorCode: string | null;
+  error: string | null;
+}
+
+export interface QueueView {
+  windowHours: number;
+  inFlight: QueueEntry[];
+  recent: QueueEntry[];
+  stalled: QueueEntry[];
+  counts: {
+    queued: number;
+    building: number;
+    publishing: number;
+    failed24h: number;
+    ready24h: number;
+  };
+  note?: string;
+}
+
+/** How much history the queue view carries. Long enough to cover a working day. */
+const QUEUE_WINDOW_HOURS = 24;
+
+/**
+ * What the build queue is doing right now.
+ *
+ * The one operator view that did not exist. Fleet, hostnames, workloads and
+ * storage all compare recorded state against reality; none answered 'is
+ * anything building, and did the last thing fail?'. So the only way to see a
+ * build was to read the worker's stdout on whichever machine happened to be
+ * running it — which is not something an operator can do, and is how every
+ * stuck deployment in this project was diagnosed.
+ *
+ * IN-FLIGHT IS SEPARATED FROM RECENT. Queued and building are what somebody is
+ * waiting on; recent is history. Merged into one 'latest deployments' table, a
+ * queue that has silently stopped moving looks identical to one with nothing
+ * to do.
+ */
+export async function queueView(): Promise<QueueView> {
+  const since = new Date(Date.now() - QUEUE_WINDOW_HOURS * 3_600_000).toISOString();
+
+  const [rows, projectRows] = await Promise.all([
+    db.select<{
+      ref: string; state: string; trigger: string; git_ref: string; git_sha: string | null;
+      error_code: string | null; error_message: string | null; queued_at: string;
+      started_at: string | null; ready_at: string | null; image_digest: string | null;
+      project_id: string;
+    }>(
+      "deployments",
+      `select=ref,state,trigger,git_ref,git_sha,error_code,error_message,queued_at,` +
+        `started_at,ready_at,image_digest,project_id` +
+        `&or=(state.in.(queued,building,publishing),queued_at.gte.${since})` +
+        `&order=queued_at.desc&limit=200`,
+    ),
+    db.select<{ id: string; ref: string; name: string }>("projects", "select=id,ref,name"),
+  ]);
+
+  const nameOf = new Map(projectRows.map((p) => [p.id, { ref: p.ref, name: p.name }]));
+  const ageMs = (iso: string | null): number | null => (iso ? Date.now() - Date.parse(iso) : null);
+
+  const shape = (r: (typeof rows)[number]): QueueEntry => {
+    const waiting = ageMs(r.queued_at);
+    const running = ageMs(r.started_at);
+    return {
+      deployment: r.ref,
+      project: nameOf.get(r.project_id)?.ref ?? null,
+      projectName: nameOf.get(r.project_id)?.name ?? null,
+      state: r.state,
+      trigger: r.trigger,
+      branch: r.git_ref,
+      sha: r.git_sha ? r.git_sha.slice(0, 7) : null,
+      queuedAt: r.queued_at,
+      startedAt: r.started_at,
+      readyAt: r.ready_at,
+      waitingSeconds: waiting === null ? null : Math.round(waiting / 1000),
+      runningSeconds: running === null ? null : Math.round(running / 1000),
+      hasImage: Boolean(r.image_digest),
+      errorCode: r.error_code,
+      // Truncated, never dropped: the whole reason this exists is that the
+      // failure was only ever visible in a log on somebody's laptop.
+      error: r.error_message ? r.error_message.slice(0, 300) : null,
+    };
+  };
+
+  const inFlightStates = new Set(["queued", "building", "publishing"]);
+  const inFlight = rows.filter((r) => inFlightStates.has(r.state)).map(shape);
+  const recent = rows.filter((r) => !inFlightStates.has(r.state)).map(shape);
+
+  // Past the build timeout and still unfinished: either a row abandoned when a
+  // worker died, or nothing picking it up. A queued row with no worker running
+  // looks exactly like a busy one from the database alone.
+  const stalled = inFlight.filter((d) => {
+    const age = d.state === "queued" ? d.waitingSeconds : (d.runningSeconds ?? d.waitingSeconds);
+    return age !== null && age * 1000 > BUILD_TIMEOUT_MS;
+  });
+
+  return {
+    windowHours: QUEUE_WINDOW_HOURS,
+    inFlight,
+    recent: recent.slice(0, 50),
+    stalled,
+    counts: {
+      queued: inFlight.filter((d) => d.state === "queued").length,
+      building: inFlight.filter((d) => d.state === "building").length,
+      publishing: inFlight.filter((d) => d.state === "publishing").length,
+      failed24h: recent.filter((d) => d.state === "error").length,
+      ready24h: recent.filter((d) => d.state === "ready").length,
+    },
+    // Said in the payload rather than left to the reader: nothing here proves a
+    // worker is alive.
+    note:
+      stalled.length > 0
+        ? `${stalled.length} deployment(s) past the ${Math.round(BUILD_TIMEOUT_MS / 60000)}m build timeout — check that a build worker is running.`
+        : undefined,
+  };
+}
+
 export async function operatorView(): Promise<OperatorView> {
   const settle = async <T>(fn: () => Promise<T>): Promise<T | { error: string }> => {
     try {

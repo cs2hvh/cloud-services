@@ -18,7 +18,7 @@
 
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/supabase/auth";
-import { operatorView } from "@/lib/paas/telemetry/operator";
+import { operatorView, queueView } from "@/lib/paas/telemetry/operator";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -97,6 +97,16 @@ export default async function OperatorPage() {
   const view = await operatorView();
   const { fleet, hostnames, workloads, storage, usage } = view;
 
+  // Independently, and never allowed to blank the page. An operator dashboard
+  // is most useful exactly when something is broken, so a failed queue read
+  // renders as a queue panel that says why rather than as no dashboard.
+  let queue: Awaited<ReturnType<typeof queueView>> | { error: string };
+  try {
+    queue = await queueView();
+  } catch (e) {
+    queue = { error: (e as Error).message.slice(0, 200) };
+  }
+
   return (
     <main className="mx-auto max-w-5xl space-y-6 p-6">
       <header>
@@ -106,6 +116,68 @@ export default async function OperatorPage() {
           changes anything.
         </p>
       </header>
+
+      {/*
+        FIRST, because it is the question this page could not answer. Fleet,
+        hostnames, workloads and storage all compare recorded state against
+        reality; none of them said whether anything was building or whether the
+        last thing failed, so the only way to see a build was to read a worker's
+        stdout on whichever machine was running it.
+      */}
+      <Panel title="Build queue" subtitle="paas.deployments in flight, and the last 24 hours">
+        {"error" in queue ? (
+          <Unavailable error={queue.error} />
+        ) : (
+          <>
+            <div className="flex flex-wrap gap-4">
+              <Stat label="Queued" value={String(queue.counts.queued)} />
+              <Stat label="Building" value={String(queue.counts.building)} />
+              <Stat label="Ready 24h" value={String(queue.counts.ready24h)} />
+              <Stat label="Failed 24h" value={String(queue.counts.failed24h)} />
+            </div>
+
+            {queue.note ? (
+              <p className="mt-3 text-xs font-medium text-amber-600 dark:text-amber-500">{queue.note}</p>
+            ) : null}
+
+            {queue.inFlight.length > 0 ? (
+              <div className="mt-3">
+                <p className="text-xs font-medium">In flight</p>
+                <ul className="mt-1 space-y-1">
+                  {queue.inFlight.map((d) => (
+                    <li key={d.deployment} className="font-mono text-xs text-neutral-600 dark:text-neutral-400">
+                      {d.state} · {d.project ?? "(no project)"} · {d.deployment} · {d.sha ?? "?"} ·{" "}
+                      {d.state === "queued" ? `waiting ${d.waitingSeconds}s` : `running ${d.runningSeconds ?? 0}s`}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <p className="mt-3 text-xs text-neutral-500">
+                Nothing in flight. This does NOT prove a worker is running — a stopped queue and an
+                idle one look the same from the database.
+              </p>
+            )}
+
+            {queue.recent.filter((d) => d.state === "error").length > 0 ? (
+              <div className="mt-3">
+                <p className="text-xs font-medium">Recent failures</p>
+                <ul className="mt-1 space-y-1">
+                  {queue.recent
+                    .filter((d) => d.state === "error")
+                    .slice(0, 6)
+                    .map((d) => (
+                      <li key={d.deployment} className="text-xs text-neutral-600 dark:text-neutral-400">
+                        <span className="font-mono">{d.project ?? "?"}</span> · {d.deployment} ·{" "}
+                        <span className="text-red-600 dark:text-red-400">{d.error ?? d.errorCode ?? "no reason recorded"}</span>
+                      </li>
+                    ))}
+                </ul>
+              </div>
+            ) : null}
+          </>
+        )}
+      </Panel>
 
       <Panel
         title="Fleet"
