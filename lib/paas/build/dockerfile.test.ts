@@ -612,3 +612,56 @@ test("a runtime that is NOT nginx keeps its own port", () => {
   });
   assert.equal(port, 3000);
 });
+
+// FINDING THE SITE WHEN IT IS NOT WHERE THE FRAMEWORK PROMISED.
+//
+// Angular forces this. Detection records outputDirectory `dist`, which was right
+// until Angular 17; the CLI now writes dist/<project-name>/browser, and the
+// project name is whatever the customer called their app — unknowable at
+// generation time, and a Dockerfile COPY cannot glob for it.
+//
+// The failure is the quiet kind: COPY succeeds, because dist EXISTS — it just
+// holds a directory rather than a site. nginx then answers 404 for every path on
+// a build that reported success.
+//
+// The shell was checked against a real /bin/sh, not only read:
+//   dist/myapp/browser/index.html  ->  dist/index.html
+
+test("a static build looks for its output when the expected path has none", () => {
+  const df = mustGenerate({
+    detection: { framework: "angular", runtime: "static", buildCommand: "npm run build", startCommand: null, outputDirectory: "dist", port: 80, confidence: "certain", reason: "t" },
+    packageManager: "npm",
+    hasLockfile: true,
+    publicEnvKeys: [],
+  });
+  assert.match(df, /if \[ ! -f "dist\/index\.html" \]/);
+  assert.match(df, /-maxdepth 3 -name index\.html/);
+});
+
+test("IT RUNS AFTER THE BUILD AND BEFORE THE COPY", () => {
+  // Before the build there is nothing to find; after the COPY it is too late.
+  const df = mustGenerate({
+    detection: { framework: "angular", runtime: "static", buildCommand: "npm run build", startCommand: null, outputDirectory: "dist", port: 80, confidence: "certain", reason: "t" },
+    packageManager: "npm",
+    hasLockfile: true,
+    publicEnvKeys: [],
+  });
+  const build = df.indexOf("npm run build");
+  const normalise = df.indexOf("-maxdepth 3 -name index.html");
+  const copy = df.indexOf("COPY --from=builder");
+  assert.ok(build < normalise, "normalisation must follow the build");
+  assert.ok(normalise < copy, "and precede the copy");
+});
+
+test("finding nothing at all FAILS rather than shipping an empty site", () => {
+  const df = mustGenerate({
+    detection: { framework: "vite", runtime: "static", buildCommand: "npm run build", startCommand: null, outputDirectory: "dist", port: 80, confidence: "certain", reason: "t" },
+    packageManager: "npm",
+    hasLockfile: true,
+    publicEnvKeys: [],
+  });
+  // An nginx serving nothing, from a build that said it succeeded, is the worst
+  // available outcome — it looks like a routing fault for as long as anyone cares
+  // to look.
+  assert.match(df, /no index\.html anywhere under dist"; exit 1/);
+});

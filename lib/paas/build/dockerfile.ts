@@ -286,6 +286,39 @@ function runCmd(pm: DockerfileInput["packageManager"], script: string): string {
  * server-side environment is the normal case, so that path has to be the safe
  * one.
  */
+/**
+ * Find the built site when it is not where the framework said it would be.
+ *
+ * ANGULAR IS THE CASE THAT FORCES THIS. Detection records outputDirectory
+ * `dist`, which was right until Angular 17; the CLI now writes
+ * dist/<project-name>/browser, and the project name is whatever the customer
+ * called their app. We cannot know it at generation time, and a Dockerfile
+ * COPY cannot glob for it.
+ *
+ * The failure it prevents is the quiet kind: COPY succeeds, because dist EXISTS
+ * — it just contains a directory rather than a site. nginx then serves 404 for
+ * every path, on a build that reported success, with no error anywhere to
+ * explain it.
+ *
+ * Only ever runs when the expected path has no index.html, so a framework that
+ * puts its output where it promised is untouched. Depth 3 covers
+ * dist/<name>/browser without wandering into node_modules-sized trees.
+ */
+function normaliseOutput(out: string): string {
+  return [
+    `RUN if [ ! -f "${out}/index.html" ]; then \\`,
+    `      found=$(find "${out}" -maxdepth 3 -name index.html -print -quit 2>/dev/null || true); \\`,
+    `      if [ -n "$found" ]; then \\`,
+    `        src=$(dirname "$found"); \\`,
+    `        echo "site is at $src, not ${out} — moving it"; \\`,
+    `        mv "$src" /tmp/__site && rm -rf "${out}" && mv /tmp/__site "${out}"; \\`,
+    `      else \\`,
+    `        echo "no index.html anywhere under ${out}"; exit 1; \\`,
+    `      fi; \\`,
+    `    fi`,
+  ].join("\n");
+}
+
 function buildRun(cmd: string): string {
   return (
     "RUN --mount=type=secret,id=ahura-env,target=/run/secrets/ahura-env \\\n" +
@@ -392,6 +425,7 @@ ${needsWholeTree(i) ? `# ${wholeTreeReason(i)}\nCOPY . .` : `COPY package.json $
 RUN --mount=type=cache,target=/root/.npm ${installCmd(pm, false, i.hasLockfile !== false)}
 COPY . .
 ${args}${buildRun(runCmd(pm, build))}
+${normaliseOutput(out)}
 
 ${NGINX_STATIC}
 COPY --from=builder /app/${out} /usr/share/nginx/html
