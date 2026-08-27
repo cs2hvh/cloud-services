@@ -43,9 +43,9 @@ support gap being mistaken for a build gap.
 | 4 | cs2hvh/ArthaKosha | Next.js 15 (private) | PASS | 200 build, 500 serve → APP-ERR | Found three platform bugs: unauthenticated detection, unauthenticated clone, credential destroyed before the commit fetch |
 | 5 | cs2hvh/ahurasense-task | Next.js (private) | APP-ERR | 500 | Needs NEXTAUTH_SECRET; runtime logs name it |
 | 6 | fastify/fastify-example-todo | Fastify, no lockfile | APP-ERR | 503 | Built, routed, served — the app wants a database. Found the `npm ci` gap |
-| 7 | vercel/next-learn | Next.js in a monorepo subdirectory | TODO | — | Failed on the pnpm lockfile and corepack; both fixed, needs a re-run |
-| 8 | remix-run/indie-stack | Remix, repo-supplied Dockerfile | TODO | — | Built and routed; the probe timed out waiting on DNS. Needs a re-run |
-| 9 | sveltejs/realworld | SvelteKit on `master`, pnpm | TODO | — | Found the corepack gap. The branch fallback to `master` worked |
+| 7 | vercel/next-learn | Next.js in a monorepo subdirectory | TODO | — | Found three gaps in a row: pnpm lockfile format, corepack, then pnpm refusing install scripts for bcrypt and sharp. All fixed; re-running |
+| 8 | remix-run/indie-stack | Remix, repo-supplied Dockerfile | APP-ERR | 503 | Built, routed, served. The app wants a database it was not given |
+| 9 | sveltejs/realworld | SvelteKit on `master`, **pnpm** | APP-ERR | 503 | Built, routed, served — **first proof pnpm works end to end**. Branch fallback to `master` also proven |
 
 ---
 
@@ -79,6 +79,30 @@ code:
 Items 6 to 8 all came from the first batch of three real applications, which
 is the argument for testing real repositories rather than templates: a
 template ships a fresh lockfile and uses npm, and would have passed all three.
+
+---
+
+## Package managers
+
+Proven means an application built with it reached a routed hostname that
+answered. A correct-looking Dockerfile is not proof.
+
+| | State | Evidence |
+|---|---|---|
+| npm | **Proven** | heroku/node-js-getting-started, fastify-example-todo |
+| pnpm | **Proven** | sveltejs/realworld — built, routed, answered 503 from the app |
+| yarn | Fixed, unproven | Same corepack fix as pnpm; no yarn application deployed yet |
+| bun | Fixed, unproven | Now builds on `oven/bun`; nothing has deployed with it |
+
+Four defects sat between npm working and pnpm working, and every one of them
+would have passed against a generated template:
+
+- the frozen install demanded a lockfile that may not exist
+- a lockfile written by a newer pnpm was fatal rather than survivable
+- corepack was enabled in `deps` only, so the builder could not run the build
+  and the runner could not start the app
+- pnpm 10 refuses install scripts and exits non-zero, which kills any project
+  with a native dependency — sharp, bcrypt, prisma, esbuild
 
 ---
 
