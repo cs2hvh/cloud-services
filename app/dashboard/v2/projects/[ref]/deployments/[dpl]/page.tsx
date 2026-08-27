@@ -22,12 +22,22 @@ import { StateBadge, Timestamp, Duration } from "@/components/v2/state-badge";
 
 export const dynamic = "force-dynamic";
 
-type Params = { params: Promise<{ ref: string }> };
+/**
+ * Two segments now, not one. This page moved under the project when the two
+ * parallel dashboards were merged, so `ref` is the PROJECT and `dpl` is the
+ * deployment — the opposite of what it meant at the old top-level path. Naming
+ * the deployment segment `dpl` rather than a second `ref` is deliberate: two
+ * segments called `ref` would be a silent mix-up every time someone edits this
+ * file, and the failure would be a 404 on a deployment that exists.
+ */
+type Params = { params: Promise<{ ref: string; dpl: string }> };
 
 const LOG_TAIL_LINES = 400;
 
 export default async function DeploymentPage({ params }: Params) {
-  const { ref } = await params;
+  // `dpl` is this deployment; the project segment is not needed to resolve it,
+  // because the deployment ref is unique and RLS decides visibility.
+  const { dpl: ref } = await params;
   const caller = await getCaller();
 
   if (!caller) {
