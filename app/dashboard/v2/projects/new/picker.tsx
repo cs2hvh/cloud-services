@@ -44,6 +44,17 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  /**
+   * The caller's team, needed to START a connection.
+   *
+   * The empty state used to say “install the AhuraSense app” and offer no way
+   * to do it — a dead end on the one screen where a new customer arrives with
+   * nothing connected. /api/v2/git/connect needs a team ref, and /api/v2/me is
+   * where that comes from; it also bootstraps a personal team, so a brand-new
+   * account gets one by asking.
+   */
+  const [teamRef, setTeamRef] = useState<string | null>(null);
+
   // Everything below was accepted by POST /api/v2/projects from the start and
   // never offered. The API validated `branch`, `rootDirectory` and `instances`
   // while the form silently sent the default branch, no subdirectory and one
@@ -73,6 +84,18 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
     let cancelled = false;
     (async () => {
       try {
+        // Asked alongside the repo list rather than only when it comes back
+        // empty: the button has to be ready the moment the empty state renders.
+        fetch("/api/v2/me")
+          .then((r) => (r.ok ? r.json() : null))
+          .then((me) => {
+            if (!cancelled && me?.team?.ref) setTeamRef(me.team.ref as string);
+          })
+          .catch(() => {
+            // Left null. The empty state then explains rather than offering a
+            // button that cannot work.
+          });
+
         const res = await fetch("/api/v2/repos");
         if (!res.ok) throw new Error(`Could not list repositories (${res.status}).`);
         const body = await res.json();
@@ -212,6 +235,35 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
         <p className="mt-1 text-xs text-neutral-500">
           Install the AhuraSense app on your GitHub account and choose which repositories it can see.
         </p>
+        {/*
+          CONNECTIONS ARE PER TEAM, NOT PER LOGIN, and that is why this can say
+          "not connected" while the account settings page says "Connected".
+          That page reads your Supabase OAuth identities — how you signed in.
+          This reads paas.installations, which records which GitHub App
+          installation a TEAM holds. Signing in with GitHub does not give your
+          team a deploy connection, and the two are meant to be separable:
+          people deploy from an org account they did not sign in with.
+        */}
+        <p className="mt-3 text-xs text-neutral-500">
+          Signing in with GitHub is not the same thing — that is how you log in.
+          This connects a GitHub account to your team so we can read its
+          repositories.
+        </p>
+        {teamRef ? (
+          <a
+            href={`/api/v2/git/connect?team=${encodeURIComponent(teamRef)}`}
+            className="mt-4 inline-block rounded bg-neutral-900 px-4 py-2 text-xs font-medium text-white hover:bg-neutral-700 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
+          >
+            Connect GitHub
+          </a>
+        ) : (
+          // No button rather than a broken one. Without a team ref the connect
+          // route cannot bind the installation to anything.
+          <p className="mt-4 text-xs text-amber-600 dark:text-amber-500">
+            Could not read your team, so the connect link cannot be built. Reload,
+            and if it persists your account has no team yet.
+          </p>
+        )}
       </div>
     );
   }
