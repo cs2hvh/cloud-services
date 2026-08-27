@@ -52,6 +52,9 @@ support gap being mistaken for a build gap.
 | 15 | vitejs/vite | pnpm workspace monorepo — expected to refuse | APP-ERR | build failed | Refused, but only after leasing a VM. Found that NO monorepo could install |
 | 16 | gothinkster/vue-realworld-example-app | Vue 2 SPA, bun lockfile | APP-ERR | build failed | The repo's own build is broken — rolldown cannot resolve its `src/main.js` |
 | 17 | gothinkster/angular-realworld-example-app | Angular, **bun** | APP-ERR | build failed | The repo imports `realworld/assets/theme/styles.css` and has no such dependency. Confirmed bun detection was CORRECT — the repo really does ship `bun.lock` |
+| 18 | **withastro/astro** `examples/blog` | Astro through OUR Dockerfile — no lockfile, inside a monorepo | **PASS** | **200** | Astro proven end to end. Served at `v2-astro.ahurasense.com`, then torn down |
+| 19 | satnaing/astro-paper | Astro blog shipping its own Dockerfile | BUILD-ERR | build failed | Their Dockerfile, not ours: `pnpm install --frozen-lockfile` under pnpm 10 stops on `ERR_PNPM_IGNORED_BUILDS`. Proves the docker path, says nothing about Astro |
+| 20 | withastro/starlight | Workspace root with no build script | REFUSED | at detect | Refused in seconds without leasing a machine. Previously spent a VM to fail on `"/dist": not found` |
 | 8 | remix-run/indie-stack | Remix, repo-supplied Dockerfile | APP-ERR | 503 | Built, routed, served. The app wants a database it was not given |
 | 9 | sveltejs/realworld | SvelteKit on `master`, **pnpm** | APP-ERR | 503 | Built, routed, served — **first proof pnpm works end to end**. Branch fallback to `master` also proven |
 
@@ -121,6 +124,25 @@ And one that had nothing to do with package managers:
   answered 503. CRA, Vite, Vue, Angular, Gatsby, Astro and Hugo were all
   affected, and it stayed hidden because everything deployed here before was a
   Node server or a repo-supplied Dockerfile.
+- **the batch runner never ran.** `framework-batch.ts` uses a top-level await,
+  which tsx cannot compile to CommonJS, so it died in the transform before
+  reaching a single repository — and because the run was piped, the pipeline's
+  exit code was reported rather than the script's, so it read as a clean sweep.
+  Every batch result recorded before this came from running
+  `framework-probe.ts` directly, which has an async entrypoint. The probe is
+  spawned with `node --experimental-strip-types`, which supports top-level
+  await; that is why one worked and the other did not.
+- **a correct refusal was scored as a platform failure.** The runner graded on
+  the verdict alone, so a target that MUST be turned away counted the same as
+  one that should have served and did not. That is how the astro batch came to
+  be read backwards. Targets now declare `serve`, `refuse`, `app-err` or
+  `build-err` and the runner reports `as expected` or `UNEXPECTED — wanted X`.
+- **a static site with nothing to build and nothing to serve leased a machine
+  to fail.** With no build script the generated Dockerfile copies a pre-built
+  directory out of the repository; when that directory does not exist Docker
+  answers `failed to calculate checksum of ref …: "/dist": not found`, which
+  names no cause. Detection now refuses up front unless there is an
+  `index.html` at the root, which is the only case where that copy is right.
 - **no monorepo could install.** The deps stage copied only the root manifest
   so the dependency layer could cache; a workspace's root dependencies point
   at sibling packages, and pnpm answered ERR_PNPM_WORKSPACE_PKG_NOT_FOUND

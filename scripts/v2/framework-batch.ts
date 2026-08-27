@@ -79,7 +79,29 @@ if (targets.length === 0) {
   process.exit(EXIT_CANNOT_RUN);
 }
 
-function runProbe(t: Target): Promise<{ code: number; verdict: string; http: string }> {
+/**
+ * Did the run do what the target said it would?
+ *
+ * A refusal is not a failure. withastro/starlight must be turned away, and
+ * being turned away at detect — in seconds, without leasing a build machine —
+ * is the whole point. Grading on the verdict alone reported that as a platform
+ * failure next to genuine ones, which is how the astro batch came to be read
+ * backwards.
+ *
+ * Serving when we should have refused is the interesting direction: a library
+ * that deploys means detection accepted something it cannot support.
+ */
+function meets(expect: Target["expect"], verdict: string, stage: string): boolean {
+  if (expect === "serve") return verdict === "PASS";
+  // Better than promised is still fine: if an app we expected to error on a
+  // missing secret answers 200 anyway, the platform did its job.
+  if (expect === "app-err") return verdict === "APP-ERR" || verdict === "PASS";
+  if (expect === "refuse") return stage === "detect";
+  if (expect === "build-err") return stage === "build";
+  return false;
+}
+
+function runProbe(t: Target): Promise<{ code: number; verdict: string; http: string; stage: string }> {
   return new Promise((resolve) => {
     const argv = [
       "--experimental-strip-types",
@@ -108,10 +130,16 @@ function runProbe(t: Target): Promise<{ code: number; verdict: string; http: str
 
     child.on("close", (code) => {
       const m = /RESULT\s+(\S+)\s+http=(\S+)/.exec(out);
+      // A run that never reached the serve check prints `FAIL at <stage>`
+      // instead, and that stage is the whole answer: stopping at detect is a
+      // success for a target that must be refused and a failure for one that
+      // must serve. Grading on the verdict alone called both of those FAIL.
+      const f = /RESULT\s+FAIL at (\w+)/.exec(out);
       resolve({
         code: code ?? 1,
         verdict: m?.[1] ?? "FAIL",
         http: m?.[2] ?? "no answer",
+        stage: f?.[1] ?? (m ? "serve" : "unknown"),
       });
     });
   });
@@ -121,7 +149,8 @@ function runProbe(t: Target): Promise<{ code: number; verdict: string; http: str
 // run lives in an async entrypoint. Without it the batch died before deploying
 // anything and still exited 0 — a green run that tested nothing.
 async function main() {
-  const results: Array<{ repo: string; note: string; verdict: string; http: string }> = [];
+  const results: Array<{ repo: string; note: string; verdict: string; http: string; expect: string; ok: boolean }> =
+    [];
 
   console.log(`\nBatch ${batchName ?? "ad hoc"} — ${targets.length} repository(ies), one at a time`);
   console.log("═".repeat(84));
@@ -129,23 +158,23 @@ async function main() {
   for (const t of targets) {
     console.log(`\n▶ ${t.repo}  (${t.note})`);
     const r = await runProbe(t);
-    results.push({ repo: t.repo, note: t.note, verdict: r.verdict, http: r.http });
+    results.push({ repo: t.repo, note: t.note, verdict: r.verdict, http: r.http, expect: t.expect, ok: meets(t.expect, r.verdict, r.stage) });
   }
 
   console.log("\n" + "═".repeat(84));
   console.log("  Summary — paste into docs/v2/10-FRAMEWORK-MATRIX.md\n");
   for (const r of results) {
-    console.log(`  | ${r.repo} | ${r.note} | ${r.verdict} | ${r.http} |`);
+    console.log(`  | ${r.repo} | ${r.note} | ${r.verdict} | ${r.http} | ${r.ok ? "as expected" : "UNEXPECTED — wanted " + r.expect} |`);
   }
 
-  const bad = results.filter((r) => r.verdict === "FAIL");
+  const bad = results.filter((r) => !r.ok);
   console.log(
     `\n  ${results.filter((r) => r.verdict === "PASS").length} served, ` +
-      `${results.filter((r) => r.verdict === "APP-ERR").length} app-error, ${bad.length} platform failure(s).`,
+      `${results.filter((r) => r.verdict === "APP-ERR").length} app-error, ${bad.length} unexpected outcome(s).`,
   );
   if (bad.length) {
-    console.log(`\n  Platform failures to diagnose — these are the point of the run:`);
-    for (const r of bad) console.log(`    ${r.repo} (${r.note})`);
+    console.log(`\n  Unexpected outcomes — these are the point of the run:`);
+    for (const r of bad) console.log(`    ${r.repo} — wanted ${r.expect}, got ${r.verdict} (${r.note})`);
   }
 
   process.exit(bad.length ? EXIT_FINDINGS : EXIT_CLEAN);

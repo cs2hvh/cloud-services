@@ -42,8 +42,13 @@ export interface Target {
    * `refuse` — should be turned away with a clear reason, and quickly.
    * `app-err` — should build and route; the app itself will error (needs a
    *   database, a secret) and that is not a platform failure.
+   * `build-err` — the build cannot finish because of what the repository
+   *   contains: a stale Dockerfile of its own, a lockfile its own toolchain
+   *   rejects, source that does not compile. Also not a platform failure, and
+   *   distinct from `refuse` — we were right to try, and the answer arrived
+   *   from the builder rather than from detection.
    */
-  expect: "serve" | "refuse" | "app-err";
+  expect: "serve" | "refuse" | "app-err" | "build-err";
 }
 
 export const BATCHES: Record<string, Target[]> = {
@@ -66,7 +71,7 @@ export const BATCHES: Record<string, Target[]> = {
     { repo: "vitejs/vite", note: "Vite monorepo — a LIBRARY, must refuse", expect: "refuse" },
   ],
   vue: [
-    { repo: "gothinkster/vue-realworld-example-app", note: "Vue 2 SPA", expect: "serve" },
+    { repo: "gothinkster/vue-realworld-example-app", note: "Vue 2 SPA whose own build is broken", expect: "build-err" },
     { repo: "nuxt/movies", note: "Nuxt 3, real app", expect: "serve" },
   ],
   angular: [
@@ -82,7 +87,7 @@ export const BATCHES: Record<string, Target[]> = {
     // build command and nothing to serve. An example inside the Astro monorepo is
     // the only one of the three that exercises detect -> build -> nginx.
     { repo: "withastro/astro", note: "Astro via our Dockerfile, no lockfile, inside a monorepo", root: "examples/blog", expect: "serve" },
-    { repo: "satnaing/astro-paper", note: "Astro blog shipping its own Dockerfile", expect: "app-err" },
+    { repo: "satnaing/astro-paper", note: "Astro blog shipping its own Dockerfile", expect: "build-err" },
     { repo: "withastro/starlight", note: "workspace root with no build script — must refuse", expect: "refuse" },
   ],
   remix: [
