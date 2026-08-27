@@ -190,6 +190,28 @@ function runCmd(pm: DockerfileInput["packageManager"], script: string): string {
   return `corepack enable && ${cmd}`;
 }
 
+/**
+ * The runtime for anything that builds to static files.
+ *
+ * THE PID PATH IS REWRITTEN BY PATTERN, NOT BY LITERAL, and that one detail
+ * decides whether any static site runs at all.
+ *
+ * This matched the literal `/var/run/nginx.pid`. nginx 1.27's shipped config
+ * says `/run/nginx.pid`, so the substitution silently did nothing, and the
+ * container — running as uid 101 — could not write its pidfile:
+ *
+ *     [emerg] open() "/run/nginx.pid" failed (13: Permission denied)
+ *
+ * nginx logged a clean startup first and then died, so the pod reported
+ * Running before it began crash-looping and the platform answered 503. Every
+ * static site was affected — CRA, Vite, Vue, Angular, Gatsby, Astro, Hugo —
+ * and it stayed hidden because the applications deployed here until now were
+ * Node servers and repo-supplied Dockerfiles, neither of which touches this
+ * stage.
+ *
+ * Matching `^pid .*` instead survives the path moving again, which it already
+ * has once.
+ */
 const NGINX_STATIC = `
 FROM nginx:1.27-alpine AS runner
 RUN printf 'server {\\n\\
@@ -201,7 +223,7 @@ RUN printf 'server {\\n\\
   gzip_types text/css application/javascript application/json image/svg+xml;\\n\\
 }\\n' > /etc/nginx/conf.d/default.conf \\
  && sed -i 's|user  nginx;||' /etc/nginx/nginx.conf \\
- && sed -i 's|/var/run/nginx.pid|/tmp/nginx.pid|' /etc/nginx/nginx.conf \\
+ && sed -i 's|^pid .*|pid /tmp/nginx.pid;|' /etc/nginx/nginx.conf \\
  && chown -R 101:101 /usr/share/nginx/html /var/cache/nginx /etc/nginx
 USER 101:101
 EXPOSE 8080
