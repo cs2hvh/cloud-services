@@ -42,6 +42,10 @@ support gap being mistaken for a build gap.
 | 3 | Azure-Samples/python-docs-hello-world | Python / Flask | PASS | 200 | |
 | 4 | cs2hvh/ArthaKosha | Next.js 15 (private) | PASS | 200 build, 500 serve → APP-ERR | Found three platform bugs: unauthenticated detection, unauthenticated clone, credential destroyed before the commit fetch |
 | 5 | cs2hvh/ahurasense-task | Next.js (private) | APP-ERR | 500 | Needs NEXTAUTH_SECRET; runtime logs name it |
+| 6 | fastify/fastify-example-todo | Fastify, no lockfile | APP-ERR | 503 | Built, routed, served — the app wants a database. Found the `npm ci` gap |
+| 7 | vercel/next-learn | Next.js in a monorepo subdirectory | TODO | — | Failed on the pnpm lockfile and corepack; both fixed, needs a re-run |
+| 8 | remix-run/indie-stack | Remix, repo-supplied Dockerfile | TODO | — | Built and routed; the probe timed out waiting on DNS. Needs a re-run |
+| 9 | sveltejs/realworld | SvelteKit on `master`, pnpm | TODO | — | Found the corepack gap. The branch fallback to `master` worked |
 
 ---
 
@@ -61,6 +65,20 @@ code:
 4. **A failure before `building` never left the queue** — retried every 15s
    forever, shown as "queued" with no reason anywhere a customer could see.
 5. **Custom domains never got an Ingress**, so every one 404'd regardless of DNS.
+6. **No repository without a lockfile could build.** `npm ci` requires one,
+   and pnpm, yarn and bun's frozen flags all refuse without one. The
+   generated Dockerfile always chose the frozen form.
+7. **A lockfile written by a newer package manager was fatal.** corepack
+   resolved pnpm 10 for a pnpm 11 lockfile. The frozen install now falls back
+   to a fresh resolve rather than failing the build.
+8. **Every pnpm and yarn project failed**, in three stages at once. Each
+   build stage is a fresh `FROM node:alpine`; corepack was enabled only in
+   `deps`, so the builder could not run the build script and the runner could
+   not start the app. Only npm worked, because npm ships inside node.
+
+Items 6 to 8 all came from the first batch of three real applications, which
+is the argument for testing real repositories rather than templates: a
+template ships a fresh lockfile and uses npm, and would have passed all three.
 
 ---
 
