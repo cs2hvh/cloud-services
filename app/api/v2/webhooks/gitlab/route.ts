@@ -20,8 +20,9 @@
 
 import { verifyToken, parsePushEvent } from "@/lib/paas/gitlab/webhook";
 import { providerConfig } from "@/lib/paas/providers/config";
-import { decidePush, matchProject, type ProjectRow } from "@/lib/paas/providers/policy";
-import { environments, deployments, db } from "@/lib/paas/db";
+import { decidePush } from "@/lib/paas/providers/policy";
+import { resolveRepoTarget } from "@/lib/paas/repo-target";
+import { projects, environments, deployments, db } from "@/lib/paas/db";
 
 export const dynamic = "force-dynamic";
 
@@ -79,26 +80,25 @@ export async function POST(req: Request) {
     return json(503, { error: "control plane unreachable" });
   }
 
-  // Scoped by PROVIDER as well as name: `acme/api` on GitLab and on GitHub are
-  // different repositories, and a provider-blind lookup would deploy one
-  // customer's commit onto another customer's hostname.
-  const rows = await db.select<ProjectRow>(
-    "projects",
-    "select=id,ref,provider,repo_full_name,production_branch&deleted_at=is.null",
+  // Provider-scoped in the QUERY, then resolved. `acme/api` on GitLab and on
+  // GitHub are different repositories sharing a string, and two teams may each
+  // connect the same public repo on one provider — so a single row is not the
+  // same as the right row.
+  const target = resolveRepoTarget(
+    await projects.matchingRepo("gitlab", push.repoFullName),
+    push.repoFullName,
+    "gitlab",
   );
-  const found = matchProject(rows, "gitlab", push.repoFullName);
 
-  if (!found.project) {
-    if (found.ambiguous) {
-      // Two live projects claiming one repo on one provider. Something is
-      // already wrong; picking either would build a commit onto whichever row
-      // sorted first.
-      console.error(`[webhook/gitlab] ${push.repoFullName} matches more than one live project — building nothing`);
-      return json(409, { error: "repository matches more than one project" });
-    }
-    return json(202, { ok: true, ignored: `no gitlab project for ${push.repoFullName}` });
+  if (target.kind === "none") return json(202, { ok: true, ignored: target.reason });
+  if (target.kind === "ambiguous") {
+    // 202, NOT 5xx. A retry cannot resolve data we made ambiguous ourselves,
+    // and GitLab would redeliver until the delivery expired. Loud in the log,
+    // because the customer only sees a push that did nothing.
+    console.error(`[webhook/gitlab] ${target.reason} — building nothing (${target.refs.join(", ")})`);
+    return json(202, { ok: false, ignored: target.reason, refs: target.refs });
   }
-  const project = found.project;
+  const project = target.project;
 
   const decision = decidePush(push, project.production_branch);
   if (!decision.deploy) return json(202, { ok: true, ignored: decision.reason });

@@ -19,8 +19,9 @@
 
 import { verifySignature, parsePushEvent, BITBUCKET_SIGNATURE_HEADER } from "@/lib/paas/bitbucket/webhook";
 import { providerConfig } from "@/lib/paas/providers/config";
-import { decidePush, matchProject, type ProjectRow } from "@/lib/paas/providers/policy";
-import { environments, deployments, db } from "@/lib/paas/db";
+import { decidePush } from "@/lib/paas/providers/policy";
+import { resolveRepoTarget } from "@/lib/paas/repo-target";
+import { projects, environments, deployments, db } from "@/lib/paas/db";
 
 export const dynamic = "force-dynamic";
 
@@ -79,20 +80,19 @@ export async function POST(req: Request) {
     return json(503, { error: "control plane unreachable" });
   }
 
-  const rows = await db.select<ProjectRow>(
-    "projects",
-    "select=id,ref,provider,repo_full_name,production_branch&deleted_at=is.null",
+  const target = resolveRepoTarget(
+    await projects.matchingRepo("bitbucket", push.repoFullName),
+    push.repoFullName,
+    "bitbucket",
   );
-  const found = matchProject(rows, "bitbucket", push.repoFullName);
 
-  if (!found.project) {
-    if (found.ambiguous) {
-      console.error(`[webhook/bitbucket] ${push.repoFullName} matches more than one live project — building nothing`);
-      return json(409, { error: "repository matches more than one project" });
-    }
-    return json(202, { ok: true, ignored: `no bitbucket project for ${push.repoFullName}` });
+  if (target.kind === "none") return json(202, { ok: true, ignored: target.reason });
+  if (target.kind === "ambiguous") {
+    // 202, not 5xx — a retry cannot resolve data we made ambiguous ourselves.
+    console.error(`[webhook/bitbucket] ${target.reason} — building nothing (${target.refs.join(", ")})`);
+    return json(202, { ok: false, ignored: target.reason, refs: target.refs });
   }
-  const project = found.project;
+  const project = target.project;
 
   const decision = decidePush(push, project.production_branch);
   if (!decision.deploy) return json(202, { ok: true, ignored: decision.reason });
