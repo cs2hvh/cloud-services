@@ -187,6 +187,14 @@ export default async function ProjectPage({
   const previewEnvs = (environments.data ?? []).filter((e) => e.kind === "preview");
   const latest = deployments.data?.[0] ?? null;
 
+  // Runtime logs follow what production POINTS AT when something does, because
+  // logs from a superseded build are almost never what somebody wants. With
+  // nothing pointed — a project built but not yet routed — the newest
+  // deployment is the only sensible answer, and the API says so if it has no
+  // pods.
+  const logsTarget =
+    (deployments.data ?? []).find((d) => production?.deployment_id && d.ref === latest?.ref) ?? latest;
+
   /**
    * Runtime replica status, and the reason it is worth the extra call.
    *
@@ -495,10 +503,24 @@ export default async function ProjectPage({
             title="Runtime logs"
             subtitle="Output from the pods currently serving this project"
           >
-            {latest && production?.deployment_id ? (
-              <RuntimeLogs deploymentRef={latest.ref} />
+            {/*
+              GATED ON A DEPLOYMENT EXISTING, NOT ON ONE BEING ROUTED.
+
+              This asked for a production alias too, and refused to render
+              without one — so a project whose build is ready but whose hostname
+              has not been pointed yet showed 'nothing is serving' and never
+              asked the cluster. The pods may well be running; an alias is about
+              ROUTING, not about whether a container is alive.
+
+              The API already answers the empty case properly, and better than a
+              guess from here: it distinguishes a superseded deployment scaled to
+              zero from one that has not started, and explains which. Duplicating
+              that decision in the page is how the two came to disagree.
+            */}
+            {logsTarget ? (
+              <RuntimeLogs deploymentRef={logsTarget.ref} />
             ) : (
-              <Empty title="Nothing is serving yet">
+              <Empty title="Nothing deployed yet">
                 Runtime logs come from running pods. Deploy this project and they will appear here;
                 until then the build log on a deployment is the place to look.
               </Empty>
