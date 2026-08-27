@@ -136,27 +136,46 @@ export async function inspectRepo(
    * falling back to main — building the wrong recipe is worse than refusing.
    */
   explicitBranch?: string | null,
-): Promise<{ branch: string; files: RepoFiles; authenticated: boolean }> {
+): Promise<{ branch: string; files: RepoFiles; readable: boolean }> {
   const dir = rootDirectory ? `${rootDirectory.replace(/^\/+|\/+$/g, "")}/` : "";
   const installationId = await installationForRepo(repo);
 
-  const branch =
-    explicitBranch ??
-    ((await probe(repo, "main", `${dir}README.md`, installationId)) !== null ||
-    (await probe(repo, "main", `${dir}package.json`, installationId)) !== null
-      ? "main"
-      : "master");
+  // WHETHER WE COULD READ THIS REPOSITORY AT ALL, observed rather than assumed.
+  //
+  // These two probes run anyway to pick a default branch, and either one
+  // returning content proves the repository is readable — which is a different
+  // question from whether we hold a token for it, and the one the failure
+  // message downstream actually depends on.
+  const readmeOnMain = await probe(repo, "main", `${dir}README.md`, installationId);
+  const pkgOnMain = await probe(repo, "main", `${dir}package.json`, installationId);
+  let readable = readmeOnMain !== null || pkgOnMain !== null;
+
+  const branch = explicitBranch ?? (readable ? "main" : "master");
+
+  // The two probes above only ever looked at `main`. A repository whose default
+  // branch is `master` answers nothing there, so it looked unreadable even when
+  // it is public and perfectly readable — docker/awesome-compose was told to
+  // connect a GitHub account it does not need. One more probe, on the branch we
+  // actually settled on, is the difference between `we could not read this` and
+  // `we read it and there is nothing here`.
+  if (!readable) {
+    readable = (await probe(repo, branch, `${dir}README.md`, installationId)) !== null;
+  }
 
   const files: RepoFiles = { paths: [], contents: {} };
   for (const f of [...new Set(MARKER_FILES)]) {
     const body = await probe(repo, branch, `${dir}${f}`, installationId);
     if (body === null) continue;
+    // A repository whose default branch is master answers nothing on main, so
+    // readability is confirmed here too rather than only above.
+    readable = true;
     files.paths.push(f);
     if ((DETECTION_FILES as readonly string[]).includes(f)) files.contents[f] = body;
   }
   // Reported so the caller can tell 'read it, found nothing' from 'could not
-  // read it'. Those need different messages and different fixes.
-  return { branch, files, authenticated: installationId !== null };
+  // read it'. Those need different messages and different fixes — and the flag
+  // used to be `installationId !== null`, which answers neither.
+  return { branch, files, readable };
 }
 
 export interface DeployOptions {
@@ -285,7 +304,7 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
     throw new Error(`deployment ${opts.existingDeploymentRef} not found`);
   }
 
-  const { branch, files, authenticated } = await inspectRepo(
+  const { branch, files, readable } = await inspectRepo(
     opts.repo,
     opts.rootDirectory,
     adopted?.git_ref ?? null,
@@ -299,7 +318,11 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
     // A repository we could not authenticate against looks EXACTLY like one
     // with no marker files, and telling somebody to add a Dockerfile they
     // already have is worse than saying nothing. Name the likelier cause.
-    if (!authenticated && files.paths.length === 0) {
+    // NOT `we had no token`. github/gitignore and docker/awesome-compose are
+    // public, were read perfectly well, and simply have nothing deployable at
+    // their root — and both were told to connect a GitHub account, which would
+    // not have helped and is not the problem.
+    if (!readable) {
       throw new Error(
         `cannot read ${opts.repo}: no GitHub App installation covers that account, so a private ` +
           `repository is indistinguishable from an empty one. Connect the account that owns it and ` +
