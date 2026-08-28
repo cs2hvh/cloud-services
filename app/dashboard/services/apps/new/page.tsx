@@ -21,6 +21,7 @@ import { ChevronLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { TIERS } from "@/lib/paas/tiers";
 import { Card, Hero, ServiceShell, V2_MONO } from "@/components/v2/kit";
+import { GitConnections } from "@/components/v2/git-connections";
 import { Picker } from "./picker";
 
 export const dynamic = "force-dynamic";
@@ -59,6 +60,16 @@ export default async function NewProjectPage() {
               priceUsd: t.priceUsd,
             }))}
           />
+        </Card>
+
+        {/*
+          Below the picker, because the common case is picking a repository and
+          the uncommon one is fixing which account you can pick from. It is here
+          rather than buried in settings so that somebody who cannot find their
+          repository has the answer on the same screen as the problem.
+        */}
+        <Card title="Git accounts" subtitle="Where repositories are read from" className="mt-4">
+          <GitConnections />
         </Card>
       </div>
     </ServiceShell>
