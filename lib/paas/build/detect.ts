@@ -9,7 +9,7 @@
  * network and no build VM.
  */
 
-export type Runtime = "node" | "python" | "go" | "ruby" | "java" | "php" | "hugo" | "static" | "docker";
+export type Runtime = "node" | "python" | "go" | "ruby" | "java" | "php" | "rust" | "hugo" | "static" | "docker";
 
 export interface Detection {
   framework: string;
@@ -150,7 +150,7 @@ export function detectFramework(files: RepoFiles): Detection {
   // The signals are not symmetrical. A composer.json says THIS IS A PHP
   // APPLICATION; a package.json in the same repository says only that it has
   // JavaScript somewhere, which is true of nearly every web application now.
-if (has(files, "composer.json")) {
+  if (has(files, "composer.json")) {
     return {
       framework: "php",
       runtime: "php",
@@ -409,6 +409,23 @@ if (has(files, "composer.json")) {
   }
 
   // 4. Go.
+  // AFTER the Node branch, unlike composer. A Rust backend beside a JS frontend
+  // and a Node app with a Rust addon (napi-rs, neon) look identical from here,
+  // and the second is the commoner shape — so the package.json wins, which is
+  // also the behaviour that existed before Rust was detected at all.
+  if (has(files, "Cargo.toml")) {
+    return {
+      framework: "rust",
+      runtime: "rust",
+      buildCommand: null,
+      startCommand: null,
+      outputDirectory: null,
+      port: 8080,
+      confidence: "certain",
+      reason: "Found Cargo.toml; building the release binary.",
+    };
+  }
+
   if (has(files, "go.mod")) {
     return {
       framework: "go",

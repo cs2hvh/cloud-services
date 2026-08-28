@@ -362,3 +362,31 @@ test("a Dockerfile still outranks composer.json", () => {
   const d = detectFramework(repo(["Dockerfile", "composer.json"], { Dockerfile: "FROM php:8.3\n" }));
   assert.equal(d.framework, "dockerfile");
 });
+
+// RUST.
+//
+// Cargo.toml was not a marker at all, so a Rust service was refused as having no
+// recognised framework — actix/examples is a workspace and would be refused
+// anyway, but a single-binary service would have been too.
+
+test("Cargo.toml is a Rust service", () => {
+  const d = detectFramework(repo(["Cargo.toml"]));
+  assert.equal(d.framework, "rust");
+  assert.equal(d.runtime, "rust");
+  assert.equal(d.port, 8080);
+});
+
+test("a Dockerfile still outranks Cargo.toml", () => {
+  const d = detectFramework(repo(["Dockerfile", "Cargo.toml"], { Dockerfile: "FROM rust:1\n" }));
+  assert.equal(d.framework, "dockerfile");
+});
+
+test("A NODE PROJECT BESIDE A Cargo.toml IS STILL NODE", () => {
+  // A Rust backend with a JS frontend in the same repository is ordinary, and
+  // the Node branch runs first on purpose — the package.json is the thing being
+  // served. This documents the order rather than leaving it to be discovered.
+  const d = detectFramework(repo(["Cargo.toml", "package.json"], {
+    "package.json": pkg({ next: "15.0.0" }, { build: "next build" }),
+  }));
+  assert.equal(d.framework, "nextjs");
+});

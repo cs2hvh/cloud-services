@@ -50,7 +50,7 @@ const MARKER_FILES = [
   // Anything that could be the module a Python server is started from. Their
   // presence is the whole signal — no contents needed.
   "app.py", "main.py", "wsgi.py", "asgi.py", "application.py", "server.py", "run.py",
-  "pom.xml", "build.gradle", "build.gradle.kts", "composer.json", "index.html",
+  "pom.xml", "build.gradle", "build.gradle.kts", "composer.json", "Cargo.toml", "index.html",
   ...DETECTION_FILES,
 ];
 
