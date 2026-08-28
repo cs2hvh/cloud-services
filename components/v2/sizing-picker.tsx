@@ -78,6 +78,8 @@ export function SizingPicker({
   const [tier, setTier] = useState(currentTier);
   const [instances, setInstances] = useState(currentInstances);
   const [busy, setBusy] = useState(false);
+  const [needsDeploy, setNeedsDeploy] = useState(false);
+  const [deploying, setDeploying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const selected = tiers.find((t) => t.id === tier) ?? null;
@@ -106,6 +108,23 @@ export function SizingPicker({
       return;
     }
     setBusy(false);
+    // Only after a save that landed, so the offer appears exactly when the
+    // sentence asking for it does.
+    if (deployRequired) setNeedsDeploy(true);
+    router.refresh();
+  }
+
+  async function redeploy() {
+    setDeploying(true);
+    const res = await fetch(`/api/v2/projects/${projectRef}/deployments`, { method: "POST" });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      setError(body?.error?.message ?? `Could not deploy (${res.status}).`);
+      setDeploying(false);
+      return;
+    }
+    setNeedsDeploy(false);
+    setDeploying(false);
     router.refresh();
   }
 
@@ -290,6 +309,25 @@ export function SizingPicker({
               Takes effect on the next deployment.
             </span>
           )}
+        </div>
+      )}
+
+      {/* Saved, and the thing that applies it is right here. The bar above says
+          a deploy is needed and used to leave you to find the button — the same
+          gap the environment editor had. */}
+      {needsDeploy && !dirty && (
+        <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-white/[0.08] pt-4">
+          <span className="text-[12.5px] text-white/55">
+            Saved. The new size applies on the next deployment.
+          </span>
+          <button
+            type="button"
+            onClick={redeploy}
+            disabled={deploying}
+            className="rounded-[6px] border border-white/[0.18] px-2.5 py-1 text-[12px] text-white transition-colors hover:border-white/40 disabled:opacity-40"
+          >
+            {deploying ? "Queueing…" : "Redeploy now"}
+          </button>
         </div>
       )}
 
