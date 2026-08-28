@@ -26,12 +26,15 @@ import {
   ListTable,
   PROJECT_COLUMNS,
   ServiceShell,
-  Stat,
+  StatStrip,
+  StatCell,
+  SectionHead,
   StateBadge,
   buttonClass,
   heroButtonClass,
   timeAgo,
 } from "@/components/v2/kit";
+import { Capabilities } from "@/components/v2/capabilities";
 import { AutoRefresh } from "@/components/v2/auto-refresh";
 
 export const dynamic = "force-dynamic";
@@ -122,22 +125,38 @@ export default async function ProjectsPage() {
       ) : null}
 
       {/*
-        Only worth a row of figures once there is something to summarise. On an
-        empty account this would be three zeroes above an empty state, which
-        says nothing and takes the space the next action should have.
+        The same strip kubernetes and database use: full bleed, hairline top and
+        bottom, four cells divided by verticals. The apps page had a small rounded
+        box holding three numbers, which read as a different product sitting in
+        the same sidebar.
+
+        Shown even at zero, unlike the box it replaces. Those pages show their
+        zeroes too, and a strip that appears once you have projects makes the page
+        change shape underneath somebody on their first deploy.
       */}
-      {!readFailed && rows.length > 0 ? (
-        <div className="mb-4 flex flex-wrap gap-6 rounded-lg border border-white/[0.07] bg-[#15171c] px-5 py-4">
-          <Stat label="Projects" value={rows.length} />
-          <Stat label="Live" value={live} tone={live > 0 ? "good" : "default"} />
-          {building > 0 ? <Stat label="Building" value={building} /> : null}
-          <Stat
-            label="Failing"
-            value={failing}
-            tone={failing > 0 ? "bad" : "default"}
-            hint={failing > 0 ? "last deploy errored" : undefined}
+      {!readFailed ? (
+        <StatStrip>
+          <StatCell label="Projects" value={String(rows.length)} hint="Repositories deployed here" />
+          <StatCell
+            label="Live"
+            value={String(live)}
+            suffix={rows.length > 0 ? `/ ${rows.length}` : undefined}
+            hint="Serving their hostname"
+            accent="#4ade80"
           />
-        </div>
+          <StatCell
+            label="Building"
+            value={String(building)}
+            hint="Deploying right now"
+            accent={building > 0 ? "#0095FF" : undefined}
+          />
+          <StatCell
+            label="Failing"
+            value={String(failing)}
+            hint={failing > 0 ? "Last deploy errored" : "Nothing errored"}
+            accent={failing > 0 ? "#fb7185" : undefined}
+          />
+        </StatStrip>
       ) : null}
 
       {!readFailed && !connected.length ? (
@@ -171,6 +190,15 @@ export default async function ProjectsPage() {
           Pick a repository and it will build, get a hostname, and start serving. Every branch other than
           production gets a free preview that expires after 48 hours.
         </Empty>
+      ) : null}
+
+      {!readFailed ? (
+        <SectionHead
+          eyebrow="Project inventory"
+          title="Your"
+          accent="projects"
+          rightMeta={rows.length > 0 ? `${live} live · ${rows.length} total` : undefined}
+        />
       ) : null}
 
       {rows.length > 0 ? (
@@ -244,6 +272,15 @@ export default async function ProjectsPage() {
           })}
         </ListTable>
       ) : null}
+
+      {/*
+        Below the table, not above it: someone who already has projects came here
+        to look at them. This is for the first visit and for the question "can it
+        do X", and every line in it is something the platform actually does — v1's
+        equivalent grid advertises auto-scaling, four nines and multi-AZ failover,
+        none of which exist here.
+      */}
+      <Capabilities />
     </ServiceShell>
   );
 }

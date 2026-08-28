@@ -326,14 +326,116 @@ export const V2_SERIF: React.CSSProperties = {
  * and a 28px dot grid, exactly as /dashboard/services/apps renders them, so the
  * eye reads one continuous surface rather than a card floating in a gap.
  *
- * Wider than the services pages on purpose: max-w-7xl rather than 6xl. This
- * lane's pages carry two-up project cards and dense deployment tables, and the
- * extra column is the difference between two cards per row and two cards per
- * row with room to breathe.
+ * FULL BLEED, no max width. It was capped at max-w-7xl, which is 1280px, and on
+ * a wide monitor that left a visible gutter down both sides while every
+ * neighbouring service ran edge to edge — kubernetes has no cap at all. A
+ * hostname column and a deployment table both want the room, and a page that is
+ * narrower than the one beside it reads as a different product.
  *
  * The background is pointer-events-none and z-0 so it can never intercept a
  * click meant for the content above it.
  */
+/**
+ * The figures strip, and the section heading under it.
+ *
+ * COPIED IN SHAPE FROM kubernetes AND database ON PURPOSE. Those two pages set
+ * the convention for a service landing page in this dashboard — a full-bleed
+ * row bounded by hairlines, four cells divided by verticals, each a bullet, a
+ * label, a large figure and one line saying what the figure counts. The apps
+ * page had a small rounded box with three numbers in it, which read as a
+ * different product sitting in the same sidebar.
+ *
+ * The cells are DIVIDED, not boxed. A box inside a box is the thing the rest of
+ * this dashboard spent its design budget avoiding.
+ */
+export function StatStrip({ children }: { children: React.ReactNode }) {
+  return (
+    <section className="mb-14 grid grid-cols-2 divide-x divide-white/[0.06] border-y border-white/[0.06] lg:grid-cols-4">
+      {children}
+    </section>
+  );
+}
+
+export function StatCell({
+  label,
+  value,
+  suffix,
+  hint,
+  accent,
+}: {
+  label: string;
+  value: string;
+  suffix?: string;
+  /** What the figure counts. Without it a number is a number. */
+  hint: string;
+  accent?: string;
+}) {
+  return (
+    <div className="flex flex-col gap-2.5 px-5 py-5">
+      <div className="flex items-center gap-2">
+        <span
+          className="h-1 w-1 shrink-0 rounded-full"
+          style={{
+            background: accent ?? "rgba(255,255,255,0.55)",
+            boxShadow: accent ? `0 0 5px ${accent}` : "none",
+          }}
+        />
+        <span
+          className={`${V2_MONO} text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45`}
+        >
+          {label}
+        </span>
+      </div>
+      <div className="flex items-baseline gap-1">
+        {/* tabular-nums so a figure changing from 9 to 10 does not shift the row. */}
+        <span className="text-[40px] font-bold leading-none tracking-[-0.035em] tabular-nums text-white">
+          {value}
+        </span>
+        {suffix ? <span className="text-[16px] font-medium text-white/40">{suffix}</span> : null}
+      </div>
+      <p className={`${V2_MONO} text-[10.5px] text-white/40`}>{hint}</p>
+    </div>
+  );
+}
+
+/** The heading that introduces a section, as kubernetes and database write it. */
+export function SectionHead({
+  eyebrow,
+  title,
+  accent,
+  rightMeta,
+}: {
+  eyebrow?: string;
+  title: string;
+  accent: string;
+  rightMeta?: string;
+}) {
+  return (
+    <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+      <div>
+        {eyebrow ? (
+          <p
+            className={`${V2_MONO} mb-1.5 text-[10.5px] uppercase tracking-[0.14em] text-white/45`}
+          >
+            {eyebrow}
+          </p>
+        ) : null}
+        <h2 className="text-[22px] font-semibold tracking-[-0.02em] text-white">
+          {title} <span className="font-normal text-[#0095FF]">{accent}</span>
+          <span className="font-normal text-white/55">.</span>
+        </h2>
+      </div>
+      {rightMeta ? (
+        <span
+          className={`${V2_MONO} text-[10.5px] uppercase tracking-[0.12em] tabular-nums text-white/45`}
+        >
+          {rightMeta}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 export function ServiceShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="relative min-h-full bg-[#08090b] text-white">
@@ -355,7 +457,7 @@ export function ServiceShell({ children }: { children: React.ReactNode }) {
           }}
         />
       </div>
-      <div className="relative z-10 mx-auto w-full max-w-7xl px-6 py-8 sm:px-10 sm:py-10">
+      <div className="relative z-10 px-6 py-8 sm:px-10 sm:py-10">
         {children}
       </div>
     </div>
