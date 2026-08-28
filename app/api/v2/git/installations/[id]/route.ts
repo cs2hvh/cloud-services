@@ -36,21 +36,38 @@ export async function DELETE(request: Request, { params }: Params) {
   if (!caller) return unauthenticated();
 
   const { id } = await params;
-  const installationId = Number(id);
-  // A bigint that arrived as "abc" would otherwise become NaN and match nothing,
-  // which reads to the caller as "no such connection" rather than "bad request".
-  if (!Number.isInteger(installationId) || installationId <= 0) {
-    return apiError("invalid_request", "That is not an installation id.", 400);
+  const url = new URL(request.url);
+
+  // WHICH PROVIDER, because the id alone does not say. The table's primary key
+  // is (provider, external_id) precisely so a GitLab project numbered 42 and a
+  // GitHub installation numbered 42 stay distinct — matching on the id alone
+  // would let a caller delete one by naming the other.
+  //
+  // Defaulted to github: every caller written before multi-provider means it.
+  const provider = url.searchParams.get("provider") ?? "github";
+  if (!["github", "gitlab", "bitbucket"].includes(provider)) {
+    return apiError("invalid_request", "Unknown git provider.", 400);
   }
 
-  const force = new URL(request.url).searchParams.get("force") === "1";
+  // Only GitHub's id is a number. A Bitbucket workspace id is a braced UUID,
+  // so this check belongs to GitHub rather than to the route.
+  const installationId = Number(id);
+  if (provider === "github" && (!Number.isInteger(installationId) || installationId <= 0)) {
+    return apiError("invalid_request", "That is not an installation id.", 400);
+  }
+  if (!id || id.length > 128) {
+    return apiError("invalid_request", "That is not a connection id.", 400);
+  }
+
+  const force = url.searchParams.get("force") === "1";
 
   // RLS scopes this to the caller's own teams, so a link belonging to somebody
   // else is simply not here — the same answer as one that never existed.
   const { data: linkRows, error: linkError } = await caller.db
     .from("installations")
-    .select("installation_id, account_login, provider, team_id")
-    .eq("installation_id", installationId)
+    .select("installation_id, external_id, account_login, provider, team_id")
+    .eq("provider", provider)
+    .eq("external_id", id)
     .is("deleted_at", null);
 
   if (linkError) {
@@ -65,10 +82,16 @@ export async function DELETE(request: Request, { params }: Params) {
   // assumed from the account name: a repository's owner and the installation it
   // is read through are not the same thing, which is the whole reason somebody
   // deploys from an org they did not sign in with.
+  // connection_id, not installation_id: the latter is the deprecated
+  // GitHub-only column and is NULL on every GitLab and Bitbucket project, so
+  // matching on it would report no dependants and disconnect silently — the
+  // 409 that protects people from breaking their own builds would go vacuous
+  // for exactly the providers it was just extended to cover.
   const { data: projectRows, error: projectError } = await caller.db
     .from("projects")
-    .select("ref, name, installation_id")
-    .eq("installation_id", installationId)
+    .select("ref, name, connection_id")
+    .eq("provider", provider)
+    .eq("connection_id", id)
     .is("deleted_at", null);
 
   if (projectError) {
@@ -98,9 +121,10 @@ export async function DELETE(request: Request, { params }: Params) {
   const { data: updated, error: updateError } = await caller.db
     .from("installations")
     .update({ deleted_at: new Date().toISOString() })
-    .eq("installation_id", installationId)
+    .eq("provider", provider)
+    .eq("external_id", id)
     .is("deleted_at", null)
-    .select("installation_id");
+    .select("external_id");
 
   if (updateError) {
     console.error("[v2/git/installations/:id] unlink failed:", updateError);
@@ -108,17 +132,37 @@ export async function DELETE(request: Request, { params }: Params) {
   }
   if (!updated || updated.length === 0) return notFound("Connection");
 
+  // WHAT WE DID AND DID NOT REVOKE, per provider. Saying only 'disconnected'
+  // would imply we revoked something on the provider that we did not touch —
+  // and where the customer goes to finish the job differs on all three.
+  const revoke: Record<string, { note: string; url: string }> = {
+    github: {
+      note:
+        "The account is unlinked from your team. The GitHub App itself is still " +
+        "installed on that account — remove it from GitHub's settings to revoke " +
+        "our access entirely.",
+      url: `https://github.com/settings/installations/${installationId}`,
+    },
+    gitlab: {
+      note:
+        "The account is unlinked from your team and the stored token is no longer " +
+        "used. Revoke the authorisation in GitLab to be certain it cannot be reused.",
+      url: "https://gitlab.com/-/user_settings/applications",
+    },
+    bitbucket: {
+      note:
+        "The workspace is unlinked from your team and the stored token is no longer " +
+        "used. Revoke the authorisation in Bitbucket to be certain it cannot be reused.",
+      url: "https://bitbucket.org/account/settings/app-authorizations/",
+    },
+  };
+
   return json({
-    disconnected: installationId,
+    disconnected: id,
     account: link.account_login,
     provider: link.provider,
     projectsAffected: affected.length,
-    // Said plainly, because "disconnected" on its own would imply we revoked
-    // something on GitHub that we did not touch.
-    note:
-      "The account is unlinked from your team. The GitHub App itself is still " +
-      "installed on that account — remove it from GitHub's settings to revoke " +
-      "our access entirely.",
-    revokeUrl: `https://github.com/settings/installations/${installationId}`,
+    note: revoke[provider].note,
+    revokeUrl: revoke[provider].url,
   });
 }

@@ -37,23 +37,32 @@ export async function createProject(req: Request): Promise<Response> {
     return apiError("internal", "Could not load your account. Nothing has been created.", 500);
   }
 
-  // THE INSTALLATION MUST BE ONE OF THEIRS. RLS answers this — the row is
-  // invisible unless the caller's team holds it — so a caller naming a stranger's
-  // installation id gets "not found" rather than deploy access to their
+  // THE CONNECTION MUST BE ONE OF THEIRS. RLS answers this — the row is
+  // invisible unless the caller's team holds it — so a caller naming a
+  // stranger's connection gets "not found" rather than deploy access to their
   // repositories. Checked here rather than trusted from the body, because this
-  // id is what later mints a GitHub token.
+  // is what later selects the credential the build authenticates with.
+  //
+  // MATCHED ON (provider, external_id), WHICH IS THE PRIMARY KEY. Matching on
+  // external_id alone would let a GitLab project numbered 42 satisfy a check
+  // meant for GitHub installation 42 — the migration that introduced the
+  // composite key called out that exact collision, and a lookup that ignores
+  // half the key reintroduces it.
   const { data: install, error: installError } = await db
     .from("installations")
-    .select("installation_id,account_login,deleted_at")
-    .eq("installation_id", plan.installationId)
+    .select("provider,external_id,account_login,deleted_at")
+    .eq("provider", plan.provider)
+    .eq("external_id", plan.connectionId)
     .maybeSingle();
 
   if (installError) {
-    console.error("[v2/projects POST] installation read failed:", JSON.stringify(installError));
-    return apiError("internal", "Could not verify your GitHub connection.", 500);
+    console.error("[v2/projects POST] connection read failed:", JSON.stringify(installError));
+    return apiError("internal", `Could not verify your ${plan.provider} connection.`, 500);
   }
   if (!install || install.deleted_at) {
-    return invalid("That GitHub connection is not available to your account.", { installationId: "unknown" });
+    return invalid(`That ${plan.provider} connection is not available to your account.`, {
+      connectionId: "unknown",
+    });
   }
 
   const { data: created, error: writeError } = await db
@@ -62,10 +71,15 @@ export async function createProject(req: Request): Promise<Response> {
       team_id: team.id,
       name: plan.name,
       slug: plan.slug,
-      provider: "github",
+      provider: plan.provider,
       repo_id: plan.repoFullName,
       repo_full_name: plan.repoFullName,
-      installation_id: plan.installationId,
+      // connection_id is the provider-agnostic identity; installation_id is the
+      // deprecated GitHub-only column it replaced, kept in step while it still
+      // exists. Null rather than 0 for the other providers, because 0 is a
+      // value and this is an absence.
+      connection_id: plan.connectionId,
+      installation_id: plan.installationId > 0 ? plan.installationId : null,
       production_branch: plan.productionBranch,
       root_directory: plan.rootDirectory,
       tier: plan.tier,

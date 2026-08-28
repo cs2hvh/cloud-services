@@ -63,6 +63,11 @@ async function buildOne(ref: string): Promise<void> {
   try {
     const out = await deployFromRepo({
       repo: project.repo_full_name,
+      // FROM THE PROJECT ROW, not defaulted. This is the webhook redeploy path:
+      // a push to a GitLab project arrives here, and without this the clone URL
+      // would be built for github.com — the repository would not exist and the
+      // build would die on a remote that was never asked for.
+      provider: project.provider,
       rootDirectory: project.root_directory,
       gatewayIp: await gatewayIp(),
       existingDeploymentRef: d.ref,

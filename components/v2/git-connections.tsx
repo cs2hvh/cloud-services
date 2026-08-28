@@ -2,10 +2,15 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
 
 import { Notice } from "@/components/v2/notice";
-import { V2_MONO, buttonClass } from "@/components/v2/kit";
+import { V2_MONO } from "@/components/v2/kit";
+import {
+  ProviderMark,
+  PROVIDER_LABEL,
+  PROVIDER_ACCENT,
+  type Provider,
+} from "@/components/v2/provider-mark";
 
 /**
  * The git accounts this team can deploy from — and the way to remove one.
@@ -15,6 +20,12 @@ import { V2_MONO, buttonClass } from "@/components/v2/kit";
  * or somebody who has left. The API had no DELETE and the picker only ever
  * showed a connect button, and only when nothing was connected.
  *
+ * THREE PROVIDERS, AND THE ONES THIS DEPLOYMENT CANNOT DO SAY SO. GitLab and
+ * Bitbucket were fully built — OAuth, webhooks, clients, columns — and had no
+ * way in from the interface, so the platform read as GitHub-only. Offering a
+ * button that 500s because a client secret is unset would be worse than not
+ * offering it, so the button asks first and explains instead.
+ *
  * DISCONNECTING ASKS TWICE WHEN SOMETHING DEPENDS ON IT. The route answers 409
  * with the projects that build through the account, and this shows them by name
  * before offering to go ahead. Naming them matters more than counting them —
@@ -22,14 +33,26 @@ import { V2_MONO, buttonClass } from "@/components/v2/kit";
  */
 
 interface Installation {
-  id: number;
+  /** A string on every provider: Bitbucket's workspace id is a braced UUID. */
+  id: string;
+  provider: Provider;
   account: string | null;
   accountType: string | null;
   repositorySelection?: string | null;
+  hasCredential?: boolean;
+}
+
+interface ProviderStatus {
+  provider: Provider;
+  label: string;
+  configured: boolean;
+  connectUrl: string;
+  missing?: string;
 }
 
 interface Blocked {
-  installationId: number;
+  installationId: string;
+  provider: Provider;
   account: string;
   message: string;
   projects: Array<{ ref: string; name: string }>;
@@ -44,7 +67,11 @@ export function GitConnections() {
   const [installations, setInstallations] = useState<Installation[] | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<number | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  // Which providers this deployment can actually start a connect flow for.
+  // Null while unknown — rendering three buttons before the answer arrives
+  // would offer one that is about to turn out to be unavailable.
+  const [providers, setProviders] = useState<ProviderStatus[] | null>(null);
   const [blocked, setBlocked] = useState<Blocked | null>(null);
 
   const load = useCallback(async () => {
@@ -68,13 +95,21 @@ export function GitConnections() {
       .then((r) => (r.ok ? r.json() : null))
       .then((b) => setTeamRef(b?.team?.ref ?? b?.teams?.[0]?.ref ?? null))
       .catch(() => setTeamRef(null));
+    fetch("/api/v2/git/providers")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b) => setProviders(b?.providers ?? null))
+      .catch(() => setProviders(null));
   }, [load]);
 
-  async function disconnect(id: number, force: boolean) {
+  async function disconnect(id: string, provider: Provider, force: boolean) {
     setBusy(id);
     setError(null);
     try {
-      const res = await fetch(`/api/v2/git/installations/${id}${force ? "?force=1" : ""}`, {
+      // The provider is part of the address, not a detail: the table's key is
+      // (provider, external_id), so an id alone does not identify a row.
+      const qs = new URLSearchParams({ provider });
+      if (force) qs.set("force", "1");
+      const res = await fetch(`/api/v2/git/installations/${encodeURIComponent(id)}?${qs}`, {
         method: "DELETE",
       });
       const body = await res.json();
@@ -82,6 +117,7 @@ export function GitConnections() {
       if (res.status === 409) {
         setBlocked({
           installationId: id,
+          provider,
           account: body.account ?? String(id),
           message: body?.error?.message ?? "Projects still use this connection.",
           projects: body.projects ?? [],
@@ -106,9 +142,6 @@ export function GitConnections() {
     setBusy(null);
   }
 
-  const connectHref = teamRef
-    ? `/api/v2/git/connect?team=${encodeURIComponent(teamRef)}`
-    : null;
 
   return (
     <div>
@@ -122,21 +155,38 @@ export function GitConnections() {
       ) : (
         <ul className="divide-y divide-white/[0.06]">
           {installations.map((i) => (
-            <li key={i.id} className="flex items-center justify-between gap-4 py-2.5 first:pt-0">
-              <div className="min-w-0">
-                <p className="truncate text-[13px] text-white">{i.account ?? `Installation ${i.id}`}</p>
-                <p className={`${V2_MONO} mt-0.5 text-[10.5px] text-white/35`}>
-                  {i.accountType ?? "account"}
-                  {i.repositorySelection === "all"
-                    ? " · all repositories"
-                    : i.repositorySelection === "selected"
-                      ? " · selected repositories"
-                      : ""}
-                </p>
+            <li
+              key={`${i.provider}:${i.id}`}
+              className="flex items-center justify-between gap-4 py-2.5 first:pt-0"
+            >
+              <div className="flex min-w-0 items-center gap-2.5">
+                {/* Which provider, at a glance. An account name alone does not
+                    say — the same person can be `harshit` on all three. */}
+                <span
+                  className="shrink-0"
+                  style={{ color: PROVIDER_ACCENT[i.provider] }}
+                  title={PROVIDER_LABEL[i.provider]}
+                >
+                  <ProviderMark provider={i.provider} className="h-[15px] w-[15px]" />
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-[13px] text-white">
+                    {i.account ?? `Connection ${i.id}`}
+                  </p>
+                  <p className={`${V2_MONO} mt-0.5 text-[10.5px] text-white/35`}>
+                    {PROVIDER_LABEL[i.provider]}
+                    {i.accountType ? ` · ${i.accountType}` : ""}
+                    {i.repositorySelection === "all"
+                      ? " · all repositories"
+                      : i.repositorySelection === "selected"
+                        ? " · selected repositories"
+                        : ""}
+                  </p>
+                </div>
               </div>
               <button
                 type="button"
-                onClick={() => disconnect(i.id, false)}
+                onClick={() => disconnect(i.id, i.provider, false)}
                 disabled={busy === i.id}
                 className={`${V2_MONO} shrink-0 rounded-[5px] border border-white/[0.12] px-2.5 py-1 text-[10.5px] uppercase tracking-[0.12em] text-white/50 transition-colors hover:border-rose-400/40 hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-40`}
               >
@@ -147,17 +197,72 @@ export function GitConnections() {
         </ul>
       )}
 
-      {connectHref ? (
-        <a href={connectHref} className={buttonClass("secondary", "sm", "mt-4")}>
-          <Plus className="h-3.5 w-3.5" aria-hidden />
-          {installations && installations.length > 0 ? "Add another account" : "Connect an account"}
-        </a>
-      ) : (
-        <p className={`${V2_MONO} mt-4 text-[11px] text-white/35`}>
-          Could not read your team, so the connect link cannot be built. Reload the page.
-        </p>
-      )}
+      {/*
+        ONE BUTTON PER PROVIDER, and the ones this deployment cannot do are
+        shown disabled with the reason rather than hidden. Hiding them makes a
+        deployment that has not configured GitLab look like a product that does
+        not support GitLab, which sends the customer to a competitor over an
+        unset environment variable.
+      */}
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        {providers === null ? (
+          <span className={`${V2_MONO} text-[11px] text-white/30`}>
+            Checking which providers are available…
+          </span>
+        ) : (
+          providers.map((pr) => {
+            // GitHub's connect flow needs the team in the URL; the OAuth ones
+            // mint their state server-side and need nothing from here.
+            const needsTeam = pr.provider === "github";
+            const href = needsTeam
+              ? teamRef
+                ? `${pr.connectUrl}?team=${encodeURIComponent(teamRef)}`
+                : null
+              : pr.connectUrl;
+            const usable = pr.configured && href !== null;
 
+            if (!usable) {
+              return (
+                <span
+                  key={pr.provider}
+                  title={
+                    pr.configured
+                      ? "Could not read your team. Reload the page."
+                      : `Not configured on this deployment${pr.missing ? ` — needs ${pr.missing}` : ""}.`
+                  }
+                  className={`${V2_MONO} inline-flex cursor-not-allowed items-center gap-1.5 rounded-[6px] border border-white/[0.08] px-2.5 py-1.5 text-[11.5px] text-white/25`}
+                >
+                  <ProviderMark provider={pr.provider} className="h-3.5 w-3.5" />
+                  {pr.label}
+                  <span className="text-[10px] uppercase tracking-[0.1em] text-white/20">
+                    {pr.configured ? "unavailable" : "off"}
+                  </span>
+                </span>
+              );
+            }
+
+            return (
+              <a
+                key={pr.provider}
+                href={href}
+                className={`${V2_MONO} inline-flex items-center gap-1.5 rounded-[6px] border border-white/[0.14] px-2.5 py-1.5 text-[11.5px] text-white/75 transition-colors hover:border-white/30 hover:text-white`}
+              >
+                <span style={{ color: PROVIDER_ACCENT[pr.provider] }}>
+                  <ProviderMark provider={pr.provider} className="h-3.5 w-3.5" />
+                </span>
+                {pr.label}
+              </a>
+            );
+          })
+        )}
+      </div>
+
+      {providers !== null && !providers.some((pr) => pr.configured) ? (
+        <p className={`${V2_MONO} mt-2 text-[11px] text-white/30`}>
+          No git provider is configured on this deployment. An operator has to set the client
+          credentials before any account can be connected.
+        </p>
+      ) : null}
       {blocked ? (
         <div className="mt-4">
           <Notice tone="blocked" title={`${blocked.account} is still in use`}>
@@ -172,7 +277,7 @@ export function GitConnections() {
             <div className="mt-3 flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => disconnect(blocked.installationId, true)}
+                onClick={() => disconnect(blocked.installationId, blocked.provider, true)}
                 disabled={busy === blocked.installationId}
                 className={`${V2_MONO} rounded-[5px] border border-rose-400/50 bg-rose-500/15 px-2.5 py-1 text-[10.5px] uppercase tracking-[0.12em] text-rose-200 transition-colors hover:bg-rose-500/25 disabled:opacity-40`}
               >
@@ -192,7 +297,7 @@ export function GitConnections() {
 
       {warning ? (
         <div className="mt-4">
-          <Notice tone="blocked" title="A connection no longer exists on GitHub">
+          <Notice tone="blocked" title="A GitHub connection no longer exists">
             {warning}
           </Notice>
         </div>

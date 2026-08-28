@@ -18,11 +18,17 @@ import { useEffect, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { useRouter } from "next/navigation";
 
+import { ProviderMark, PROVIDER_ACCENT, type Provider } from "@/components/v2/provider-mark";
+
 interface Repo {
   fullName: string;
   private: boolean;
   defaultBranch: string | null;
-  installationId: number;
+  /** GitHub only — null on the OAuth providers, which have no installation. */
+  installationId: number | null;
+  /** The provider-agnostic identity. A Bitbucket workspace id is a UUID. */
+  connectionId: string;
+  provider: Provider;
   account: string;
 }
 
@@ -145,10 +151,15 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
     setBranch(chosen.defaultBranch ?? "");
     (async () => {
       try {
-        const [owner, repo] = chosen.fullName.split("/");
-        const res = await fetch(
-          `/api/v2/git/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branches?installation=${chosen.installationId}`,
-        );
+        // The provider-agnostic route, not the GitHub one. That route takes the
+        // repository as two path segments and a GitLab path is not two — group/
+        // sub/project would arrive there with everything after `sub` dropped.
+        const qs = new URLSearchParams({
+          provider: chosen.provider,
+          repo: chosen.fullName,
+          connection: chosen.connectionId,
+        });
+        const res = await fetch(`/api/v2/git/branches?${qs}`);
         if (!res.ok) throw new Error(`Could not list branches (${res.status}).`);
         const body = await res.json();
         if (cancelled) return;
@@ -181,6 +192,11 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           repo: chosen.fullName,
+          // Both, because the API accepts either: connectionId is the
+          // provider-agnostic identity and installationId is the GitHub
+          // spelling kept for callers that predate multi-provider.
+          provider: chosen.provider,
+          connectionId: chosen.connectionId,
           installationId: chosen.installationId,
           branch: branch || chosen.defaultBranch || "main",
           rootDirectory: rootDirectory.trim() || undefined,
@@ -299,12 +315,20 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
           className="flex w-full items-center justify-between gap-3 rounded-[6px] border border-white/[0.09] bg-black/30 px-3 py-2.5 text-left transition-colors hover:border-white/[0.18]"
         >
           {chosen ? (
-            <span className="flex min-w-0 items-baseline gap-1.5">
-              <span className="shrink-0 font-mono text-[12px] text-white/35">
-                {chosen.fullName.split("/")[0]}/
+            <span className="flex min-w-0 items-center gap-2">
+              <span
+                className="shrink-0"
+                style={{ color: PROVIDER_ACCENT[chosen.provider] }}
+              >
+                <ProviderMark provider={chosen.provider} className="h-[14px] w-[14px]" />
               </span>
-              <span className="truncate font-mono text-[13px] text-white">
-                {chosen.fullName.split("/")[1]}
+              <span className="flex min-w-0 items-baseline gap-1.5">
+                <span className="shrink-0 font-mono text-[12px] text-white/35">
+                  {chosen.fullName.split("/").slice(0, -1).join("/")}/
+                </span>
+                <span className="truncate font-mono text-[13px] text-white">
+                  {chosen.fullName.split("/").pop()}
+                </span>
               </span>
             </span>
           ) : (
@@ -336,10 +360,17 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
             ) : (
               <ul className="max-h-72 divide-y divide-white/[0.05] overflow-y-auto">
                 {shown.map((r) => {
-                  const isChosen = chosen?.fullName === r.fullName;
-                  const [owner, name] = r.fullName.split("/");
+                  const isChosen =
+                    chosen?.fullName === r.fullName && chosen?.provider === r.provider;
+                  // Split from the RIGHT, because a GitLab path nests: the
+                  // repository is the last segment and everything before it is
+                  // the namespace. A plain split("/") would call the middle
+                  // segment of group/sub/project the repository name.
+                  const parts = r.fullName.split("/");
+                  const name = parts[parts.length - 1];
+                  const owner = parts.slice(0, -1).join("/");
                   return (
-                    <li key={`${r.installationId}:${r.fullName}`}>
+                    <li key={`${r.provider}:${r.connectionId}:${r.fullName}`}>
                       <button
                         type="button"
                         onClick={() => {
@@ -356,6 +387,16 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
                         <span className="flex min-w-0 items-baseline gap-1.5">
                           {/* The owner repeats on every row and is not what
                               anyone is scanning for, so it recedes. */}
+                          {/* Which provider, on the row. Two accounts can hold
+                              the same repository name on different providers,
+                              and the name alone would not tell them apart. */}
+                          <span
+                            className="shrink-0 self-center"
+                            style={{ color: PROVIDER_ACCENT[r.provider] }}
+                            title={r.provider}
+                          >
+                            <ProviderMark provider={r.provider} className="h-[13px] w-[13px]" />
+                          </span>
                           <span className="shrink-0 font-mono text-[12px] text-white/35">{owner}/</span>
                           <span className="truncate font-mono text-[12.5px] text-white">{name}</span>
                           {r.private ? (

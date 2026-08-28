@@ -18,6 +18,15 @@ export interface CreateProjectInput {
   tier?: unknown;
   instances?: unknown;
   installationId?: unknown;
+  provider?: unknown;
+  /**
+   * The connection this repository is read through, provider-agnostic.
+   *
+   * `installationId` is the GitHub spelling of the same thing and is kept
+   * for callers that predate multi-provider. A Bitbucket workspace id is a
+   * braced UUID, so there is no number that could hold one.
+   */
+  connectionId?: unknown;
 }
 
 export interface CreateProjectPlan {
@@ -28,15 +37,31 @@ export interface CreateProjectPlan {
   rootDirectory: string | null;
   tier: string;
   instances: number;
+  /**
+   * GitHub only, and 0 when there is none — the column it feeds is deprecated
+   * in favour of connection_id and only accepts a number.
+   */
   installationId: number;
+  provider: GitProvider;
+  connectionId: string;
 }
 
 export type Validated =
   | { ok: true; plan: CreateProjectPlan }
   | { ok: false; message: string; fields?: Record<string, string> };
 
-/** `owner/repo`, the shapes GitHub actually permits and nothing else. */
+export type GitProvider = "github" | "gitlab" | "bitbucket";
+const PROVIDERS: readonly GitProvider[] = ["github", "gitlab", "bitbucket"];
+
+/**
+ * `owner/repo` — and on GitLab, `group/subgroup/repo`.
+ *
+ * GitLab NESTS and the two-segment rule rejects a perfectly ordinary GitLab
+ * path as malformed. GitHub and Bitbucket are always exactly two, so the
+ * looser grammar is applied only where it is true.
+ */
 const REPO = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/;
+const REPO_NESTED = /^[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)+$/;
 
 /**
  * A slug becomes a DNS label, so it is bounded HERE rather than discovered at
@@ -55,17 +80,59 @@ export function slugFromRepo(repoFullName: string): string {
 }
 
 export function validateCreateProject(input: CreateProjectInput): Validated {
-  const repo = typeof input.repo === "string" ? input.repo.trim() : "";
-  if (!repo) return { ok: false, message: "Choose a repository.", fields: { repo: "required" } };
-  if (!REPO.test(repo)) {
-    return { ok: false, message: "That does not look like an owner/repo name.", fields: { repo: "shape" } };
+  // Defaulted to github because every caller written before multi-provider
+  // means github, and rejecting an absent provider would break all of them.
+  const provider = (
+    typeof input.provider === "string" && input.provider.trim() ? input.provider.trim() : "github"
+  ) as GitProvider;
+  if (!PROVIDERS.includes(provider)) {
+    return {
+      ok: false,
+      message: `Unknown git provider ${provider}.`,
+      fields: { provider: "unknown" },
+    };
   }
 
-  const installationId = Number(input.installationId);
-  if (!Number.isSafeInteger(installationId) || installationId <= 0) {
-    // Not cosmetic: this id selects which GitHub credentials get minted, so a
-    // missing one must fail loudly rather than default to "any installation".
-    return { ok: false, message: "Missing GitHub installation.", fields: { installationId: "required" } };
+  const repo = typeof input.repo === "string" ? input.repo.trim() : "";
+  if (!repo) return { ok: false, message: "Choose a repository.", fields: { repo: "required" } };
+  const shape = provider === "gitlab" ? REPO_NESTED : REPO;
+  if (!shape.test(repo)) {
+    return {
+      ok: false,
+      message: "That does not look like an owner/repo name.",
+      fields: { repo: "shape" },
+    };
+  }
+
+  // THE CONNECTION, whichever provider it belongs to. This selects which
+  // credential the build authenticates with, so a missing one must fail
+  // loudly rather than default to "any connection".
+  const connectionId =
+    typeof input.connectionId === "string" && input.connectionId.trim()
+      ? input.connectionId.trim()
+      : input.installationId != null && String(input.installationId).trim()
+        ? String(input.installationId).trim()
+        : "";
+
+  if (!connectionId) {
+    return {
+      ok: false,
+      message: `Missing ${provider} connection.`,
+      fields: { connectionId: "required" },
+    };
+  }
+
+  // Only GitHub's is a number, and only GitHub's deprecated column wants one.
+  // A Bitbucket workspace UUID would become NaN here, which is why this is 0
+  // rather than a parse the other providers have to survive.
+  const installationId =
+    provider === "github" && /^\d+$/.test(connectionId) ? Number(connectionId) : 0;
+  if (provider === "github" && (!Number.isSafeInteger(installationId) || installationId <= 0)) {
+    return {
+      ok: false,
+      message: "Missing GitHub installation.",
+      fields: { installationId: "required" },
+    };
   }
 
   const branch = typeof input.branch === "string" && input.branch.trim() ? input.branch.trim() : "main";
@@ -106,6 +173,17 @@ export function validateCreateProject(input: CreateProjectInput): Validated {
 
   return {
     ok: true,
-    plan: { repoFullName: repo, productionBranch: branch, name, slug, rootDirectory, tier, instances, installationId },
+    plan: {
+      repoFullName: repo,
+      productionBranch: branch,
+      name,
+      slug,
+      rootDirectory,
+      tier,
+      instances,
+      installationId,
+      provider,
+      connectionId,
+    },
   };
 }

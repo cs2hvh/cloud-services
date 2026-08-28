@@ -60,8 +60,29 @@ const flag = (name: string): string | null => {
 const BRANCH = flag("branch");
 const ROOT = flag("root");
 
-if (!repo || !/^[^/\s]+\/[^/\s]+$/.test(repo)) {
-  console.error("usage: framework-probe.ts <owner/repo> [--keep] [--branch b] [--root dir]");
+// Which provider the repository lives on. Defaulted to github because every
+// run before multi-provider meant github and the sweep matrix is written that
+// way — but a probe that cannot name another provider cannot prove one, and
+// proving one is the whole point of the flag.
+const PROVIDERS = ["github", "gitlab", "bitbucket"] as const;
+type Provider = (typeof PROVIDERS)[number];
+const PROVIDER = (flag("provider") ?? "github") as Provider;
+
+if (!PROVIDERS.includes(PROVIDER)) {
+  console.error(`unknown provider ${PROVIDER} — one of ${PROVIDERS.join(", ")}`);
+  process.exit(EXIT_CANNOT_RUN);
+}
+
+// GitLab NESTS: group/subgroup/project is an ordinary path there, and the
+// two-segment rule below would reject it as malformed. GitHub and Bitbucket
+// are always exactly two.
+const PATH_RE = PROVIDER === "gitlab" ? /^[^/\s]+(\/[^/\s]+)+$/ : /^[^/\s]+\/[^/\s]+$/;
+
+if (!repo || !PATH_RE.test(repo)) {
+  console.error(
+    "usage: framework-probe.ts <owner/repo> [--keep] [--branch b] [--root dir] " +
+      "[--provider github|gitlab|bitbucket]",
+  );
   process.exit(EXIT_CANNOT_RUN);
 }
 
@@ -189,6 +210,7 @@ async function main(): Promise<number> {
   stage = "detect";
   const out = await deployFromRepo({
     repo: repo!,
+    provider: PROVIDER,
     rootDirectory: ROOT,
     gatewayIp,
     onProgress: (s, detail) => {

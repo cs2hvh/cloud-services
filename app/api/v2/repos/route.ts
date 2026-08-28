@@ -39,10 +39,11 @@ interface RepoView {
   /**
    * GitHub's installation id, or null on a provider that has no such thing.
    *
-   * Kept because the repo picker still keys its branch lookup and its create
-   * call on it. Dropping it here would break that page silently — it would
-   * compile, fetch, and render a list whose every row failed on click. The UI
-   * lane moves to `connectionId` when the branches route takes a provider.
+   * The picker has since moved to `connectionId` — /api/v2/git/branches takes a
+   * provider, and project creation accepts either spelling. This stays because
+   * the create API still writes the deprecated projects.installation_id column
+   * while it exists, and because dropping a field from a response is a breaking
+   * change for any caller that reads it.
    */
   installationId: number | null;
   account: string;

@@ -1,15 +1,20 @@
 /**
  * GET /api/v2/git/installations
  *
- * The GitHub App installations this caller may act through — never the App's
- * full installation list. See ../_lib/scope.ts for why that distinction is
+ * Every git connection this caller may act through — never the App's full
+ * installation list. See ../_lib/scope.ts for why that distinction is
  * load-bearing.
+ *
+ * GitHub is asked OF GitHub: its installations are listed from the API, so an
+ * account uninstalled upstream is reported as stale rather than shown as
+ * working. GitLab and Bitbucket have no such API to reconcile against — the
+ * connection IS the row — so those come straight from the table.
  */
 
 import { listInstallations } from "@/lib/paas/github/app.ts";
 import { getCaller } from "../../_lib/auth";
 import { json, unauthenticated, apiError } from "../../_lib/http";
-import { callerInstallations } from "../_lib/scope";
+import { callerInstallations, callerConnections } from "../_lib/scope";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +25,20 @@ export async function GET() {
   const linked = await callerInstallations(caller);
   const allowed = linked.map((i) => i.installationId);
 
-  if (allowed.length === 0) {
+  // The OAuth providers. Read once here so BOTH the empty case and the full
+  // one report them — a team with only a GitLab connection is connected, and
+  // the GitHub-shaped empty response would tell it otherwise.
+  const others = (await callerConnections(caller))
+    .filter((c) => c.provider !== "github")
+    .map((c) => ({
+      id: c.externalId,
+      provider: c.provider,
+      account: c.accountLogin,
+      accountType: c.accountType,
+      hasCredential: c.hasCredential,
+    }));
+
+  if (allowed.length === 0 && others.length === 0) {
     // Not an error: a team that has never connected a repo. Since 2c2b8d83
     // this is recoverable — /api/v2/git/connect starts an install and the
     // callback records the link — so the client can offer the action rather
@@ -29,7 +47,18 @@ export async function GET() {
       installations: [],
       canConnectNew: true,
       connectUrl: "/api/v2/git/connect",
-      note: "No GitHub App installation is linked to your team yet.",
+      note: "No git account is connected to your team yet.",
+    });
+  }
+
+  // Connections exist, but none of them is GitHub. Asking GitHub anyway would
+  // fail the whole request during a GitHub outage for a team that does not use
+  // GitHub at all.
+  if (allowed.length === 0) {
+    return json({
+      installations: others,
+      canConnectNew: true,
+      connectUrl: "/api/v2/git/connect",
     });
   }
 
@@ -49,7 +78,12 @@ export async function GET() {
   const mine = accounts
     .filter((inst) => allowed.includes(inst.id))
     .map((inst) => ({
-      id: inst.id,
+      // A string, like every other provider's id. Bitbucket's is a braced
+      // UUID, so the shared shape cannot be a number.
+      id: String(inst.id),
+      // Named rather than implied: every entry in this list now has to say
+      // which provider it belongs to, because two of them are not GitHub.
+      provider: "github" as const,
       account: inst.account?.login ?? null,
       accountType: inst.account?.type ?? null,
       repositorySelection: inst.repository_selection,
@@ -61,7 +95,7 @@ export async function GET() {
   const stale = allowed.filter((id) => !accounts.some((inst) => inst.id === id));
 
   return json({
-    installations: mine,
+    installations: [...mine, ...others],
     canConnectNew: true,
     connectUrl: "/api/v2/git/connect",
     ...(stale.length > 0

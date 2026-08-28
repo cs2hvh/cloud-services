@@ -21,13 +21,21 @@
 import { detectFramework, detectPackageManager, DETECTION_FILES, type RepoFiles } from "./build/detect.ts";
 import { generateDockerfile, servingPort, runtimeUid } from "./build/dockerfile.ts";
 import { resolveNodeVersion, enginesNodeFrom } from "./build/node-version.ts";
+import { resolveToken, type ConnectionRow } from "./providers/adapter.ts";
+import {
+  cloneTarget,
+  defaultBranch as providerDefaultBranch,
+  fileContents as providerFileContents,
+  listDir as providerListDir,
+  type GitProvider,
+} from "./providers/source.ts";
 import { leaseBuildVm, pollBuildResult, destroyBuildVm, type BuildRequest } from "./build/vm.ts";
 import { presign, deleteObject, r2Keys } from "./build/r2.ts";
 import { imageIsDurable } from "./build/registry.ts";
 import { kube } from "./k8s/client.ts";
 import { PAAS_NAMESPACE, REGISTRY_PUSH, publisherJob } from "./k8s/manifests.ts";
 import { reconcileProject, kubeContextFromEnv } from "./reconciler.ts";
-import { teams, projects, environments, deployments, aliases, envVars, type DeploymentRow, type ProjectRow, type AliasRow } from "./db.ts";
+import { db, teams, projects, environments, deployments, aliases, envVars, type DeploymentRow, type ProjectRow, type AliasRow } from "./db.ts";
 import { decryptEnvValue, pgHexToBytes } from "./secrets.ts";
 import { appHostname } from "./config.ts";
 import { getFileContents, getDefaultBranch, buildCloneUrl, listInstallationRepos } from "./github/client.ts";
@@ -78,6 +86,56 @@ async function installationForRepo(repo: string): Promise<number | null> {
 }
 
 /**
+ * The OAuth token for a GitLab or Bitbucket connection, or null.
+ *
+ * GitHub authenticates with a per-installation token minted on demand; the
+ * other two hold a refreshable OAuth token on the installation row. This reads
+ * it for the account that owns `repo`.
+ *
+ * NULL IS NOT AN ERROR. A public repository clones and reads with no token at
+ * all, on every provider — that is what lets this path be proven end to end
+ * without registering an OAuth app, and it is how the framework sweep ran.
+ * Returning null and letting the anonymous path run is therefore correct, not a
+ * silent failure.
+ */
+async function oauthTokenForRepo(
+  provider: GitProvider,
+  repo: string,
+): Promise<string | null> {
+  if (provider === "github") return null;
+  const owner = repo.split("/")[0]?.toLowerCase();
+  if (!owner) return null;
+
+  try {
+    // db is a PostgREST wrapper, not a supabase-js client — filters go in the
+    // query string. This runs on the server with the service role, outside any
+    // request, so there is no RLS session to scope it; the account_login match
+    // below is what ties the row to the repository being deployed.
+    const rows = await db.select<{
+      account_login: string | null;
+      access_token_ct: string | null;
+      token_dek_id: string | null;
+    }>(
+      "installations",
+      `select=provider,account_login,access_token_ct,token_dek_id,token_expires_at` +
+        `&provider=eq.${provider}&deleted_at=is.null`,
+    );
+
+    const row = rows.find(
+      (i) => String(i.account_login ?? "").toLowerCase() === owner,
+    );
+    if (!row) return null;
+
+    const resolved = resolveToken(row as unknown as ConnectionRow);
+    return "token" in resolved ? resolved.token : null;
+  } catch {
+    // Cannot ask. The anonymous path still works for a public repository, and
+    // a private one fails at clone with git own message rather than here.
+    return null;
+  }
+}
+
+/**
  * Read one file, or establish that it is not there.
  *
  * THIS USED TO FETCH raw.githubusercontent.com WITH NO CREDENTIAL, and a
@@ -100,16 +158,13 @@ async function probe(
   branch: string,
   path: string,
   installationId: number | null,
+  provider: GitProvider = "github",
+  token: string | null = null,
 ): Promise<string | null> {
-  if (installationId !== null) {
-    return getFileContents(installationId, repo, path, branch);
-  }
-  // No installation for this owner. Public repositories still resolve, which
-  // keeps the proof scripts working against upstream samples.
-  const r = await fetch(`https://raw.githubusercontent.com/${repo}/${branch}/${path}`, {
-    headers: { "User-Agent": UA },
-  });
-  return r.ok ? r.text() : null;
+  // Per provider, and a public repository resolves with no token at all —
+  // which is what keeps the proof scripts working against upstream samples,
+  // on every provider rather than only on GitHub.
+  return providerFileContents(provider, repo, path, branch, installationId, token);
 }
 
 /**
@@ -136,9 +191,22 @@ export async function inspectRepo(
    * falling back to main — building the wrong recipe is worse than refusing.
    */
   explicitBranch?: string | null,
+  /**
+   * Which provider this repository lives on.
+   *
+   * LAST, and defaulted, so every existing caller keeps working unchanged —
+   * inserting it third silently pushed explicitBranch along and a git ref
+   * arrived where a provider was expected.
+   */
+  provider: GitProvider = "github",
 ): Promise<{ branch: string; files: RepoFiles; readable: boolean }> {
   const dir = rootDirectory ? `${rootDirectory.replace(/^\/+|\/+$/g, "")}/` : "";
-  const installationId = await installationForRepo(repo);
+  // GitHub App installations are a GitHub concept. GitLab and Bitbucket
+  // authenticate with an OAuth token held on the installation row, and asking
+  // installationForRepo about them would search the wrong provider's rows.
+  const installationId = provider === "github" ? await installationForRepo(repo) : null;
+  // Null for a public repository, which reads fine without one.
+  const token = await oauthTokenForRepo(provider, repo);
 
   // THE DEFAULT BRANCH IS ASKED FOR, NOT INFERRED.
   //
@@ -154,7 +222,7 @@ export async function inspectRepo(
   // and two feature branches. Detection succeeded against a ref that does not
   // exist and the build died at `Remote branch master not found in upstream
   // origin`, after leasing a machine.
-  const reported = await getDefaultBranch(installationId, repo);
+  const reported = await providerDefaultBranch(provider, repo, installationId, token);
 
   // A repository we can name the default branch of is one we can read. That is
   // a stronger signal than any file probe, and it is the question the refusal
@@ -174,18 +242,52 @@ export async function inspectRepo(
   // messages and different fixes. docker/awesome-compose was told to connect a
   // GitHub account it does not need, because we conflated them.
   if (!readable) {
-    readable = (await probe(repo, branch, `${dir}README.md`, installationId)) !== null;
+    readable = (await probe(repo, branch, `${dir}README.md`, installationId, provider, token)) !== null;
   }
 
   const files: RepoFiles = { paths: [], contents: {} };
+
+  // ONE LISTING INSTEAD OF FORTY PROBES, where the provider offers one.
+  //
+  // Bitbucket allows sixty anonymous REST calls per hour and this loop asks
+  // for about forty files, so a single deploy consumed most of an hour's
+  // budget and the next failed at detect with a 429. Listing the directory
+  // answers 'which of these exist' in one call, and only the handful whose
+  // CONTENTS detection actually reads are fetched afterwards.
+  //
+  // Null means the provider would not list — not that the directory is empty —
+  // so the fallback is the original per-file probe rather than an empty result.
+  const listed = await providerListDir(provider, repo, branch, dir, token);
+  const present = listed === null ? null : new Set(listed);
+  // A directory we could list is a repository we can read, which is the same
+  // signal naming the default branch gives and costs nothing extra here.
+  if (present !== null) readable = true;
+
   for (const f of [...new Set(MARKER_FILES)]) {
-    const body = await probe(repo, branch, `${dir}${f}`, installationId);
+    // Nested paths cannot be answered by a single-directory listing, so those
+    // still probe. Every marker today is a bare name; this is here so adding
+    // one with a slash does not silently stop being detected.
+    const nested = f.includes("/");
+    if (present !== null && !nested && !present.has(f)) continue;
+
+    // Only these are read for their CONTENTS. The rest are detected by
+    // existence alone, which the listing has already established — so on a
+    // provider that lists, a repository with a package.json and a lockfile
+    // costs one listing and two reads rather than forty.
+    const needsBody = (DETECTION_FILES as readonly string[]).includes(f);
+    if (present !== null && !needsBody) {
+      readable = true;
+      files.paths.push(f);
+      continue;
+    }
+
+    const body = await probe(repo, branch, `${dir}${f}`, installationId, provider, token);
     if (body === null) continue;
     // A repository whose default branch is master answers nothing on main, so
     // readability is confirmed here too rather than only above.
     readable = true;
     files.paths.push(f);
-    if ((DETECTION_FILES as readonly string[]).includes(f)) files.contents[f] = body;
+    if (needsBody) files.contents[f] = body;
   }
   // Reported so the caller can tell 'read it, found nothing' from 'could not
   // read it'. Those need different messages and different fixes — and the flag
@@ -195,6 +297,17 @@ export async function inspectRepo(
 
 export interface DeployOptions {
   repo: string;
+  /**
+   * Which git provider `repo` lives on.
+   *
+   * Optional and defaulted to github: every caller written before multi-provider
+   * means github, and every existing project row says github. The connect flows,
+   * webhook receivers and provider columns for gitlab and bitbucket already
+   * existed — this is the parameter that was missing, so a gitlab project could
+   * be recorded and its pushes received and then the build would try to clone it
+   * from github.com.
+   */
+  provider?: GitProvider;
   teamSlug?: string;
   rootDirectory?: string | null;
   /** Public hostname label. Defaults to `v2-<project slug>`. */
@@ -319,10 +432,16 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
     throw new Error(`deployment ${opts.existingDeploymentRef} not found`);
   }
 
+  // Resolved ONCE and threaded through. Reading it separately at each of the
+  // three places that need it is how the clone URL and the project row came to
+  // disagree in the first place.
+  const provider: GitProvider = opts.provider ?? "github";
+
   const { branch, files, readable } = await inspectRepo(
     opts.repo,
     opts.rootDirectory,
     adopted?.git_ref ?? null,
+    provider,
   );
   const detection = detectFramework(files);
   const pm = detectPackageManager(files);
@@ -426,7 +545,7 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
       teamId: team.id,
       name: opts.repo,
       slug,
-      provider: "github",
+      provider,
       repoId: opts.repo,
       repoFullName: opts.repo,
       productionBranch: branch,
@@ -613,7 +732,14 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
   // The numeric id has to be looked up: paas.projects.repo_id holds the full
   // name despite its name, so it cannot be used for scoping.
   let gitToken: string | null = null;
-  const buildInstallationId = await installationForRepo(opts.repo);
+  const clone = cloneTarget(provider, opts.repo);
+
+  // GitHub App installations, and the visibility pre-check below, are GitHub
+  // concepts. The other providers hold an OAuth token on the installation row
+  // instead; a public repository on any of them needs no token at all, which is
+  // what makes this path provable without an OAuth app registration.
+  const buildInstallationId =
+    provider === "github" ? await installationForRepo(opts.repo) : null;
   if (buildInstallationId !== null) {
     const visible = await listInstallationRepos(buildInstallationId);
     const match = visible.find((r) => r.full_name.toLowerCase() === opts.repo.toLowerCase());
@@ -627,11 +753,21 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
       );
     }
     gitToken = (await buildCloneUrl(buildInstallationId, { id: match.id, full_name: match.full_name })).token;
+  } else if (provider !== "github") {
+    // GitLab and Bitbucket: the OAuth token from the connection row, or null
+    // for a public repository. The credential file is written only when there
+    // is a token, so null simply means an anonymous clone.
+    gitToken = await oauthTokenForRepo(provider, opts.repo);
   }
 
   const req: BuildRequest = {
     deploymentRef: d.ref,
-    cloneUrl: `https://github.com/${opts.repo}.git`,
+    // Per provider. This line said github.com unconditionally, so a gitlab
+    // project — which the connect flow, the webhook receiver and the provider
+    // column all supported — would be cloned from a github URL that does not
+    // exist.
+    cloneUrl: clone.cloneUrl,
+    gitUsername: clone.username,
     gitToken,
     gitRef: branch,
     // Build the commit the ROW records, when it records one. A webhook-created

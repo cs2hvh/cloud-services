@@ -93,3 +93,55 @@ export function parseInstallationId(raw: string | null): number | null {
   const n = Number(raw);
   return Number.isInteger(n) && n > 0 ? n : null;
 }
+
+/**
+ * Every git connection the caller can see, on any provider.
+ *
+ * `callerInstallations` above answers the GitHub question — which App
+ * installations may this caller mint a token for — and coerces installation_id
+ * to a Number to do it. That column is NULL for GitLab and Bitbucket, because
+ * only a numeric external id can be mirrored into a bigint, so those rows come
+ * back through it as installation 0. Harmless for authorization (0 matches
+ * nothing) and wrong for listing, which is what this is for.
+ *
+ * RLS scopes the read. No membership check is written by hand here, so there is
+ * none to forget.
+ */
+export interface CallerConnection {
+  provider: "github" | "gitlab" | "bitbucket";
+  /** The provider's own id. A Bitbucket workspace id is a braced UUID. */
+  externalId: string;
+  accountLogin: string;
+  accountType: string | null;
+  teamRef: string | null;
+  /** Whether a usable credential is stored. GitHub never stores one. */
+  hasCredential: boolean;
+}
+
+export async function callerConnections(caller: Caller): Promise<CallerConnection[]> {
+  const { data, error } = await caller.db
+    .from("installations")
+    .select("provider, external_id, account_login, account_type, access_token_ct, teams:team_id (ref)")
+    .is("deleted_at", null);
+
+  if (error || !data) return [];
+
+  return (
+    data as Array<{
+      provider: string;
+      external_id: string;
+      account_login: string;
+      account_type: string | null;
+      access_token_ct: string | null;
+      teams: { ref: string } | null;
+    }>
+  ).map((row) => ({
+    provider: row.provider as CallerConnection["provider"],
+    externalId: String(row.external_id),
+    accountLogin: row.account_login,
+    accountType: row.account_type,
+    teamRef: row.teams?.ref ?? null,
+    // Presence only. The ciphertext never leaves this function.
+    hasCredential: Boolean(row.access_token_ct),
+  }));
+}

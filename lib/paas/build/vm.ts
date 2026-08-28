@@ -58,6 +58,16 @@ export interface BuildRequest {
    * the URL, so git never has a secret to print.
    */
   gitToken?: string | null;
+  /**
+   * Which username the token is presented as. Provider-specific and NOT
+   * cosmetic: GitHub wants `x-access-token`, GitLab `oauth2`, Bitbucket
+   * `x-token-auth`, and the wrong one is rejected as bad credentials rather
+   * than as a wrong username.
+   *
+   * Defaults to the GitHub value so callers written before multi-provider keep
+   * working — they all mean GitHub.
+   */
+  gitUsername?: string | null;
   gitRef: string;
   gitSha: string;
   /** null when the repository supplies its own Dockerfile. */
@@ -419,9 +429,25 @@ export function renderCloudInit(
 
   // The token reaches git via a 0600 credential file. Base64 so it is never a
   // shell token, and removed immediately after the clone.
-  const credentialBlock = req.gitToken
+  // THE HOST COMES FROM THE CLONE URL, not from a constant. git matches a
+  // credential entry by host, so a file naming github.com is silently ignored
+  // when cloning gitlab.com — the clone then fails as "authentication failed"
+  // on a repository we hold a perfectly good token for. Deriving it here means
+  // the credential and the remote cannot disagree.
+  const credentialHost = (() => {
+    try {
+      return new URL(req.cloneUrl).host;
+    } catch {
+      // Not a URL we can parse. Falling back to github.com would write a
+      // credential for the wrong host, so write none and let the clone fail
+      // with git own message.
+      return null;
+    }
+  })();
+
+  const credentialBlock = req.gitToken && credentialHost
     ? [
-        `echo '${b64(`https://x-access-token:${req.gitToken}@github.com\n`)}' | base64 -d > /home/builder/.git-credentials`,
+        `echo '${b64(`https://${req.gitUsername || "x-access-token"}:${req.gitToken}@${credentialHost}\n`)}' | base64 -d > /home/builder/.git-credentials`,
         "chmod 600 /home/builder/.git-credentials",
         "chown builder:builder /home/builder/.git-credentials",
         "sudo -u builder git config --global credential.helper store",

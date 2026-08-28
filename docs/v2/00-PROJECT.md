@@ -64,6 +64,20 @@ no manual step:
 | `Azure-Samples/python-docs-hello-world` | flask | `v2-flask.ahurasense.com` — **200** |
 | `docker/welcome-to-docker` | own Dockerfile | `v2-docker.ahurasense.com` — **200** |
 
+**Every provider, proven the same way — 2026-08-27**
+
+| Provider | Repo | Detected | Live |
+|---|---|---|---|
+| GitHub | `gothinkster/react-redux-realworld-example-app` | create-react-app | **200** |
+| GitLab | `pages/plain-html` (`/public`) | static | **200** |
+| Bitbucket | `tutorials/tutorials.git.bitbucket.org` | static | **200** |
+
+All three torn down after; 0 leaked build VMs. The GitHub run is a REGRESSION
+check, not a new capability — the provider seam changed the clone URL, the
+credential username and the file readers underneath the path that already
+worked, and "the new providers work" is not the same claim as "the old one
+still does".
+
 **Live infrastructure**
 
 | | |
@@ -92,6 +106,10 @@ installations 1 · open drift 15 · pod_allocated 25 · scale_to_zero on 1
 - Per-alias routing — two hostnames on one project serving two builds
 - Env vars: AES-256-GCM, per-project HKDF, injected via `envFrom`
 - Webhook-driven deploys (signature verified over raw bytes)
+- **All three git providers, proven end to end** — GitHub, GitLab and
+  Bitbucket each clone, detect, build, route and serve 200 from their own
+  host. A public repository needs no token on any of them, which is what
+  makes the path provable without an OAuth app registration.
 - Scale-to-zero with an activator — measured idleness, not elapsed time
 - Tenant ResourceQuota + LimitRange enforced on 3 namespaces
 - Image scan gate — pass / fail / **could-not-determine blocks**
@@ -781,6 +799,34 @@ Two rules fall out, and the second is the operational one:
   confirm it still says something.** A safety check that goes quiet once the
   risky change is made is worse than no check, because its silence reads as
   reassurance — and unlike the other two failures, nobody is looking any more.
+
+### An anonymous API budget is a capacity limit, and 404 is how it lies
+
+Bitbucket allows **sixty** REST calls per hour per IP for an unauthenticated
+caller. `inspectRepo` probes about forty marker files, one call each — so ONE
+deploy consumed most of an hour and the next failed. That is the cheap half of
+the lesson.
+
+The expensive half: the reader returned `res.ok ? text : null`, and null means
+ABSENT to detection. A rate-limited repository was therefore reported as one
+with no `package.json` and no `Dockerfile` — and the customer would have been
+told to add files they already had. Same shape as the private-repo bug in the
+recurring entry below, in a new place: **empty is not the same as unknown**,
+and a 429 is unknown.
+
+Both halves are fixed and both fixes are load-bearing:
+
+- `readRaw` in `lib/paas/providers/source.ts` treats **404 and only 404** as
+  null; every other non-200 throws with the status in the message. Proven by
+  mutation — the test fails when the guard is removed.
+- `listDir` lists the directory in ONE call, so absent files cost nothing.
+  Forty probes became one listing plus the two or three files whose CONTENTS
+  detection actually reads. Null from `listDir` means *could not list* and
+  falls back to probing — it is not an empty directory.
+
+GitHub is deliberately exempt: it reads through `raw.githubusercontent.com`,
+which does not share the API's anonymous budget, so spending a scarcer
+allowance to list there would save nothing.
 
 ### A default that fits the only case that exists is a landmine for the next one
 
