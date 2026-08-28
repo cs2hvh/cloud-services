@@ -88,7 +88,7 @@ function FrameworkTile({ tile }: { tile: Tile }) {
   const { Icon } = tile;
   return (
     <div
-      className="group/tile relative flex items-center gap-3 overflow-hidden border px-3.5 py-3 transition-all duration-300"
+      className="group/tile relative flex items-center gap-3 overflow-hidden rounded-[6px] border px-3.5 py-3 transition-all duration-300"
       // Tinted from the brand colour rather than uniformly grey. The homepage
       // model wall gets its life from every tile being a slightly different
       // colour; a grid of identical charcoal boxes reads as a table someone

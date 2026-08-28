@@ -97,7 +97,7 @@ export function DeleteProject({
           disabled={busy}
           spellCheck={false}
           autoComplete="off"
-          className="mt-1.5 w-full max-w-[340px] border border-white/[0.12] bg-black/30 px-2.5 py-1.5 font-mono text-[13px] text-white outline-none focus:border-rose-400/60"
+          className="mt-1.5 w-full max-w-[340px] rounded-[6px] border border-white/[0.12] bg-black/30 px-2.5 py-1.5 font-mono text-[13px] text-white outline-none focus:border-rose-400/60"
         />
       </label>
 
@@ -105,7 +105,7 @@ export function DeleteProject({
         type="button"
         onClick={remove}
         disabled={!armed}
-        className={`mt-3 border px-3 py-1.5 text-[13px] transition-colors ${
+        className={`mt-3 rounded-[6px] border px-3 py-1.5 text-[13px] transition-colors ${
           armed
             ? "cursor-pointer border-rose-400/50 bg-rose-500/15 text-rose-200 hover:bg-rose-500/25"
             : "cursor-not-allowed border-white/10 bg-white/[0.03] text-white/25"

@@ -138,7 +138,7 @@ export function GitConnections() {
                 type="button"
                 onClick={() => disconnect(i.id, false)}
                 disabled={busy === i.id}
-                className={`${V2_MONO} shrink-0 border border-white/[0.12] px-2.5 py-1 text-[10.5px] uppercase tracking-[0.12em] text-white/50 transition-colors hover:border-rose-400/40 hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-40`}
+                className={`${V2_MONO} shrink-0 rounded-[5px] border border-white/[0.12] px-2.5 py-1 text-[10.5px] uppercase tracking-[0.12em] text-white/50 transition-colors hover:border-rose-400/40 hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-40`}
               >
                 {busy === i.id ? "Working…" : "Disconnect"}
               </button>
@@ -174,7 +174,7 @@ export function GitConnections() {
                 type="button"
                 onClick={() => disconnect(blocked.installationId, true)}
                 disabled={busy === blocked.installationId}
-                className={`${V2_MONO} border border-rose-400/50 bg-rose-500/15 px-2.5 py-1 text-[10.5px] uppercase tracking-[0.12em] text-rose-200 transition-colors hover:bg-rose-500/25 disabled:opacity-40`}
+                className={`${V2_MONO} rounded-[5px] border border-rose-400/50 bg-rose-500/15 px-2.5 py-1 text-[10.5px] uppercase tracking-[0.12em] text-rose-200 transition-colors hover:bg-rose-500/25 disabled:opacity-40`}
               >
                 Disconnect anyway
               </button>

@@ -296,7 +296,7 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
           type="button"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
-          className="flex w-full items-center justify-between gap-3 border border-white/[0.09] bg-black/30 px-3 py-2.5 text-left transition-colors hover:border-white/[0.18]"
+          className="flex w-full items-center justify-between gap-3 rounded-[6px] border border-white/[0.09] bg-black/30 px-3 py-2.5 text-left transition-colors hover:border-white/[0.18]"
         >
           {chosen ? (
             <span className="flex min-w-0 items-baseline gap-1.5">
@@ -317,7 +317,7 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
         </button>
 
         {open ? (
-          <div className="absolute z-20 mt-1 w-full border border-white/[0.12] bg-[#0d0e11] shadow-xl">
+          <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-[6px] border border-white/[0.12] bg-[#0d0e11] shadow-xl">
             <input
               type="search"
               value={filter}
@@ -359,7 +359,7 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
                           <span className="shrink-0 font-mono text-[12px] text-white/35">{owner}/</span>
                           <span className="truncate font-mono text-[12.5px] text-white">{name}</span>
                           {r.private ? (
-                            <span className="ml-1 shrink-0 border border-white/[0.12] px-1 py-px font-mono text-[9px] uppercase tracking-[0.1em] text-white/40">
+                            <span className="ml-1 shrink-0 rounded-[3px] border border-white/[0.12] px-1 py-px font-mono text-[9px] uppercase tracking-[0.1em] text-white/40">
                               private
                             </span>
                           ) : null}

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Notice } from "@/components/v2/notice";
+import { ColHead } from "@/components/v2/kit";
 
 /**
  * Instance size and count.
@@ -111,8 +112,19 @@ export function SizingPicker({
   const shared = tiers.filter((t) => t.cls === "shared");
   const dedicated = tiers.filter((t) => t.cls === "dedicated");
 
+  const GRID =
+    "grid grid-cols-[18px_minmax(0,1.4fr)_minmax(52px,0.6fr)_minmax(56px,0.6fr)_minmax(88px,0.8fr)_minmax(76px,0.7fr)] gap-3";
+
   return (
     <div>
+      {/*
+        A TABLE, NOT A GRID OF CARDS, and the same one the compute plan picker
+        uses: one bordered container, a header naming the columns, a radio per
+        row. Six standalone boxes made the reader compare four numbers by
+        jumping between corners of the page; in a column, memory reads down
+        against memory and price against price, which is the comparison anybody
+        is here to make.
+      */}
       {[
         { key: "shared", rows: shared, title: "Shared CPU", note: "Burstable, oversubscribed. What most apps need." },
         {
@@ -123,13 +135,24 @@ export function SizingPicker({
           note: "Guaranteed vCPU, not shared with another tenant.",
         },
       ].map((group) => (
-        <div key={group.key} className="mb-6 last:mb-0">
-          <div className="mb-2.5">
+        <div key={group.key} className="mb-5 last:mb-0">
+          <div className="mb-2">
             <span className="text-[12.5px] text-white/70">{group.title}</span>
             <span className="ml-2 text-[12px] text-white/35">{group.note}</span>
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="overflow-hidden rounded-[6px] border border-white/[0.07] bg-[#111216]">
+            <div
+              className={`${GRID} border-b border-white/[0.06] bg-white/[0.015] px-4 py-2.5`}
+            >
+              <span />
+              <ColHead>Plan</ColHead>
+              <ColHead align="right">Memory</ColHead>
+              <ColHead align="right">vCPU</ColHead>
+              <ColHead align="right">Transfer</ColHead>
+              <ColHead align="right">Monthly</ColHead>
+            </div>
+
             {group.rows.map((t) => {
               const on = t.id === tier;
               return (
@@ -139,41 +162,43 @@ export function SizingPicker({
                   disabled={busy}
                   onClick={() => setTier(t.id)}
                   aria-pressed={on}
-                  className={`flex items-baseline justify-between gap-3 border px-3.5 py-3 text-left transition-colors disabled:opacity-50 ${
- on
- ? "border-[#0095FF]/60 bg-[#0095FF]/[0.08]"
- : "border-white/[0.1] bg-white/[0.02] hover:border-white/25"
- }`}
+                  className={`w-full border-b border-white/[0.04] text-left transition-colors last:border-b-0 disabled:opacity-50 ${
+                    on ? "bg-[#0095FF]/[0.08]" : "hover:bg-white/[0.03]"
+                  }`}
                 >
-                  <span className="min-w-0">
-                    <span className="flex items-center gap-2">
-                      <span className="text-[13.5px] text-white">{t.label}</span>
-                      {/* Which one you are ALREADY on. Without it the selected
-                          card and the current plan look identical the moment
-                          somebody clicks a different one, and there is no way
-                          back except remembering. */}
+                  <div className={`${GRID} items-center px-4 py-3`}>
+                    {/* A radio, because this is a choice of one — a tick or a
+                        highlight alone leaves the unselected rows looking
+                        merely dim rather than selectable. */}
+                    <span
+                      aria-hidden
+                      className="relative h-[15px] w-[15px] shrink-0 rounded-full"
+                      style={{
+                        border: `1.5px solid ${on ? "#0095FF" : "rgba(255,255,255,0.18)"}`,
+                      }}
+                    >
+                      {on ? (
+                        <span
+                          className="absolute inset-[3px] block rounded-full"
+                          style={{ background: "#0095FF", boxShadow: "0 0 6px rgba(0,149,255,0.6)" }}
+                        />
+                      ) : null}
+                    </span>
+
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="truncate text-[13px] text-white">{t.label}</span>
                       {t.id === currentTier ? (
-                        <span className="border border-white/[0.15] px-1 py-px font-mono text-[9px] uppercase tracking-[0.1em] text-white/40">
+                        <span className="shrink-0 rounded-[3px] border border-white/[0.15] px-1 py-px font-mono text-[9px] uppercase tracking-[0.1em] text-white/40">
                           current
                         </span>
                       ) : null}
                     </span>
-                    <span className="mt-0.5 block font-mono text-[11.5px] text-white/45">
-                      {gib(t.memoryMib)} · {t.vcpu} vCPU
-                    </span>
-                    {/* Transfer was passed to this component and never shown. It
-                        is part of what the price buys, and leaving it out makes
-                        two plans look like they differ only in memory. */}
-                    <span className="mt-0.5 block font-mono text-[11px] text-white/30">
-                      {t.transferGb} GB transfer
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-right">
-                    <span className="block font-mono text-[13px] text-white">
-                      ${t.priceUsd}
-                    </span>
-                    <span className="block text-[11px] text-white/35">/mo</span>
-                  </span>
+
+                    <span className="text-right font-mono text-[11.5px] text-white/60">{gib(t.memoryMib)}</span>
+                    <span className="text-right font-mono text-[11.5px] text-white/60">{t.vcpu}</span>
+                    <span className="text-right font-mono text-[11.5px] text-white/45">{t.transferGb} GB</span>
+                    <span className="text-right font-mono text-[12.5px] text-white">${t.priceUsd}</span>
+                  </div>
                 </button>
               );
             })}

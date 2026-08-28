@@ -89,7 +89,7 @@ export function SourceSettings({
             onChange={(e) => setBranch(e.target.value)}
             disabled={busy}
             spellCheck={false}
-            className="mt-1.5 w-full border border-white/[0.12] bg-black/30 px-2.5 py-1.5 font-mono text-[13px] text-white outline-none focus:border-[#0095FF]/60"
+            className="mt-1.5 w-full rounded-[6px] border border-white/[0.12] bg-black/30 px-2.5 py-1.5 font-mono text-[13px] text-white outline-none focus:border-[#0095FF]/60"
           />
           <span className="mt-1 block text-[11px] text-white/30">
             Pushes here deploy. Every other branch gets a preview.
@@ -104,7 +104,7 @@ export function SourceSettings({
             disabled={busy}
             spellCheck={false}
             placeholder="repository root"
-            className="mt-1.5 w-full border border-white/[0.12] bg-black/30 px-2.5 py-1.5 font-mono text-[13px] text-white outline-none placeholder:text-white/25 focus:border-[#0095FF]/60"
+            className="mt-1.5 w-full rounded-[6px] border border-white/[0.12] bg-black/30 px-2.5 py-1.5 font-mono text-[13px] text-white outline-none placeholder:text-white/25 focus:border-[#0095FF]/60"
           />
           <span className="mt-1 block text-[11px] text-white/30">
             For a monorepo — the folder holding the app that builds.
