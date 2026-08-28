@@ -45,7 +45,7 @@ export default async function ProjectsPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/signin?redirectTo=%2Fdashboard%2Fv2%2Fprojects");
+  if (!user) redirect("/signin?redirectTo=%2Fdashboard%2Fservices%2Fapps");
 
   const db = supabase.schema("paas");
 
@@ -100,7 +100,6 @@ export default async function ProjectsPage() {
       <Hero
         lead="Deploy and operate"
         accent="application workloads"
-        description="Repository-backed deployments with live build status, previews on every branch, and one-click rollback."
         action={
           <Link href="/dashboard/services/apps/new" className={heroButtonClass}>
             <Plus className="h-3.5 w-3.5" aria-hidden />
@@ -194,7 +193,6 @@ export default async function ProjectsPage() {
 
       {!readFailed ? (
         <SectionHead
-          eyebrow="Project inventory"
           title="Your"
           accent="projects"
           rightMeta={rows.length > 0 ? `${live} live · ${rows.length} total` : undefined}
