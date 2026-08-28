@@ -22,6 +22,7 @@ import { createClient } from "@/lib/supabase/server";
 import { TIERS } from "@/lib/paas/tiers";
 import { Card, Hero, ServiceShell, V2_MONO } from "@/components/v2/kit";
 import { GitConnections } from "@/components/v2/git-connections";
+import { FrameworkMarquee } from "@/components/v2/framework-marquee";
 import { Picker } from "./picker";
 
 export const dynamic = "force-dynamic";
@@ -47,9 +48,19 @@ export default async function NewProjectPage() {
         Projects
       </Link>
 
-      <Hero lead="Deploy a" accent="new application" />
+      <Hero lead="Deploy" accent="application" />
 
-      <div className="max-w-3xl">
+      {/*
+        Two-up, because the form has a natural width and the page does not. The
+        column that holds the fields keeps a readable measure; the space that
+        used to sit empty beside it now carries the frameworks the detector
+        handles, which is the question somebody on this page is actually asking.
+
+        The wall is hidden below lg. On a narrow viewport it would push the
+        thing you came here to use below the fold.
+      */}
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,640px)_minmax(0,1fr)]">
+        <div>
         <Card title="Repository">
           <Picker
             tiers={TIERS.map((t) => ({
@@ -71,6 +82,11 @@ export default async function NewProjectPage() {
         <Card title="Git accounts" subtitle="Where repositories are read from" className="mt-4">
           <GitConnections />
         </Card>
+        </div>
+
+        <div className="hidden lg:block">
+          <FrameworkMarquee />
+        </div>
       </div>
     </ServiceShell>
   );

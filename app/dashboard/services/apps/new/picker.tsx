@@ -285,7 +285,10 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
         placeholder="Filter repositories"
-        className="w-full rounded border border-white/[0.09] px-3 py-1.5 text-sm border-white/[0.09]"
+        // Mono, because every value in the list below it is mono. A search box
+        // set in the body face over a column of monospaced names reads as two
+        // controls that came from different places.
+        className="w-full border border-white/[0.09] bg-black/30 px-3 py-2 font-mono text-[12.5px] text-white outline-none transition-colors placeholder:text-white/25 focus:border-[#0095FF]/60"
       />
 
       {shown.length === 0 ? (
@@ -295,24 +298,47 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
             : "No repository matches that filter."}
         </p>
       ) : (
-        <ul className="max-h-72 divide-y divide-white/[0.06] overflow-y-auto rounded border border-white/[0.07] border-white/[0.07]">
-          {shown.map((r) => (
-            <li key={`${r.installationId}:${r.fullName}`}>
-              <button
-                type="button"
-                onClick={() => setChosen(r)}
-                className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-white/[0.05] ${
- chosen?.fullName === r.fullName ? "bg-white/[0.06]" : ""
- }`}
-              >
-                <span className="truncate">
-                  {r.fullName}
-                  {r.private ? <span className="ml-2 text-xs text-white/40">private</span> : null}
-                </span>
-                <span className="shrink-0 text-xs text-white/40">{r.defaultBranch ?? "—"}</span>
-              </button>
-            </li>
-          ))}
+        <ul className="max-h-80 divide-y divide-white/[0.05] overflow-y-auto border border-white/[0.07] bg-black/20">
+          {shown.map((r) => {
+            const isChosen = chosen?.fullName === r.fullName;
+            const [owner, name] = r.fullName.split("/");
+            return (
+              <li key={`${r.installationId}:${r.fullName}`}>
+                <button
+                  type="button"
+                  onClick={() => setChosen(r)}
+                  className={`relative flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors ${
+                    isChosen ? "bg-[#0095FF]/[0.08]" : "hover:bg-white/[0.035]"
+                  }`}
+                >
+                  {/* A rail rather than a tick: it marks the row without
+                      taking a column, and it is the same device the tables and
+                      the framework wall use. */}
+                  {isChosen ? (
+                    <span
+                      aria-hidden
+                      className="absolute inset-y-0 left-0 w-[2px] bg-[#0095FF]"
+                    />
+                  ) : null}
+                  <span className="flex min-w-0 items-baseline gap-1.5">
+                    {/* The owner is repeated on every row and is not what anyone
+                        is scanning for, so it recedes and the repository name
+                        carries the weight. */}
+                    <span className="shrink-0 font-mono text-[12px] text-white/35">{owner}/</span>
+                    <span className="truncate font-mono text-[12.5px] text-white">{name}</span>
+                    {r.private ? (
+                      <span className="ml-1 shrink-0 border border-white/[0.12] px-1 py-px font-mono text-[9px] uppercase tracking-[0.1em] text-white/40">
+                        private
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="shrink-0 font-mono text-[10.5px] text-white/35">
+                    {r.defaultBranch ?? "—"}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
 
