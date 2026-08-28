@@ -122,6 +122,16 @@ export default async function ProjectPage({
       .from("domains")
       .select(DOMAIN_COLUMNS)
       .eq("project_id", project.id)
+      // MATCHING THE API, which has always excluded removed rows. This page
+      // reimplemented the query and left that filter out, so a removed domain
+      // stayed listed for ever — and its Remove button answered 404, because
+      // DELETE looks for a row that is NOT already removed. Seen live on
+      // task1.cs2hvh.com: two clicks, two 404s, nothing wrong with the button
+      // or the route.
+      //
+      // The row is kept rather than deleted so the Cloudflare custom hostname
+      // can still be torn down; `removed` is a state, not an absence.
+      .neq("state", "removed")
       .order("created_at", { ascending: true }),
     // Read here rather than through /api/v2/projects/{ref}/usage for the same
     // reason as everything else on this page: a server render taking an HTTP

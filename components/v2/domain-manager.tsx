@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { Notice, Empty } from "@/components/v2/notice";
 import { StateBadge } from "@/components/v2/state-badge";
+import { ColHead } from "@/components/v2/kit";
 
 /**
  * Custom domain management.
@@ -38,6 +39,49 @@ export interface DomainSummary {
    * there was never a reason to withhold it.
    */
   records?: DnsInstruction[];
+}
+
+/**
+ * A value with a copy button.
+ *
+ * These records are typed into somebody ELSE'S control panel — a registrar, a
+ * DNS provider — and a mistyped CNAME target fails silently for as long as it
+ * takes them to notice the certificate never issued. Transcribing
+ * `_cf-custom-hostname.app.example.com` by hand is where that mistake comes
+ * from, so it should not have to be transcribed.
+ *
+ * Falls back to selecting the text when the clipboard is unavailable, which it
+ * is over plain http and in some embedded browsers. A copy button that silently
+ * does nothing is worse than no copy button.
+ */
+function Copyable({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1400);
+    } catch {
+      // Left for the reader to select manually; saying nothing would look
+      // like the click was ignored.
+      setCopied(false);
+    }
+  }
+
+  return (
+    <span className="group/copy inline-flex min-w-0 items-center gap-1.5">
+      <span className="break-all font-mono text-[12px] text-white/90">{value}</span>
+      <button
+        type="button"
+        onClick={copy}
+        aria-label={`Copy ${value}`}
+        className="shrink-0 rounded-[3px] border border-white/[0.12] px-1.5 py-px font-mono text-[9px] uppercase tracking-[0.1em] text-white/35 opacity-0 transition-all hover:border-white/30 hover:text-white/70 focus:opacity-100 group-hover/copy:opacity-100"
+      >
+        {copied ? "copied" : "copy"}
+      </button>
+    </span>
+  );
 }
 
 export function DomainManager({
@@ -109,68 +153,74 @@ export function DomainManager({
           where it is — nothing needs to move.
         </Empty>
       ) : (
-        <div className="border border-white/[0.09]">
-          {domains.map((d, i) => (
-            <div
-              key={d.ref}
-              className={`px-4 py-3 ${i > 0 ? "border-t border-white/[0.06]" : ""}`}
-            >
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <span className="font-mono text-[13px] text-white">
-                    {d.domain}
-                  </span>
+        /*
+          A table in a rounded container, like every other list in this lane. It
+          was a bare bordered stack with square corners, which is what made this
+          tab look older than the ones beside it.
+        */
+        <div className="overflow-hidden rounded-[6px] border border-white/[0.07] bg-[#111216]">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 border-b border-white/[0.06] bg-white/[0.015] px-4 py-2.5">
+            <ColHead>Domain</ColHead>
+            <ColHead align="right">Status</ColHead>
+          </div>
+
+          {domains.map((d) => (
+            <div key={d.ref} className="border-b border-white/[0.04] px-4 py-3 last:border-b-0">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+                <span className="truncate font-mono text-[13px] text-white">{d.domain}</span>
+                <span className="flex shrink-0 items-center gap-2">
                   <StateBadge state={d.state} kind="domain" />
-                </div>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => remove(d.ref)}
-                  className="border border-white/[0.14] px-2.5 py-1 text-[12px] text-white/60 transition-colors hover:border-rose-400/50 hover:text-rose-300 disabled:opacity-40"
-                >
-                  Remove
-                </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => remove(d.ref)}
+                    className="rounded-[5px] border border-white/[0.14] px-2.5 py-1 text-[11.5px] text-white/60 transition-colors hover:border-rose-400/50 hover:text-rose-300 disabled:opacity-40"
+                  >
+                    Remove
+                  </button>
+                </span>
               </div>
 
               {/*
-                THE WHOLE RECORD SET, not just the ownership TXT. A customer
-                shown only the TXT has been told how to prove they own the
-                domain and nothing about how to make it answer.
+                THE WHOLE RECORD SET, not just the ownership TXT. A customer shown
+                only the TXT has been told how to prove they own the domain and
+                nothing about how to make it answer.
 
-                Each record says what it is FOR. "Add a CNAME" without a reason
-                is a instruction people put off; "this is what routes traffic"
-                is one they act on.
+                Each record says what it is FOR. "Add a CNAME" without a reason is
+                an instruction people put off; "this is what routes traffic" is one
+                they act on.
               */}
               {(d.records?.length ?? 0) > 0 && (
-                <div className="mt-2 border border-white/[0.07] bg-black/25 px-3 py-2.5">
-                  <p className="m-0 text-[11.5px] uppercase tracking-[0.1em] text-white/30">
+                <div className="mt-3 overflow-hidden rounded-[6px] border border-white/[0.07] bg-black/25">
+                  <p className={`m-0 border-b border-white/[0.06] px-3 py-2 text-[10.5px] uppercase tracking-[0.12em] text-white/30`}>
                     Add these records at your DNS provider
                   </p>
-                  <div className="mt-2 space-y-2.5">
-                    {d.records!.map((r) => (
-                      <div key={`${r.type}:${r.name}`}>
-                        <div className="flex flex-wrap items-baseline gap-x-2 font-mono text-[12px]">
-                          <span className="rounded border border-white/[0.12] px-1.5 py-0.5 text-[10px] text-white/50">
-                            {r.type}
-                          </span>
-                          <span className="break-all text-white/70">{r.name}</span>
-                          <span className="text-white/25">→</span>
-                          <span className="break-all text-white/90">{r.value}</span>
-                        </div>
-                        <p className="m-0 mt-0.5 text-[11px] text-white/35">{r.purpose}</p>
+
+                  {d.records!.map((r) => (
+                    <div
+                      key={`${r.type}:${r.name}`}
+                      className="border-b border-white/[0.04] px-3 py-2.5 last:border-b-0"
+                    >
+                      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                        <span className="shrink-0 rounded-[3px] border border-white/[0.12] px-1.5 py-0.5 font-mono text-[9.5px] uppercase tracking-[0.1em] text-white/50">
+                          {r.type}
+                        </span>
+                        <Copyable value={r.name} />
+                        <span className="text-white/25">→</span>
+                        <Copyable value={r.value} />
                       </div>
-                    ))}
-                  </div>
-                  <p className="m-0 mt-2.5 text-[11px] text-white/30">
+                      <p className="m-0 mt-1 text-[11px] text-white/35">{r.purpose}</p>
+                    </div>
+                  ))}
+
+                  <p className="m-0 border-t border-white/[0.06] px-3 py-2 text-[11px] text-white/30">
                     The certificate issues automatically once these resolve. DNS can take a few minutes.
                   </p>
                 </div>
               )}
 
               {d.lastError && (
-                <p className="m-0 mt-2 text-[12px] text-rose-300">
-                  {d.lastError}
-                </p>
+                <p className="m-0 mt-2 text-[12px] text-rose-300">{d.lastError}</p>
               )}
             </div>
           ))}
@@ -187,13 +237,13 @@ export function DomainManager({
           placeholder="app.example.com"
           spellCheck={false}
           autoComplete="off"
-          className="min-w-[240px] border border-white/[0.12] bg-black/30 px-2.5 py-1.5 font-mono text-[13px] text-white outline-none focus:border-[#0095FF]/60"
+          className="min-w-[260px] rounded-[6px] border border-white/[0.12] bg-black/30 px-2.5 py-1.5 font-mono text-[13px] text-white outline-none placeholder:text-white/25 focus:border-[#0095FF]/60"
         />
         <button
           type="button"
           onClick={add}
           disabled={busy || !value.trim()}
-          className="border border-white/[0.14] px-3 py-1.5 text-[12.5px] text-white transition-colors hover:border-[#0095FF] hover:bg-[#0095FF]/10 disabled:opacity-40"
+          className="rounded-[6px] border border-[#0095FF]/50 bg-[#0095FF]/15 px-3 py-1.5 text-[12.5px] text-white transition-colors hover:bg-[#0095FF]/25 disabled:opacity-40"
         >
           {busy ? "Adding…" : "Add domain"}
         </button>
