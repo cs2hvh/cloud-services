@@ -84,8 +84,12 @@ export default async function NewProjectPage() {
         </Card>
         </div>
 
+        {/* Sticky, so it stays beside the form instead of scrolling away from
+            it — and so it can never be the thing that makes the page taller. */}
         <div className="hidden lg:block">
-          <FrameworkMarquee />
+          <div className="sticky top-8">
+            <FrameworkMarquee />
+          </div>
         </div>
       </div>
     </ServiceShell>
