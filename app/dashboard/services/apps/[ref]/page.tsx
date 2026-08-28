@@ -9,7 +9,7 @@
 
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { Activity, Receipt } from "lucide-react";
+import { Activity, Boxes, Receipt } from "lucide-react";
 import { TabNav } from "@/components/v2/tab-nav";
 import { AutoRefresh } from "@/components/v2/auto-refresh";
 import { isSection } from "@/components/v2/sections";
@@ -36,6 +36,7 @@ import {
   Failed,
   PageHeader,
   ServiceShell,
+  Facts,
   Stat,
   StateBadge,
   timeAgo,
@@ -336,7 +337,7 @@ export default async function ProjectPage({
         whether it has been working, which is the question somebody opens the
         page to answer at the moment it matters.
       */}
-      <Card title="Health" subtitle="Sampled every 15 minutes, last 7 days" icon={Activity}>
+      <Card title="Health" icon={Activity}>
         {samples.error ? (
           <Failed what="health samples" detail="The app is unaffected — this is a monitoring read." />
         ) : (
@@ -372,7 +373,10 @@ export default async function ProjectPage({
                   <Stat label="Peak pods" value={health.peakPods} hint="most running at once" />
                 </div>
 
-                <p className="mt-3 text-xs text-white/50">{verdict.reason}</p>
+                <p className="mt-3 text-xs text-white/50">
+                  {verdict.reason}{" "}
+                  <span className="text-white/30">Last 7 days, sampled every 15 minutes.</span>
+                </p>
 
                 {/*
                   Said out loud rather than folded into the percentage. Time
@@ -391,7 +395,7 @@ export default async function ProjectPage({
         )}
       </Card>
 
-      <Card title="Serving" subtitle="The hostname this project answers on">
+      <Card title="Serving">
         {production ? (
           <div className="flex flex-wrap items-center justify-between gap-3">
             <a
@@ -431,7 +435,10 @@ export default async function ProjectPage({
           Only shown when there is something to choose: an alias to move, and
           at least one ready build that is not already serving.
         */}
-        {production && promotable.length > 0 && (
+        {/* Counted AFTER removing what is already serving — promotable holds the
+            live deployment too, so the old check drew a divider above an empty
+            control whenever the newest build was the one running. */}
+        {production && promotable.some((p) => p.ref !== latest?.ref) && (
           <div className="mt-3 border-t border-black/5 pt-3 dark:border-white/10">
             <PromoteControl
               projectRef={project.ref}
@@ -453,6 +460,85 @@ export default async function ProjectPage({
             Plan &quot;{project.tier}&quot; is not in the price list — this project cannot be sized. Contact support.
           </p>
         )}
+      </Card>
+
+      {/*
+        WHAT THIS APP IS, which the page never said. Health and Serving answer
+        'is it up' and 'where'; somebody arriving cold also needs to know which
+        repository and branch this builds from, what commit is live, and what it
+        is costing — and every one of those was only discoverable by clicking
+        into another tab or reading a build log.
+
+        Facts, not prose. Each row is a value somebody might need to copy or
+        compare, which is why they are monospaced and why the commit is here at
+        all: 'it deployed' and 'it deployed THIS' are different claims.
+      */}
+      <Card title="This app" icon={Boxes}>
+        <Facts
+          items={[
+            {
+              label: "Repository",
+              value: (
+                <a
+                  href={`https://github.com/${project.repo_full_name}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-sky-300 transition-colors hover:text-sky-200"
+                >
+                  {project.repo_full_name}
+                </a>
+              ),
+            },
+            { label: "Production branch", value: project.production_branch },
+            {
+              label: "Root directory",
+              // A monorepo deploys from a subdirectory, and getting this wrong
+              // is one of the commonest reasons a build fails confusingly.
+              value: project.root_directory ?? <span className="text-white/40">repository root</span>,
+            },
+            {
+              label: "Live commit",
+              value: latest?.git_sha ? (
+                <a
+                  href={`https://github.com/${project.repo_full_name}/commit/${latest.git_sha}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-sky-300 transition-colors hover:text-sky-200"
+                >
+                  {latest.git_sha.slice(0, 7)}
+                </a>
+              ) : (
+                <span className="text-white/40">not deployed yet</span>
+              ),
+            },
+            {
+              label: "Size",
+              value: sizing
+                ? `${sizing.label} · ${sizing.memory} · ${sizing.cpu} · ×${project.instance_count}`
+                : `${project.tier} (not in the price list)`,
+            },
+            {
+              label: "Sleeps when idle",
+              // Named because it changes what a visitor experiences, and it is
+              // off unless somebody turned it on.
+              value: project.scale_to_zero ? (
+                `after ${Math.round((project.idle_seconds ?? 900) / 60)} min idle`
+              ) : (
+                <span className="text-white/40">no — always warm</span>
+              ),
+            },
+            {
+              label: "Preview branches",
+              value:
+                previewAliases.length > 0 ? (
+                  `${previewAliases.length} live`
+                ) : (
+                  <span className="text-white/40">none right now</span>
+                ),
+            },
+            { label: "Project id", value: project.ref },
+          ]}
+        />
       </Card>
         </div>
       ) : null}
@@ -562,7 +648,7 @@ export default async function ProjectPage({
           */}
           <Card
             title="Runtime logs"
-            subtitle="Output from the pods currently serving this project"
+           
           >
             {/*
               GATED ON A DEPLOYMENT EXISTING, NOT ON ONE BEING ROUTED.
@@ -592,7 +678,7 @@ export default async function ProjectPage({
 
       {tab === "settings" ? (
         <div className="space-y-4">
-      <Card title="Size" subtitle="What each instance gets, and how many run">
+      <Card title="Size">
         {/*
           Replaces the read-only cpu/memory line this page used to show. Same
           source — lib/paas/tiers — so what the page says and what the pod gets
@@ -630,7 +716,7 @@ export default async function ProjectPage({
         )}
       </Card>
 
-      <Card title="Sleep" subtitle="Scale to zero when nothing is asking">
+      <Card title="Sleep">
         {/*
           sweepScheduled={false}: the idle sweep is a script someone runs, not
           a schedule. The panel records the setting and says plainly that
@@ -646,7 +732,7 @@ export default async function ProjectPage({
         />
       </Card>
 
-      <Card title="Build" subtitle="Where the build reads your repository from">
+      <Card title="Build">
         <BuildSettings
           projectRef={project.ref}
           rootDirectory={project.root_directory}
@@ -673,7 +759,7 @@ export default async function ProjectPage({
 
       {tab === "domains" ? (
         <div className="space-y-4">
-      <Card title="Custom domains" subtitle="Your own hostname in front of this project">
+      <Card title="Custom domains">
         {domains.error ? (
           <Failed what="custom domains" />
         ) : (

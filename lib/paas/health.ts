@@ -120,7 +120,14 @@ export function healthVerdict(h: HealthSummary): {
   reason: string;
 } {
   if (h.samples === 0 || h.uptimePct === null) {
-    return { state: "unknown", reason: "No samples yet — nothing has measured this app." };
+    return {
+      state: "unknown",
+      // Says when the answer arrives rather than only that it has not. The
+      // sampler runs every 15 minutes, so a new app is blank for a few minutes
+      // by design — without that, four dashes and "nothing has measured this"
+      // reads like something is broken on the day somebody signs up.
+      reason: "Not measured yet. The sampler runs every 15 minutes, so a new app is blank for a few minutes.",
+    };
   }
   if (h.uptimePct >= 99) {
     return {

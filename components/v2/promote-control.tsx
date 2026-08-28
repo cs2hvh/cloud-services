@@ -65,13 +65,10 @@ export function PromoteControl({
 
   const options = candidates.filter((c) => c.ref !== currentDeploymentRef);
 
-  if (options.length === 0) {
-    return (
-      <p className="m-0 text-[12px] text-white/30">
-        No other ready deployment to switch to.
-      </p>
-    );
-  }
+  // Nothing rather than a sentence saying there is nothing. A control that
+  // announces its own absence is a line of text where a person expected a
+  // button, and the caller already hides the surrounding rule in this case.
+  if (options.length === 0) return null;
 
   async function apply() {
     if (!selected) return;
