@@ -15,6 +15,7 @@
  */
 
 import { useEffect, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 interface Repo {
@@ -40,6 +41,10 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
   const [chosen, setChosen] = useState<Repo | null>(null);
+  // The list is behind a control now rather than always open. Somebody with
+  // forty repositories was reading a scrollbar before they had chosen
+  // anything, and the rest of the form sat below the fold behind it.
+  const [open, setOpen] = useState(false);
   const [tier, setTier] = useState(tiers[0]?.id ?? "starter");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -280,67 +285,97 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
         </p>
       ) : null}
 
-      <input
-        type="search"
-        value={filter}
-        onChange={(e) => setFilter(e.target.value)}
-        placeholder="Filter repositories"
-        // Mono, because every value in the list below it is mono. A search box
-        // set in the body face over a column of monospaced names reads as two
-        // controls that came from different places.
-        className="w-full border border-white/[0.09] bg-black/30 px-3 py-2 font-mono text-[12.5px] text-white outline-none transition-colors placeholder:text-white/25 focus:border-[#0095FF]/60"
-      />
+      {/*
+        A DISCLOSURE, NOT A PERMANENT LIST. Rendering every repository inline
+        meant the branch, size and create button all sat under a scrollbar, and
+        the page opened on a wall of names none of which is the one you want.
+        Closed it says what is chosen; open it is the same searchable list.
+      */}
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="flex w-full items-center justify-between gap-3 border border-white/[0.09] bg-black/30 px-3 py-2.5 text-left transition-colors hover:border-white/[0.18]"
+        >
+          {chosen ? (
+            <span className="flex min-w-0 items-baseline gap-1.5">
+              <span className="shrink-0 font-mono text-[12px] text-white/35">
+                {chosen.fullName.split("/")[0]}/
+              </span>
+              <span className="truncate font-mono text-[13px] text-white">
+                {chosen.fullName.split("/")[1]}
+              </span>
+            </span>
+          ) : (
+            <span className="font-mono text-[12.5px] text-white/35">Select a repository</span>
+          )}
+          <ChevronDown
+            className={`h-3.5 w-3.5 shrink-0 text-white/40 transition-transform ${open ? "rotate-180" : ""}`}
+            aria-hidden
+          />
+        </button>
 
-      {shown.length === 0 ? (
-        <p className="text-sm text-white/40">
-          {repos.length === 0
-            ? "This installation can see no repositories. Grant it access to one on GitHub."
-            : "No repository matches that filter."}
-        </p>
-      ) : (
-        <ul className="max-h-80 divide-y divide-white/[0.05] overflow-y-auto border border-white/[0.07] bg-black/20">
-          {shown.map((r) => {
-            const isChosen = chosen?.fullName === r.fullName;
-            const [owner, name] = r.fullName.split("/");
-            return (
-              <li key={`${r.installationId}:${r.fullName}`}>
-                <button
-                  type="button"
-                  onClick={() => setChosen(r)}
-                  className={`relative flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors ${
-                    isChosen ? "bg-[#0095FF]/[0.08]" : "hover:bg-white/[0.035]"
-                  }`}
-                >
-                  {/* A rail rather than a tick: it marks the row without
-                      taking a column, and it is the same device the tables and
-                      the framework wall use. */}
-                  {isChosen ? (
-                    <span
-                      aria-hidden
-                      className="absolute inset-y-0 left-0 w-[2px] bg-[#0095FF]"
-                    />
-                  ) : null}
-                  <span className="flex min-w-0 items-baseline gap-1.5">
-                    {/* The owner is repeated on every row and is not what anyone
-                        is scanning for, so it recedes and the repository name
-                        carries the weight. */}
-                    <span className="shrink-0 font-mono text-[12px] text-white/35">{owner}/</span>
-                    <span className="truncate font-mono text-[12.5px] text-white">{name}</span>
-                    {r.private ? (
-                      <span className="ml-1 shrink-0 border border-white/[0.12] px-1 py-px font-mono text-[9px] uppercase tracking-[0.1em] text-white/40">
-                        private
-                      </span>
-                    ) : null}
-                  </span>
-                  <span className="shrink-0 font-mono text-[10.5px] text-white/35">
-                    {r.defaultBranch ?? "—"}
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+        {open ? (
+          <div className="absolute z-20 mt-1 w-full border border-white/[0.12] bg-[#0d0e11] shadow-xl">
+            <input
+              type="search"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              placeholder="Filter repositories"
+              autoFocus
+              className="w-full border-b border-white/[0.08] bg-transparent px-3 py-2.5 font-mono text-[12.5px] text-white outline-none placeholder:text-white/25"
+            />
+
+            {shown.length === 0 ? (
+              <p className="px-3 py-3 text-[12px] text-white/40">
+                {repos.length === 0
+                  ? "This installation can see no repositories. Grant it access to one on GitHub."
+                  : "No repository matches that filter."}
+              </p>
+            ) : (
+              <ul className="max-h-72 divide-y divide-white/[0.05] overflow-y-auto">
+                {shown.map((r) => {
+                  const isChosen = chosen?.fullName === r.fullName;
+                  const [owner, name] = r.fullName.split("/");
+                  return (
+                    <li key={`${r.installationId}:${r.fullName}`}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setChosen(r);
+                          setOpen(false);
+                        }}
+                        className={`relative flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors ${
+                          isChosen ? "bg-[#0095FF]/[0.08]" : "hover:bg-white/[0.035]"
+                        }`}
+                      >
+                        {isChosen ? (
+                          <span aria-hidden className="absolute inset-y-0 left-0 w-[2px] bg-[#0095FF]" />
+                        ) : null}
+                        <span className="flex min-w-0 items-baseline gap-1.5">
+                          {/* The owner repeats on every row and is not what
+                              anyone is scanning for, so it recedes. */}
+                          <span className="shrink-0 font-mono text-[12px] text-white/35">{owner}/</span>
+                          <span className="truncate font-mono text-[12.5px] text-white">{name}</span>
+                          {r.private ? (
+                            <span className="ml-1 shrink-0 border border-white/[0.12] px-1 py-px font-mono text-[9px] uppercase tracking-[0.1em] text-white/40">
+                              private
+                            </span>
+                          ) : null}
+                        </span>
+                        <span className="shrink-0 font-mono text-[10.5px] text-white/35">
+                          {r.defaultBranch ?? "—"}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        ) : null}
+      </div>
 
       {chosen ? (
         <div className="space-y-4 rounded border border-white/[0.07] p-3 border-white/[0.07]">

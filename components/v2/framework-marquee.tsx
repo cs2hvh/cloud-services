@@ -1,6 +1,6 @@
 "use client";
 
-import type { ComponentType } from "react";
+import type { ComponentType, CSSProperties } from "react";
 import {
   SiAngular,
   SiAstro,
@@ -49,7 +49,7 @@ interface Tile {
   /** How it is served once built — the thing a customer is actually choosing. */
   meta: string;
   accent: string;
-  Icon: ComponentType<{ className?: string }>;
+  Icon: ComponentType<{ className?: string; style?: CSSProperties }>;
 }
 
 const COLUMN_A: Tile[] = [
@@ -87,20 +87,30 @@ const COLUMNS: Array<{ tiles: Tile[]; durationS: number; reverse: boolean }> = [
 function FrameworkTile({ tile }: { tile: Tile }) {
   const { Icon } = tile;
   return (
-    <div className="group/tile flex items-center gap-2.5 border border-white/[0.06] bg-white/[0.015] px-2.5 py-2 transition-colors duration-300 hover:border-white/[0.18] hover:bg-white/[0.05]">
+    <div
+      className="group/tile relative flex items-center gap-3 overflow-hidden border px-3.5 py-3 transition-all duration-300"
+      // Tinted from the brand colour rather than uniformly grey. The homepage
+      // model wall gets its life from every tile being a slightly different
+      // colour; a grid of identical charcoal boxes reads as a table someone
+      // forgot to finish.
+      style={{
+        borderColor: `${tile.accent}26`,
+        background: `linear-gradient(135deg, ${tile.accent}14, ${tile.accent}05 55%, transparent)`,
+      }}
+    >
+      {/* The rail carries the colour at full strength; the tile only hints at
+          it, so eight of them side by side stay legible. */}
       <span
-        className="flex h-7 w-7 shrink-0 items-center justify-center border"
-        style={{
-          background: `linear-gradient(135deg, ${tile.accent}22, ${tile.accent}08)`,
-          borderColor: `${tile.accent}40`,
-          color: tile.accent,
-        }}
-      >
-        <Icon className="h-3.5 w-3.5" />
-      </span>
+        aria-hidden
+        className="absolute inset-y-0 left-0 w-[2px] opacity-70 transition-opacity duration-300 group-hover/tile:opacity-100"
+        style={{ background: tile.accent, boxShadow: `0 0 12px ${tile.accent}` }}
+      />
+      {/* No box around the mark. A bordered square around a logo that already
+          has its own silhouette is a second frame doing nothing. */}
+      <Icon className="h-6 w-6 shrink-0" style={{ color: tile.accent }} />
       <div className="min-w-0">
-        <p className="truncate font-mono text-[11px] font-medium text-white">{tile.name}</p>
-        <p className="truncate font-mono text-[9.5px] text-white/35">{tile.meta}</p>
+        <p className="truncate font-mono text-[13px] font-medium text-white">{tile.name}</p>
+        <p className="mt-0.5 truncate font-mono text-[10.5px] text-white/45">{tile.meta}</p>
       </div>
     </div>
   );

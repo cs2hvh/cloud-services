@@ -59,7 +59,11 @@ export default async function NewProjectPage() {
         The wall is hidden below lg. On a narrow viewport it would push the
         thing you came here to use below the fold.
       */}
-      <div className="grid gap-8 lg:grid-cols-[minmax(0,640px)_minmax(0,1fr)]">
+      {/* BOTH COLUMNS ARE BOUNDED. The second was minmax(0,1fr), which on this
+          full-bleed page grew to whatever the monitor was — the framework wall
+          ran off the right edge of a wide screen. A fixed measure keeps the two
+          columns beside each other instead of one chasing the viewport. */}
+      <div className="grid gap-10 lg:grid-cols-[minmax(0,620px)_minmax(0,520px)]">
         <div>
         <Card title="Repository">
           <Picker
