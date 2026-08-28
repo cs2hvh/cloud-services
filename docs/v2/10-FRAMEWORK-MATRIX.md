@@ -88,6 +88,7 @@ support gap being mistaken for a build gap.
 | 51 | gothinkster/vue-realworld-example-app | Vue 2 SPA | BUILD-ERR | build failed | Its own build is broken upstream |
 | 52 | gothinkster/angular-realworld-example-app | Angular, **bun** | BUILD-ERR | build failed | `Could not resolve "realworld/assets/theme/styles.css"` |
 | 53 | realworld-apps/angular-realworld-example-app | The MAINTAINED copy of the same app, Angular 21 | BUILD-ERR | build failed | Fails identically, and neither manifest declares a package providing that stylesheet — so a clean install cannot. Upstream, and Vercel would fail the same way |
+| 54 | **ganatan/angular-bootstrap** | **Angular 22**, CLI build, nested output | **PASS** | **200** | Angular proven at last, and it proved the output-normalisation fix with it: `Output location: /app/dist/angular-starter`, then `site is at dist/angular-starter/browser, not dist — moving it` |
 | 8 | remix-run/indie-stack | Remix, repo-supplied Dockerfile | APP-ERR | 503 | Built, routed, served. The app wants a database it was not given |
 | 9 | sveltejs/realworld | SvelteKit on `master`, **pnpm** | APP-ERR | 503 | Built, routed, served — **first proof pnpm works end to end**. Branch fallback to `master` also proven |
 
@@ -165,8 +166,9 @@ And one that had nothing to do with package managers:
   while a package.json beside it says only that the project has JavaScript
   somewhere, which is true of nearly everything now.
 
-**ANGULAR IS NOT PROVEN.** Both copies of the canonical RealWorld Angular app
-fail on a stylesheet import that no manifest backs, so the Angular path has
+**ANGULAR IS PROVEN, on the second attempt.** Both copies of the canonical RealWorld Angular app
+fail on a stylesheet import that no manifest backs, so neither could ever prove
+the Angular path — a current Angular 22 app was needed instead. Chasing it also
 never reached a served page. Chasing it produced one real fix anyway:
 detection records `dist`, which was right until Angular 17 — the CLI now
 writes `dist/<project-name>/browser`, and a Dockerfile COPY cannot glob for a

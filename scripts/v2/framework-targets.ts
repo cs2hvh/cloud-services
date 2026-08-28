@@ -75,6 +75,11 @@ export const BATCHES: Record<string, Target[]> = {
     { repo: "nuxt/movies", note: "Nuxt 3, real app", expect: "serve" },
   ],
   angular: [
+    // A CURRENT Angular that actually builds. Both copies of the RealWorld
+    // Angular app fail on a stylesheet no manifest declares, so neither could
+    // ever prove the Angular path; this one is Angular 22 with a lockfile, and
+    // it writes to dist/<project>/browser, which is the case that broke us.
+    { repo: "ganatan/angular-bootstrap", note: "Angular 22, CLI build, nested output directory", expect: "serve" },
     { repo: "gothinkster/angular-realworld-example-app", note: "Angular; imports a stylesheet no manifest declares", expect: "build-err" },
   ],
   svelte: [
