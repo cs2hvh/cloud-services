@@ -154,18 +154,24 @@ export function DomainManager({
         </Empty>
       ) : (
         /*
-          A table in a rounded container, like every other list in this lane. It
-          was a bare bordered stack with square corners, which is what made this
-          tab look older than the ones beside it.
+          ONE FRAME, NOT FOUR. This had a rounded container inside the Card, a
+          bordered block inside that for the records, and a border on every
+          record row — so a single domain sat inside four nested boxes and the
+          eye had to work out which edge belonged to what.
+
+          The Card is the frame. Domains are separated by hairlines, and the
+          records hang off a left rail rather than sitting in a box of their
+          own: indentation says 'these belong to the domain above' using one
+          line instead of four.
         */
-        <div className="overflow-hidden rounded-[6px] border border-white/[0.07] bg-[#111216]">
-          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 border-b border-white/[0.06] bg-white/[0.015] px-4 py-2.5">
+        <div className="-mx-1">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 border-b border-white/[0.07] px-1 pb-2">
             <ColHead>Domain</ColHead>
             <ColHead align="right">Status</ColHead>
           </div>
 
           {domains.map((d) => (
-            <div key={d.ref} className="border-b border-white/[0.04] px-4 py-3 last:border-b-0">
+            <div key={d.ref} className="border-b border-white/[0.05] px-1 py-3 last:border-b-0">
               <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
                 <span className="truncate font-mono text-[13px] text-white">{d.domain}</span>
                 <span className="flex shrink-0 items-center gap-2">
@@ -174,7 +180,7 @@ export function DomainManager({
                     type="button"
                     disabled={busy}
                     onClick={() => remove(d.ref)}
-                    className="rounded-[5px] border border-white/[0.14] px-2.5 py-1 text-[11.5px] text-white/60 transition-colors hover:border-rose-400/50 hover:text-rose-300 disabled:opacity-40"
+                    className="rounded-[5px] px-2 py-1 text-[11.5px] text-white/40 transition-colors hover:bg-rose-500/10 hover:text-rose-300 disabled:opacity-40"
                   >
                     Remove
                   </button>
@@ -191,29 +197,26 @@ export function DomainManager({
                 they act on.
               */}
               {(d.records?.length ?? 0) > 0 && (
-                <div className="mt-3 overflow-hidden rounded-[6px] border border-white/[0.07] bg-black/25">
-                  <p className={`m-0 border-b border-white/[0.06] px-3 py-2 text-[10.5px] uppercase tracking-[0.12em] text-white/30`}>
+                <div className="mt-2.5 space-y-2.5 border-l border-white/[0.08] pl-3.5">
+                  <p className="m-0 text-[10.5px] uppercase tracking-[0.12em] text-white/30">
                     Add these records at your DNS provider
                   </p>
 
                   {d.records!.map((r) => (
-                    <div
-                      key={`${r.type}:${r.name}`}
-                      className="border-b border-white/[0.04] px-3 py-2.5 last:border-b-0"
-                    >
+                    <div key={`${r.type}:${r.name}`}>
                       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                        <span className="shrink-0 rounded-[3px] border border-white/[0.12] px-1.5 py-0.5 font-mono text-[9.5px] uppercase tracking-[0.1em] text-white/50">
+                        <span className="shrink-0 font-mono text-[9.5px] uppercase tracking-[0.1em] text-white/40">
                           {r.type}
                         </span>
                         <Copyable value={r.name} />
                         <span className="text-white/25">→</span>
                         <Copyable value={r.value} />
                       </div>
-                      <p className="m-0 mt-1 text-[11px] text-white/35">{r.purpose}</p>
+                      <p className="m-0 mt-0.5 text-[11px] text-white/35">{r.purpose}</p>
                     </div>
                   ))}
 
-                  <p className="m-0 border-t border-white/[0.06] px-3 py-2 text-[11px] text-white/30">
+                  <p className="m-0 text-[11px] text-white/25">
                     The certificate issues automatically once these resolve. DNS can take a few minutes.
                   </p>
                 </div>
