@@ -10,6 +10,7 @@
 
 import { checkCustomDomain } from "../../../_lib/domains";
 import { reconcileProjectByRef } from "@/lib/paas/reconciler.ts";
+import { toCustomerFacing } from "@/lib/paas/errors";
 import { listCustomHostnames, deleteCustomHostname } from "@/lib/paas/edge/cloudflare";
 import { DOMAIN_COLUMNS, FALLBACK_ORIGIN, liveStateFor, toDomainDto, type DomainRow } from "@/lib/paas/domain-view";
 import { paasConfig } from "@/lib/paas/config";
@@ -294,9 +295,12 @@ export async function POST(request: Request, { params }: Params) {
       201
     );
   } catch (e) {
-    const message = (e as Error).message.slice(0, 300);
-    await caller.db.from("domains").update({ last_error: message }).eq("id", row.id);
-    console.error("[v2/domains] issuance failed:", message);
+    // domains.last_error IS RENDERED IN THE DOMAINS TAB. The exception here is
+    // almost always from the edge provider — an auth failure, a zone conflict,
+    // a rate limit — and putting that on a customer screen names our vendor,
+    // our zone and our credential state, none of which they can act on.
+    const shown = toCustomerFacing(e, "domain", "[v2/domains]");
+    await caller.db.from("domains").update({ last_error: shown.message }).eq("id", row.id);
     return json(
       {
         domain: toDomainDto(row),
@@ -304,7 +308,7 @@ export async function POST(request: Request, { params }: Params) {
         // The claim is KEPT deliberately. Releasing it would free the domain
         // for another tenant to claim while this customer is mid-setup.
         note: "The domain is claimed, but the certificate request failed. It can be retried.",
-        error: message,
+        error: shown.message,
       },
       201
     );

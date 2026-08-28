@@ -15,6 +15,7 @@ import {
 } from "@/lib/paas/tiers.ts";
 import { getCaller } from "../../_lib/auth";
 import { kube, loadKubeconfig } from "@/lib/paas/k8s/client.ts";
+import { toCustomerFacing } from "@/lib/paas/errors";
 import {
   json,
   unauthenticated,
@@ -275,8 +276,12 @@ export async function DELETE(_request: Request, { params }: Params) {
     // happen is how v1 ended up billing for apps that no longer existed;
     // reporting failure for a delete that DID happen would have the customer
     // try again forever. Say exactly what is true of each half.
-    teardownError = (err as Error).message.slice(0, 200);
-    console.error("[v2/projects/:ref] namespace teardown failed:", err);
+    // The delete DID happen; only the workload removal did not. Reporting
+    // failure for a delete that succeeded would have the customer retry
+    // forever, and reporting success for a teardown that did not is how v1
+    // billed for apps that no longer existed. Say what is true of each half,
+    // without naming the orchestrator that refused.
+    teardownError = toCustomerFacing(err, "deploy", "[v2/projects/:ref]").message;
   }
 
   return json({

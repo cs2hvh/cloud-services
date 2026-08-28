@@ -98,7 +98,7 @@ export async function GET(request: Request, { params }: Params) {
     // A ref that cannot form a legal namespace means the row is malformed,
     // not that the caller did something wrong.
     console.error("[v2/runtime-logs] derived an invalid namespace:", namespace);
-    return apiError("internal", "This project's namespace is malformed.", 500);
+    return apiError("internal", "We could not read the logs for this app. Please try again in a few minutes.", 500);
   }
 
   const k = kube(
@@ -114,7 +114,7 @@ export async function GET(request: Request, { params }: Params) {
     console.error("[v2/runtime-logs] pod list failed:", err);
     return apiError(
       "upstream_error",
-      "Could not reach the cluster to read logs.",
+      "We could not read the logs for this app right now. Please try again in a few minutes.",
       502
     );
   }

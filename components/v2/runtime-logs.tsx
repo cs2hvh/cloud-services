@@ -74,13 +74,14 @@ export function RuntimeLogs({
         // The message from the API, not a generic one. It distinguishes "no
         // pods, this deployment was superseded" from "the cluster is
         // unreachable", and those need different reactions.
-        setError(body?.error?.message ?? `Could not read runtime logs (${res.status}).`);
+        setError(body?.error?.message ?? "We could not read the logs right now. Please try again in a few minutes.");
         return;
       }
       setError(null);
       setData(body as Payload);
     } catch (e) {
-      setError((e as Error).message);
+      console.error("[runtime-logs]", e);
+      setError("We could not reach the server. Check your connection and try again.");
     } finally {
       setLoading(false);
     }

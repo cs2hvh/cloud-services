@@ -131,7 +131,7 @@ export async function PUT(req: Request, ctx: Ctx) {
       // loudly is the only safe answer; storing plaintext "for now" is how a
       // secret store stops being one.
       console.error("[v2/env PUT] encryption failed:", (e as Error).message);
-      return apiError("internal", "Secret storage is not configured. Nothing has been saved.", 500);
+      return apiError("internal", "We could not save these variables. Nothing has been changed. Please contact support if this continues.", 500);
     }
 
     rows.push({

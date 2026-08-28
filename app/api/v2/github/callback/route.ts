@@ -71,7 +71,7 @@ export async function GET(req: Request) {
   const raw = url.searchParams.get("installation_id");
   const installationId = Number(raw);
   if (!raw || !Number.isSafeInteger(installationId) || installationId <= 0) {
-    return invalid("installation_id is missing or not a number.");
+    return invalid("GitHub did not complete the connection. Start again from the dashboard.");
   }
 
   // Necessary, not sufficient: this only establishes the installation is one of

@@ -26,6 +26,7 @@
 import { getCaller } from "../../../_lib/auth";
 import { json, unauthenticated, notFound, invalid, conflict, apiError } from "../../../_lib/http";
 import { assessRollback } from "@/lib/paas/rollback";
+import { toCustomerFacing } from "@/lib/paas/errors";
 import { imagePresence } from "@/lib/paas/registry";
 import { reconcileProjectByRef, kubeContextFromEnv } from "@/lib/paas/reconciler.ts";
 import { kube } from "@/lib/paas/k8s/client";
@@ -128,7 +129,10 @@ export async function POST(request: Request, { params }: Params) {
       imageNote = "Could not confirm the image exists; the registry did not answer.";
     }
   } catch (e) {
-    imageNote = `Could not confirm the image exists (${(e as Error).message.slice(0, 120)}).`;
+    // Why we could not check is our business — a registry that did not
+    // answer, a credential that expired. That we could not check is theirs.
+    toCustomerFacing(e, "read", "[v2/rollback]");
+    imageNote = "We could not confirm this build is still available. The rollback was applied anyway.";
   }
 
   // Wake and repoint, atomically, as one authorized write.
@@ -153,8 +157,9 @@ export async function POST(request: Request, { params }: Params) {
   try {
     await reconcileProjectByRef(project.ref);
   } catch (e) {
-    convergeError = (e as Error).message.slice(0, 300);
-    console.error("[v2/rollback] converge after rollback failed:", e);
+    // A failure here is NOT a failed rollback — the alias write already
+    // succeeded and is the source of truth.
+    convergeError = toCustomerFacing(e, "deploy", "[v2/rollback]").message;
   }
 
   return json({

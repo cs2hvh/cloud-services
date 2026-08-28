@@ -29,6 +29,7 @@
  */
 
 import { reconcileProjectByRef } from "@/lib/paas/reconciler.ts";
+import { toCustomerFacing } from "@/lib/paas/errors";
 import { isPlaceholderSha } from "../../../_lib/deployments";
 import { getCaller } from "../../../_lib/auth";
 import {
@@ -238,8 +239,11 @@ export async function PATCH(request: Request, { params }: Params) {
   try {
     await reconcileProjectByRef(project.ref);
   } catch (e) {
-    convergeError = (e as Error).message.slice(0, 300);
-    console.error("[v2/aliases] converge after promote failed:", e);
+    // The alias write above is durable and IS the promotion. What failed is
+    // applying it to the cluster, and the sweep finishes that — so this is a
+    // note, not an error. The exception itself names the orchestrator and
+    // belongs in the log, not in a response.
+    convergeError = toCustomerFacing(e, "deploy", "[v2/aliases]").message;
   }
 
   return json({

@@ -130,7 +130,7 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
           });
 
         const res = await fetch("/api/v2/repos");
-        if (!res.ok) throw new Error(`Could not list repositories (${res.status}).`);
+        if (!res.ok) throw new Error("We could not load your repositories. Please try again in a few minutes.");
         const body = await res.json();
         if (cancelled) return;
         setRepos(body.repos ?? []);
@@ -142,7 +142,12 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
           setLoadError(`Some connections could not be read: ${body.errors.map((e: { account: string }) => e.account).join(", ")}.`);
         }
       } catch (e) {
-        if (!cancelled) setLoadError((e as Error).message);
+        // Logged for the operator, never rendered: the browser text here is
+        // "Failed to fetch" or "NetworkError when attempting to fetch", which
+        // means nothing to a customer and can carry a URL we would rather not
+        // put on their screen.
+        console.error("[repos]", e);
+        if (!cancelled) setLoadError("We could not reach the server. Check your connection and try again.");
       }
     })();
     return () => {
@@ -182,7 +187,7 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
           connection: chosen.connectionId,
         });
         const res = await fetch(`/api/v2/git/branches?${qs}`);
-        if (!res.ok) throw new Error(`Could not list branches (${res.status}).`);
+        if (!res.ok) throw new Error("We could not load the branches for this repository. Please try again in a few minutes.");
         const body = await res.json();
         if (cancelled) return;
         const names: string[] = (body.branches ?? []).map((b: { name: string }) => b.name);
@@ -192,7 +197,8 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
         if (chosen.defaultBranch && names.includes(chosen.defaultBranch)) setBranch(chosen.defaultBranch);
         else if (names.length) setBranch(names[0]);
       } catch (e) {
-        if (!cancelled) setBranchError((e as Error).message);
+        console.error("[branches]", e);
+        if (!cancelled) setBranchError("We could not reach the server. Check your connection and try again.");
       }
     })();
     return () => {
@@ -230,7 +236,7 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
       if (!res.ok) {
         // The API's message, not a generic one. It already says whether this is
         // a duplicate name, an unknown plan, or an unusable repository name.
-        setSubmitError(body?.error?.message ?? `Could not create the project (${res.status}).`);
+        setSubmitError(body?.error?.message ?? "We could not create this app. Nothing has been created. Please try again in a few minutes.");
         return;
       }
 
@@ -252,7 +258,8 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
 
       router.push(`/dashboard/services/apps/${body.project.ref}`);
     } catch (e) {
-      setSubmitError((e as Error).message);
+      console.error("[create]", e);
+      setSubmitError("We could not reach the server. Check your connection and try again.");
     } finally {
       setSubmitting(false);
     }

@@ -124,7 +124,7 @@ export function SizingPicker({
     const res = await fetch(`/api/v2/projects/${projectRef}/deployments`, { method: "POST" });
     const body = await res.json().catch(() => null);
     if (!res.ok) {
-      setError(body?.error?.message ?? `Could not deploy (${res.status}).`);
+      setError(body?.error?.message ?? "We could not start that deployment. Please try again in a few minutes.");
       setDeploying(false);
       return;
     }

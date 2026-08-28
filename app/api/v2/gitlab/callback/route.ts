@@ -59,7 +59,7 @@ export async function GET(req: Request) {
   }
 
   const code = url.searchParams.get("code");
-  if (!code) return invalid("code is missing.");
+  if (!code) return invalid("GitLab did not complete the connection. Start again from the dashboard.");
 
   const state = verifyState(url.searchParams.get("state"), "gitlab");
   if (!state.ok) {

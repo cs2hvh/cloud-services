@@ -40,6 +40,7 @@ import {
 import { ACTIVATOR_NAME, activatorAliasService } from "./k8s/activator.ts";
 import { appIngress } from "./k8s/gateway.ts";
 import { projects, deployments, aliases, envVars, environments, type ProjectRow, type DeploymentRow, type AliasRow } from "./db.ts";
+import { toCustomerFacing } from "./errors.ts";
 import { requireTier, clampInstances, resourcesFor, DEFAULT_TIER } from "./tiers.ts";
 import { PREVIEW_TIER, PREVIEW_INSTANCES } from "./previews.ts";
 import { decryptEnvValue, pgHexToBytes } from "./secrets.ts";
@@ -851,6 +852,6 @@ export async function promoteAndConverge(
     // The pointer moved and is durable; the loop will finish the job. Report it
     // rather than throwing, so the caller can say "promoted, converging" rather
     // than implying the promote failed when it did not.
-    return { alias, report: null, convergeError: (e as Error).message.slice(0, 300) };
+    return { alias, report: null, convergeError: toCustomerFacing(e, "deploy", "[reconciler]").message };
   }
 }

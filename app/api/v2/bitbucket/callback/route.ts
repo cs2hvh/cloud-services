@@ -56,7 +56,7 @@ export async function GET(req: Request) {
   if (url.searchParams.get("error")) return back({ error: "bitbucket_denied" });
 
   const code = url.searchParams.get("code");
-  if (!code) return invalid("code is missing.");
+  if (!code) return invalid("Bitbucket did not complete the connection. Start again from the dashboard.");
 
   const state = verifyState(url.searchParams.get("state"), "bitbucket");
   if (!state.ok) {

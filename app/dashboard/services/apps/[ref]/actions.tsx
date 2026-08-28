@@ -29,14 +29,17 @@ export function DeployButton({ projectRef, branch }: { projectRef: string; branc
         // 409 is not a failure the user caused — it means the same commit is
         // already on its way, which is worth saying plainly rather than as an
         // error.
-        setMessage(body?.error?.message ?? `Could not deploy (${res.status}).`);
+        setMessage(body?.error?.message ?? "We could not start that deployment. Please try again in a few minutes.");
         return;
       }
       setMessage(`Queued ${body.deployment.shortSha} on ${body.deployment.branch}.`);
       router.refresh();
     } catch (e) {
+      // Logged for the operator, never rendered. The browser text here is
+      // "Failed to fetch" or similar, which means nothing to a customer.
+      console.error("[apps]", e);
       setFailed(true);
-      setMessage((e as Error).message);
+      setMessage("We could not reach the server. Check your connection and try again.");
     } finally {
       setBusy(false);
     }
@@ -87,7 +90,7 @@ export function EnvEditor({ projectRef, initial }: { projectRef: string; initial
       });
       const body = await res.json();
       if (!res.ok) {
-        setError(body?.error?.message ?? `Could not save (${res.status}).`);
+        setError(body?.error?.message ?? "We could not save that. Nothing has been changed.");
         return;
       }
       setSaved(body.note ?? "Saved.");
@@ -97,7 +100,10 @@ export function EnvEditor({ projectRef, initial }: { projectRef: string; initial
       setVars(fresh.vars ?? []);
       router.refresh();
     } catch (e) {
-      setError((e as Error).message);
+      // Logged for the operator, never rendered. The browser text here is
+      // "Failed to fetch" or similar, which means nothing to a customer.
+      console.error("[apps]", e);
+      setError("We could not reach the server. Check your connection and try again.");
     } finally {
       setBusy(false);
     }
@@ -112,7 +118,7 @@ export function EnvEditor({ projectRef, initial }: { projectRef: string; initial
       });
       if (!res.ok) {
         const body = await res.json();
-        setError(body?.error?.message ?? `Could not delete (${res.status}).`);
+        setError(body?.error?.message ?? "We could not delete that. Nothing has been changed.");
         return;
       }
       setVars((v) => v.filter((x) => x.key !== name));

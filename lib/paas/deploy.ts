@@ -35,6 +35,7 @@ import { imageIsDurable } from "./build/registry.ts";
 import { kube } from "./k8s/client.ts";
 import { PAAS_NAMESPACE, REGISTRY_PUSH, publisherJob } from "./k8s/manifests.ts";
 import { reconcileProject, kubeContextFromEnv } from "./reconciler.ts";
+import { buildFailureMessage, customerError, toCustomerFacing, GENERIC } from "./errors.ts";
 import { db, teams, projects, environments, deployments, aliases, envVars, type DeploymentRow, type ProjectRow, type AliasRow } from "./db.ts";
 import { decryptEnvValue, pgHexToBytes } from "./secrets.ts";
 import { appHostname } from "./config.ts";
@@ -457,14 +458,20 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
     // their root — and both were told to connect a GitHub account, which would
     // not have helped and is not the problem.
     if (!readable) {
-      throw new Error(
-        `cannot read ${opts.repo}: no GitHub App installation covers that account, so a private ` +
-          `repository is indistinguishable from an empty one. Connect the account that owns it and ` +
-          `redeploy. Detection saw no files at all, which is why this is not reported as a missing ` +
-          `framework marker.`,
+      // Customer-facing on purpose: they own the fix, and the distinction
+      // between 'we could not read it' and 'we read it and found nothing' is
+      // exactly what they need to act.
+      throw customerError(
+        "repo_unreadable",
+        `We could not read ${opts.repo}. If it is private, connect the account that owns it and ` +
+          `deploy again — we saw no files at all, which usually means we do not have access ` +
+          `rather than that the repository is empty.`,
       );
     }
-    throw new Error(`cannot determine how to build ${opts.repo}: ${detection.reason}`);
+    throw customerError(
+      "framework_undetected",
+      `We could not work out how to build ${opts.repo}. ${detection.reason}`,
+    );
   }
 
   // A PYTHON PROJECT WHOSE ENTRYPOINT WE WOULD BE INVENTING.
@@ -485,10 +492,12 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
     "manage.py", "app.py", "main.py", "wsgi.py", "asgi.py", "application.py", "server.py", "run.py",
   ];
   if (detection.runtime === "python" && !PYTHON_ENTRYPOINTS.some((f) => files.paths.includes(f))) {
-    throw new Error(
-      `detected ${detection.framework} in ${opts.repo}, but none of ${PYTHON_ENTRYPOINTS.join(", ")} is at ` +
-        `the root, so there is no module to start. If the application lives in a subdirectory, set the ` +
-        `root directory to it; if this is a library rather than an application, it cannot be deployed.`,
+    throw customerError(
+      "no_entrypoint",
+      `This looks like a ${detection.framework} app, but none of ${PYTHON_ENTRYPOINTS.join(", ")} is at ` +
+        `the root, so there is nothing for us to start. If the app lives in a subdirectory, set the ` +
+        `root directory to it in Settings; if this is a library rather than an app, it cannot be ` +
+        `deployed here.`,
     );
   }
 
@@ -509,10 +518,11 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
   // is correct. Without one, refusing here costs nothing — the build was going
   // to fail a minute later with a worse message and a leased machine.
   if (detection.runtime === "static" && !detection.buildCommand && !files.paths.includes("index.html")) {
-    throw new Error(
-      `detected ${detection.framework} in ${opts.repo}, but the repository has no build script and no ` +
-        `index.html to serve as-is. If this is a monorepo, set the root directory to the app that ` +
-        `builds; if it is a plain static site, commit an index.html at that root.`,
+    throw customerError(
+      "nothing_to_build",
+      `This looks like a ${detection.framework} project, but it has no build script and no ` +
+        `index.html we could serve as-is. If this is a monorepo, set the root directory to the app ` +
+        `that builds; if it is a plain static site, commit an index.html at that root.`,
     );
   }
 
@@ -570,7 +580,11 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
     if (found.state !== "queued") {
       // Refusing rather than rebuilding is what stops two workers, or a worker
       // and a retry, from both building one commit.
-      throw new Error(`deployment ${found.ref} is ${found.state}, not queued — refusing to rebuild it`);
+      throw customerError(
+        "not_queued",
+      `That deployment has already ${found.state === "ready" ? "finished" : `moved on (${found.state})`}, ` +
+          `so it cannot be built again. Start a new deployment instead.`,
+      );
     }
     d = await deployments.setRuntimeFacts(found.ref, { containerPort: port, runAsUser: runtimeUid(detection) });
     say("deployment", `${d.ref} adopted (${d.trigger})`);
@@ -682,6 +696,9 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
     // A value we cannot decrypt must stop the build. Continuing bakes a missing
     // key into the bundle, and that failure surfaces in someone's browser with
     // nothing pointing back to here.
+    // The underlying failure is a decryption or a database problem — ours,
+    // and named in terms the customer cannot use. It reaches the log through
+    // toCustomerFacing at the seam; it must not ride along in the message.
     throw new Error(
       `cannot read the public environment for ${project.ref}: ${(e as Error).message}`,
     );
@@ -747,9 +764,10 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
       // Refuse before leasing a VM. Proceeding would spend money to reach a
       // clone failure whose real cause — the installation cannot see this
       // repository — appears nowhere in the build log.
-      throw new Error(
-        `the connected GitHub installation cannot see ${opts.repo}. Grant it access to that ` +
-          `repository and redeploy.`,
+      throw customerError(
+        "repo_not_granted",
+        `Your connected GitHub account cannot see ${opts.repo}. Grant it access to that ` +
+          `repository and deploy again.`,
       );
     }
     gitToken = (await buildCloneUrl(buildInstallationId, { id: match.id, full_name: match.full_name })).token;
@@ -804,9 +822,17 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
   }
 
   if (!result || result.status !== "success") {
-    const msg = result?.error ?? "build timed out";
-    await deployments.setState(d.ref, { state: "error", errorCode: "build_failed", errorMessage: msg });
-    throw new Error(`build failed for ${d.ref}: ${msg}`);
+    const raw = result?.error ?? null;
+    // Two audiences, two strings. The customer gets a sentence they can act on
+    // when the failure is theirs, and a generic one plus a reference when it is
+    // ours; the operator gets the original, in the log and in the throw.
+    const shown = buildFailureMessage(raw);
+    await deployments.setState(d.ref, {
+      state: "error",
+      errorCode: shown.code,
+      errorMessage: shown.message,
+    });
+    throw customerError(shown.code, shown.message);
   }
   say("build", `image ${result.imageDigest}`);
 
@@ -855,7 +881,10 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
     await deployments.setState(d.ref, {
       state: "error",
       errorCode: "publish_failed",
-      errorMessage: "publisher job did not succeed",
+      // "publisher" is an internal component and names nothing the customer
+      // can act on. They need to know it is ours and that retrying is the
+      // right next step.
+      errorMessage: GENERIC.build,
     });
     throw new Error(`publish failed for ${d.ref}`);
   }
@@ -938,7 +967,10 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
   // would reject it anyway; failing here says why.
   const clash = await aliases.byHostname(hostname);
   if (clash && clash.project_id !== project.id) {
-    throw new Error(`hostname ${hostname} is already claimed by another project`);
+    throw customerError(
+      "hostname_taken",
+      `${hostname} is already in use by another app. Rename this app to get a different address.`,
+    );
   }
 
   const allAliases = await aliases.forProject(project.id);

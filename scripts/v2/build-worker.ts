@@ -21,6 +21,7 @@
  */
 
 import { deployments, projects } from "../../lib/paas/db.ts";
+import { toCustomerFacing } from "../../lib/paas/errors.ts";
 import { deployFromRepo } from "../../lib/paas/deploy.ts";
 import { kube, loadKubeconfig } from "../../lib/paas/k8s/client.ts";
 import { PAAS_NAMESPACE } from "../../lib/paas/k8s/manifests.ts";
@@ -99,10 +100,17 @@ async function buildOne(ref: string): Promise<void> {
     try {
       const after = await deployments.byRef(d.ref);
       if (after && (after.state === "queued" || after.state === "building" || after.state === "publishing")) {
+        // TRANSLATED, NOT TRUNCATED. This used to be the raw exception text,
+        // and deployments.error_message is shown to the customer — so a
+        // Cloudflare 403, an R2 signature mismatch or a malformed kubeconfig
+        // path would have been rendered on their screen verbatim. None of
+        // those is theirs to act on, and together they map our infrastructure
+        // to anyone who can make a build fail.
+        const shown = toCustomerFacing(e, "build", "[build-worker]");
         await deployments.setState(d.ref, {
           state: "error",
-          errorCode: "build_failed",
-          errorMessage: message.slice(0, 500),
+          errorCode: shown.code,
+          errorMessage: shown.message,
         });
         console.log(`   recorded   ${d.ref} -> error (it would otherwise retry forever)`);
       }

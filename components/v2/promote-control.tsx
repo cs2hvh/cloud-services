@@ -104,8 +104,8 @@ export function PromoteControl({
     // who is not told will repeat a write that already worked.
     if (body?.converged === false) {
       setResult(
-        `Rolled back, but the cluster has not converged yet. It is recorded and ` +
-          `will be applied — do not repeat it. (${body?.convergeError ?? "no detail"})`,
+        `Rolled back. This is saved and will be applied shortly — do not repeat it.` +
+          (body?.convergeError ? ` ${body.convergeError}` : ""),
       );
       setBusy(false);
       return;
