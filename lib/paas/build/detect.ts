@@ -157,9 +157,12 @@ export function detectFramework(files: RepoFiles): Detection {
       buildCommand: "composer install --no-dev --optimize-autoloader",
       startCommand: null,
       outputDirectory: "public",
-      port: 80,
+      // 8080, not 80. The container runs as a non-root uid and cannot bind a
+      // privileged port — the same constraint that made every static site
+      // crash-loop on an nginx pidfile it could not write.
+      port: 8080,
       confidence: "likely",
-      reason: "Found composer.json.",
+      reason: "Found composer.json; installing with composer and serving public/ through Apache.",
     };
   }
 

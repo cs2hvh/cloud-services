@@ -155,7 +155,12 @@ test("servingPort matches the port the container actually exposes", () => {
 });
 
 test("a runtime we cannot build refuses rather than emitting a broken image", () => {
-  const d = { ...detect(["README.md"]), runtime: "php" as const, framework: "php" };
+  // EVERY runtime the detector can currently produce has a builder — php was the
+  // last one without, and adding it made this test fail because its example was
+  // no longer unsupported. The guard still matters: it is what a NEW runtime hits
+  // between being detected and being buildable, and detection is deliberately
+  // allowed to run ahead of the builders. So the example is one that cannot exist.
+  const d = { ...detect(["README.md"]), runtime: "erlang" as unknown as "php", framework: "erlang" };
   // Asserting the PROPERTY, not the wording. This used to pin the exact string
   // `No generator for runtime`, so improving the message — which named our
   // internals and read like a crash — failed a test that had no quarrel with the
@@ -163,7 +168,7 @@ test("a runtime we cannot build refuses rather than emitting a broken image", ()
   // the escape hatch.
   assert.throws(() => generateDockerfile(input({ detection: d })), (e: unknown) => {
     const m = (e as Error).message;
-    return m.includes("php") && /Dockerfile/.test(m);
+    return m.includes("erlang") && /Dockerfile/.test(m);
   });
 });
 
@@ -664,4 +669,53 @@ test("finding nothing at all FAILS rather than shipping an empty site", () => {
   // available outcome — it looks like a routing fault for as long as anyone cares
   // to look.
   assert.match(df, /no index\.html anywhere under dist"; exit 1/);
+});
+
+// PHP, AND THE PART THAT IS NOT ABOUT PHP.
+//
+// Apache normally starts as root, binds port 80 and drops to www-data. This
+// container never gets to be root, so all three assumptions have to be undone.
+// Every static site on this platform once crash-looped because exactly one
+// detail of this kind — an nginx pidfile — was missed, and the symptom was a 503
+// behind a clean startup log.
+
+function php() {
+  return mustGenerate({
+    detection: { framework: "php", runtime: "php", buildCommand: "composer install", startCommand: null, outputDirectory: "public", port: 8080, confidence: "likely", reason: "t" },
+    packageManager: "npm",
+    hasLockfile: false,
+    publicEnvKeys: [],
+  });
+}
+
+test("php listens on an unprivileged port and runs unprivileged", () => {
+  const df = php();
+  assert.match(df, /Listen 8080/);
+  assert.match(df, /^USER 1001:1001$/m);
+  assert.ok(!/^USER root$/m.test(df), "the runner must not run as root");
+});
+
+test("ITS RUNTIME PATHS ARE WRITABLE BY THE UID THAT USES THEM", () => {
+  const df = php();
+  // Created before they are chowned: /var/run/apache2 does not exist in the
+  // base image, and `set -eux` would abort the whole layer on the chown.
+  assert.match(df, /mkdir -p \/var\/run\/apache2/);
+  assert.ok(
+    df.indexOf("mkdir -p /var/run/apache2") < df.indexOf("chown -R 1001:1001"),
+    "the directories must exist before they are chowned",
+  );
+  assert.match(df, /PidFile \/tmp\/apache2\.pid/);
+});
+
+test("THE DOCUMENT ROOT IS TESTED FOR, NOT ASSUMED", () => {
+  // Laravel and Symfony serve from public/; a plain PHP app serves from its
+  // root. Getting this wrong serves the application's SOURCE, which is a
+  // security question rather than a cosmetic one.
+  const df = php();
+  assert.match(df, /if \[ -f \/var\/www\/html\/public\/index\.php \]/);
+  assert.match(df, /DocumentRoot/);
+});
+
+test("composer runs without dev dependencies", () => {
+  assert.match(php(), /composer install --no-dev/);
 });
