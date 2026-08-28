@@ -91,6 +91,7 @@ support gap being mistaken for a build gap.
 | 54 | **ganatan/angular-bootstrap** | **Angular 22**, CLI build, nested output | **PASS** | **200** | Angular proven at last, and it proved the output-normalisation fix with it: `Output location: /app/dist/angular-starter`, then `site is at dist/angular-starter/browser, not dist — moving it` |
 | 55 | **laravel/laravel** | Laravel, composer, Apache | **PASS** | **200** | Detected as a React SPA in the morning, refused as unbuildable PHP by the afternoon, deployed by the evening |
 | 56 | symfony/demo | Symfony, composer, Apache | APP-ERR | 500 | Builds, routes, pod **Ready=True** — the application wants APP_SECRET and a database. Needed `APP_ENV=prod`, which is Symfony-specific |
+| 57 | **gothinkster/golang-gin-realworld-example-app** | Gin + **SQLite via cgo** | **WORKING** | 404 at `/`, **200 at `/api/articles` and `/api/tags`** | Crash-looped on exit 2 before: built CGO_ENABLED=0, so the sqlite3 driver was absent at run time. Now serves real rows out of its database |
 | 8 | remix-run/indie-stack | Remix, repo-supplied Dockerfile | APP-ERR | 503 | Built, routed, served. The app wants a database it was not given |
 | 9 | sveltejs/realworld | SvelteKit on `master`, **pnpm** | APP-ERR | 503 | Built, routed, served — **first proof pnpm works end to end**. Branch fallback to `master` also proven |
 
@@ -205,40 +206,19 @@ its own.
   way. Worth revisiting only with the relaxation stated loudly in the build
   log.
 
-**Known limitation — cgo.** Go binaries are built `CGO_ENABLED=0` because the
-runtime is `distroless/static`. A dependency that needs cgo — `go-sqlite3` is
-the common one — builds but fails at startup. Supporting it means a second Go
-runtime shape with a libc in it, which is a real decision rather than an
-oversight.
-- **the build could not read the project's environment.** Applications that
-  validate configuration during `next build` — @t3-oss/env-nextjs is
-  everywhere — could not be deployed at all, however completely the customer
-  had filled their environment in. Server-side values now arrive through a
-  buildkit secret mount, which is in no image layer, unlike a build arg.
-- **and the last build arg was silently dropped.** The file is written with no
-  trailing newline and `read` returns non-zero on a final unterminated line, so
-  `while IFS= read -r line` never ran its body for it. With one variable that is
-  every variable. Unreachable while buildArgs was hardcoded empty; the first
-  public value ever passed went missing.
-- **an install that runs the repository's own scripts got only the manifest.**
-  `prisma generate` reads prisma/schema.prisma, emits a client with no models,
-  and the build dies much later with a type error in the customer's own source.
-- **Hugo was not a framework.** It was detected as Go (Hugo modules ship a
-  go.mod), then needed npm dependencies for js.Build and Tailwind, then a
-  NEWER node than Debian ships, and finally was routed to port 80 while nginx
-  listened on 8080 — building, publishing and routing successfully while
-  serving nothing.
-- **two public repositories were told to connect a GitHub account.** The flag
-  behind that message reported whether we held a TOKEN, not whether we could
-  read anything, while its own comment claimed otherwise. The inverse of this
-  project's recurring bug: treating observed-empty as could-not-observe.
-- **Python entrypoints were invented, not read.** `gunicorn app:app` for
-  Flask and a `wsgi.py` hunt for Django are what a Python app USUALLY looks
-  like, not anything found in the repository. When the guess was wrong there
-  was no good failure: one spent a build machine failing to install itself,
-  the other built, routed and then crash-looped on exit 2 — reaching the
-  customer as a 503 with no cause, and sitting in this matrix as a correct
-  app error. Both are now refused in a second, naming the fix.
+**cgo is no longer a limitation.** Go binaries are built with cgo ENABLED and
+still link statically — usually opposites. The builder is alpine, so the C
+library is musl, which links statically without glibc's caveats; the runtime
+stays distroless, which only a static binary can use. gothinkster's Gin app
+went from crash-looping on a missing sqlite3 driver to serving rows out of
+SQLite.
+
+**A 4xx is the application answering, not a platform failure.** The harness
+counted 4xx as FAIL, which buried every API-only service in the same bucket as
+a build that never started — the Gin app answers 404 at `/` because a REST API
+has no root handler, while `/api/articles` returns 200. Only silence counts as
+ours now, and the pod diagnosis runs for every non-served result so a genuine
+routing fault stays distinguishable.
 
 **Still open — the build context cannot be separated from the root
 directory.** Setting a root directory makes it the Docker build context, which

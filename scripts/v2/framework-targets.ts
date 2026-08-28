@@ -131,7 +131,7 @@ export const BATCHES: Record<string, Target[]> = {
   /* ── Compiled and other runtimes ──────────────────────────────────────── */
 
   go: [
-    { repo: "gothinkster/golang-gin-realworld-example-app", note: "Gin, go.mod", expect: "app-err" },
+    { repo: "gothinkster/golang-gin-realworld-example-app", note: "Gin + SQLite via cgo; a REST API with no root route", expect: "app-err" },
     { repo: "gohugoio/hugoDocs", note: "Hugo, static site generator", expect: "serve" },
   ],
   ruby: [

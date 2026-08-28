@@ -239,9 +239,20 @@ async function main(): Promise<number> {
 
   line();
   const served = status >= 200 && status < 400;
-  // APP-ERR is not FAIL. A 5xx means we built it, routed it, and the customer's
-  // own code answered badly — the platform did its job.
-  const verdict = served ? "PASS" : status >= 500 ? "APP-ERR" : "FAIL";
+  // APP-ERR is not FAIL. ANY HTTP status means we built it, routed it, and
+  // something answered — the platform did its job and the reply is the
+  // application's. Only silence is ours to answer for.
+  //
+  // 4xx used to count as FAIL, and that mislabelled every API-only service: the
+  // Gin RealWorld app answers 404 at / because a REST API has no root handler,
+  // while /api/articles and /api/tags both return 200 from its database. Calling
+  // that a platform failure would have buried a working deployment in the same
+  // bucket as a build that never started.
+  //
+  // A routing failure also shows as 404, so this is deliberately generous — which
+  // is why the pod diagnosis below runs for every non-served result. Ready=True
+  // beside a 404 is an application with no route there; anything else is ours.
+  const verdict = served ? "PASS" : status > 0 ? "APP-ERR" : "FAIL";
   console.log(`  RESULT      ${verdict}  http=${status || "no answer"}`);
   if (!served && builtRef) await diagnose(builtRef);
   console.log(`  project     ${builtRef ?? "(none)"}`);
