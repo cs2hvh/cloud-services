@@ -42,6 +42,14 @@ export interface SweepJob {
   schedule: string;
   needs: SweepNeed[];
   why: string;
+  /**
+   * Whether the scheduled run is allowed to act, rather than only report.
+   *
+   * OFF FOR EVERYTHING BY DEFAULT, and each sweep that turns it on says why
+   * at its own definition. A sweep that starts changing the world the moment
+   * it is scheduled is the wrong shape for anything that deletes or bills.
+   */
+  apply?: boolean;
 }
 
 /**
@@ -150,10 +158,20 @@ export const SWEEP_JOBS: SweepJob[] = [
     script: "scripts/v3/project-teardown.ts",
     schedule: "18 * * * *",
     needs: ["db", "k8s", "cf"],
-    // REPORT ONLY — installed without --apply. It scales pods down and deletes
-    // DNS records, and a sweep that starts destroying the moment it is
-    // scheduled is the wrong shape for that even when every project it touches
-    // has already been deleted by its owner.
+    // APPLIES, since 2026-08-28, and this is the only sweep that does.
+    //
+    // It was report-only on the reasoning that a sweep should not start
+    // destroying the moment it is scheduled. What changed is evidence: it had
+    // 33 pending actions, every one of them a DNS record left behind by a
+    // project its owner had already deleted, and running it by hand converged
+    // to zero without touching anything live. Its own `why` below explains the
+    // cost of leaving it off — the owner keeps paying for an app they deleted.
+    //
+    // The scope is what makes this safe rather than the intent: the query is
+    // `deleted_at=not.is.null`, so a project that is live cannot be reached by
+    // it at all. It is idempotent, so a missed run self-heals, and database
+    // rows are kept because build history is what explains a bill.
+    apply: true,
     why: "A soft-deleted project is INVISIBLE to reconcileAll, which iterates projects.list() and that filters deleted_at=is.null. So its pods keep running, its Ingress keeps routing, its DNS keeps resolving, and once metering is on its owner keeps paying for an app they deleted — v1's $543.17 defect reproduced exactly. Idempotent by construction, so a missed run is self-healing rather than permanent. Database rows are KEPT: build history is what explains a bill.",
   },
   {
@@ -304,8 +322,12 @@ const FINDINGS_EXIT_CODES = [10, 11] as const;
  * in the source closure, and when the contract is absent no translation
  * happens: every non-zero stays a failure, which is noisy and correct.
  */
-export function sweepCommand(scriptPath: string, contractPresent: boolean): string[] {
-  const node = `node --experimental-strip-types /src/${scriptPath}`;
+export function sweepCommand(
+  scriptPath: string,
+  contractPresent: boolean,
+  apply = false,
+): string[] {
+  const node = `node --experimental-strip-types /src/${scriptPath}${apply ? " --apply" : ""}`;
   if (!contractPresent) {
     // No contract: exit 1 is ambiguous, so nothing is translated. Findings will
     // show as failed Jobs until the contract ships — visibly wrong beats
@@ -378,7 +400,7 @@ export function sweepCronJob(
                 {
                   name: "sweep",
                   image: "node:24-alpine",
-                  command: sweepCommand(job.script, contractPresent),
+                  command: sweepCommand(job.script, contractPresent, job.apply === true),
                   workingDir: "/src",
                   envFrom: [{ secretRef: { name: `sweep-${job.name}` } }],
                   volumeMounts: [{ name: "src", mountPath: "/src", readOnly: true }],
