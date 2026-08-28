@@ -108,7 +108,29 @@ behavioural tests replaying confirmed v1 criticals.
 ## 4. What is NOT done
 
 ### Blocks opening signups to untrusted tenants
-- **Origin lockdown — BLOCKED ON A CREDENTIAL WE DO NOT CONTROL** 2026-08-26.
+- ~~**Origin lockdown**~~ — **DONE 2026-08-28**, verified in both directions.
+  `scripts/v2/origin-lockdown-apply.ts --apply`. Firewall 143239782 is attached
+  to NodeBalancer 2437817 (device 14371201). Every hostname still answers 200
+  through Cloudflare; a direct connection to 172.236.185.23 now times out.
+  Undo with `--detach`.
+  - The four preconditions were CHECKED rather than assumed, because the note
+    below asked for exactly that and had been written two days earlier:
+    Traefik carries no ACME arguments at all, so nothing at the origin needs
+    port 80 from outside Cloudflare; the firewall's rules match Cloudflare's
+    live list today (15 v4, 7 v6, nothing missing and nothing extra); the
+    firewall was attached to nothing; and all 26 A records pointing at the
+    origin are proxied, as are `app.ahurasense.ai` and the custom hostname
+    `task3.cs2hvh.com`, which live in OTHER zones and would not have shown up
+    in the first check.
+  - The script probes every live hostname before touching anything, attaches,
+    probes again, and DETACHES if something that was answering has stopped. A
+    revert nobody is awake to perform is not a revert.
+  - **The first direct-access test said 404, which looked like failure and was
+    not.** A firewall change is not instant at the edge; the same request timed
+    out a minute later. Reading one probe as proof would have produced a
+    confident, wrong report in either direction.
+
+- ~~Origin lockdown, as it stood on 2026-08-26~~ (kept for the reasoning):
   The origin NodeBalancer still answers on its public IP, so Cloudflare's WAF
   and rate limiting can be walked past by anyone who learns the address.
   - Linode Cloud Firewall `143239782` exists. It **cannot be attached from the
@@ -403,7 +425,9 @@ behavioural tests replaying confirmed v1 criticals.
       *User action —* it deletes DNS records and database rows, so it needs an
       explicit go-ahead. Until then, an expired preview is reported and not
       removed.
-- **Build logs are not surfaced to users.**
+- ~~Build logs are not surfaced to users.~~ **DONE.** Build and runtime logs
+  are both on the project page, and the runtime view explains an empty read
+  rather than showing nothing.
 
 ### Economics
 - **Warm fraction measured 1.0** across three independent measurements: every app

@@ -719,3 +719,39 @@ test("THE DOCUMENT ROOT IS TESTED FOR, NOT ASSUMED", () => {
 test("composer runs without dev dependencies", () => {
   assert.match(php(), /composer install --no-dev/);
 });
+
+// CGO IS ON, AND THE BINARY IS STILL STATIC — usually opposites.
+//
+// Building CGO_ENABLED=0 is the ordinary way to get a binary that runs on
+// distroless, and it silently excludes every dependency with a C part.
+// mattn/go-sqlite3 is the common one: it compiles, the driver is absent at run
+// time, and the app dies at startup on `sql: unknown driver "sqlite3"` — having
+// built and routed perfectly. gothinkster's Gin app failed exactly that way.
+
+test("go enables cgo and still links statically", () => {
+  const df = mustGenerate({
+    detection: { framework: "go", runtime: "go", buildCommand: null, startCommand: null, outputDirectory: null, port: 8080, confidence: "certain", reason: "t" },
+    packageManager: "npm",
+    hasLockfile: false,
+    publicEnvKeys: [],
+  });
+  assert.match(df, /CGO_ENABLED=1/);
+  assert.match(df, /-linkmode external/);
+  assert.match(df, /-extldflags "-static"/);
+  // Without a C compiler in the builder, enabling cgo fails at the first
+  // dependency that needs it.
+  assert.match(df, /apk add --no-cache gcc musl-dev/);
+});
+
+test("THE RUNTIME IS STILL DISTROLESS, which only a static binary can use", () => {
+  // If the link stopped being static this would keep passing while every Go app
+  // died on a missing loader, so the two assertions belong together.
+  const df = mustGenerate({
+    detection: { framework: "go", runtime: "go", buildCommand: null, startCommand: null, outputDirectory: null, port: 8080, confidence: "certain", reason: "t" },
+    packageManager: "npm",
+    hasLockfile: false,
+    publicEnvKeys: [],
+  });
+  assert.match(df, /FROM gcr\.io\/distroless\/static-debian12:nonroot/);
+  assert.match(df, /-extldflags "-static"/);
+});
