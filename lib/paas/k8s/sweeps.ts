@@ -147,10 +147,28 @@ export const SWEEP_JOBS: SweepJob[] = [
     // a pod started at :00 is observed rather than raced.
     schedule: "4 * * * *",
     needs: ["db", "k8s"],
-    // NOTE: installed WITHOUT --apply, so it reports what it would bill and
-    // charges nothing. Money moving is a decision with a person behind it, and
-    // a sweep that starts deducting the moment it is scheduled is the wrong
-    // shape for that. Flipping it on is one word in this script path.
+    // BILLING IS LIVE, 2026-08-28, on Harshit's explicit instruction. Until then
+    // this ran hourly in dry run and nothing had ever been charged: the RPC
+    // existed, usage was sampled, the usage tab showed what a customer would owe,
+    // and no money moved.
+    //
+    // Three things were checked before the flag went in, because turning on
+    // billing is not reversible in the way a deploy is — money already taken
+    // stays taken.
+    //
+    //  1. TEARDOWN APPLIES FIRST. A project whose pods were never torn down is
+    //     invisible to reconcileAll but still running, and billing that is
+    //     v1's $543.17 defect exactly. project-teardown now acts on its schedule
+    //     and converged to zero pending actions before this was enabled.
+    //  2. NOBODY GETS SUSPENDED BY IT. Insufficient credit starts an arrears
+    //     clock that ends in suspension, so an empty balance would have taken
+    //     live apps down. Both payers hold enough for years and no project
+    //     carries arrears_since.
+    //  3. A RE-RUN CANNOT DOUBLE-CHARGE. The claim is keyed on
+    //     (project_id, period_start) with a unique constraint and inserts
+    //     ON CONFLICT DO NOTHING, so a repeated hour returns already-charged
+    //     before any credit is touched.
+    apply: true,
     why: "Bills every running v2 app for the hour in progress. Without it, paas.charge_project_hour exists and nothing calls it, which is the same as not having it — every project ran free while usage_samples collected. Refuses to bill at all when the cluster cannot be read: an unreadable cluster is not an empty one, and under-billing is recoverable because the hour is keyed, while over-billing is money taken for work nobody verified.",
   },
   {
