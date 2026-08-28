@@ -162,11 +162,17 @@ export function EnvEditor({
       delete next[activeScope];
       return next;
     });
-    // Not just "Saved". Kubernetes reads envFrom once at container start, so
-    // the reconciler rolls the pods to apply a change — it is neither instant
-    // nor zero-downtime, and saying otherwise implies it already took effect.
+    // "restarting to apply" was FALSE, and the server had been saying so all
+    // along: its response note reads "Saved. Redeploy for these to take
+    // effect." Nothing reconciles a project when env changes — the reconciler
+    // is called by deploy, rollback, aliases and domains, and by nothing else —
+    // so the pods keep the environment they started with until the next build.
+    //
+    // A running pod reads envFrom once, at container start. Telling somebody it
+    // is restarting when it is not is how they conclude the platform ignored
+    // their change.
     setMessage(
-      `Saved ${saved} variable${saved === 1 ? "" : "s"} — restarting to apply.`
+      `Saved ${saved} variable${saved === 1 ? "" : "s"}. Redeploy for ${saved === 1 ? "it" : "them"} to take effect — running pods keep the values they started with.`
     );
     setBusy(false);
   }
