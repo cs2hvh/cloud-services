@@ -66,6 +66,18 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
    */
   const [teamRef, setTeamRef] = useState<string | null>(null);
 
+  /**
+   * Which providers this deployment can start a connect flow for.
+   *
+   * Asked rather than assumed. The authorize routes 500 when their client
+   * credentials are unset — correctly, because a half-configured OAuth app
+   * produces an authorize URL the provider rejects — but a button that 500s
+   * on click is worse than one that is not offered. Null while unknown.
+   */
+  const [connectable, setConnectable] = useState<
+    Array<{ provider: Provider; label: string; configured: boolean; connectUrl: string }> | null
+  >(null);
+
   // Everything below was accepted by POST /api/v2/projects from the start and
   // never offered. The API validated `branch`, `rootDirectory` and `instances`
   // while the form silently sent the default branch, no subdirectory and one
@@ -97,6 +109,16 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
       try {
         // Asked alongside the repo list rather than only when it comes back
         // empty: the button has to be ready the moment the empty state renders.
+        fetch("/api/v2/git/providers")
+          .then((r) => (r.ok ? r.json() : null))
+          .then((b) => {
+            if (!cancelled) setConnectable(b?.providers ?? null);
+          })
+          .catch(() => {
+            // Left null. The empty state then names no provider rather than
+            // offering one that may not work.
+          });
+
         fetch("/api/v2/me")
           .then((r) => (r.ok ? r.json() : null))
           .then((me) => {
@@ -251,38 +273,78 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
 
   if (connected === false) {
     return (
-      <div className="rounded border border-dashed border-white/[0.09] px-4 py-8 text-center border-white/[0.09]">
-        <p className="text-sm font-medium">No GitHub account connected</p>
+      <div className="rounded border border-dashed border-white/[0.09] px-4 py-8 text-center">
+        <p className="text-sm font-medium">No git account connected</p>
         <p className="mt-1 text-xs text-white/40">
-          Install the AhuraSense app on your GitHub account and choose which repositories it can see.
+          Connect GitHub, GitLab or Bitbucket and we will read its repositories. You choose which
+          ones we can see.
         </p>
         {/*
           CONNECTIONS ARE PER TEAM, NOT PER LOGIN, and that is why this can say
           "not connected" while the account settings page says "Connected".
           That page reads your Supabase OAuth identities — how you signed in.
-          This reads paas.installations, which records which GitHub App
-          installation a TEAM holds. Signing in with GitHub does not give your
-          team a deploy connection, and the two are meant to be separable:
-          people deploy from an org account they did not sign in with.
+          This reads paas.installations, which records which connection a TEAM
+          holds. Signing in with GitHub does not give your team a deploy
+          connection, and the two are meant to be separable: people deploy from
+          an org account they did not sign in with.
         */}
         <p className="mt-3 text-xs text-white/40">
-          Signing in with GitHub is not the same thing — that is how you log in.
-          This connects a GitHub account to your team so we can read its
-          repositories.
+          Signing in is not the same thing — that is how you log in. This connects an account to
+          your team so we can read its repositories.
         </p>
-        {teamRef ? (
-          <a
-            href={`/api/v2/git/connect?team=${encodeURIComponent(teamRef)}`}
-            className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-white px-4 py-2 text-xs font-medium text-black transition-colors hover:bg-white/90"
-          >
-            Connect GitHub
-          </a>
-        ) : (
-          // No button rather than a broken one. Without a team ref the connect
-          // route cannot bind the installation to anything.
+
+        {/*
+          THE SAME THREE BUTTONS AS THE PANEL BELOW, because this is where
+          somebody with nothing connected actually is. Sending them to a
+          GitHub-only button here and showing GitLab further down would make
+          the second one look like a different feature.
+        */}
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+          {(connectable ?? [])
+            .filter((c) => c.configured)
+            .map((c) => ({
+              provider: c.provider,
+              label: c.label,
+              // GitHub's connect route binds the installation to a team and
+              // needs it in the URL; the OAuth routes mint their state
+              // server-side and need nothing from here.
+              href:
+                c.provider === "github"
+                  ? teamRef
+                    ? `${c.connectUrl}?team=${encodeURIComponent(teamRef)}`
+                    : null
+                  : c.connectUrl,
+            }))
+            .map((c) =>
+            c.href ? (
+              <a
+                key={c.provider}
+                href={c.href}
+                className="inline-flex items-center gap-1.5 rounded-md border border-white/[0.14] px-3 py-2 text-xs font-medium text-white/80 transition-colors hover:border-white/30 hover:text-white"
+              >
+                <span style={{ color: PROVIDER_ACCENT[c.provider] }}>
+                  <ProviderMark provider={c.provider} className="h-3.5 w-3.5" />
+                </span>
+                {c.label}
+              </a>
+            ) : null,
+          )}
+        </div>
+
+        {connectable !== null && !connectable.some((c) => c.configured) ? (
           <p className="mt-4 text-xs text-amber-600 dark:text-amber-500">
-            Could not read your team, so the connect link cannot be built. Reload,
-            and if it persists your account has no team yet.
+            No git provider is configured on this deployment. An operator has to set the client
+            credentials before any account can be connected.
+          </p>
+        ) : null}
+
+        {teamRef ? null : (
+          // No GitHub button rather than a broken one. Without a team ref the
+          // connect route cannot bind the installation to anything. The OAuth
+          // providers mint their state server-side and are unaffected.
+          <p className="mt-4 text-xs text-amber-600 dark:text-amber-500">
+            Could not read your team, so the GitHub connect link cannot be built. Reload, and if it
+            persists your account has no team yet.
           </p>
         )}
       </div>
