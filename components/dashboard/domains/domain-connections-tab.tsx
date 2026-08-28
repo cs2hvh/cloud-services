@@ -495,7 +495,7 @@ export function DomainConnectionsTab({
                         )}
                       </Button>
                     )}
-                    <Link href={`/dashboard/services/apps/${connection.appId}`}>
+                    <Link href={`/dashboard/services/apps-v1/${connection.appId}`}>
                       <Button
                         size="sm"
                         variant="ghost"

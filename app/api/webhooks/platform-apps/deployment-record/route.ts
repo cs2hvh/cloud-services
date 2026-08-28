@@ -153,7 +153,7 @@ export async function POST(req: NextRequest) {
         event: body.status === 'success' ? 'ready' : 'failed',
         items: items.length > 0 ? items : undefined,
         errorMessage: body.status === 'failed' ? (failure_reason ?? undefined) : undefined,
-        actionPath: `/dashboard/services/apps/${body.app_id}`,
+        actionPath: `/dashboard/services/apps-v1/${body.app_id}`,
       });
     }
 

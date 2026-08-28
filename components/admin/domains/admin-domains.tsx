@@ -185,7 +185,7 @@ function StatusBadge({ status, colorMap }: { status: string; colorMap: Record<st
 function AppPill({ name, slug }: { name: string | null; slug: string | null }) {
   if (!name) return <span className="text-white/25 text-xs italic">—</span>;
   return (
-    <a href={slug ? `/dashboard/services/apps/${slug}` : "#"} target="_blank" rel="noreferrer"
+    <a href={slug ? `/dashboard/services/apps-v1/${slug}` : "#"} target="_blank" rel="noreferrer"
       className="inline-flex items-center gap-1 text-xs text-blue-300 hover:text-blue-200 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded transition-colors">
       {name}<ExternalLink className="h-2.5 w-2.5 opacity-60" />
     </a>

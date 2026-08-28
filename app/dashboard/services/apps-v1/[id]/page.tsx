@@ -1002,7 +1002,7 @@ export default function AppDetailPage() {
           const provider: string = validProviders.includes(data.provider) ? (data.provider as string) : 'github';
           setEnvVarError(`Your ${provider} account is not connected or the token has expired. Redirecting to Account Settings to reconnect…`);
           redirectTimerRef.current = setTimeout(() => {
-            router.push(`/dashboard/settings?tab=account&reconnect=${provider}&returnTo=/dashboard/services/apps/${app.id}`);
+            router.push(`/dashboard/settings?tab=account&reconnect=${provider}&returnTo=/dashboard/services/apps-v1/${app.id}`);
           }, 1500);
           return;
         }
@@ -1201,7 +1201,7 @@ export default function AppDetailPage() {
             <XCircle className="h-10 w-10 text-rose-300/70 mx-auto mb-4" />
             <p className="text-[15px] font-semibold text-white">{error || 'App not found'}</p>
             <Link
-              href="/dashboard/services/apps"
+              href="/dashboard/services/apps-v1"
               className={`${APP_MONO} mt-6 inline-flex items-center gap-1.5 h-10 px-3.5 border border-white/[0.08] bg-[#0d0e11] text-[11px] uppercase tracking-[0.14em] text-white/65 hover:text-white hover:bg-white/[0.04] rounded-[5px] transition-colors`}
             >
               <ArrowLeft className="h-3 w-3" />
@@ -1236,7 +1236,7 @@ export default function AppDetailPage() {
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl min-w-0">
             <Link
-              href="/dashboard/services/apps"
+              href="/dashboard/services/apps-v1"
               className={`${APP_MONO} inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.14em] text-white/45 hover:text-white transition-colors mb-5`}
             >
               <ArrowLeft className="h-3 w-3" />

@@ -29,7 +29,32 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const REPO = join(import.meta.dirname, "..", "..");
-const ROOTS = [join("app", "dashboard", "v2"), join("components", "v2")];
+// The deploy-v2 project pages moved to /dashboard/services/apps when v2 became
+// the surface a customer actually reaches; app/dashboard/v2 still holds the
+// admin view. Both are listed, and MISSING ONE IS THE FAILURE MODE THIS FILE
+// EXISTS TO PREVENT: after the move the scan still found eight files and every
+// check still passed, while covering none of the pages that had just moved.
+const ROOTS = [
+  join("app", "dashboard", "v2"),
+  join("app", "dashboard", "services", "apps"),
+  join("components", "v2"),
+];
+
+/**
+ * Files that must be in the scan, named individually.
+ *
+ * A count is not coverage. `length >= 8` stayed true when the project pages
+ * moved out from under the roots, so the suite went green while the thing it
+ * guards had left the building. Naming them means a move has to update this
+ * list, which is a deliberate act rather than a silent loss.
+ */
+// `rel` is always forward-slashed, so these are too — matching on join() would
+// pass on POSIX and fail on Windows for no reason anyone would enjoy finding.
+const MUST_SCAN = [
+  "app/dashboard/services/apps/page.tsx",
+  "app/dashboard/services/apps/[ref]/page.tsx",
+  "app/dashboard/services/apps/new/page.tsx",
+];
 
 /** Handlers React only accepts on a client component. */
 const HANDLER = /\son(Click|Change|Submit|Input|Focus|Blur|KeyDown|KeyUp|MouseEnter|MouseLeave)=\{/;
@@ -73,6 +98,12 @@ test("the scan is looking at real files, not an empty tree", () => {
   // to check — a guard that succeeds by not running.
   const all = files();
   assert.ok(all.length >= 8, `expected the v2 surfaces, found ${all.length}`);
+  for (const must of MUST_SCAN) {
+    assert.ok(
+      all.some((f) => f.rel === must),
+      `${must} is not being scanned — did these pages move again?`,
+    );
+  }
   assert.ok(all.some((f) => f.isClient), "expected at least one client component");
   assert.ok(all.some((f) => !f.isClient), "expected at least one server component");
 });

@@ -227,7 +227,7 @@ export function AppsList({
                 here.
               </p>
               <Link
-                href="/dashboard/services/apps/new"
+                href="/dashboard/services/apps-v1/new"
                 className="font-[var(--font-geist-mono),ui-monospace,monospace] relative z-10 mt-5 inline-flex items-center gap-2 h-9 px-4 text-[11px] uppercase tracking-[0.14em] font-semibold rounded-[5px] transition-all"
                 style={{
                   background: "linear-gradient(135deg, #0095FF, #0066B3)",

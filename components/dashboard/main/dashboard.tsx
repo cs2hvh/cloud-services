@@ -486,7 +486,7 @@ const Dashboard = ({ data }: { data: PageProps }) => {
                             {data.platform_apps.map((app) => (
                                 <ResourceRow
                                     key={`pa-${app.id}`}
-                                    href={`/dashboard/services/apps/${app.id}`}
+                                    href={`/dashboard/services/apps-v1/${app.id}`}
                                     icon={<div className="h-3.5 w-3.5"><AppGlyph /></div>}
                                     title={app.name}
                                     sub={`${app.repository_name} · ${app.git_provider || "github"}`}

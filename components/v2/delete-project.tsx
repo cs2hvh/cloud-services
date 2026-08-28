@@ -63,7 +63,7 @@ export function DeleteProject({
       return;
     }
 
-    router.push("/dashboard/v2/projects");
+    router.push("/dashboard/services/apps");
     router.refresh();
   }
 

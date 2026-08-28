@@ -155,7 +155,7 @@ export function AppCard({
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 mb-1">
                 <Link 
-                  href={`/dashboard/services/apps/${app.id}`}
+                  href={`/dashboard/services/apps-v1/${app.id}`}
                   className={`text-sm font-semibold text-white truncate hover:text-blue-400 transition-colors ${
                     isAppDeleting ? 'pointer-events-none' : ''
                   }`}
@@ -250,7 +250,7 @@ export function AppCard({
 
           {/* Right: Actions */}
           <div className="flex items-center gap-2 ml-4">
-            <Link href={`/dashboard/services/apps/${app.id}`}>
+            <Link href={`/dashboard/services/apps-v1/${app.id}`}>
               <Button
                 size="sm"
                 variant="ghost"

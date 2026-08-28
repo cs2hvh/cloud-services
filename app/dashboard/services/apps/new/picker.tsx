@@ -207,7 +207,7 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
         }
       }
 
-      router.push(`/dashboard/v2/projects/${body.project.ref}`);
+      router.push(`/dashboard/services/apps/${body.project.ref}`);
     } catch (e) {
       setSubmitError((e as Error).message);
     } finally {

@@ -34,7 +34,7 @@ import { unauthenticated, invalid, notFound, conflict, apiError } from "../../_l
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const DASHBOARD = "/dashboard/v2/projects";
+const DASHBOARD = "/dashboard/services/apps";
 
 function back(params: Record<string, string>): Response {
   const q = new URLSearchParams(params).toString();

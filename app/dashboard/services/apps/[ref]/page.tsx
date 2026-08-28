@@ -74,7 +74,7 @@ export default async function ProjectPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect(`/signin?redirectTo=${encodeURIComponent(`/dashboard/v2/projects/${ref}`)}`);
+  if (!user) redirect(`/signin?redirectTo=${encodeURIComponent(`/dashboard/services/apps/${ref}`)}`);
   if (!PROJECT_REF.test(ref)) notFound();
 
   const db = supabase.schema("paas");
@@ -297,7 +297,7 @@ export default async function ProjectPage({
     <ServiceShell>
       <PageHeader
         title={project.slug}
-        back={{ href: "/dashboard/v2/projects", label: "Projects" }}
+        back={{ href: "/dashboard/services/apps", label: "Projects" }}
         description={
           <span className="font-mono text-xs">
             {project.repo_full_name} · {project.production_branch}
@@ -488,7 +488,7 @@ export default async function ProjectPage({
                       is always present and is what the link uses anyway.
                     */}
                     <Link
-                      href={`/dashboard/v2/projects/${project.ref}/deployments/${d.ref}`}
+                      href={`/dashboard/services/apps/${project.ref}/deployments/${d.ref}`}
                       className="text-xs text-sky-300 transition-colors hover:text-sky-200"
                     >
                       <code className="text-xs">
