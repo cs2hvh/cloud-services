@@ -151,8 +151,35 @@ export function detectFramework(files: RepoFiles): Detection {
   // APPLICATION; a package.json in the same repository says only that it has
   // JavaScript somewhere, which is true of nearly every web application now.
   if (has(files, "composer.json")) {
+    // WHICH PHP FRAMEWORK MATTERS, and only for one reason: Symfony runs
+    // `cache:clear` from a composer auto-script, and with --no-dev that fails
+    // with
+    //
+    //     Uncaught Error: Class Symfony\\Bundle\\DebugBundle\\DebugBundle not found
+    //
+    // because config/bundles.php still lists the dev bundles for the dev
+    // environment. Setting APP_ENV=prod is the documented answer — and it is
+    // NOT safe to set for everything: Laravel's production environment is
+    // spelled `production`, so a blanket `prod` would quietly put a Laravel
+    // app in an environment of its own.
+    const composer = files.contents["composer.json"] ?? "";
+    let requires: Record<string, unknown> = {};
+    try {
+      const parsed = JSON.parse(composer || "{}");
+      requires = { ...(parsed.require ?? {}), ...(parsed["require-dev"] ?? {}) };
+    } catch {
+      // An unreadable composer.json is still a PHP project. It will fail at
+      // install with an error naming the file, which is clearer than anything
+      // this branch could say.
+    }
+    const framework = Object.hasOwn(requires, "symfony/framework-bundle")
+      ? "symfony"
+      : Object.hasOwn(requires, "laravel/framework")
+        ? "laravel"
+        : "php";
+
     return {
-      framework: "php",
+      framework,
       runtime: "php",
       buildCommand: "composer install --no-dev --optimize-autoloader",
       startCommand: null,
@@ -162,7 +189,7 @@ export function detectFramework(files: RepoFiles): Detection {
       // crash-loop on an nginx pidfile it could not write.
       port: 8080,
       confidence: "likely",
-      reason: "Found composer.json; installing with composer and serving public/ through Apache.",
+      reason: `Found composer.json${framework === "php" ? "" : ` (${framework})`}; installing with composer and serving public/ through Apache.`,
     };
   }
 
@@ -518,6 +545,8 @@ export const DETECTION_FILES = [
   // Contents, not just presence: this file's whole purpose is the version
   // written inside it.
   ".nvmrc",
+  // Contents, because which PHP framework it is changes how it must be built.
+  "composer.json",
   // Hugo. hugo.toml is the modern name; a site made before 0.110 still uses
   // config.toml, which is far too generic on its own — archetypes/default.md
   // is what `hugo new site` writes and nothing else does, so the pair is the

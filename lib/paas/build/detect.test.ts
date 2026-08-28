@@ -345,8 +345,11 @@ test("composer.json outranks a package.json full of frontend tooling", () => {
     "package.json": pkg({ react: "^18.0.0", vite: "^5.0.0" }, { build: "vite build" }),
     "composer.json": JSON.stringify({ require: { "laravel/framework": "^11.0" } }),
   }));
-  assert.equal(d.framework, "php");
+  // The RUNTIME is the claim being made here. Which PHP framework it is gets
+  // decided separately, and asserting that here made this test fail for a reason
+  // it has no opinion about.
   assert.equal(d.runtime, "php");
+  assert.equal(d.framework, "laravel");
 });
 
 test("a repository with ONLY package.json is still a Node app", () => {
@@ -389,4 +392,43 @@ test("A NODE PROJECT BESIDE A Cargo.toml IS STILL NODE", () => {
     "package.json": pkg({ next: "15.0.0" }, { build: "next build" }),
   }));
   assert.equal(d.framework, "nextjs");
+});
+
+// WHICH PHP FRAMEWORK, and only because it changes how the thing must be built.
+//
+// Symfony runs cache:clear from a composer auto-script, and with --no-dev that
+// dies on a DebugBundle that config/bundles.php still lists for the dev
+// environment. APP_ENV=prod is the documented fix — and is NOT safe to set for
+// every PHP app, because Laravel's production environment is spelled
+// `production`, so a blanket `prod` would put a Laravel app in an environment of
+// its own.
+
+test("symfony is told apart by its framework-bundle", () => {
+  const d = detectFramework(repo(["composer.json"], {
+    "composer.json": JSON.stringify({ require: { "symfony/framework-bundle": "^7.0" } }),
+  }));
+  assert.equal(d.framework, "symfony");
+  assert.equal(d.runtime, "php");
+});
+
+test("laravel is told apart by its framework", () => {
+  const d = detectFramework(repo(["composer.json"], {
+    "composer.json": JSON.stringify({ require: { "laravel/framework": "^12.0" } }),
+  }));
+  assert.equal(d.framework, "laravel");
+});
+
+test("A PLAIN PHP PROJECT IS NEITHER", () => {
+  // Without this, a detector that answered `symfony` unconditionally would pass
+  // the first test and quietly put every PHP app into APP_ENV=prod.
+  const d = detectFramework(repo(["composer.json"], {
+    "composer.json": JSON.stringify({ require: { "monolog/monolog": "^3.0" } }),
+  }));
+  assert.equal(d.framework, "php");
+});
+
+test("an unreadable composer.json is still a PHP project", () => {
+  const d = detectFramework(repo(["composer.json"], { "composer.json": "{ not json" }));
+  assert.equal(d.runtime, "php");
+  assert.equal(d.framework, "php");
 });

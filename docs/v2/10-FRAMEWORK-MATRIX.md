@@ -75,9 +75,9 @@ support gap being mistaken for a build gap.
 | 38 | github/gitignore | No framework marker at all | REFUSED | at detect | Now says so. It used to be told to connect a GitHub account it does not need |
 | 39 | docker/awesome-compose | Many apps, none at the root | REFUSED | at detect | Same, and it took a second fix — its default branch is `master` |
 | 40 | **spring-projects/spring-petclinic** | Spring Boot, Maven | **PASS** | **200** | Clean run, no fixes needed. The JVM path was right first time |
-| 41 | laravel/laravel | Laravel skeleton | REFUSED | at detect | Was detected as **vite-react (static)** — its package.json carries vite and react for the asset pipeline. Now correctly PHP, and refused because PHP has no builder |
+| 41 | laravel/laravel | Laravel skeleton | REFUSED | at detect | Was detected as **vite-react (static)** — its package.json carries vite and react for the asset pipeline. Now correctly PHP — and refused at the time, because PHP had no builder yet. See row 55 |
 | 42 | symfony/demo | Symfony demo | REFUSED | at detect | Same refusal, in plain words rather than `[dockerfile] No generator for runtime` |
-| 43 | actix/examples | Actix, cargo workspace | REFUSED | at detect | Rust is not detected at all — Cargo.toml is not a marker file |
+| 43 | actix/examples | Actix, cargo workspace | REFUSED | at detect | Rust was not detected at all at the time — Cargo.toml was not a marker file. It is now |
 | 44 | **gatsbyjs/gatsby-starter-blog** | Gatsby, yarn, native deps | **PASS** | **200** | Was BUILD-ERR. Detecting Gatsby as static rather than as a generic Node server changed the whole path, and it no longer needs the dependency that would not compile |
 | 45 | **vercel/ai-chatbot** | Next.js, native deps, heavy build | **PASS** | **307** | A redirect to sign-in, which is the app working |
 | 46 | vercel/next-learn `dashboard/final-example` | Next.js that PRERENDERS from a database | BUILD-ERR | build failed | `Failed to fetch card data` while prerendering /dashboard. It needs POSTGRES_URL AT BUILD TIME — which the platform can now supply, so this is configuration rather than a defect. Never tested before: the batch runner was broken when this target was chosen |
@@ -89,6 +89,8 @@ support gap being mistaken for a build gap.
 | 52 | gothinkster/angular-realworld-example-app | Angular, **bun** | BUILD-ERR | build failed | `Could not resolve "realworld/assets/theme/styles.css"` |
 | 53 | realworld-apps/angular-realworld-example-app | The MAINTAINED copy of the same app, Angular 21 | BUILD-ERR | build failed | Fails identically, and neither manifest declares a package providing that stylesheet — so a clean install cannot. Upstream, and Vercel would fail the same way |
 | 54 | **ganatan/angular-bootstrap** | **Angular 22**, CLI build, nested output | **PASS** | **200** | Angular proven at last, and it proved the output-normalisation fix with it: `Output location: /app/dist/angular-starter`, then `site is at dist/angular-starter/browser, not dist — moving it` |
+| 55 | **laravel/laravel** | Laravel, composer, Apache | **PASS** | **200** | Detected as a React SPA in the morning, refused as unbuildable PHP by the afternoon, deployed by the evening |
+| 56 | symfony/demo | Symfony, composer, Apache | APP-ERR | 500 | Builds, routes, pod **Ready=True** — the application wants APP_SECRET and a database. Needed `APP_ENV=prod`, which is Symfony-specific |
 | 8 | remix-run/indie-stack | Remix, repo-supplied Dockerfile | APP-ERR | 503 | Built, routed, served. The app wants a database it was not given |
 | 9 | sveltejs/realworld | SvelteKit on `master`, **pnpm** | APP-ERR | 503 | Built, routed, served — **first proof pnpm works end to end**. Branch fallback to `master` also proven |
 
@@ -178,6 +180,21 @@ rather than shipping an nginx that answers 404 on a build that reported
 success. Verified against a real /bin/sh, and Gatsby re-verified at 200
 afterwards to confirm the untouched case stayed untouched.
 
+**PHP AND RUST BOTH BUILD NOW**, and with them every runtime the detector can
+produce has a builder behind it. PHP was the harder of the two, and almost
+none of the difficulty was PHP: Apache starts as root, binds port 80 and drops
+to www-data, and this platform grants none of those — so the listener moved to
+8080, the pid and lock files moved somewhere writable, and the directories
+Apache opens at startup had to be created before they could be handed over.
+That is the same class of detail that once left every static site
+crash-looping on an nginx pidfile.
+
+Symfony additionally needs `APP_ENV=prod` at install, or its composer
+auto-script runs cache:clear against dev bundles that --no-dev has removed.
+That is set for Symfony ALONE: Laravel spells its production environment
+`production`, so a blanket `prod` would put a Laravel app in an environment of
+its own.
+
 **Deliberate gaps, with reasons.**
 
 - **`npm install --legacy-peer-deps` is NOT used as a fallback.** It would let
@@ -187,29 +204,6 @@ afterwards to confirm the untouched case stayed untouched.
   the exact conflicting versions, which is actionable. Vercel fails the same
   way. Worth revisiting only with the relaxation stated loudly in the build
   log.
-
-- **PHP has no builder.** Detection recognises it — knowing what something is
-  beats calling it unknown — and refuses before leasing a machine, naming the
-  Dockerfile escape hatch. Vercel, the benchmark for this work, does not build
-  PHP either. Supporting it properly means php-fpm behind nginx in one image,
-  or Apache with its document root moved to public/, and a non-root uid that
-  neither expects: a real piece of work rather than a missing branch.
-- **Rust is not detected at all.** Cargo.toml is not a marker file, so a Rust
-  repository is refused as having no recognised framework. actix/examples is a
-  cargo workspace and would be refused anyway, but a single-binary Rust
-  service would be too, and that is a gap rather than a judgement.
-- **the default branch was guessed from two files many repositories lack.**
-  Detection probed README.md and package.json on `main` and fell back to
-  `master`; a Go repository has no package.json, and this one has no root
-  README either. Worse, the wrong guess LOOKED right:
-  raw.githubusercontent.com still serves a branch GitHub has renamed, so
-  `master/go.mod` returned 200 and detection reported a ref that `git clone`
-  then could not find. GitHub is now asked for `default_branch` instead.
-- **`go build ./...` cannot write multiple packages to one output.** Any module
-  with a package beside its main — most of them — failed after downloading
-  every dependency. The main package is now located with `go list`, which
-  covers a main at the root and one under cmd/ alike, and refuses clearly when
-  there is none.
 
 **Known limitation — cgo.** Go binaries are built `CGO_ENABLED=0` because the
 runtime is `distroless/static`. A dependency that needs cgo — `go-sqlite3` is
