@@ -221,7 +221,12 @@ behavioural tests replaying confirmed v1 criticals.
     `calico, host-local, portmap` — **no bandwidth plugin**, so those annotations
     would apply cleanly and shape nothing. Adding it on LKE is the open question,
     since node config is not exposed.
-- **Origin is reachable directly — confirmed wide open.**
+- ~~**Origin is reachable directly**~~ — **CLOSED 2026-08-28.** Firewall
+  143239782 is attached to NodeBalancer 2437817; a direct connection to the
+  origin now times out while every hostname still answers 200 through
+  Cloudflare. The measurement below is what it looked like before, and the
+  reasoning about why Traefik could not close it is still the reason the fix
+  had to happen at the network layer:
   `curl -k -H "Host: v2-docker.ahurasense.com" https://172.236.185.23/` returns
   **200**, and so does plain HTTP on port 80. That bypasses Cloudflare entirely:
   no WAF, no DDoS protection, no TLS on the `:80` path, and the per-tenant rate
@@ -318,7 +323,12 @@ behavioural tests replaying confirmed v1 criticals.
       Services. It now releases the aliases and deletes the namespace, and
       reports `deleted` and `marked_for_deletion` as different outcomes rather
       than flattening them.
-- **ROLLBACK WORKS, AND ONLY FROM A SCRIPT** 2026-08-27 (`418168fd`).
+- **ROLLBACK WORKS** 2026-08-27 (`418168fd`), and no longer only from a
+  script: `POST /api/v2/projects/[ref]/rollback` exists and
+  `components/v2/promote-control.tsx` drives it from the deployments tab. It
+  posts to that endpoint rather than PATCHing an alias, because moving one
+  alias moves one hostname and leaves the others pointing at the old
+  deployment. The original note follows.
   `scripts/v2/rollback.ts --project … [--to …] [--apply]`. Proven on a live
   app in both directions: rolled `prj-560214c8fa34` back to `dpl-d04263409931`
   (pod came up on the target digest, three hostnames 200) and forward again.
@@ -428,6 +438,28 @@ behavioural tests replaying confirmed v1 criticals.
 - ~~Build logs are not surfaced to users.~~ **DONE.** Build and runtime logs
   are both on the project page, and the runtime view explains an empty read
   rather than showing nothing.
+
+### What is left, and who it belongs to — 2026-08-28
+
+The framework sweep is finished: every runtime the detector can produce has a
+builder, and every batch has run. Origin lockdown is closed. Delete deletes.
+The teardown sweep acts on its schedule. Three things remain, and all three
+are decisions rather than work:
+
+1. **Metering is installed and runs hourly in DRY RUN.** `paas.charge_project_hour`
+   exists, usage is sampled, the usage tab shows what a customer would owe —
+   and nothing has ever been charged. Turning it on is one flag
+   (`apply: true` on the meter-apps job in `lib/paas/k8s/sweeps.ts`). It is
+   deliberately not mine to flip: money moving is a decision with a person
+   behind it. **Turn teardown on FIRST** — that ordering is now satisfied, and
+   it matters because billing a project whose pods were never torn down is
+   exactly v1's $543.17 defect.
+2. **Egress bandwidth is unbounded.** Needs a Cloudflare plan decision; the
+   free plan gives one rate-limit rule and no per-tenant WAF.
+3. **Scale-to-zero is opt-in and off.** Warm fraction measured 1.0, which is
+   the ~$52k/month model at 10k apps rather than the ~$18–20k the plan
+   assumes. Making it the default trades a cold start on the first request for
+   most of that difference — a product decision, not a technical one.
 
 ### Economics
 - **Warm fraction measured 1.0** across three independent measurements: every app
