@@ -50,6 +50,7 @@ import { SizingPicker } from "@/components/v2/sizing-picker";
 import { SleepSettings } from "@/components/v2/sleep-settings";
 import { BuildSettings } from "@/components/v2/build-settings";
 import { DeleteProject } from "@/components/v2/delete-project";
+import { SourceSettings } from "@/components/v2/source-settings";
 import { PromoteControl } from "@/components/v2/promote-control";
 import { DomainManager } from "@/components/v2/domain-manager";
 
@@ -678,6 +679,18 @@ export default async function ProjectPage({
 
       {tab === "settings" ? (
         <div className="space-y-4">
+      {/* First, because it is the only setting that decides WHAT gets built.
+          Size, sleep and build context all describe how to run whatever this
+          points at. */}
+      <Card title="Source">
+        <SourceSettings
+          projectRef={project.ref}
+          repoFullName={project.repo_full_name}
+          productionBranch={project.production_branch}
+          rootDirectory={project.root_directory}
+        />
+      </Card>
+
       <Card title="Size">
         {/*
           Replaces the read-only cpu/memory line this page used to show. Same

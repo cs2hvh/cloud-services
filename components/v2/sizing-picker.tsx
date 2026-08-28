@@ -146,9 +146,26 @@ export function SizingPicker({
  }`}
                 >
                   <span className="min-w-0">
-                    <span className="block text-[13.5px] text-white">{t.label}</span>
-                    <span className="mt-0.5 block text-[12px] text-white/45">
+                    <span className="flex items-center gap-2">
+                      <span className="text-[13.5px] text-white">{t.label}</span>
+                      {/* Which one you are ALREADY on. Without it the selected
+                          card and the current plan look identical the moment
+                          somebody clicks a different one, and there is no way
+                          back except remembering. */}
+                      {t.id === currentTier ? (
+                        <span className="border border-white/[0.15] px-1 py-px font-mono text-[9px] uppercase tracking-[0.1em] text-white/40">
+                          current
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="mt-0.5 block font-mono text-[11.5px] text-white/45">
                       {gib(t.memoryMib)} · {t.vcpu} vCPU
+                    </span>
+                    {/* Transfer was passed to this component and never shown. It
+                        is part of what the price buys, and leaving it out makes
+                        two plans look like they differ only in memory. */}
+                    <span className="mt-0.5 block font-mono text-[11px] text-white/30">
+                      {t.transferGb} GB transfer
                     </span>
                   </span>
                   <span className="shrink-0 text-right">

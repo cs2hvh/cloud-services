@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { Notice, Empty } from "@/components/v2/notice";
 
@@ -87,6 +88,11 @@ export function EnvEditor({
   // discard or a successful save.
   const [drafts, setDrafts] = useState<Record<string, Draft[]>>({});
   const [busy, setBusy] = useState(false);
+  // Set only after a successful save, so the redeploy offer appears exactly
+  // when the message that asks for it does.
+  const router = useRouter();
+  const [needsDeploy, setNeedsDeploy] = useState(false);
+  const [deploying, setDeploying] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const scopeDrafts = drafts[activeScope] ?? [];
@@ -174,7 +180,25 @@ export function EnvEditor({
     setMessage(
       `Saved ${saved} variable${saved === 1 ? "" : "s"}. Redeploy for ${saved === 1 ? "it" : "them"} to take effect — running pods keep the values they started with.`
     );
+    setNeedsDeploy(true);
     setBusy(false);
+  }
+
+  async function redeploy() {
+    setDeploying(true);
+    const res = await fetch(`/api/v2/projects/${projectRef}/deployments`, { method: "POST" });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) {
+      // 409 means the same commit is already building, which is not a failure
+      // the person caused and reads badly as an error.
+      setMessage(body?.error?.message ?? `Could not deploy (${res.status}).`);
+      setDeploying(false);
+      return;
+    }
+    setNeedsDeploy(false);
+    setDeploying(false);
+    setMessage(`Queued ${body?.deployment?.shortSha ?? "a build"} — the new values are in it.`);
+    router.refresh();
   }
 
   const visible = variables.filter(
@@ -362,6 +386,20 @@ export function EnvEditor({
         )}
         {message && (
           <span className="text-[12.5px] text-white/55">{message}</span>
+        )}
+        {/* The button belongs beside the sentence that asks for it. Telling
+            somebody to redeploy and then making them find the control is how a
+            two-step task becomes a hunt — and the message only appears after a
+            save, so this is not a second deploy button sitting there all day. */}
+        {needsDeploy && (
+          <button
+            type="button"
+            onClick={redeploy}
+            disabled={deploying}
+            className="border border-white/[0.18] px-2.5 py-1 text-[12px] text-white transition-colors hover:border-white/40 disabled:opacity-40"
+          >
+            {deploying ? "Queueing…" : "Redeploy now"}
+          </button>
         )}
       </div>
     </div>
