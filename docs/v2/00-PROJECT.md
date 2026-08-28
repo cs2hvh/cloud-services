@@ -443,17 +443,17 @@ behavioural tests replaying confirmed v1 criticals.
 
 The framework sweep is finished: every runtime the detector can produce has a
 builder, and every batch has run. Origin lockdown is closed. Delete deletes.
-The teardown sweep acts on its schedule. Three things remain, and all three
+The teardown sweep acts on its schedule. Two things remain, and both
 are decisions rather than work:
 
-1. **Metering is installed and runs hourly in DRY RUN.** `paas.charge_project_hour`
-   exists, usage is sampled, the usage tab shows what a customer would owe —
-   and nothing has ever been charged. Turning it on is one flag
-   (`apply: true` on the meter-apps job in `lib/paas/k8s/sweeps.ts`). It is
-   deliberately not mine to flip: money moving is a decision with a person
-   behind it. **Turn teardown on FIRST** — that ordering is now satisfied, and
-   it matters because billing a project whose pods were never torn down is
-   exactly v1's $543.17 defect.
+1. ~~**Metering runs in DRY RUN**~~ — **LIVE 2026-08-28.** The first real pass
+   charged 5 projects $0.047945 for the hour; a second pass charged $0.000000
+   and reported all five already-charged. Verified against the BALANCES rather
+   than the sweep's own report — 777.151506 to 777.122739 is exactly three
+   projects, 656042108.091267 to 656042108.072089 exactly two — because a sweep
+   that says it charged and a balance that moved are different claims.
+   Teardown was enabled first and had converged to zero; billing a project
+   whose pods were never torn down is v1's $543.17 defect exactly.
 2. **Egress bandwidth is unbounded.** Needs a Cloudflare plan decision; the
    free plan gives one rate-limit rule and no per-tenant WAF.
 3. **Scale-to-zero is opt-in and off.** Warm fraction measured 1.0, which is
