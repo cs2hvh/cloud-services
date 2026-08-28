@@ -47,6 +47,41 @@ test("Next.js standalone output changes the start command", () => {
   assert.equal(d.startCommand, "node server.js");
 });
 
+test("NEXT.JS output:export IS STATIC — there is no server to start", () => {
+  // next build writes a directory to out/ and next start refuses to run
+  // against it. Detected as node, this ran `next start`, exited 1 and
+  // crash-looped — observed on gitlab.com/pages/nextjs, GitLab own Next.js
+  // sample, and an identical repository on GitHub would have done the same.
+  for (const config of ["next.config.js", "next.config.mjs", "next.config.ts"]) {
+    const d = detectFramework(
+      repo(["package.json", config], {
+        "package.json": pkg({ next: "15.3.0" }, { build: "next build", start: "next start" }),
+        [config]: "const nextConfig = { output: 'export' };\nexport default nextConfig;",
+      }),
+    );
+    assert.equal(d.framework, "nextjs", config);
+    assert.equal(d.runtime, "static", `${config}: an exported build has no server`);
+    assert.equal(d.outputDirectory, "out", config);
+    assert.equal(d.startCommand, null, `${config}: nothing is started`);
+    // The build still has to run — this is not a plain directory of HTML.
+    assert.equal(d.buildCommand, "build", config);
+  }
+});
+
+test("a Next.js app WITHOUT output:export still starts a server", () => {
+  // The guard above must not swallow the ordinary case. `output` can also be
+  // standalone, or absent entirely, and both of those do start a server.
+  const d = detectFramework(
+    repo(["package.json", "next.config.mjs"], {
+      "package.json": pkg({ next: "15.3.0" }, { build: "next build" }),
+      "next.config.mjs": "export default { reactStrictMode: true, images: { unoptimized: true } };",
+    }),
+  );
+  assert.equal(d.runtime, "node");
+  assert.equal(d.port, 3000);
+  assert.equal(d.startCommand, "start");
+});
+
 test("Nuxt detected and served from .output", () => {
   const d = detectFramework(repo(["package.json"], { "package.json": pkg({ nuxt: "3.12.0" }, { build: "nuxt build" }) }));
   assert.equal(d.framework, "nuxtjs");

@@ -201,12 +201,40 @@ export function detectFramework(files: RepoFiles): Detection {
     const build = scripts.build ? "build" : null;
 
     if (dep(pkg, "next")) {
-      const standalone = /output\s*:\s*["']standalone["']/.test(
+      const nextConfig =
         files.contents["next.config.js"] ??
-          files.contents["next.config.mjs"] ??
-          files.contents["next.config.ts"] ??
-          "",
-      );
+        files.contents["next.config.mjs"] ??
+        files.contents["next.config.ts"] ??
+        "";
+      const standalone = /output\s*:\s*["']standalone["']/.test(nextConfig);
+
+      // `output: 'export'` MEANS THERE IS NO SERVER TO START.
+      //
+      // next build writes a directory of static files to out/ and next start
+      // refuses to run against it — so this detected as a node app, ran
+      // `next start`, exited 1 and crash-looped. Found on gitlab.com/pages/
+      // nextjs, which is GitLab's own Next.js sample, and it would have hit an
+      // identical repository on GitHub the same way. Vercel and Netlify both
+      // serve out/ for this config; so do we now.
+      const exported = /output\s*:\s*["']export["']/.test(nextConfig);
+      if (exported) {
+        return {
+          framework: "nextjs",
+          // static, not node: nginx serves the directory and nothing is
+          // started. The framework stays nextjs because that is what it IS,
+          // and the build command still has to be Next's own.
+          runtime: "static",
+          buildCommand: build,
+          startCommand: null,
+          outputDirectory: "out",
+          port: 80,
+          confidence: "certain",
+          reason:
+            `Found "next" with output:'export'; serving its static output from out/ ` +
+            "— next start cannot serve an exported build.",
+        };
+      }
+
       return {
         framework: "nextjs",
         runtime: "node",

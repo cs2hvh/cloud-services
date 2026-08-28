@@ -71,8 +71,9 @@ no manual step:
 | GitHub | `gothinkster/react-redux-realworld-example-app` | create-react-app | **200** |
 | GitLab | `pages/plain-html` (`/public`) | static | **200** |
 | Bitbucket | `tutorials/tutorials.git.bitbucket.org` | static | **200** |
+| GitLab | `pages/nextjs` | nextjs (**static**) | **200** |
 
-All three torn down after; 0 leaked build VMs. The GitHub run is a REGRESSION
+All torn down after; 0 leaked build VMs. The GitHub run is a REGRESSION
 check, not a new capability — the provider seam changed the clone URL, the
 credential username and the file readers underneath the path that already
 worked, and "the new providers work" is not the same claim as "the old one
