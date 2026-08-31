@@ -168,6 +168,8 @@ export async function destroyServer(serverId: number): Promise<DestroyServerResu
         closeActive: () =>
           BillingCredits.closeActiveCompute({ serviceId: server.billing_service_id as string }),
       });
+      // The v2 meter is closed inside closeActiveBilling, so there is nothing
+      // to do here.
       billingSettled = true;
     } catch (billErr) {
       console.error("[destroyServer] billing close FAILED — keeping the servers row so the meter stays traceable:", billErr);

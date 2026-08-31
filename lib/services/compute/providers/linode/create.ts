@@ -35,6 +35,7 @@ import {
     releaseProvision,
 } from "@/config/billing-flow";
 import { BillingCredits } from "@/lib/billing/credits";
+import { normalizePlanKey } from "@/lib/billing/meters";
 import { destroyServer } from "@/lib/services/compute/server-lifecycle";
 import { sendServiceEventEmail } from "@/lib/services/shared/service-event-email";
 import { NotificationService, createServiceNotification } from "@/lib/notifications/service";
@@ -498,6 +499,14 @@ export async function handleLinodeCreate({
                         hourlyRate: hourlyCost,
                         serviceId: billingServiceId,
                         serviceType: "compute",
+                        // The v2 meter is opened inside settleProvision. Only
+                        // the plan key has to be supplied here, because this is
+                        // the one place that knows it. normalizePlanKey strips
+                        // the `linode:` prefix plan_slug carries — the price
+                        // book is keyed by the bare instance_plans slug, and an
+                        // unstripped key would match no price and silently
+                        // never bill.
+                        planKey: normalizePlanKey(`${LINODE_PLAN_SLUG_PREFIX}${typeId}`),
                         addActive: BillingCredits.addActiveCompute,
                     });
                 } catch (billingErr) {
