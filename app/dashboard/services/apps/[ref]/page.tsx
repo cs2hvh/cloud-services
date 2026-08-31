@@ -53,6 +53,11 @@ import { DeleteProject } from "@/components/v2/delete-project";
 import { SourceSettings } from "@/components/v2/source-settings";
 import { PromoteControl } from "@/components/v2/promote-control";
 import { DomainManager } from "@/components/v2/domain-manager";
+import { Notice } from "@/components/v2/notice";
+// Same modules the deployment detail page uses, so the log is scrubbed by one
+// set of rules rather than two that can drift.
+import { getObject, r2Keys } from "@/lib/paas/build/r2.ts";
+import { sanitizeBuildLog, tail, alterationNotice } from "@/lib/paas/telemetry/build-log.ts";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -303,6 +308,39 @@ export default async function ProjectPage({
     replicas = new Map(states.map((r) => [r.ref, r]));
   } catch (err) {
     console.error("[dashboard/v2] replica read failed:", err);
+  }
+
+  /*
+    THE LATEST BUILD'S LOG, read here so the Deployments tab can show it
+    without a click. Only on that tab — R2 is a network call and the other
+    tabs have no use for it.
+
+    Only the most recent deployment. Older builds keep their own page:
+    rendering every log inline would turn a list into a wall and make the
+    one that matters harder to find, not easier.
+  */
+  let latestLog: string | null = null;
+  let latestLogNotice: string | null = null;
+  let latestLogFailed = false;
+  // `latest` is already resolved above — the newest deployment is the newest
+  // deployment, and two names for it is how they drift apart.
+  const latestInFlight =
+    latest?.state === "queued" || latest?.state === "building" || latest?.state === "publishing";
+
+  if (tab === "deployments" && latest) {
+    try {
+      const bytes = await getObject(r2Keys.buildLog(latest.ref));
+      if (bytes) {
+        // Whole log sanitised BEFORE the tail is taken. The reverse order
+        // can split a credential across the cut and hide it in both halves.
+        const clean = sanitizeBuildLog(bytes.toString("utf8"));
+        latestLog = tail(clean, 200).lines.join("\n");
+        latestLogNotice = alterationNotice(clean);
+      }
+    } catch (err) {
+      console.error("[dashboard/v2] inline build log read failed:", err);
+      latestLogFailed = true;
+    }
   }
 
   return (
@@ -608,6 +646,47 @@ export default async function ProjectPage({
           </ul>
         )}
       </Card>
+
+      {/*
+        The newest build's output, in place. The row above is still a link
+        for anything older — this is the one somebody is actually waiting on.
+      */}
+      {latest ? (
+        <Card
+          title="Build log"
+          subtitle={`${isPlaceholderSha(latest.git_sha) ? latest.ref : latest.git_sha!.slice(0, 7)} · newest build`}
+          actions={<AutoRefresh active={Boolean(latestInFlight)} />}
+        >
+          {latestLogFailed ? (
+            <Notice tone="blocked" title="Could not read the build log.">
+              The deployment exists; the log store did not respond.
+            </Notice>
+          ) : latestLog === null ? (
+            <Notice
+              title={
+                latest.state === "queued"
+                  ? "The build has not started yet."
+                  : latestInFlight
+                    ? "The build machine has not sent anything yet."
+                    : "No build log was stored for this deployment."
+              }
+            >
+              {latestInFlight
+                ? "Output is scrubbed of credentials on the build machine before it is sent, so the first lines appear a few seconds in. This page is updating itself."
+                : null}
+            </Notice>
+          ) : (
+            <>
+              {latestLogNotice ? (
+                <p className="m-0 mb-2 text-[12px] text-white/40">{latestLogNotice}</p>
+              ) : null}
+              <pre className="m-0 max-h-[460px] overflow-auto rounded-[6px] border border-white/[0.09] bg-black/40 p-4 font-mono text-[12px] leading-[1.65] text-white/75">
+                {latestLog}
+              </pre>
+            </>
+          )}
+        </Card>
+      ) : null}
 
       <Card
         title="Previews"

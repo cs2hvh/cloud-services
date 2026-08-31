@@ -1,12 +1,11 @@
 /**
- * /dashboard/v2/deployments/[ref] — one deployment and its build log.
+ * /dashboard/services/apps/[ref]/deployments/[dpl] — one deployment and its build log.
  *
  * The log is fetched server-side through the same R2 helper the API route
  * uses, after the deployment has been resolved through RLS. It is never
  * exposed as a presigned URL — see app/api/v2/deployments/[ref]/logs.
  */
 
-import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { getObject, r2Keys } from "@/lib/paas/build/r2.ts";
@@ -17,6 +16,7 @@ import {
   toDeploymentDto,
   type DeploymentRow,
 } from "@/app/api/v2/_lib/deployments";
+import { ServiceShell, PageHeader } from "@/components/v2/kit";
 import { Notice } from "@/components/v2/notice";
 import { StateBadge, Timestamp, Duration } from "@/components/v2/state-badge";
 import { AutoRefresh } from "@/components/v2/auto-refresh";
@@ -85,13 +85,8 @@ export default async function DeploymentPage({ params }: Params) {
   }
 
   return (
-    <Shell project={d.project}>
-      <div className="mb-8 flex flex-wrap items-center gap-3">
-        <h1 className="m-0 font-mono text-[24px] font-normal tracking-tight text-white">
-          {d.label}
-        </h1>
-        <StateBadge state={d.state} />
-      </div>
+    // Title and state now live in PageHeader, like every other page here.
+    <Shell project={d.project} label={d.label} state={d.state}>
 
       {d.error && (
         <Notice
@@ -218,20 +213,36 @@ function Fact({
 
 function Shell({
   project,
+  label,
+  state,
   children,
 }: {
   project?: { ref: string; name: string } | null;
+  label?: string | null;
+  state?: string | null;
   children: React.ReactNode;
 }) {
   return (
-    <div className="mx-auto w-full max-w-[1100px] px-6 py-10">
-      <Link
-        href={project ? `/dashboard/v2/${project.ref}` : "/dashboard/v2"}
-        className="text-[12.5px] text-white/40 hover:text-white"
-      >
-        ← {project ? project.name : "Projects"}
-      </Link>
-      <div className="mt-3">{children}</div>
-    </div>
+    // THE SAME SHELL AS EVERY OTHER PAGE IN THIS LANE. This had its own,
+    // capped at 1100px with a bare text link, so opening a build log dropped
+    // you out of the dashboard's chrome onto a narrow column — on the page
+    // somebody reaches precisely when a build is failing.
+    //
+    // PageHeader's `back` is the same control the project page uses, so the
+    // way out of here looks like the way out of everywhere else.
+    <ServiceShell>
+      <PageHeader
+        title={label ?? "Build"}
+        back={{
+          href: project ? `/dashboard/services/apps/${project.ref}` : "/dashboard/services/apps",
+          label: project ? project.name : "Projects",
+        }}
+        description={
+          project ? <span className="font-mono text-xs">{project.name}</span> : undefined
+        }
+        actions={state ? <StateBadge state={state} /> : undefined}
+      />
+      {children}
+    </ServiceShell>
   );
 }
