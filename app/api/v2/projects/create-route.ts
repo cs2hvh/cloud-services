@@ -92,7 +92,13 @@ export async function createProject(req: Request): Promise<Response> {
     // A duplicate slug within the team is the common one, and it is a real
     // conflict rather than an error: two projects would fight over one hostname.
     if (writeError.code === "23505") {
-      return conflict(`You already have a project named "${plan.slug}".`);
+      // Actionable, because the fix is one field away. Deploying the same
+      // repository twice is ordinary — a staging copy, or two apps from one
+      // monorepo — and the old message read like a refusal with no remedy.
+      return conflict(
+        `You already have an app called "${plan.slug}". Give this one a different name — ` +
+          `the name sets its address, so two apps can share a repository.`,
+      );
     }
     const translated = fromPostgrestError(writeError);
     if (translated) return translated;

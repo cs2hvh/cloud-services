@@ -60,6 +60,12 @@ const flag = (name: string): string | null => {
 const BRANCH = flag("branch");
 const ROOT = flag("root");
 
+// WHOSE ACCOUNT. Without this every probe landed in `ahura-demo` — the seeded
+// team — because that is deployFromRepo's default. So a deploy run to test the
+// platform billed a fixed account and appeared in nobody else's dashboard,
+// which is exactly the landmine the comment above that default warns about.
+const TEAM = flag("team");
+
 // Which provider the repository lives on. Defaulted to github because every
 // run before multi-provider meant github and the sweep matrix is written that
 // way — but a probe that cannot name another provider cannot prove one, and
@@ -81,7 +87,7 @@ const PATH_RE = PROVIDER === "gitlab" ? /^[^/\s]+(\/[^/\s]+)+$/ : /^[^/\s]+\/[^/
 if (!repo || !PATH_RE.test(repo)) {
   console.error(
     "usage: framework-probe.ts <owner/repo> [--keep] [--branch b] [--root dir] " +
-      "[--provider github|gitlab|bitbucket]",
+      "[--provider github|gitlab|bitbucket] [--team slug]",
   );
   process.exit(EXIT_CANNOT_RUN);
 }
@@ -211,6 +217,7 @@ async function main(): Promise<number> {
   const out = await deployFromRepo({
     repo: repo!,
     provider: PROVIDER,
+    ...(TEAM ? { teamSlug: TEAM } : {}),
     rootDirectory: ROOT,
     gatewayIp,
     onProgress: (s, detail) => {

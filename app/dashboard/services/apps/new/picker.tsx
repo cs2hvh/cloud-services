@@ -109,8 +109,27 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
   const [rootDirectory, setRootDirectory] = useState("");
   const [instances, setInstances] = useState(1);
 
+  /**
+   * The app's name, which SETS ITS ADDRESS.
+   *
+   * Empty means "follow the repository", which is what the API does with no
+   * name. Once somebody types, it is theirs — including typing it back to the
+   * repository's own name, which is why this is not derived state.
+   */
+  const [appName, setAppName] = useState("");
+
   // Derived, never stored: a total held in state goes stale the moment the
   // plan or the count changes and nobody remembers to recompute it.
+  // Same rule the server applies, so what is previewed is what is created.
+  // Duplicated deliberately rather than imported: create.ts is server code
+  // and pulling it in would drag the tier table into the client bundle.
+  const slugPreview = (appName || chosen?.fullName.split("/").pop() || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 38);
+
   const selectedTier = tiers.find((t) => t.id === tier) ?? null;
   const monthlyUsd = selectedTier ? selectedTier.priceUsd * instances : 0;
 
@@ -245,6 +264,9 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           repo: chosen.fullName,
+          // Omitted when blank so the server falls back to the repository name,
+          // which is exactly what it did before this field existed.
+          ...(appName.trim() ? { name: appName.trim() } : {}),
           // Both, because the API accepts either: connectionId is the
           // provider-agnostic identity and installationId is the GitHub
           // spelling kept for callers that predate multi-provider.
@@ -569,6 +591,31 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
             />
             <p className="mt-1 text-xs text-white/40">
               For a monorepo. Leave blank if the app is at the repository root.
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="appName" className="block text-xs font-medium text-white/60">
+              App name <span className="font-normal text-white/30">optional</span>
+            </label>
+            <input
+              id="appName"
+              type="text"
+              value={appName}
+              onChange={(e) => setAppName(e.target.value)}
+              placeholder={chosen?.fullName.split("/").pop() ?? "my-app"}
+              className={`${FIELD} w-full font-mono`}
+            />
+            <p className="mt-1 text-xs text-white/40">
+              Sets the address. Change it to deploy the same repository more than once —
+              {slugPreview ? (
+                <>
+                  {" "}this one will answer on{" "}
+                  <span className="font-mono text-white/60">{slugPreview}.ahurasense.com</span>.
+                </>
+              ) : (
+                " each app needs its own."
+              )}
             </p>
           </div>
 
