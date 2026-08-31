@@ -425,7 +425,7 @@ export default async function ProjectPage({
 
                 <p className="mt-3 text-xs text-white/50">
                   {verdict.reason}{" "}
-                  <span className="text-white/30">Last 7 days, sampled every 15 minutes.</span>
+                  <span className="text-white/30">Last 7 days.</span>
                 </p>
 
                 {/*
@@ -475,6 +475,34 @@ export default async function ProjectPage({
           <Empty title="No hostname yet">
             A hostname is created by the first successful deploy. Nothing is broken.
           </Empty>
+        )}
+
+        {/*
+          CUSTOM DOMAINS ANSWER TOO, and this card never said so — it showed the
+          platform hostname alone, so somebody who had pointed their own domain
+          and seen it work found no trace of it under Serving.
+
+          Only the ones actually serving. A domain still waiting on DNS belongs
+          on the Domains tab with its records, not in a list of what answers.
+        */}
+        {domainDtos.filter((d) => d.serving).length > 0 && (
+          <div className="mt-3 space-y-2 border-t border-white/[0.06] pt-3">
+            {domainDtos
+              .filter((d) => d.serving)
+              .map((d) => (
+                <div key={d.ref} className="flex flex-wrap items-center justify-between gap-3">
+                  <a
+                    href={d.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sm text-sky-300 transition-colors hover:text-sky-200"
+                  >
+                    {d.domain}
+                  </a>
+                  <StateBadge state="active" />
+                </div>
+              ))}
+          </div>
         )}
 
         {/*

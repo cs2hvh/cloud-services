@@ -104,10 +104,31 @@ export interface DomainDto {
 }
 
 export function toDomainDto(row: DomainRow, live: LiveHostname | null = null): DomainDto {
+  // BOTH HALVES ACTIVE, which is what `ready` below means: Cloudflare has
+  // verified the hostname AND issued the certificate. Ownership alone cannot
+  // serve a request.
+  const liveReady = live !== null && live.status === "active" && live.sslStatus === "active";
+
   return {
     ref: row.ref,
     domain: row.domain,
-    state: row.state,
+    /*
+      LIVE CAN PROMOTE; ONLY THE ROW CAN DEMOTE.
+
+      The row moves to active only when something writes it, and nothing does
+      on the read path — so a domain that Cloudflare had verified and issued a
+      certificate for went on reading "verifying" indefinitely, and the
+      Overview left it out of Serving because that flag came off the same row.
+
+      The reverse is deliberately not done. A null `live` means Cloudflare
+      could not be read, which is not the same as not serving; demoting on it
+      would flip a working customer domain to "verifying" during an edge
+      outage. Failed and removed are OUR decisions and stand regardless.
+    */
+    state:
+      liveReady && row.state !== "failed" && row.state !== "removed"
+        ? ("active" as DomainRow["state"])
+        : row.state,
     url: `https://${row.domain}`,
     // `_cf-custom-hostname`, NOT a name of our own invention.
     //
@@ -129,8 +150,14 @@ export function toDomainDto(row: DomainRow, live: LiveHostname | null = null): D
     verifiedAt: row.verified_at,
     lastError: row.last_error,
     createdAt: row.created_at,
-    /** Honest: nothing serves a custom hostname until SaaS mode is on. */
-    serving: row.state === "active",
+    /**
+     * Honest: nothing serves a custom hostname until SaaS mode is on.
+     *
+     * Same promotion rule as `state`. This drives whether the domain appears
+     * under Serving on the Overview, so a stale row meant a working custom
+     * domain was simply absent from the list of what answers.
+     */
+    serving: liveReady || row.state === "active",
     // THE CNAME IS ALWAYS INCLUDED, the TXT only once Cloudflare has issued
     // one. The CNAME is the record that actually carries traffic and it is
     // deterministic, so there is never a reason to withhold it — a customer
@@ -172,7 +199,7 @@ export function toDomainDto(row: DomainRow, live: LiveHostname | null = null): D
     ],
     live,
     // Both halves. Ownership alone cannot serve a request.
-    ready: live !== null && live.status === "active" && live.sslStatus === "active",
+    ready: liveReady,
   };
 }
 

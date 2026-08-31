@@ -47,7 +47,7 @@ const CAPABILITIES: Capability[] = [
   {
     title: "Build logs while it builds",
     body:
-      "The log streams from the build machine every few seconds rather than arriving when it finishes, so a build that hangs is visible while it hangs.",
+      "Output appears while the build runs, so a build that stalls is visible immediately.",
     caveat: "Credentials are scrubbed before the log leaves the machine.",
     icon: `${ICONS}/life cycle.png`,
   },
