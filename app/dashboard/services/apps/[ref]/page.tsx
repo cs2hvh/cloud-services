@@ -243,24 +243,25 @@ export default async function ProjectPage({
     (d) => d.state === "queued" || d.state === "building" || d.state === "publishing",
   );
 
+  // WHAT STATE, AND WHAT TO DO. Nothing about images, routing or pods —
+  // those describe how the platform works, not what has happened to the
+  // customer's app, and a person reading an empty log needs the second.
   const emptyExplanation =
     logsTarget?.state === "error"
       ? {
-          what: "The last deployment failed, so nothing was ever started.",
-          action:
-            "Open it under Deployments — the build log says where it stopped. Runtime logs only exist once a container runs.",
+          what: "The last deployment failed.",
+          action: "Check the build log under Deployments to see where it stopped.",
         }
       : !production
         ? {
-            what: "This project has no hostname yet, so its build was never routed.",
-            action:
-              "The image is built and waiting. Use Deploy to publish it — that creates the hostname and starts a pod.",
+            what: "Not deployed yet.",
+            action: "Use Deploy to publish this app and give it an address.",
           }
         : project.scale_to_zero
           ? {
-              what: "This project is asleep. Scale to zero is on, so it runs no pods until a request arrives.",
+              what: "This app is asleep.",
               action:
-                "Open the site and it will wake, then output appears here. Turn this off under Settings if you want it always warm.",
+                "Open the site and it will wake. Turn sleeping off under Settings to keep it always on.",
             }
           : null;
 
@@ -376,7 +377,7 @@ export default async function ProjectPage({
         moment nothing is in flight.
       */}
       <div className="-mt-2 mb-4">
-        <AutoRefresh active={anyInFlight} label="Deploying — this page is updating itself." />
+        <AutoRefresh active={anyInFlight} label="Deploying" />
       </div>
 
       {tab === "overview" ? (
@@ -663,16 +664,17 @@ export default async function ProjectPage({
             </Notice>
           ) : latestLog === null ? (
             <Notice
+              busy={Boolean(latestInFlight)}
               title={
                 latest.state === "queued"
-                  ? "The build has not started yet."
+                  ? "Preparing environment"
                   : latestInFlight
-                    ? "The build machine has not sent anything yet."
+                    ? "Starting build"
                     : "No build log was stored for this deployment."
               }
             >
               {latestInFlight
-                ? "Output is scrubbed of credentials on the build machine before it is sent, so the first lines appear a few seconds in. This page is updating itself."
+                ? "Output appears once the build machine reports in."
                 : null}
             </Notice>
           ) : (

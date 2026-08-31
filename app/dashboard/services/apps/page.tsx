@@ -119,7 +119,7 @@ export default async function ProjectsPage() {
         already computed for the summary row, so following it costs nothing.
       */}
       <div className="-mt-3 mb-4">
-        <AutoRefresh active={building > 0} label={`${building} deploying — this list is updating itself.`} />
+        <AutoRefresh active={building > 0} label={`${building} deploying`} />
       </div>
 
       {readFailed ? (

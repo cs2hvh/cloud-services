@@ -303,6 +303,28 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
         }
       }
 
+      // AND START BUILDING IT. Create used to stop at the row, leaving the
+      // customer on a project page hunting for a Deploy button — after
+      // completing a form headed "Deploy application".
+      //
+      // After the env write, never before: a build that starts without the
+      // variables the customer just typed fails for want of config they have
+      // already given us, which is the failure those rows exist to prevent.
+      //
+      // Best effort. The project is real by now, and reporting a failed build
+      // start as a failed creation would throw away their form. If it does not
+      // take, they land on the project page with Deploy still available —
+      // exactly where they used to land anyway.
+      try {
+        await fetch(`/api/v2/projects/${body.project.ref}/deployments/trigger`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+      } catch (e) {
+        console.error("[create] could not start the first build", e);
+      }
+
       router.push(`/dashboard/services/apps/${body.project.ref}`);
     } catch (e) {
       console.error("[create]", e);
@@ -756,7 +778,7 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
         disabled={!chosen || submitting}
         className="rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-40"
       >
-        {submitting ? "Creating…" : chosen ? `Create ${chosen.fullName.split("/")[1]}` : "Choose a repository"}
+        {submitting ? "Creating and deploying…" : chosen ? "Create and deploy" : "Choose a repository"}
       </button>
     </div>
   );

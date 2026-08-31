@@ -168,16 +168,17 @@ export default async function DeploymentPage({ params }: Params) {
         </Notice>
       ) : log === null ? (
         <Notice
+          busy={inFlight}
           title={
             d.state === "queued" || !d.timing.startedAt
-              ? "The build has not started yet."
+              ? "Preparing environment"
               : inFlight
-                ? "The build machine has not sent anything yet."
+                ? "Starting build"
                 : "No build log was stored for this deployment."
           }
         >
           {inFlight
-            ? "Output is scrubbed of credentials on the build machine before it is sent, so the first lines appear a few seconds in. This page is updating itself."
+            ? "Output appears once the build machine reports in."
             : null}
         </Notice>
       ) : (

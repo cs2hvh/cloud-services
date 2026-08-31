@@ -168,9 +168,9 @@ export function DomainManager({
       {pending > 0 ? (
         <div className="mb-3 flex items-center justify-between gap-3">
           <span className={`${V2_MONO} text-[11px] text-white/40`}>
-            {pending} domain{pending === 1 ? "" : "s"} still verifying — this updates itself
+            {pending} domain{pending === 1 ? "" : "s"} verifying
           </span>
-          <AutoRefresh active intervalMs={20000} label="checking" />
+          <AutoRefresh active intervalMs={20000} label="" />
         </div>
       ) : null}
 
