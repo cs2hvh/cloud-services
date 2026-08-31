@@ -20,6 +20,7 @@ import {
   Bot,
   ScrollText,
   Sparkles,
+  Rocket,
 } from "lucide-react";
 
 /**
@@ -58,12 +59,13 @@ export const ADMIN_SECTIONS: AdminSection[] = [
   { title: "Game", slug: "game", icon: Gamepad2, migrated: false, description: "Game hosting console", group: "Compute" },
   { title: "Kubernetes", slug: "kubernetes", icon: Boxes, migrated: true, description: "Managed clusters", group: "Compute" },
 
+  { title: "Deploy v2", slug: "deploy", icon: Rocket, migrated: true, description: "PaaS ops — queue, fleet, drift", group: "Services" },
   { title: "AI Labs", slug: "ai", icon: Sparkles, migrated: true, description: "Inference — usage, models, health", group: "Services" },
   { title: "AI Agents", slug: "ai-agents", icon: Bot, migrated: false, description: "Agent builder product", group: "Services" },
   { title: "Databases", slug: "databases", icon: Database, migrated: true, description: "Managed databases", group: "Services" },
   { title: "Object Storage", slug: "object-storage", icon: Archive, migrated: false, description: "Buckets and spaces", group: "Services" },
   { title: "Network & DDoS", slug: "network-ddos", icon: ShieldAlert, migrated: false, description: "Spectrum apps", group: "Services" },
-  { title: "Platform Apps", slug: "platform-apps", icon: AppWindow, migrated: false, description: "PaaS deployments", group: "Services" },
+  { title: "Platform Apps (v1)", slug: "platform-apps", icon: AppWindow, migrated: false, description: "Legacy PaaS — being retired", group: "Services" },
   { title: "Domains", slug: "domains", icon: Globe, migrated: true, description: "Registrations and transfers", group: "Services" },
   { title: "Cluster Monitor", slug: "cluster-monitor", icon: Activity, migrated: false, description: "Internal cluster health", group: "Services" },
 
