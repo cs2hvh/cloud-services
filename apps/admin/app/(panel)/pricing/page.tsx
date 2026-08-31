@@ -1,95 +1,108 @@
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/supabase/auth";
+import { createServiceClient } from "@/lib/supabase/server";
 import { PageHeader } from "@admin/components/page-header";
-import { Panel, Callout } from "@admin/components/deploy/bits";
+import { Callout } from "@admin/components/deploy/bits";
+import { PriceBook } from "@admin/components/pricing/price-book";
+import type { PriceRow, ServicePlan } from "@admin/lib/pricing";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Status stub, deliberately. The old pricing surface (public.products,
- * instance_plans, gpu_pricing) was dropped on 2026-08-31 — archived in
- * pricing_archive_20260831 — and the platform currently has ZERO prices.
- * The canonical replacement is billing.service_pricing (append-only price
- * book; see docs/BILLING-HANDOFF.md for the full contract). This page becomes
- * the single write surface on top of it; until that lands it states the
- * world honestly instead of rendering a dead deep-link.
+ * The single write surface on the price book (billing.service_pricing).
+ *
+ * Catalog comes from public.service_plans (spec-only, no price columns);
+ * current prices are simply effective_to IS NULL — the partial unique index
+ * guarantees at most one per (service_type, plan_key). All writes go through
+ * billing.set_price() via /api/admin/pricing/set-price, which audits with
+ * actor and old → new. Contract and history: docs/BILLING-HANDOFF.md.
  */
-export default async function PricingStatusPage() {
+export default async function PricingPage() {
   const checkAdmin = await requireAdmin();
   if (!checkAdmin.ok) {
     notFound();
   }
 
+  const supabase = await createServiceClient();
+  const [plansRes, pricesRes] = await Promise.all([
+    supabase
+      .from("service_plans")
+      .select("*")
+      .eq("is_active", true)
+      .order("service_type")
+      .order("sort_order"),
+    supabase
+      .schema("billing")
+      .from("service_pricing")
+      .select("*")
+      .is("effective_to", null),
+  ]);
+
+  if (plansRes.error) {
+    return (
+      <div>
+        <PageHeader title="Pricing" />
+        <Callout tone="critical">
+          Could not read the plan catalog (public.service_plans):{" "}
+          {plansRes.error.message}
+        </Callout>
+      </div>
+    );
+  }
+  if (pricesRes.error) {
+    return (
+      <div>
+        <PageHeader title="Pricing" />
+        <Callout tone="critical">
+          Could not read the price book (billing.service_pricing):{" "}
+          {pricesRes.error.message}
+        </Callout>
+      </div>
+    );
+  }
+
+  const plans = (plansRes.data ?? []) as ServicePlan[];
+  const prices = (pricesRes.data ?? []) as PriceRow[];
+  const priced = new Set(prices.map((p) => `${p.service_type}:${p.plan_key}`));
+  const unpricedCount = plans.filter(
+    (p) => !priced.has(`${p.service_type}:${p.plan_key}`),
+  ).length;
+
   return (
     <div>
       <PageHeader
         title="Pricing"
-        description="Price book rebuild in progress — this page becomes the single place a price is set"
+        description="The price book — the one place a price is set. Writes go through billing.set_price() and are audited."
       />
 
-      <Callout tone="critical">
-        <strong className="font-semibold">
-          The platform currently has zero prices.
-        </strong>{" "}
-        Nothing can be priced, provisioned or billed until the new price book
-        is seeded. This is deliberate: the legacy tables were dropped rather
-        than emptied so failing paths throw instead of silently making every
-        service free.
-      </Callout>
+      {prices.length === 0 ? (
+        <Callout tone="critical">
+          <strong className="font-semibold">
+            The platform has zero live prices.
+          </strong>{" "}
+          Nothing can be priced, provisioned or billed until plans below are
+          priced (or the archive seed is approved). Unpriced hours are refused
+          by the sweep — never billed as zero.
+        </Callout>
+      ) : (
+        unpricedCount > 0 && (
+          <Callout tone="warning">
+            {unpricedCount} of {plans.length} active plans have no live price.
+            An unpriced plan provisions nothing and bills nothing — the sweep
+            refuses its hours.
+          </Callout>
+        )
+      )}
 
-      <div className="mt-6 space-y-6">
-        <Panel
-          title="What happened"
-          subtitle="2026-08-31 — billing/pricing rebuild (see docs/BILLING-HANDOFF.md)"
-        >
-          <ul className="list-disc space-y-1.5 pl-4 text-xs text-muted-foreground">
-            <li>
-              <code>public.products</code>, <code>public.instance_plans</code>{" "}
-              and <code>public.gpu_pricing</code> were dropped. All 290 rows
-              are archived in <code>pricing_archive_20260831</code>.
-            </li>
-            <li>
-              The old surface had no single source of truth — the same price
-              lived in a DB table, a TypeScript constant and a marketing page,
-              and they drifted. It also produced a repeating 720× unit defect
-              (monthly figures written into hourly columns) that overcharged a
-              real customer $4,629.91 for an empty bucket.
-            </li>
-            <li>
-              The replacement is <code>billing.service_pricing</code>: an
-              append-only price book where a price is stored in the unit it was
-              quoted in, only one live row may exist per service and plan,
-              changes close a row and insert a new one (never UPDATE), and
-              charges reference the exact price row that produced them.
-            </li>
-          </ul>
-        </Panel>
+      <PriceBook plans={plans} prices={prices} />
 
-        <Panel
-          title="What this page becomes"
-          subtitle="The single write surface on the price book"
-        >
-          <ul className="list-disc space-y-1.5 pl-4 text-xs text-muted-foreground">
-            <li>
-              Every price write audited (actor, old → new) via the panel&apos;s
-              audit log.
-            </li>
-            <li>
-              Monthly-equivalent preview on every hourly rate before commit —
-              $120/hr renders as $87,600/mo, which nobody approves by accident.
-            </li>
-            <li>
-              Rates more than ~10× the category median rejected or requiring
-              explicit confirmation, on top of the database&apos;s own bounds.
-            </li>
-            <li>
-              Discounts and free allowances (<code>billing.discounts</code>)
-              managed separately from credit-grant promo codes — they are
-              different instruments and do not stack.
-            </li>
-          </ul>
-        </Panel>
-      </div>
+      <p className="mt-6 text-xs text-muted-foreground">
+        Prices are append-only: a change closes the current row and inserts a
+        new one on an hour boundary, so every historical charge keeps pointing
+        at the exact price that produced it. Same-hour revisions correct in
+        place (the sweep only bills completed hours). Full contract:
+        docs/BILLING-HANDOFF.md.
+      </p>
     </div>
   );
 }

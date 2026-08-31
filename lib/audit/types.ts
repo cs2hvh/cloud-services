@@ -15,7 +15,8 @@ export type AuditServiceType =
   | 'ai_agent'
   | 'knowledge_base'
   | 'domain'
-  | 'compute';
+  | 'compute'
+  | 'pricing';
 
 export type AuditUserRole = 'user' | 'admin' | 'system';
 
