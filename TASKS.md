@@ -105,3 +105,12 @@ Still open:
 - [ ] Off-box billing worker holds a leaked, never-rotated `service_role` key.
 - [ ] Rotate the leaked secrets (6 still live in git history) and the prod
       root SSH password; move the box to key-only auth.
+
+## BLOCKING — read docs/BILLING-HANDOFF.md before touching Pricing
+
+As of 2026-08-31 `public.products`, `public.instance_plans` and
+`public.gpu_pricing` are DROPPED. The main app's /dashboard/admin/pricing
+deep-link that Pricing currently relies on is dead, and the platform has
+zero prices until this panel ships a write surface over
+`billing.service_pricing`. Schema, contract and gotchas are in
+docs/BILLING-HANDOFF.md.
