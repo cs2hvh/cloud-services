@@ -1,0 +1,1032 @@
+# Deploy v2 — project tracker
+
+**The single source of truth for what is done, what is next, and who owns what.**
+Read this before starting work. Update it when you finish something.
+
+Repo `C:\cloud-app-v2` · Last updated 2026-08-26 by `cloud-app-v2-d8`
+
+---
+
+## 1. What this is
+
+A ground-up rebuild of AhuraCloud's git-push-to-deploy PaaS, replacing the v1
+platform-apps service. v1 had 132 confirmed defects (59 critical/high), zero
+tenant isolation, and a shell RCE reachable from an ordinary user account.
+`platform_apps` was empty in production, so there is **no migration burden** —
+this is a clean rebuild.
+
+Target: Vercel-class product semantics, 10,000+ apps, untrusted public signups,
+on Linode + Cloudflare + R2.
+
+Background reading — do not re-derive what these already establish:
+- [`01-discovery.md`](01-discovery.md) — the v1 audit, 132 findings with file:line evidence
+- [`02-architecture.md`](02-architecture.md) — the plan, substrate constraints, unit economics
+- [`03-status.md`](03-status.md) — build status, live infra, what the live system taught us
+- [`04-observability.md`](04-observability.md) — what watches the platform
+
+---
+
+## 2. Lanes and ownership
+
+Three sessions work in parallel on separate branches. **Do not edit files
+another lane owns.**
+
+**Ownership is keyed to the BRANCH and the PATHS, not to a session name.** Session
+names change — this lane has been app-deploy-rework, cloud-services-73 and
+cloud-app-v2-d8; the observability lane has been app-deploy-3, cloud-app-v2-99 and
+cloud-app-v2-e6 — and a table keyed to names goes stale exactly the way a stale
+comment does. The branch and the paths have been stable all day.
+
+| Lane | Branch | Owns |
+|---|---|---|
+| **Deploy** | `feat/deploy-v2` | `lib/paas/*` (except `telemetry/`), `scripts/v2/**`, `supabase/migrations/**`, `app/api/v2/**` (except `admin/` and `_lib/`) |
+| **Observability** | `feat/deploy-v2-obs` | `lib/paas/telemetry/**`, `scripts/v3/**`, `app/api/v2/admin/**`, `app/dashboard/v2/admin/**` |
+| **UI** | `feat/deploy-v2-ui` | `app/dashboard/v2/**` (except `admin/`), `app/api/v2/_lib/**`, `components/v2/**` |
+
+`app/api/v2/_lib/` is the shared API error contract. It is authored in the UI lane
+and **lives on `feat/deploy-v2`** because two lanes independently imported it —
+duplicating it would produce two contracts that drift, and the whole point of
+`_lib/http.ts` is that "invisible is 404, never 403" is decided in one place.
+
+The observability lane's work is **merged into `feat/deploy-v2`** as of `e557a65b`;
+it continues on its own branch. All three converge on `feat/deploy-v2` before `dev`.
+
+---
+
+## 3. Current state — verified, not claimed
+
+Three real public repositories go from a git URL to a live public HTTPS URL with
+no manual step:
+
+| Repo | Detected | Live |
+|---|---|---|
+| `heroku/node-js-getting-started` | express | `v2-express.ahurasense.com` — **200** |
+| `Azure-Samples/python-docs-hello-world` | flask | `v2-flask.ahurasense.com` — **200** |
+| `docker/welcome-to-docker` | own Dockerfile | `v2-docker.ahurasense.com` — **200** |
+
+**Every provider, proven the same way — 2026-08-27**
+
+| Provider | Repo | Detected | Live |
+|---|---|---|---|
+| GitHub | `gothinkster/react-redux-realworld-example-app` | create-react-app | **200** |
+| GitLab | `pages/plain-html` (`/public`) | static | **200** |
+| Bitbucket | `tutorials/tutorials.git.bitbucket.org` | static | **200** |
+| GitLab | `pages/nextjs` | nextjs (**static**) | **200** |
+
+All torn down after; 0 leaked build VMs. The GitHub run is a REGRESSION
+check, not a new capability — the provider seam changed the clone URL, the
+credential username and the file readers underneath the path that already
+worked, and "the new providers work" is not the same claim as "the old one
+still does".
+
+**Live infrastructure**
+
+| | |
+|---|---|
+| Cluster | LKE `647920` `ahura-v2-dev`, k8s 1.36, `in-bom-2` (Mumbai 2) |
+| Nodes | 2 × `g6-standard-4` — system (untainted), runtime (tainted) |
+| Gateway | Traefik v3 → Linode NodeBalancer `172.236.185.23` → Cloudflare |
+| TLS | one Cloudflare Origin CA cert for `*.ahurasense.com`, valid to 2041 |
+| Registry | Docker Distribution on R2, never publicly exposed |
+| Cost | ~$116.07/mo standing, $0.00 unaccounted |
+| Leaked VMs | **0** |
+
+**Database** (`paas` schema, live in `xafjjpgazdxhktpfeuri`)
+
+```
+projects 3 · deployments 8 · aliases 6 · usage_samples 27
+installations 1 · open drift 15 · pod_allocated 25 · scale_to_zero on 1
+```
+
+**Capabilities that work**
+
+- Framework detection across 10 real repos; repo Dockerfile wins when present
+- Build in a throwaway Linode, rootless BuildKit, VM destroyed after
+- gVisor sandboxing — tenant pods report `Linux version 4.19.0-gvisor`
+- Promote and rollback as **one** `UPDATE` of `aliases.deployment_id`
+- Per-alias routing — two hostnames on one project serving two builds
+- Env vars: AES-256-GCM, per-project HKDF, injected via `envFrom`
+- Webhook-driven deploys (signature verified over raw bytes)
+- **All three git providers, proven end to end** — GitHub, GitLab and
+  Bitbucket each clone, detect, build, route and serve 200 from their own
+  host. A public repository needs no token on any of them, which is what
+  makes the path provable without an OAuth app registration.
+- Scale-to-zero with an activator — measured idleness, not elapsed time
+- Tenant ResourceQuota + LimitRange enforced on 3 namespaces
+- Image scan gate — pass / fail / **could-not-determine blocks**
+- Drift detection across Linode, DNS, workloads, R2, with history
+- Usage metering: warm-seconds, pod-seconds, build-minutes
+- Traffic shape per hostname: organic vs keep-alive-shaped vs none, sampled on
+  the same tick as pod usage so warmth and traffic describe one window
+
+**Tests:** ~530 (deploy) + 326 (observability) + 46 (UI). Plus 11 database
+behavioural tests replaying confirmed v1 criticals.
+
+---
+
+## 4. What is NOT done
+
+### Blocks opening signups to untrusted tenants
+- ~~**Origin lockdown**~~ — **DONE 2026-08-28**, verified in both directions.
+  `scripts/v2/origin-lockdown-apply.ts --apply`. Firewall 143239782 is attached
+  to NodeBalancer 2437817 (device 14371201). Every hostname still answers 200
+  through Cloudflare; a direct connection to 172.236.185.23 now times out.
+  Undo with `--detach`.
+  - The four preconditions were CHECKED rather than assumed, because the note
+    below asked for exactly that and had been written two days earlier:
+    Traefik carries no ACME arguments at all, so nothing at the origin needs
+    port 80 from outside Cloudflare; the firewall's rules match Cloudflare's
+    live list today (15 v4, 7 v6, nothing missing and nothing extra); the
+    firewall was attached to nothing; and all 26 A records pointing at the
+    origin are proxied, as are `app.ahurasense.ai` and the custom hostname
+    `task3.cs2hvh.com`, which live in OTHER zones and would not have shown up
+    in the first check.
+  - The script probes every live hostname before touching anything, attaches,
+    probes again, and DETACHES if something that was answering has stopped. A
+    revert nobody is awake to perform is not a revert.
+  - **The first direct-access test said 404, which looked like failure and was
+    not.** A firewall change is not instant at the edge; the same request timed
+    out a minute later. Reading one probe as proof would have produced a
+    confident, wrong report in either direction.
+
+- ~~Origin lockdown, as it stood on 2026-08-26~~ (kept for the reasoning):
+  The origin NodeBalancer still answers on its public IP, so Cloudflare's WAF
+  and rate limiting can be walked past by anyone who learns the address.
+  - Linode Cloud Firewall `143239782` exists. It **cannot be attached from the
+    Firewalls page** — an LKE-managed NodeBalancer is owned by the cluster and
+    does not appear in that dialog. The user's screenshot showed "No available
+    NodeBalancers", which is the product behaving correctly, not a UI fault.
+    An earlier instruction in this file to attach it there was wrong.
+  - The supported route is the CCM annotation
+    `service.beta.kubernetes.io/linode-loadbalancer-firewall-id` on
+    `ahura-system/traefik`. It was applied. **The CCM tried and was refused:**
+    `SyncLoadBalancerFailed: failed to ensure load balancer: [403] Unauthorized`.
+    The LKE-managed CCM token has no firewall scope.
+  - **The annotation was REMOVED again.** Left in place it puts the Service
+    that fronts every app into a failing reconcile loop, which is a worse
+    exposure than the one it was closing. All 8 hostnames verified 200 after.
+  - Generalised, and the reason this took two wrong attempts: **a control
+    plane that accepts a setting has not applied it.** The PATCH returned 200
+    with the annotation present; the work happens in a controller whose
+    failure is only in the Service's events. Reading back what you wrote
+    confirms the write, never the effect. Same shape as the firewall create
+    that reported "attached" because it printed what it asked for.
+  - **A token for the CCM is NOT the fix, and asking for one was wrong.** The
+    CCM runs in Linode's MANAGED control plane — there is no deployment in
+    kube-system and no Linode credential in the cluster to replace. The only
+    Linode API token here (`kube-system/linode`) is mounted by the CSI driver
+    alone; `ccm-user-token-…` is a Kubernetes ServiceAccount token, which is
+    how the CCM talks TO the apiserver, not to Linode.
+  - **The path that works needs no new token.** The Linode API lists the
+    LKE NodeBalancer (`id=2437817`, `172.236.185.23`) to the token we already
+    hold, even though the Firewalls page hides it. Attaching is one call:
+    `POST /v4/networking/firewalls/143239782/devices`
+    `{"id": 2437817, "type": "nodebalancer"}`.
+  - Firewall `143239782` is ready and verified against Cloudflare's live list:
+    inbound DROP, ACCEPT 80/443 from all 15 published v4 and 7 v6 ranges, with
+    nothing missing and nothing extra. It is attached to NOTHING — the label
+    says `UNATTACHED-cf-only-origin` so the state is legible from the console.
+  - **DEFERRED BY THE USER 2026-08-26**, and it blocks nothing: no part of
+    build, deploy, or serve consults it. The standing cost is that anyone who
+    learns the origin IP bypasses the WAF and rate limiting.
+  - Before attaching, confirm nothing at the origin needs port 80 from outside
+    Cloudflare. Traefik carries no ACME arguments and serves from the
+    `traefik-tls` secret, so HTTP-01 renewal does not appear to be in play —
+    but that was being checked when this was deferred, so check it rather than
+    trust this line.
+- ~~Tenant isolation unverified~~ — **MEASURED AND FIXED** 2026-08-26 (`ff559b9d`).
+  `scripts/v2/isolation-proof.ts` probes from a real tenant namespace under the
+  same gVisor RuntimeClass as customer workloads. It found a breach: **a tenant
+  pod could open a TCP connection to the Kubernetes API server**, despite
+  `10.0.0.0/8` being denied and the ClusterIP `10.128.0.1` sitting inside it.
+  - **kube-proxy DNATs the ClusterIP to the real endpoint before egress policy
+    is evaluated**, and on LKE that endpoint is public — so the policy saw a
+    public destination and allowed it. Generalised: **an `except` list cannot
+    protect an address the policy never sees.** The private-range block is real
+    for direct pod-to-pod traffic (cross-tenant was refused in the same run) and
+    does nothing for anything DNAT'd.
+  - Severity, stated honestly: TLS did not complete from that client, and tenant
+    pods carry no ServiceAccount token. Unnecessary attack surface rather than a
+    live path to credentials.
+  - Fixed by denying the endpoint's real address, read from the `kubernetes`
+    Endpoints at reconcile time — hardcoding would be correct here and silently
+    permissive on the next cluster, and the object applies cleanly either way.
+  - **The controls are the design.** Public egress and DNS *must* succeed or the
+    run is void: a probe pod with no network fails every negative test and
+    reports perfect isolation.
+- ~~No inbound rate limiting~~ — **DONE** 2026-08-26 (`148293e2`). Per-tenant,
+  50 rps / 100 burst, on **every** route rather than opt-in. Traefik middleware
+  via the **file provider** — there is no `--providers.kubernetescrd` here, so a
+  Middleware CRD would be stored and never read.
+  - **Verified by making it bite.** At the real limit, 200 parallel requests gave
+    zero 429s — indistinguishable from the middleware not being attached.
+    Dropping to `average=1` settled it: limited host **1×200 / 19×429**, control
+    host **20×200 / 0×429**. The control is what makes the first line mean
+    anything.
+  - Keyed on `CF-Connecting-IP`. The socket peer is always a Cloudflare address,
+    so limiting on it would put every visitor of every tenant in one bucket and
+    let one busy app throttle the platform.
+  - **Cloudflare plans do not solve this.** Rate limiting rules come from a
+    per-zone pool and don't scale to one rule per tenant at 10,000 apps;
+    per-hostname rules for custom hostnames are Enterprise. Separately: the API
+    reports `ahurasense.com` on **`Free Website`, price 0, no pending change** —
+    if a Pro subscription was bought, it is not on this zone.
+- **Egress bandwidth is still unbounded**, and this is the actual abuse vector —
+  a tenant mining, spamming or exfiltrating makes **outbound** connections that
+  never pass through Cloudflare or the gateway. **No Cloudflare plan addresses
+  it at any price.**
+  - Kubernetes expresses this with `kubernetes.io/egress-bandwidth`, which needs
+    the **bandwidth CNI plugin**. Checked: this cluster's conflist has
+    `calico, host-local, portmap` — **no bandwidth plugin**, so those annotations
+    would apply cleanly and shape nothing. Adding it on LKE is the open question,
+    since node config is not exposed.
+- ~~**Origin is reachable directly**~~ — **CLOSED 2026-08-28.** Firewall
+  143239782 is attached to NodeBalancer 2437817; a direct connection to the
+  origin now times out while every hostname still answers 200 through
+  Cloudflare. The measurement below is what it looked like before, and the
+  reasoning about why Traefik could not close it is still the reason the fix
+  had to happen at the network layer:
+  `curl -k -H "Host: v2-docker.ahurasense.com" https://172.236.185.23/` returns
+  **200**, and so does plain HTTP on port 80. That bypasses Cloudflare entirely:
+  no WAF, no DDoS protection, no TLS on the `:80` path, and the per-tenant rate
+  limit is defeated because a direct request carries no `CF-Connecting-IP`, so
+  every such request shares one bucket.
+  - **IP filtering at Traefik CANNOT close this**, which is the non-obvious part.
+    The Service is `externalTrafficPolicy: Cluster` behind a Linode NodeBalancer
+    in TCP mode, so the source is SNAT-ed: Traefik logs `172.236.163.199` and
+    `10.2.0.1` — node and cluster addresses — for *every* request, whether it
+    came via Cloudflare or not. An `ipAllowList` of Cloudflare's ranges would
+    match nothing useful and would refuse everything.
+  - Three ways to actually close it, none free:
+    **(a)** a Linode Cloud Firewall on the NodeBalancer restricting 80/443 to
+    Cloudflare's 15 v4 + 7 v6 ranges — sees the true source, but it is a network
+    change on an account with other production servers;
+    **(b)** proxy protocol (`linode-loadbalancer-proxy-protocol: v2` plus Traefik
+    `trustedIPs`) so Traefik sees real client IPs — in-cluster, and it breaks all
+    ingress if the two sides disagree;
+    **(c)** Cloudflare Authenticated Origin Pulls (mTLS), needing origin
+    certificate configuration.
+  - **Not attempted.** Each changes working production networking and (a) touches
+    the wider Linode account. *User decision.*
+- No crypto-mining heuristics, no abuse response.
+- **Free-plan Cloudflare**: per-tenant WAF is Enterprise-only; 1 rate-limit rule.
+- ~~No reserved-hostname list~~ — **DONE** (`e70a5506`). A tenant could have
+  claimed `api` or `www`: the deploy path only checked `paas.aliases`, and live
+  production DNS has no aliases row. Reserved set seeded from the live zone —
+  23 single-label records, none previously protected.
+
+### Blocks a real customer
+- ~~GitHub App installed on zero accounts~~ — **INSTALLED** (`156779383`, `cs2hvh`,
+  1 repo, 1-hour `contents:read` tokens) and recorded. Reconciled by
+  `scripts/v2/installations-sync.ts`, which treats the GitHub API as truth
+  because both recording paths are lossy by nature: a webhook retries a few
+  times and stops, and a browser callback fires once. Neither has a reconciler
+  in it.
+- ~~Nothing has RENDERED~~ — **IT RENDERS** 2026-08-26. `next dev --turbopack`
+  on :3010, Next 15.5.15. The marketing homepage serves 200 with live GPU
+  pricing, `/signin` serves 200, and **all seven v2 routes compiled clean with
+  zero server errors**:
+  - `/dashboard/v2/admin` → **307 → `/signin?redirectTo=…`**, auth guard working.
+  - All six `/api/v2/admin/*` → **404 by design** (`adminNotFound()`), so an
+    unauthenticated caller cannot even learn the endpoint exists.
+  - `/api/v2/webhooks/github` POST unsigned → **401**. Signature verification
+    rejecting through the real HTTP stack, not only in unit tests.
+  - Reached via `next dev`, which compiles per route — so the `GPU_MARKUP_PCT`
+    error that blocks `next build` never compiles unless the GPU wizard is
+    visited. `next build` is still blocked; the app is still runnable.
+- ~~`ADMIN_EMAILS` is not set~~ — **SET** 2026-08-26 to the operator address, in
+  `.env.local` (gitignored). The startup warning is gone **and the guard still
+  runs**: `/api/v2/admin/fleet` still returns 404 unauthenticated, so
+  `getOperator()` executed and simply had nothing to warn about. Absence of a
+  warning from a check that never ran would have proven nothing.
+  - When set it is the **only** thing granting admin — the `user_profiles.roles`
+    fallback is skipped entirely. **Production needs its own**; setting it here
+    does not carry over.
+- ~~No customer-facing v2 UI exists~~ — **THE SELF-SERVE PATH IS BUILT AND
+  PROVEN** 2026-08-26. Log in → account bootstrapped → GitHub connected → repo
+  picked → project created → deploy queued → worker builds → env vars set →
+  `v2-ahurasense-task.ahurasense.com` **200**. Every page rendered and clicked
+  through against a real session, including the Deploy button.
+  - Pages: `/dashboard/v2/projects`, `/projects/new`, `/projects/[ref]`.
+  - APIs: `/api/v2/me`, `/repos`, `/projects` (GET+POST),
+    `/projects/[ref]/deployments` (GET+POST), `/projects/[ref]/env`
+    (GET/PUT/DELETE), `/github/callback`.
+  - **ONBOARDING WAS IMPOSSIBLE** and nothing said so. `paas.teams` had no
+    INSERT policy, `team_members` required you to already be an admin of the
+    team you were joining, `projects` required membership. Every route to a
+    first team needed a team you were already in — unnoticed only because every
+    project until now was seeded by SQL. Fixed with
+    `paas.bootstrap_personal_team()`: SECURITY DEFINER, **no arguments** so it
+    can only ever act on `auth.uid()`, idempotent, pinned search_path.
+  - **Connecting GitHub was impossible for two separate reasons that print the
+    same error.** `installations` had no INSERT policy *and* granted
+    `authenticated` SELECT only. GRANT and RLS are independent gates: Postgres
+    reports a missing GRANT as `42501 permission denied for table`, while an RLS
+    refusal reads `new row violates row-level security policy` — same SQLSTATE,
+    near-identical shape. Adding the policy in response to the first error
+    changed nothing, which cost one full round of the loop.
+  - **The first dashboard deploy found a third instance of the default trap**
+    (§8). `deployFromRepo` re-derived the project from
+    `teams.bySlug(teamSlug ?? "ahura-demo")`, correct while scripts were the only
+    caller. A dashboard deploy created a duplicate project in the seed team and
+    split the app in half — deployment in the customer team, alias and DNS in the
+    phantom — and the hostname served **404**. An adopted deployment already
+    knows its project and is now used directly.
+  - ~~Still missing from the UI: build logs, custom-domain self-service,
+    rollback, and delete.~~ **ALL FOUR NOW EXIST** as of 2026-08-27. Build and
+    runtime logs, the domain manager with its verification records, rollback,
+    and delete are on the project page.
+    - Delete was the last, and it needed the route fixed first: DELETE marked
+      the row and left the workload running. `prj-61de90bd2dae` was deleted at
+      08:08 and eleven hours later still held three Deployments and four
+      Services. It now releases the aliases and deletes the namespace, and
+      reports `deleted` and `marked_for_deletion` as different outcomes rather
+      than flattening them.
+- **ROLLBACK WORKS** 2026-08-27 (`418168fd`), and no longer only from a
+  script: `POST /api/v2/projects/[ref]/rollback` exists and
+  `components/v2/promote-control.tsx` drives it from the deployments tab. It
+  posts to that endpoint rather than PATCHing an alias, because moving one
+  alias moves one hostname and leaves the others pointing at the old
+  deployment. The original note follows.
+  `scripts/v2/rollback.ts --project … [--to …] [--apply]`. Proven on a live
+  app in both directions: rolled `prj-560214c8fa34` back to `dpl-d04263409931`
+  (pod came up on the target digest, three hostnames 200) and forward again.
+  - It refuses a foreign, unready, imageless or preview deployment — and one
+    thing the database cannot answer: **an image the registry no longer has.**
+    The row records the digest that was published, not that the blob still
+    exists. `lib/paas/registry.ts` asks the registry and returns THREE states:
+    an unreachable registry is not a missing image, and refusing on it would
+    block rollback exactly when the cluster is unhealthy.
+  - **THE "BLOCKED ON A CONVERGE PATH" ENTRY WAS WRONG — corrected 2026-08-27**
+    (`0f1c57e8`). `PATCH /projects/{ref}/aliases` has converged inline via
+    `reconcileProjectByRef` since it was written. `boundary.test.ts` flags
+    DIRECT imports of the service-role db client; that route reaches the
+    reconciler instead. The conclusion was drawn from the RULE rather than
+    from the routes, and a working one existed the whole time.
+  - Checking it found a real defect. **PATCH moves ONE alias**, which is right
+    for pinning a custom domain and wrong for a rollback: production and
+    custom aliases are the same live site. The dashboard sent only production,
+    so rolling back `v2-docker.ahurasense.com` would have left
+    `app.ahurasense.ai` — the real customer domain — on the version just
+    judged broken. **Nothing reported a problem, because each alias was
+    individually consistent. Only the pair was wrong.**
+  - `POST /projects/{ref}/rollback` moves the set, refuses an image the
+    registry no longer has, and wakes a sleeping target through
+    `paas.rollback_project` — one atomic authorized write, because no tenant
+    may write `scaled_to_zero_at` and a wake that comes apart from a repoint
+    creates an outage while ending one. The dashboard control now calls it.
+- ~~Custom domains blocked on certificates~~ — **PROVEN END TO END** 2026-08-26
+  on a real third-party domain. `app.ahurasense.ai` → **200**, its own
+  certificate (`CN=app.ahurasense.ai`, Google Trust Services), serving content
+  identical to the app's platform hostname.
+  - Cloudflare for SaaS needed a **Fallback Origin** before any custom hostname
+    could be added at all — created `fallback.ahurasense.com` (proxied) and set
+    it. The `1404` quota error was gone once the feature was enabled.
+  - Ownership passed via the **CNAME**, not the TXT: Cloudflare treats a CNAME
+    into our zone as proof and stops asking for the ownership record.
+  - **I pointed the fallback origin at the Kubernetes API server**
+    (`172.236.163.171`) instead of the gateway (`172.236.185.23`) — that IP was
+    fresh in context from the isolation work minutes earlier. It surfaced as
+    `CN=kube-apiserver` at the origin and HTTP `526`. The record was proxied, and
+    the API server requires client certificates Cloudflare was not presenting, so
+    such requests reached the control plane and could not authenticate. Live for
+    roughly 40 minutes. Corrected. Kept here rather than quietly fixed: it
+    happened minutes after proving *tenants* could not reach that endpoint.
+  - Still manual. `paas.domains` challenge-verification is the self-service
+    version of what was done by hand here, and is the remaining wiring.
+- **Preview deployments: routed and sized.** Free, 48h from last push,
+  Starter-sized, always 1 instance. A push to a non-production branch now lands
+  in its own preview environment (`environments.forBranch`, named after the raw
+  branch so `feature/foo` and `feature-foo` stay distinct), and the reconciler
+  forces Starter + 1 instance for any deployment whose environment is a preview.
+  Sizing is forced there rather than at the webhook so it holds for every path
+  that reaches a pod.
+  - Wiring this surfaced a defect one layer down: the idempotency key was
+    `(project, sha)`, which is correct only while every push builds production.
+    A branch cut from the production head pushes a commit that is *already
+    deployed*, so the old key answered "already recorded" and **the preview was
+    never created** — silently, since 200 is what a successful retry looks like.
+    Now keyed on `(environment, sha)`. `scripts/v2/preview-proof.ts` shows the
+    two keys disagreeing against the live database.
+  - Wiring the *build* path found the serious one. `deployFromRepo` pointed
+    **every** alias of the project at whatever built last — right while a
+    project's hostnames all served one build, a production outage once previews
+    exist: **pushing any feature branch would have replaced production with that
+    branch.** Latent (no preview has ever been built) but made reachable by the
+    webhook change an hour earlier. `aliasesToPoint` now scopes by environment;
+    six tests, all verified to fail against the old behaviour.
+  - The reconciler gained its **only deletion**: routes whose alias row is gone.
+    Until reaping existed it only ever *added* routes, so removing an alias left
+    the hostname serving. Three gates, and **unlabelled is not orphaned** —
+    proven live, an unlabelled Ingress survived a pass that removed the orphan
+    beside it.
+  - **PROVEN END TO END** 2026-08-26 (`6fc528ab`). One real preview built from
+    `docker/welcome-to-docker@dependabot/npm_and_yarn/braces-3.0.3` — a genuine
+    feature branch, and a long slashed name that exercises `previewLabel`'s
+    truncation and hash:
+    `welcome-to-docker-dependabot-npm-c77bde.ahurasense.com` → **200**, and
+    `v2-docker.ahurasense.com` (production) → **200, unmoved**. All six
+    pre-existing apps still serve.
+  - Two more defaults found building it: detection probed **main** for every
+    build (right code, wrong recipe), and DNS was **silently skipped** when no
+    gateway address was given — `if (gatewayIp)` with no else, so the deploy
+    reported success and the hostname resolved to nothing. Both fixed; see §8.
+  - **`preview-reap` is scheduled** — sixth CronJob, `36 * * * *`, `db + k8s`
+    read-only. **REPORTS ONLY, and there is no `--apply` by design:** it deletes
+    running environments if it is ever wrong, so the licence to delete stays with
+    a person who has read the plan. Verified by running in-cluster, not by
+    applying: exit 0, `1 examined, 0 past TTL, 1 kept, 47.8h remaining`.
+    - Installed first with `db` alone, and running it said so itself — *"cluster
+      unreadable — running below is UNKNOWN, not no"*. Honest and useless: the
+      urgent case (an unindexed environment with a **live pod**) cannot be told
+      from a harmless empty one without looking. Found by running it, not by
+      reading it.
+  - **The action half is built but has never executed** —
+    `scripts/v2/preview-reap-apply.ts` (`01706d43`). Manual, not a CronJob, on
+    the r2-reap precedent. Refuses to act unless `checkReapPlan` reports nothing.
+    Order is load-bearing: **DNS first, then the alias row** — the reverse leaves
+    a record pointing at the gateway that no Ingress routes, which is a claimable
+    hostname. Neither pod nor Ingress is deleted here; removing the alias makes
+    the reconciler do both.
+    - Dry run verified both directions: reaps nothing at 0.3h, identifies the one
+      expired preview when its age is advanced past the TTL.
+    - **`--apply` was blocked by the permission classifier and has NOT been run.**
+      *User action —* it deletes DNS records and database rows, so it needs an
+      explicit go-ahead. Until then, an expired preview is reported and not
+      removed.
+- ~~Build logs are not surfaced to users.~~ **DONE.** Build and runtime logs
+  are both on the project page, and the runtime view explains an empty read
+  rather than showing nothing.
+
+### What is left, and who it belongs to — 2026-08-28
+
+The framework sweep is finished: every runtime the detector can produce has a
+builder, and every batch has run. Origin lockdown is closed. Delete deletes.
+The teardown sweep acts on its schedule. Two things remain, and both
+are decisions rather than work:
+
+1. ~~**Metering runs in DRY RUN**~~ — **LIVE 2026-08-28.** The first real pass
+   charged 5 projects $0.047945 for the hour; a second pass charged $0.000000
+   and reported all five already-charged. Verified against the BALANCES rather
+   than the sweep's own report — 777.151506 to 777.122739 is exactly three
+   projects, 656042108.091267 to 656042108.072089 exactly two — because a sweep
+   that says it charged and a balance that moved are different claims.
+   Teardown was enabled first and had converged to zero; billing a project
+   whose pods were never torn down is v1's $543.17 defect exactly.
+2. **Egress bandwidth is unbounded.** Needs a Cloudflare plan decision; the
+   free plan gives one rate-limit rule and no per-tenant WAF.
+3. **Scale-to-zero is opt-in and off.** Warm fraction measured 1.0, which is
+   the ~$52k/month model at 10k apps rather than the ~$18–20k the plan
+   assumes. Making it the default trades a cold start on the first request for
+   most of that difference — a product decision, not a technical one.
+
+### Economics
+- **Warm fraction measured 1.0** across three independent measurements: every app
+  holds a pod all day at 2–3 millicores with zero requests. That is the ~$52k/mo
+  model at 10k apps, not the ~$18–20k the plan assumes. Scale-to-zero is built and
+  proven but **opt-in, default off** (1 project enabled).
+- **Pricing is decided and measured.** Static per-instance, DigitalOcean shape:
+  six tiers, $7–$69, margins 25–36%. See [`05-pricing.md`](05-pricing.md). Two
+  corrections got it there — the kubelet reserves 24.5% of a node *before any pod
+  schedules*, and the gVisor sandbox charge was 128Mi declared against 42 MiB
+  measured, now cut to 64Mi, taking density from 89 to 99 pods/node.
+  **Prices did not move with the second correction**; the margin sits as buffer,
+  because repricing twice against one number spends confidence in the list.
+- **R2 tarballs no longer accumulate.** Every build wrote a full OCI archive
+  and nothing deleted it: 592 MB across 8 deployments, 65% of the bucket. The
+  deploy path now deletes the tar once it has read the registry's own storage
+  and confirmed BOTH the manifest blob and the repository revision link — the
+  blob alone is shared across repositories, so a correct digest under the wrong
+  repo reports 1 of 2 present. Applies to NEW deploys; the existing 592 MB stays
+  for the reaper and a human, deliberately.
+- **~360 MB of that is permanently unreclaimable** — builds that published
+  nothing, so there is no durable copy to justify deleting them.
+- **Warmth and traffic are measured over the same window**, so an always-warm app
+  is separable into "a customer using the pod they hold" and "the platform paying
+  the always-on price for nobody". Live, from one run:
+
+  ```
+  dpl-e2404975a02e   99.9% warm   ALWAYS WARM; ORGANIC
+  dpl-e2215252040c   99.9% warm   ALWAYS WARM; NO-TRAFFIC; warmth NOT justified
+  ```
+
+  Identical warm fraction, identical cost, opposite answers — warm fraction alone
+  cannot tell them apart, and neither can CPU.
+
+  **What this measurement is FOR changed after it was built.** It was the input to
+  the warm-time pricing decision; pricing is now flat, so that decision is closed.
+  It is now an ABUSE AND MARGIN signal instead: under a flat rate the second row is
+  a customer paying us the same as the first while costing us the same as the
+  first, for nobody. Still worth having — it just answers a different question.
+
+---
+
+## 5. Next steps, in order
+
+1. ~~**Durable scheduling**~~ — **DONE** 2026-08-26, commit `b0bf8b60`. Five
+   CronJobs live in `ahura-system`, verified by running rather than by applying:
+   `usage-sample` recorded 3 apps at 99.8% warm, `fleet-drift` exited clean at
+   $116.07/month standing with $0.00 unaccounted. See §6.
+2. ~~**`npm install`**~~ — **DONE** 2026-08-26, approved by the user. 687 packages.
+   The repo compiled for the first time: **21 type errors across 26,000 lines**,
+   now down to **3**, each owned by a lane actively fixing it. What it found:
+   - `ProjectRow` declared neither `scale_to_zero` nor `idle_seconds` while
+     `idle-sweep.ts` read both — on the path that decides whether an app sleeps.
+   - All 8 admin routes imported `_lib/http`, which existed only on the UI
+     branch. The admin API would have failed at build.
+   - A log route shadowed its own `params`, crashing on the first request to any
+     build log (UI lane, fixed).
+   - Two files had unterminated string literals that
+     `node --experimental-strip-types --check` **exits 0 on**. Every "parses
+     clean" claim made with that command was weaker than stated.
+3. ~~**Reserved hostnames**~~ — **DONE** (`e70a5506`).
+4. ~~**R2 tarball accumulation**~~ — **DONE** (`60d4a61b`), fixed at the source
+   rather than on a timer.
+5. **Get something to RENDER.** `next build` needs real env in the UI worktree —
+   **a user decision**, since it means putting a secrets file there.
+6. **Install the GitHub App** on `cs2hvh` and prove one real customer push.
+4. **Reserved-hostname list** before any signup path opens.
+5. **Preview deployments** — needs the user's policy decision first.
+6. **Egress limiting and abuse response** — needs Cloudflare plan decision.
+
+---
+
+**Landed 2026-08-26 (later):**
+
+7. ~~**Customers cannot see what they were charged**~~ — **DONE** (`18b01765`).
+   `GET /api/v2/projects/{ref}/usage`. Nothing in `app/` read `project_charges`
+   before this: billing existed and was invisible. Summing lives in
+   `lib/paas/usage.ts` because that is the part that fails quietly — auth and a
+   query fail with a status code, arithmetic produces something that looks like
+   a bill. An unreadable amount is counted, never added: `Number(null)` is 0 and
+   `Number("abc")` is NaN, which survives `Math.round` to serialise as JSON
+   `null` — a blank where a figure belongs, with nothing reporting a fault.
+8. ~~**A push could deploy onto another customer's hostname**~~ — **DONE**
+   (`8ea8bfa8`), found by `cloud-app-v2-a9`. `byRepoFullName` matched on
+   `repo_full_name` alone and took `[0]` from an unordered query. Reachable on
+   GitHub alone — two teams may connect the same public repo. Now
+   `matchingRepo(provider, fullName)` returning a list, and `resolveRepoTarget`
+   which **refuses** rather than tie-breaks: no ordering is right, and the
+   failure was silent — the deploy succeeds, the wrong site changes, the person
+   who pushed sees nothing. Left open: resolving by installation id, which is
+   what would let two teams legitimately share a public repo.
+   - It also caught `webhook-proof` printing `non-production branch DEPLOYS —
+     BUG`. True before previews existed, wrong every run since. **A proof that
+     calls a working feature a bug is how a red line stops being read.**
+
+---
+
+**Framework sweep — running, 2026-08-27.** Full table in
+`docs/v2/10-FRAMEWORK-MATRIX.md`; it is the artefact, this is the summary.
+
+Proven serving, end to end, then torn down: Next.js (including a **pnpm
+workspace monorepo**, `vercel/commerce`), Nuxt 3, CRA, Astro. Package
+managers: npm and pnpm proven; yarn and bun both install correctly and have
+only ever failed downstream of install.
+
+What the sweep found that no template would have:
+
+- no repository without a lockfile could build; every frozen-install flag is a
+  hard error without one
+- **every static site crash-looped**, on an nginx pidfile substitution that
+  matched a path nginx no longer uses — hidden because everything deployed
+  until then was a Node server or a repo-supplied Dockerfile
+- no monorepo could install; the deps stage copied only the root manifest
+- no native dependency could compile: no python3, make or g++ in the image, so
+  anything falling back from a prebuilt binary died inside node-gyp
+- public environment variables reached NOTHING — not the bundle, not the
+  container — because the reconciler skipped them as already baked in and
+  nothing baked them
+- Gatsby and Docusaurus were not detected at all, and ran as generic Node apps
+  with no server to start
+- the Node major was hardcoded to 22 and every pin a repository offered was
+  ignored
+
+**And one regression I caused and then caught**, which is the argument for
+keeping green targets in the sweep instead of retiring them: honouring
+`.nvmrc` as a hard pin broke `sveltejs/realworld`, which had been serving.
+Its `.nvmrc` says 20 while a package in its tree demands `>=22.12.0`.
+`engines.node` is published and enforced; `.nvmrc` is a local note that goes
+stale silently. So engines decides, including downward, and `.nvmrc` may only
+raise the floor.
+
+---
+
+## 6. Scheduling design — and why it is not one CronJob
+
+`app-deploy-3` raised this and it changed the design. `scripts/v3/drift-sweep.ts`
+imports `db` (Supabase **service role**), `edge/cloudflare`, `build/r2`,
+`k8s/client`, and via `fleet-source` also `linode/client`. A pod running it would
+hold **every platform credential at once** — strictly more than v1's build stage
+held, and that concentration was v1's RCE.
+
+The leaf scripts are already split, so per-script scheduling costs almost nothing:
+
+| Script | Credentials needed | Where |
+|---|---|---|
+| `usage-sample` | db + k8s | in-cluster, ServiceAccount + narrow DB cred |
+| `workload-drift` | db + k8s | in-cluster, same profile |
+| `r2-drift` | db + r2 | in-cluster, own Secret — needs no cluster access |
+| `dns-drift` | db + cloudflare + k8s | in-cluster, own Secret |
+| `fleet-drift` | db + linode | in-cluster, own Secret — the only job needing **no cluster access** |
+
+`fleet-drift`'s `db` is not visible in its direct imports; it arrives through
+`telemetry/fleet-source.ts`. Shipping it without one made it refuse to run, which
+was the correct outcome and is why the row now reads `db + linode`.
+
+**INSTALLED 2026-08-26** (`b0bf8b60`) — five CronJobs in `ahura-system`, each with
+its own ServiceAccount and only the one Secret it needs. No pod holds more than
+one vendor credential. `drift-sweep.ts` stays a manual tool and is never
+scheduled.
+
+Source ships as a **ConfigMap into `node:24-alpine`** — no image build, since
+these are zero-dependency TypeScript under `--experimental-strip-types`. The
+import closure is walked (20 files, 195 KB) and the installer refuses at 90% of
+the 1 MiB cap. Install with `scripts/v2/install-sweeps.ts --apply`; it dry-runs
+by default and **verifies its own writes by reading them back**.
+
+`backoffLimit` is 0: the drift scripts exit non-zero when they FIND something,
+not only when they fail, so a "failed" sweep is usually one that worked. The
+overloading is a known gap — exit 1 means both "found drift" and "could not
+run", so a scheduler cannot alert on real errors alone. Splitting them is the
+observability lane's change.
+
+---
+
+## 7. Open decisions — user only
+
+Engineering is blocked on these, not the reverse.
+
+1. **Warm-time pricing policy.** The cost model depends on the warm fraction, and
+   a customer pinging their own app forces it to 1.0. Price warm-time, cap
+   free-tier warm hours, or detect self-pinging? *Blocks metering + pricing.*
+2. **Turn scale-to-zero on fleet-wide?** Built and proven, currently 1 project.
+   *This is the single largest lever on unit economics.*
+3. **Cloudflare plan tier.** Per-tenant WAF and >1 rate-limit rule are Enterprise.
+   *Blocks abuse response.*
+4. **Free tier — is there one?** *Blocks quota and abuse design.*
+5. **Preview deployments — lifetime and who pays.** The HOSTNAME SCHEME is no
+   longer open (see below); these two are, and they should be decided together:
+   a preview that never expires and is free is the abuse vector.
+6. **ACM ($10/mo)** — deferred. Apps currently sit at `<app>.ahurasense.com` under
+   the free wildcard instead of `<app>.apps.ahurasense.com`.
+
+---
+
+## 7b. Preview hostnames — settled, build to this
+
+Fixed by constraint rather than preference, so it is not open to taste:
+
+- **One DNS label, flattened.** The zone certificate covers exactly
+  `["ahurasense.com", "*.ahurasense.com"]`, and a wildcard covers ONE label
+  deep. `preview.myapp.ahurasense.com` gets a **TLS error**, not a 404. It must
+  be `myapp-a1b2c3d4e5f6.ahurasense.com`.
+- **Charset `[a-z0-9-]`.** Deployment refs are `dpl_…` with an UNDERSCORE, which
+  is illegal in a hostname label — a preview label must transform a ref, never
+  embed it.
+- **Length fits with room:** slug is capped at 40 by `projects_slug_shape`, the
+  ref hex is 12, so `slug-hex` = 53 against the 63-char limit.
+- **Must pass `checkLabel()`** from `lib/paas/hostnames.ts`.
+- **The schema already models both flavours.** `paas.alias_kind` is
+  `production | branch | deployment | custom` — `deployment` is the permanent
+  per-build URL, `branch` the moving per-branch one. Per-alias routing is live
+  and proven, so previews need rows, not new routing.
+
+---
+
+## 8. Traps — verified, do not re-derive
+
+- **The repo does not tell you what is deployed.** Check the live system.
+- **`ap-west` (Mumbai) has no VPC support.** Use `in-bom-2`. `in-maa` (Chennai) is
+  the most capable India region.
+- **`R2_BUCKET` (`ahurasense-media`) is production assets.** v2 uses
+  `V2_R2_BUCKET` (`cloud-app-deploy`), resolved only in `lib/paas/config.ts:59`.
+- **The Cloudflare account holding the zone is not the R2 account.** Two accounts.
+- **HA control plane is irreversible** and recreates every node. The first
+  production cluster must be created with it on.
+- **Universal SSL covers one label deep.** `*.ahurasense.com` does not cover
+  `x.apps.ahurasense.com`.
+- **Never start a second dev server.** Two Next servers sharing `.next` corrupt
+  each other.
+
+### The recurring bug: empty is not the same as unknown
+
+Three independent instances in one day, in three different costumes:
+
+- A regex that did not match R2's `<Contents>` shape reported an **empty bucket**
+  that held 907 MB.
+- A Trivy gate reading an empty `Results` array reported **no vulnerabilities**
+  rather than *scan did not run*.
+- An idle sweep reading an empty router map would have reported **no traffic**
+  rather than *could not measure*.
+
+And its mirror on the write side — the same defect with the polarity flipped.
+The three above read nothing and concluded the world was empty; this one wrote
+nothing and concluded the world had changed. Both promote a null to a fact:
+
+- `allowMissing: true` on a **write** turns every failure into a silent success.
+  A quota script reported three namespaces enforced while creating zero
+  ResourceQuotas.
+
+And the sharpest instance, because the tool that detects the bug had the bug:
+
+- The **check written to catch `allowMissing` on writes** had its regex
+  backslashes eaten by a patching step — twice — leaving a pattern matching
+  nothing. The check passed both times having examined **zero call sites**. Only
+  a paired detector-proof caught it. The predicate now uses `indexOf` /
+  `startsWith` and no regex at all.
+
+A sixth, found while scheduling the sweeps: `fleet-drift` was shipped without a
+database credential because `db` is not among its *direct* imports — it arrives
+through `fleet-source.ts`. It refused to run rather than reporting every
+resource as unrecorded. **The transitive closure is the credential surface, not
+the import line.**
+
+This one is the positive case, and it is the strongest argument in this section:
+the refusal caught a bug in **another session's** work, in code that had already
+been reviewed. The credential surface was derived carefully, from the imports,
+and was still wrong. The guard did not catch carelessness — it caught a correct
+method applied to the wrong artifact. Care does not substitute for a guard.
+
+### Three ways a guard goes vacuous, and they look identical from outside
+
+The third-state rule above covers the **input** side: a check that observes
+nothing must say so rather than pass. It does **not** cover the output side.
+
+A seventh instance proved the gap. A detector's `offenders.push()` lost its
+argument to the same mangling that ate the regexes — so the scan ran correctly,
+examined every call site, and then **discarded every finding**. `examined > 0`
+passed, because the input side was genuinely fine. A counter placed before the
+push cannot see an empty push.
+
+A later instance proved a third mode, and it is the worst of them because the
+guard is *working correctly* at every point you would think to look.
+
+`sandbox-overhead.ts` had two halves. The **ceiling** said the declared sandbox
+charge was larger than any pod's whole footprint — costs density, recoverable
+whenever. **Headroom** said whether pods were near what was set aside for them —
+ends in the kernel OOM-killing whichever pod allocates next, possibly a
+different tenant's. The script returned clean as soon as the ceiling half
+passed, skipping headroom entirely.
+
+That was harmless for as long as the declaration was generous. Then `podFixed`
+was cut 128Mi → 64Mi **on the strength of that monitor** — and 64Mi is inside
+the pods' own footprints, so the ceiling check now passes by construction. The
+early exit fired every time. The one check standing between the smaller
+reservation and an OOM went silent at exactly the moment it started mattering.
+
+| Failure | What it looks like | What catches it |
+|---|---|---|
+| Observes nothing | green | report `examined`, refuse at 0 |
+| Observes, then discards | green | assert a **known-bad input** still produces a finding, every run |
+| Observes, until the change retires it | green | ask whether the guard's precondition survives the thing it guards |
+
+The third defeats both earlier defences. `examined` is honestly non-zero. A
+known-bad input still produces a finding — on the half that still runs. The
+early exit happens *after* a genuine, successful, correct examination, and it is
+conditional on state that **the guarded change itself creates**.
+
+**The property to look for: does this guard's precondition survive the change it
+exists to watch?** The ceiling half was only ever meaningful while the
+declaration was generous, so cutting the declaration retired the check. A guard
+whose relevance is inversely coupled to the risk it guards is not a guard.
+
+Two rules fall out, and the second is the operational one:
+
+- **A check with more than one half must not let either half's silence stand for
+  the whole.** They fail in different directions; state that, and make clean
+  mean *both* are clean.
+- **After making the change a monitor licensed, run the monitor again and
+  confirm it still says something.** A safety check that goes quiet once the
+  risky change is made is worse than no check, because its silence reads as
+  reassurance — and unlike the other two failures, nobody is looking any more.
+
+### An anonymous API budget is a capacity limit, and 404 is how it lies
+
+Bitbucket allows **sixty** REST calls per hour per IP for an unauthenticated
+caller. `inspectRepo` probes about forty marker files, one call each — so ONE
+deploy consumed most of an hour and the next failed. That is the cheap half of
+the lesson.
+
+The expensive half: the reader returned `res.ok ? text : null`, and null means
+ABSENT to detection. A rate-limited repository was therefore reported as one
+with no `package.json` and no `Dockerfile` — and the customer would have been
+told to add files they already had. Same shape as the private-repo bug in the
+recurring entry below, in a new place: **empty is not the same as unknown**,
+and a 429 is unknown.
+
+Both halves are fixed and both fixes are load-bearing:
+
+- `readRaw` in `lib/paas/providers/source.ts` treats **404 and only 404** as
+  null; every other non-200 throws with the status in the message. Proven by
+  mutation — the test fails when the guard is removed.
+- `listDir` lists the directory in ONE call, so absent files cost nothing.
+  Forty probes became one listing plus the two or three files whose CONTENTS
+  detection actually reads. Null from `listDir` means *could not list* and
+  falls back to probing — it is not an empty directory.
+
+GitHub is deliberately exempt: it reads through `raw.githubusercontent.com`,
+which does not share the API's anonymous budget, so spending a scarcer
+allowance to list there would save nothing.
+
+### A default that fits the only case that exists is a landmine for the next one
+
+Sibling of the guard modes above — same family (a thing that is correct until
+the world grows a second case) with a different trigger. The guard modes are
+about **checks going quiet**; this is about **defaults going wrong**.
+
+Three instances, all found on the same day, all in code that was correct when
+written:
+
+| Defaulted | Correct while | Broke when |
+|---|---|---|
+| idempotency key `(project, sha)` | every push built production | a branch cut from the production head pushed an already-deployed commit — **the preview was never created**, and 200 to GitHub looks like a successful retry |
+| `toPoint = [...existing]` — point every alias | a project's hostnames all served one build | a preview build repointed **production** at itself: pushing any feature branch replaces the live site |
+| `inspectRepo` probes main | there was one branch worth building | a preview got the right **code** and main's **recipe** — framework, port, Dockerfile |
+
+The tell is the same each time: a value that is not passed in, derived from the
+only case that existed. **`deployFromRepo` deriving the environment from the
+deployment row rather than accepting an option is the fix shape** — an option
+would have needed a default, and the default would have been `production`,
+which is precisely the bug.
+
+Two rules:
+
+1. When adding a second case to something that has only ever had one, **list
+   every place the old case is assumed rather than asked for.** Grep for the
+   constant, not for the feature.
+2. **A latent defect goes live as a side effect of an unrelated correct change.**
+   The webhook change that started recording preview deployments was right, small
+   and well tested, and it armed a production outage three files away. Nothing
+   about the arming change looks dangerous, which is what makes this class hard.
+
+### A comment asserting a guarantee is not the guarantee
+
+`GET /api/v2/github/callback` took `installation_id` from the query string,
+checked it with `listInstallations()`, and bound it to
+`bootstrap_personal_team()` — the CALLER'S team. Its header said:
+
+> Without that check, a caller could claim ANY installation id and gain deploy
+> access to a stranger's repositories.
+
+**The check does not do that.** It proves the installation exists on our App —
+that SOMEBODY installed it. It says nothing about who is asking. So any
+signed-in user who visited that URL with a real but unclaimed installation id
+bound a stranger's GitHub account to their own team and could list and deploy
+that account's repositories. Installation ids are enumerable nine-digit
+integers that appear in webhook payloads and URLs, and one stays unclaimed
+permanently for anyone who installs from GitHub's UI and stops there.
+
+**It had already happened.** The installation on `cs2hvh` was held by team
+`vedendra-singh`, owned by somebody who does not own that GitHub account,
+because their session reached the callback first. Found by the operator
+noticing the two did not match — not by a test, a review, or the comment that
+described the exact attack.
+
+`/api/v2/git/callback` had the same hole behind a better disguise: its one-time
+nonce proves the browser STARTED a flow, not which installation came back, and
+an attacker can start one legitimately.
+
+Fixed in `lib/paas/github/ownership.ts` (tested, 9 cases): the caller's GitHub
+identity must match the account the installation is on. Two rules worth
+keeping:
+
+- **Read `user.identities`, never `user_metadata`.** Metadata is
+  last-writer-wins across providers — the operator's account carries
+  `providers: ["gitlab","github"]`, so someone whose GitLab username matched a
+  GitHub account could have claimed that account's installation.
+- **Two blanks must not compare equal.** A caller with no GitHub identity and
+  an installation whose account GitHub did not name would match under naive
+  equality. Same shape as every other bug in §8.
+
+**Known gap, stated rather than hidden:** org installs cannot be proven this
+way — it needs the user's own OAuth token, which is deliberately not stored
+for GitHub. They are refused by both routes until that exists.
+
+### A migration invalidates routes no test and no typechecker can see
+
+`20260827090000` made `paas.installations.provider` and `external_id` NOT NULL
+and dropped the `link_installation(bigint, …)` overload. Both were correct. Both
+would have broken GitHub connect — the only working provider — on the user's own
+installation flow:
+
+- `app/api/v2/git/callback` passed `p_installation_id`. **PostgREST resolves an
+  RPC by argument NAME**, so after the drop the call resolved to no function at
+  all.
+- `app/api/v2/github/callback` inserted without the two new NOT NULL columns —
+  `23502` on every connect.
+
+**Nothing mechanical connects the two.** The schema is not in the type system, so
+`tsc` sees nothing; no test exercises the write, so the suite stays green; and
+the lane that wrote the migration did not own the routes it invalidated. All
+three checks passed on a tree that could not connect a GitHub account.
+
+The habit that catches it: **before making a column NOT NULL or dropping a
+function overload, grep for every writer of that table or function across the
+whole repo — not just the lane's own tree.** Then fix the callers BEFORE
+applying, so there is never a window where the deployed code is wrong against
+the live schema.
+
+Related, and the reason the `else false` line in that migration is not a
+stylistic preference: **a CHECK constraint whose expression evaluates to NULL
+ADMITS the row.** Measured, not reasoned — a temp table with
+`check (case x when 'known' then v = 'ok' end)` accepted
+`('unmatched-provider', 'obviously-invalid-value')`. A `CASE` with no `ELSE`
+returns NULL for anything unmatched, so adding a fourth `git_provider` would
+silently switch that constraint off for it: still listed, still green,
+enforcing nothing.
+
+### A backtick in generated text ends the template literal it lives in
+
+`dockerfile.ts` builds Dockerfiles inside JS template literals. Twice now I have
+written an explanatory comment containing a backticked term — ```./...` matches
+every package`` — into one of those literals, which closes it and turns the rest
+of the file into a syntax error tens of lines away from the edit. `tsc` reports
+the confusion at the NEXT stage boundary, so the message names a Dockerfile line
+in a completely different generator.
+
+The same applies to `${`, which silently interpolates instead of failing.
+
+**The rule:** text injected into a Dockerfile template gets no backticks and no
+`${`. Say the name plainly. And run `npx tsc --noEmit` after every patch script
+that touches a generator — this class is invisible on a read and instant on a
+typecheck.
+
+### The tools themselves lie, and that is a different problem
+
+Two tools reported success while failing, in the same hour:
+
+- `tsc | head` returns **HEAD's** exit code. A pipeline reports its *last*
+  command, so `tsc | tee`, `tsc | grep`, `tsc | head` all report green
+  regardless of `tsc`.
+- `node --experimental-strip-types --check` **exits 0** on a file with nine
+  syntax errors, including unterminated string literals.
+
+- `node --test <directory>` resolves the directory as a module and reports
+  **tests 1, fail 1**. It fails loudly here — but had the path resolved to
+  something importable it would have reported **tests 1, pass 1**: a green suite
+  that ran nothing. Use quoted globs, never a bare directory.
+
+- **`script | grep ...; echo $?` reports GREP's status, not the script's.** Same
+  mechanism as `tsc | head`, and worth its own line because it bit again in the
+  obvious disguise: filtering noise out of a script's output. Three "exit=0"
+  readings on `preview-proof.ts` were reported here and meant nothing — the
+  script's own exits were never observed. **Run the command unpiped and read
+  `$?` before quoting any exit code.**
+
+- **`process.exit()` can abort with pending stdout.** On Windows, a script that
+  prints a long report and then calls `process.exit(N)` can die under a libuv
+  assertion — the report prints correctly and the shell sees **127**. Found on
+  two v3 scripts, intermittently, after one had already been reported as
+  passing. Use `process.exitCode` and return; wrap the body in `main()` if a
+  top-level return would be needed (it is a syntax error in a module).
+
+- **`tsx` cannot compile a top-level `await` to CommonJS, and the script dies
+  in the transform.** `framework-batch.ts` had one. It never reached a single
+  repository — and because the run was piped, the pipeline's exit code was
+  reported instead of the script's, so it read as a clean sweep of every
+  target. The same file runs correctly under
+  `node --experimental-strip-types`, which is how its own child process is
+  spawned; that is why the probe worked and the batch around it did not.
+  **Two independent green signals, and neither one had run anything.**
+
+- **A test glob that matches none of your tests is indistinguishable from a
+  passing suite.** `npm test` is vitest with `include: ['tests/**']`, and all
+  998 deploy-v2 tests live beside their code in `lib/paas/**` as `node:test`
+  files. No script ran them. Every regression guard written during the
+  framework sweep — including ones written specifically because a bug had
+  already shipped once — sat unrun while the suite reported green. Fixed by
+  `npm run test:paas`, NOT by adding `lib/**` to vitest's globs: vitest imports
+  the file, node:test executes at import time, and the results land outside
+  vitest's reporting while still failing the process. That was tried first and
+  produced 4 reported tests out of 998.
+
+These are worth separating from the guard failures above. A broken guard is our
+code and we can fix it. A tool that reports success while doing nothing is the
+floor those guards stand on, and no amount of care in our own code detects it —
+only running a known-bad input through the whole chain does.
+
+The practical rule: **before trusting any tool's clean result, make it report a
+dirty one once.** Every instance in this section was found that way, and none
+was found by reading.
+
+**The rule:** a parse that yields nothing, a read that returns nothing, and a
+write whose failure is swallowed all look exactly like success. Distinguish
+*could not observe* from *observed nothing*, on reads **and** writes, and make
+the unobservable case refuse rather than pass. `skip` means "could not check";
+`pass` means "checked and fine". Conflating them is how a suite goes green while
+asserting nothing.
+
+---
+
+## 9. Coordination protocol
+
+- **One lane per branch.** Do not edit files another lane owns (§2).
+- **Update this file** when you finish something — do not leave it to be
+  re-derived from git log.
+- **Verify peer claims before acting on them.** Two stale claims were corrected
+  today: `pod_allocated` was reported 0 (it is 25), and an R2 leak was doubted
+  (it was real). Sessions are confidently wrong often enough that a live check is
+  cheaper than a wrong turn.
+- **State what is proven vs assumed.** "Proven against the live database" is not
+  "proven in production".

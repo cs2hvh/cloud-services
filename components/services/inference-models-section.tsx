@@ -21,31 +21,100 @@ type ModelCard = {
   accent: string;
 };
 
+/**
+ * The service page keeps the percentage-based Container it was designed in.
+ *
+ * The homepage needs its left edge on the same grid as the hero, the GPU rail
+ * and every section heading — all of which sit at 104px on a 1911px viewport.
+ * Container's `lg:max-w-[75%]` would have set it ~135px further in.
+ *
+ * Note the width is 1800, not 1704: padding sits INSIDE the max-width here
+ * (the hero's convention), so 1800 − 2×48 gives the same 1704px content box.
+ * Putting 1704 here instead lands the edge 48px too far right.
+ */
+function Shell({ isHome, children }: { isHome: boolean; children: React.ReactNode }) {
+  if (isHome) {
+    return (
+      <div className="relative z-10 mx-auto w-full max-w-[1800px] px-6 sm:px-10 lg:px-12">
+        {children}
+      </div>
+    );
+  }
+  return <Container className="relative z-10">{children}</Container>;
+}
+
 // 18 cards total → 6 per column. Long enough that the marquee loop is
 // not obviously short; short enough to keep the catalog feeling premium
 // rather than a wall of text.
+//
+// EVERY ID HERE IS A MODEL THE GATEWAY WILL ACTUALLY ROUTE. That is not a
+// stylistic note. Until 2026-08-26 this list advertised gpt-4o, o3,
+// gemini-2.5-pro, llama-4-maverick, mistral-large, command-r-plus and twelve
+// more — eighteen of eighteen unroutable after the move from OpenRouter to
+// Wokey, across six providers the platform does not serve at all. A visitor
+// who copied a name off this page got a 404 on their first request.
+//
+// The displayed name is the bare one; NAMESPACE below supplies the prefix
+// that makes it callable, because `model` in a request body is the namespaced
+// id exactly as inference.models.model_id stores it.
+//
+// inference-models.catalog.test.ts checks every id against the live catalog
+// and fails naming the offender. That test is the only reason this list is
+// allowed to be a hand-written snapshot rather than a query.
+//
+// NO VISION CLAIMS. Every active model in the catalog reports
+// capabilities.vision = false, so no card may say otherwise. The old gpt-4o
+// card led with "Vision".
 const CARDS: ModelCard[] = [
-  { provider: "OpenAI",    model: "gpt-4o",                      meta: "Vision · Tools · 128k",         accent: "#10a37f" },
-  { provider: "Anthropic", model: "claude-4-7-opus",             meta: "Frontier · Tools · 200k",       accent: "#d97706" },
-  { provider: "Google",    model: "gemini-2.5-pro",              meta: "Long context · 2M tokens",      accent: "#4285f4" },
-  { provider: "Meta",      model: "llama-4-maverick",            meta: "MoE · Open weights",            accent: "#0866ff" },
-  { provider: "Mistral",   model: "mistral-large",               meta: "Multilingual · Tools",          accent: "#fa520f" },
-  { provider: "DeepSeek",  model: "deepseek-v3",                 meta: "Reasoning · Open weights",      accent: "#7c3aed" },
+  { provider: "Anthropic", model: "claude-opus-5",         meta: "Frontier · Tools · 1M context", accent: "#d97706" },
+  { provider: "OpenAI",    model: "gpt-5.6-sol",           meta: "Frontier · Tools · 1M context", accent: "#10a37f" },
+  { provider: "xAI",       model: "grok-4.6",              meta: "Reasoning · Tools · 500k",      accent: "#a3a3a3" },
+  { provider: "Moonshot",  model: "kimi-k3",               meta: "Open weights · Tools · 1M",     accent: "#6366f1" },
+  { provider: "Zhipu",     model: "glm-5.3",               meta: "Open weights · Tools · 1M",     accent: "#14b8a6" },
+  { provider: "DeepSeek",  model: "deepseek-v4-pro",       meta: "Reasoning · Tools · 1M",        accent: "#7c3aed" },
 
-  { provider: "OpenAI",    model: "o3",                          meta: "Reasoning · Thinking",          accent: "#10a37f" },
-  { provider: "Anthropic", model: "claude-4-5-sonnet",           meta: "Frontier · Tools · 200k",       accent: "#d97706" },
-  { provider: "Google",    model: "gemini-2.5-flash",            meta: "Fast · 1M context",             accent: "#4285f4" },
-  { provider: "Qwen",      model: "qwen-3-32b",                  meta: "Multilingual · Open weights",   accent: "#615ced" },
-  { provider: "Mistral",   model: "codestral",                   meta: "Code · 32k context",            accent: "#fa520f" },
-  { provider: "DeepSeek",  model: "deepseek-coder-v3",           meta: "Code · Open weights",           accent: "#7c3aed" },
+  { provider: "Anthropic", model: "claude-sonnet-5",       meta: "Balanced · Tools · 1M context", accent: "#d97706" },
+  { provider: "OpenAI",    model: "gpt-5.6-terra",         meta: "Balanced · Tools · 1M context", accent: "#10a37f" },
+  { provider: "xAI",       model: "grok-4.5",              meta: "Reasoning · Tools · 500k",      accent: "#a3a3a3" },
+  { provider: "Moonshot",  model: "kimi-k2.7-code",        meta: "Code · Open weights · 256k",    accent: "#6366f1" },
+  { provider: "MiniMax",   model: "minimax-m3",            meta: "Open weights · Tools · 1M",     accent: "#f43f5e" },
+  { provider: "Anthropic", model: "claude-opus-4.8",       meta: "Frontier · Tools · 1M context", accent: "#d97706" },
 
-  { provider: "OpenAI",    model: "gpt-4o-mini",                 meta: "Cheap · Fast · 128k",           accent: "#10a37f" },
-  { provider: "Meta",      model: "llama-4-scout",               meta: "Small · Open weights",          accent: "#0866ff" },
-  { provider: "Cohere",    model: "command-r-plus",              meta: "RAG-tuned · Tools",             accent: "#ec4899" },
-  { provider: "xAI",       model: "grok-3",                      meta: "Reasoning · Real-time",         accent: "#a3a3a3" },
-  { provider: "Perplexity", model: "sonar-reasoning",            meta: "Web-grounded · Citations",      accent: "#22d3ee" },
-  { provider: "Qwen",      model: "qwen-coder-32b",              meta: "Code · Open weights",           accent: "#615ced" },
+  { provider: "Anthropic", model: "claude-haiku-4.5",      meta: "Fast · Tools · 200k",           accent: "#d97706" },
+  { provider: "OpenAI",    model: "gpt-5.4-mini",          meta: "Fast · Tools · 400k",           accent: "#10a37f" },
+  { provider: "OpenAI",    model: "gpt-5.3-codex",         meta: "Code · Tools · 400k",           accent: "#10a37f" },
+  { provider: "DeepSeek",  model: "deepseek-v4-flash",     meta: "Fast · Open weights · 1M",      accent: "#7c3aed" },
+  { provider: "ByteDance", model: "doubao-seed-2.1-turbo", meta: "Fast · Tools · 256k",           accent: "#06b6d4" },
+  { provider: "Anthropic", model: "claude-sonnet-4.6",     meta: "Balanced · Tools · 1M context", accent: "#d97706" },
 ];
+
+/**
+ * The namespace each card needs to become a callable id, keyed by the
+ * displayed provider name. Kept beside the cards rather than inside them so
+ * the card stays a display concern and this stays a routing fact.
+ *
+ * Moonshot, Zhipu, MiniMax and ByteDance have no brand mark in
+ * provider-logos, so ProviderLogo falls back to a two-letter monogram. That
+ * is deliberate — initials beat a wrong logo, and beat dropping four real
+ * providers from the page because we lack an SVG for them.
+ */
+const NAMESPACE: Record<string, string> = {
+  Anthropic: "anthropic",
+  OpenAI: "openai",
+  xAI: "x-ai",
+  Moonshot: "moonshotai",
+  Zhipu: "zhipu",
+  DeepSeek: "deepseek",
+  MiniMax: "minimax",
+  ByteDance: "bytedance",
+};
+
+/** The id a caller passes as `model`. Checked against the live catalog. */
+export function catalogId(card: { provider: string; model: string }): string {
+  return `${NAMESPACE[card.provider] ?? card.provider.toLowerCase()}/${card.model}`;
+}
+
+export const MODEL_CARDS: ReadonlyArray<ModelCard> = CARDS;
 
 // Three columns, each scrolls at a different speed to avoid a regimented
 // "everything moves together" look. Direction alternates so adjacent
@@ -56,14 +125,53 @@ const COLUMNS: Array<{ from: number; cards: ModelCard[]; durationS: number; reve
   { from: 12, cards: CARDS.slice(12, 18), durationS: 44, reverse: false },
 ];
 
+/**
+ * Counts the catalog can support, exported so the test can hold them to it.
+ *
+ * These were "50+" and "12" against a real 29 and 8 — inflated by roughly
+ * 1.7x and 1.5x. Both are now the live number, and the test fails if the
+ * catalog moves away from them in either direction. Being wrong LOW is still
+ * wrong: it undersells the platform and it means this file has stopped
+ * tracking reality, which is the same defect as overselling it.
+ */
+export const CATALOG_MODEL_COUNT = 29;
+export const CATALOG_PROVIDER_COUNT = 8;
+
+/**
+ * THE MARKUP STAT IS GONE, and deliberately.
+ *
+ * It read "0% Markup". That is true of 20 of the 29 active models and false
+ * of the other nine, which carry between 18% and 633% on output tokens —
+ * deepseek-v4-flash bills 132¢/Mtok against an 18¢ cost, and gpt-5.6-sol, a
+ * featured model, bills 3000¢ against 1000¢. Whether those margins should
+ * exist is a pricing decision and not this file's to make; whether the page
+ * may advertise their absence while they exist is not a close question.
+ *
+ * If inference moves to at-cost the way GPU did, put the stat back and let
+ * the test assert it. Until then the strip carries only claims that hold.
+ */
 const STATS = [
-  { value: "50+",   label: "Models" },
-  { value: "12",    label: "Providers" },
-  { value: "0%",    label: "Markup" },
-  { value: "1",     label: "API key" },
+  { value: String(CATALOG_MODEL_COUNT),    label: "Models" },
+  { value: String(CATALOG_PROVIDER_COUNT), label: "Providers" },
+  { value: "1M",                           label: "Max context" },
+  { value: "1",                            label: "API key" },
 ];
 
-export default function InferenceModelsSection() {
+/**
+ * Rendered on /services/inference AND on the marketing homepage. The model
+ * list is the single source of truth for both — do not fork it.
+ *
+ * `variant` only changes the shell: the service page keeps its percentage
+ * Container, the homepage uses the 1704px content box and page ground so its
+ * left edge lines up with every other section (Container's 75% would have put
+ * it ~135px further in).
+ */
+export default function InferenceModelsSection({
+  variant = "service",
+}: {
+  variant?: "service" | "home";
+} = {}) {
+  const isHome = variant === "home";
   const ref = useRef<HTMLDivElement | null>(null);
   const [inView, setInView] = useState(false);
 
@@ -82,7 +190,8 @@ export default function InferenceModelsSection() {
   return (
     <section
       ref={ref}
-      className="relative isolate overflow-hidden bg-[#0E0F0F] py-24 sm:py-32"
+      className={`relative isolate overflow-hidden ${isHome ? "pt-16 pb-6 lg:pt-24 lg:pb-8" : "bg-[#0E0F0F] py-24 sm:py-32"}`}
+      style={isHome ? { background: "var(--ah-bg)" } : undefined}
     >
       {/* Subtle radial wash + diagonal grain so the section reads as
           richer than a flat panel without distracting from the cards. */}
@@ -103,23 +212,22 @@ export default function InferenceModelsSection() {
         }}
       />
 
-      <Container className="relative z-10">
+      <Shell isHome={isHome}>
         <div className="grid gap-14 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-20">
           {/* ─── LEFT: sticky descriptive pane ──────────────────── */}
-          <div className="lg:sticky lg:top-32 lg:self-start">
+          <div className="lg:sticky lg:top-28 lg:self-start">
             <motion.div
               initial={{ opacity: 0, y: 16 }}
               animate={inView ? { opacity: 1, y: 0 } : {}}
               transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
             >
-              <h2 className="text-3xl font-[400] leading-[1.05] tracking-tight text-white sm:text-4xl lg:text-[3.4rem]">
-                One catalog.{" "}
-                <span className="text-[#0095FF]">One key.</span>
+              <h2 className={isHome ? "ah-h2" : "text-3xl font-[400] leading-[1.05] tracking-tight text-white sm:text-4xl lg:text-[3.4rem]"}>
+                Every provider behind
                 <br />
-                One bill.
+                <span className={isHome ? "ah-h2-hl" : "text-[#0095FF]"}>a single integration.</span>
               </h2>
               <p className="mt-6 max-w-md text-[15px] leading-7 text-white/55 sm:text-[16px]">
-                50+ models, 12 providers, one OpenAI- and Anthropic-compatible endpoint. Switch providers with a string change.
+                {CATALOG_MODEL_COUNT} models, {CATALOG_PROVIDER_COUNT} providers, one OpenAI- and Anthropic-compatible endpoint. Switch providers with a string change.
               </p>
 
               {/* Stat strip with hairline dividers — matches the hero's strip */}
@@ -160,7 +268,7 @@ export default function InferenceModelsSection() {
                 ].map((cap) => (
                   <span
                     key={cap}
-                    className="rounded-[3px] border border-white/[0.08] bg-white/[0.02] px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-white/55"
+                    className="border border-white/[0.08] bg-white/[0.02] px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-white/55"
                   >
                     {cap}
                   </span>
@@ -212,7 +320,7 @@ export default function InferenceModelsSection() {
             </motion.div>
           </div>
         </div>
-      </Container>
+      </Shell>
 
       {/* Marquee keyframes — defined inline so the file is self-contained
           and we don't have to touch globals.css. */}
@@ -273,7 +381,7 @@ function MarqueeColumn({
 function ModelTile({ card }: { card: ModelCard }) {
   return (
     <div
-      className="group/tile relative flex items-center gap-3 overflow-hidden rounded-[6px] border border-white/[0.06] bg-white/[0.015] px-3.5 py-3 backdrop-blur-sm transition-colors duration-300 hover:border-white/[0.18] hover:bg-white/[0.05]"
+      className="ah-notch-sm group/tile relative flex items-center gap-3 overflow-hidden border border-white/[0.06] bg-white/[0.015] px-3.5 py-3 backdrop-blur-sm transition-colors duration-300 hover:border-white/[0.18] hover:bg-white/[0.05]"
     >
       {/* Provider-tinted left rail */}
       <span
@@ -288,7 +396,7 @@ function ModelTile({ card }: { card: ModelCard }) {
       {/* Avatar — brand-tinted provider logo, glyph fallback when no
           mark exists. Inherits the accent via currentColor. */}
       <div
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[5px] border font-mono text-[10px] font-semibold tracking-[0.04em]"
+        className="flex h-9 w-9 shrink-0 items-center justify-center border font-mono text-[10px] font-semibold tracking-[0.04em]"
         style={{
           background: `linear-gradient(135deg, ${card.accent}22, ${card.accent}08)`,
           borderColor: `${card.accent}40`,

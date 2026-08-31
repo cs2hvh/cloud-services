@@ -186,6 +186,32 @@ function RepoConnectionRow({
 /*  Main Component                                                     */
 /* ------------------------------------------------------------------ */
 
+// One-shot params (OAuth results, reconnect hints) are consumed then stripped —
+// but only those. Anything else stays, notably ?tab= which drives the visible
+// settings tab.
+function consumeUrlParams(params: URLSearchParams, keys: string[]) {
+  keys.forEach((key) => params.delete(key));
+  const query = params.toString();
+  window.history.replaceState(
+    {},
+    "",
+    query ? `${window.location.pathname}?${query}` : window.location.pathname
+  );
+}
+
+// Error codes the git provider callbacks redirect back with.
+const OAUTH_ERROR_MESSAGES: Record<string, string> = {
+  missing_code: "The provider did not return an authorization code.",
+  invalid_state: "That connection request expired. Please try again.",
+  invalid_user: "We could not verify your account. Please sign in again.",
+  config_error: "This provider integration is not configured.",
+  token_exchange_failed: "The provider rejected the connection. Please try again.",
+  no_token: "The provider did not return an access token.",
+  user_info_failed: "We could not read your provider profile.",
+  token_storage_failed: "We could not save the connection. Please try again.",
+  unknown: "Something went wrong while connecting. Please try again.",
+};
+
 const Accounts = () => {
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
   const [loadingSection, setLoadingSection] = useState<"repo" | null>(null);
@@ -208,7 +234,7 @@ const Accounts = () => {
   };
 
   const { connectProvider: performIntegrationAction } = useProviderConnection({
-    returnTo: "/dashboard/settings",
+    returnTo: "/dashboard/settings?tab=account",
     mode: "integration",
   });
 
@@ -219,7 +245,7 @@ const Accounts = () => {
     setLoadingSection("repo");
     try {
       await performIntegrationAction(provider, "connect", {
-        returnTo: returnToRef.current ?? "/dashboard/settings",
+        returnTo: returnToRef.current ?? "/dashboard/settings?tab=account",
       });
     } catch (error) {
       console.error("Connect repo failed:", error);
@@ -251,7 +277,7 @@ const Accounts = () => {
     setLoadingSection("repo");
     try {
       await performIntegrationAction(provider, "connect", {
-        returnTo: returnToRef.current ?? "/dashboard/settings",
+        returnTo: returnToRef.current ?? "/dashboard/settings?tab=account",
       });
     } catch (error) {
       console.error("Reconnect repo failed:", error);
@@ -275,9 +301,7 @@ const Accounts = () => {
       if (rawReturnTo.startsWith("/dashboard/")) {
         returnToRef.current = rawReturnTo;
       }
-      params.delete("reconnect");
-      params.delete("returnTo");
-      window.history.replaceState({}, "", window.location.pathname);
+      consumeUrlParams(params, ["reconnect", "returnTo"]);
       const label = reconnectProvider.charAt(0).toUpperCase() + reconnectProvider.slice(1);
       toast.warning(`Your ${label} token has expired. Please reconnect your account below, then return to redeploy.`);
     }
@@ -291,18 +315,13 @@ const Accounts = () => {
 
     if (shouldAutoConnectRepo) {
       autoRepoConnectStartedRef.current = true;
-      params.delete("auto_repo_connect");
-      const nextQuery = params.toString();
-      const nextUrl = nextQuery
-        ? `${window.location.pathname}?${nextQuery}`
-        : window.location.pathname;
-      window.history.replaceState({}, "", nextUrl);
+      consumeUrlParams(params, ["auto_repo_connect"]);
 
       setLoadingProvider(autoRepoConnect);
       setLoadingSection("repo");
       void (async () => {
         const result = await performIntegrationAction(autoRepoConnect, "connect", {
-          returnTo: "/dashboard/settings",
+          returnTo: "/dashboard/settings?tab=account",
         });
         if (!result.success) {
           setLoadingProvider(null);
@@ -323,9 +342,20 @@ const Accounts = () => {
           : params.get("gitlab_connected") === "true"
           ? "GitLab"
           : "Bitbucket";
-      window.history.replaceState({}, "", window.location.pathname);
+      consumeUrlParams(params, [
+        "github_connected",
+        "gitlab_connected",
+        "bitbucket_connected",
+      ]);
       toast.success(`${connectedProvider} connected successfully`);
       setTimeout(() => fetchProviders(), 500);
+      return;
+    }
+
+    const oauthError = params.get("error");
+    if (oauthError) {
+      consumeUrlParams(params, ["error"]);
+      toast.error(OAUTH_ERROR_MESSAGES[oauthError] ?? "Could not connect that provider.");
     }
   }, [performIntegrationAction]);
 

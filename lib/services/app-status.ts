@@ -60,7 +60,10 @@ export class AppStatusService {
   static async checkK8sHealth(appName: string, namespace = 'default'): Promise<K8sHealthCheck> {
     try {
       const podInfo = await KubernetesInfoService.getPodInfo(appName, namespace);
-      const deploymentInfo = await KubernetesInfoService.getDeploymentInfo(appName, namespace);
+      // rethrowTransport: a connectivity failure must surface as `unreachable`
+      // below, not as "Deployment not found" — otherwise syncStatus marks a
+      // perfectly healthy app as failed and nothing ever corrects it.
+      const deploymentInfo = await KubernetesInfoService.getDeploymentInfo(appName, namespace, true);
 
       if (!deploymentInfo) {
         return {
@@ -256,6 +259,106 @@ export class AppStatusService {
         error: error instanceof Error ? error.message : "Unknown error",
       };
     }
+  }
+
+  /**
+   * Reconcile many apps against K8s using a SINGLE API call.
+   *
+   * syncStatus() is per-app and costs one API read each, which is why the app
+   * list was never synced and its `status` column silently went stale. This
+   * reads the whole namespace once and applies the same rules.
+   *
+   * If the API is unreachable, nothing is written — every status is preserved.
+   * Reporting "unreachable" as "no deployments found" would mark every healthy
+   * app as failed, which is exactly the failure this is meant to prevent.
+   */
+  static async syncStatusesBulk(
+    apps: { id: string; name: string; status: string; updated_at?: string | null }[],
+    namespace = "default"
+  ): Promise<{
+    changed: number;
+    skipped: number;
+    unreachable: boolean;
+    /** appId → newly written status, for callers holding stale copies in memory. */
+    updates: Map<string, AppStatus>;
+  }> {
+    const updates = new Map<string, AppStatus>();
+    if (apps.length === 0) return { changed: 0, skipped: 0, unreachable: false, updates };
+
+    let readiness: Map<string, { replicas: number; readyReplicas: number }>;
+    try {
+      readiness = await KubernetesInfoService.listDeploymentReadiness(namespace);
+    } catch (error) {
+      console.warn(
+        `[AppStatusService] Bulk sync skipped — K8s unreachable: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      return { changed: 0, skipped: apps.length, unreachable: true, updates };
+    }
+
+    let changed = 0;
+    let skipped = 0;
+
+    for (const app of apps) {
+      const previousStatus = app.status as AppStatus;
+
+      // Same exclusions as syncStatus: these states are not K8s-derived.
+      if (
+        previousStatus === "pending" ||
+        previousStatus === "stopped" ||
+        previousStatus === "deleting" ||
+        previousStatus === "building"
+      ) {
+        skipped++;
+        continue;
+      }
+
+      const info = readiness.get(app.name);
+      const newStatus: AppStatus = info && info.readyReplicas > 0 ? "running" : "failed";
+
+      if (newStatus === previousStatus) {
+        skipped++;
+        continue;
+      }
+
+      // Don't flip running → failed while a rollout is still stabilising.
+      if (previousStatus === "running" && newStatus === "failed") {
+        const inMemoryGrace = (() => {
+          const lastSet = this.recentStatusSets.get(app.id);
+          return lastSet != null && Date.now() - lastSet < this.STATUS_GRACE_PERIOD_MS;
+        })();
+        const durableGrace = app.updated_at
+          ? Date.now() - new Date(app.updated_at).getTime() < this.STATUS_GRACE_PERIOD_MS
+          : false;
+        if (inMemoryGrace || durableGrace) {
+          skipped++;
+          continue;
+        }
+      }
+
+      const reason = info
+        ? `${info.readyReplicas}/${info.replicas} pods ready`
+        : "Deployment not found in K8s";
+
+      const updateResult = await Platform_Apps.update(app.id, {
+        status: newStatus,
+        last_failure_reason: newStatus === "failed" ? reason : null,
+      });
+
+      if (updateResult.success) {
+        console.log(
+          `[AppStatusService] ✅ Bulk synced: ${app.name} ${previousStatus} → ${newStatus} (${reason})`
+        );
+        updates.set(app.id, newStatus);
+        changed++;
+      } else {
+        console.error(`[AppStatusService] Bulk sync failed for ${app.name}: ${updateResult.error}`);
+        skipped++;
+      }
+    }
+
+    return { changed, skipped, unreachable: false, updates };
   }
 
   /**

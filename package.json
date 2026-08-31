@@ -16,6 +16,7 @@
     "generate:openapi": "tsx scripts/generate-openapi.ts",
     "namecom:dev": "tsx scripts/namecom-dev.ts",
     "test": "vitest",
+    "test:paas": "node --experimental-strip-types --env-file-if-exists=.env --env-file-if-exists=.env.local --test \"lib/paas/**/*.test.ts\"",
     "test:watch": "vitest --watch",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",

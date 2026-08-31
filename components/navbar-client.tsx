@@ -6,7 +6,7 @@ import Image from "next/image";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
-  Menu, X, ChevronDown, User, LogOut, Settings, LayoutDashboard, CreditCard,
+  Menu, X, ChevronDown, LogOut, Settings, LayoutDashboard, CreditCard,
   ArrowRight, Activity, LifeBuoy, ExternalLink,
 } from "lucide-react";
 import { useRouter, usePathname } from "next/navigation";
@@ -197,7 +197,6 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
   const [solutionsOpen, setSolutionsOpen] = useState(false);
   const [productsOpen, setProductsOpen] = useState(false);
   const [aiLabsOpen, setAiLabsOpen] = useState(false);
-  const [isScrolled, setIsScrolled] = useState(false);
   const solutionsTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const productsTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const aiLabsTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -209,13 +208,6 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
     setUser(initialUser);
     setIsLoading(false);
   }, [initialUser]);
-
-  useEffect(() => {
-    const onScroll = () => setIsScrolled(window.scrollY > 8);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -296,14 +288,14 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
 
   return (
     <nav
-      className={`fixed top-0 left-0 right-0 z-50 border-b transition-colors duration-300 ${
-        isScrolled
-          ? "border-white/[0.08] bg-[#08080a]/85 backdrop-blur-[14px]"
-          : "border-transparent bg-transparent"
-      }`}
+      className="fixed top-0 left-0 right-0 z-40 border-b border-white/[0.08] bg-[#08080a]/95 backdrop-blur-[14px]"
     >
-      {/* Boxy bar — sharp corners, wide container, scroll-aware bg */}
-      <div className="mx-auto flex h-16 max-w-[1440px] items-center px-5 sm:px-8">
+      {/*
+        Full-width strip, sharp corners, flush to the top of the viewport.
+        The announcement strip that used to sit above it has been removed.
+        Always solid — there is no scroll-dependent transparent state.
+      */}
+      <div className="mx-auto flex h-14 max-w-[1800px] items-center px-6 sm:px-10 lg:px-12">
         {/* Logo */}
         <Link href="/" className="text-[22px] font-normal text-white shrink-0 font-[family-name:var(--font-nunito)]">
           ahura<span className="text-[#0095FF]">sense</span>
@@ -433,12 +425,15 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
                       <p className="px-3 pt-2 pb-1.5 font-[var(--font-geist-mono),ui-monospace,monospace] text-[9px] uppercase tracking-[0.18em] text-white/30">
                         Personal
                       </p>
-                      <UserMenuItem
-                        icon={User}
-                        label="Profile"
-                        active={pathname?.startsWith("/dashboard/nav/profile")}
-                        onClick={() => { router.push("/dashboard/nav/profile"); setDropdownOpen(false); }}
-                      />
+                      {/*
+                        No Profile entry. 01517ccc consolidated profile and
+                        account settings onto one route, and this menu item was
+                        removed with them. It came back when these marketing
+                        edits were carried across from a tree that predated that
+                        commit — a wholesale file copy reverts whatever else
+                        touched the same file, silently, and this one would have
+                        shipped a menu link to a route that no longer exists.
+                      */}
                       <UserMenuItem
                         icon={Settings}
                         label="Settings"
@@ -505,8 +500,9 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
       </div>
 
       {/* Mega-menu panels — absolute so both panels share the same position and never stack */}
-      <div className="hidden lg:block absolute inset-x-0 top-16 z-50">
-        <div className="mx-auto max-w-[1440px] px-5 sm:px-8 relative">
+      {/* clears the floating bar (h-14) plus the gap it now sits above */}
+      <div className="hidden lg:block absolute inset-x-0 top-14 z-50">
+        <div className="mx-auto max-w-[1800px] px-6 sm:px-10 lg:px-12 relative">
 
           <AnimatePresence>
             {solutionsOpen && (
@@ -687,7 +683,7 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.2 }}
-            className="lg:hidden mx-5 sm:mx-8 mt-0 border border-white/[0.08] bg-[#08080a]/95 backdrop-blur-[14px] overflow-hidden"
+            className="lg:hidden mx-6 sm:mx-10 mt-0 overflow-hidden border border-white/[0.08] bg-[#08080a]/95 backdrop-blur-[14px]"
           >
             <div className="px-5 py-4 space-y-1 max-h-[70vh] overflow-y-auto no-scrollbar">
               {/* A.I. Labs accordion in mobile */}

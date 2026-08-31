@@ -1,23 +1,27 @@
 /**
  * POST /v1/chat/completions — OpenAI Chat Completions–compatible.
  *
- * Forwards to OpenRouter with streaming-safe passthrough and cancel
+ * Forwards to Wokey with streaming-safe passthrough and cancel
  * propagation. Usage is captured from the response (non-streaming) or
  * from the final SSE chunk (streaming) and enqueued to USAGE_EVENTS
  * for the k8s consumer to flush into inference.usage.
  *
- * Phase 1: shipped. BYOK key decryption is stubbed in openrouter.ts
+ * Phase 1: shipped. BYOK key decryption lives in wokey.ts
  * and lands later in Phase 1.
  */
 import type { Handler } from "hono";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { z } from "zod";
 import type { AuthContext, Env, HonoVariables, UsageEvent } from "../types.ts";
 import {
+  clampCachedTokens,
   forwardJson,
+  readCachedTokens,
   resolveUpstreamKey,
+  sanitizeUpstreamError,
   streamPassthrough,
-} from "../lib/openrouter.ts";
-import { applyPreset, resolvePreset } from "../lib/presets.ts";
+} from "../lib/wokey.ts";
+import { applyPreset, presetRoutingIsDegraded, resolvePreset } from "../lib/presets.ts";
 import { lookupCache, shouldCache, writeCache } from "../lib/cache.ts";
 import {
   extractEmbeddableText,
@@ -77,7 +81,13 @@ interface OpenAIUsage {
   prompt_tokens?: number;
   completion_tokens?: number;
   total_tokens?: number;
+  /** OpenAI's spelling. Wokey does not send this — see readCachedTokens. */
   prompt_tokens_details?: { cached_tokens?: number };
+  /** Wokey's spellings, observed live 2026-08-25 on both the non-streaming
+   *  response and the final SSE chunk. Declared so the shape is documented
+   *  where it is read; readCachedTokens() accepts all three. */
+  cache_read_input_tokens?: number;
+  cache_read_tokens?: number;
 }
 
 interface OpenAIChatResponse {
@@ -207,7 +217,7 @@ export const chatCompletions: Handler<{
     );
   }
 
-  // 4. Resolve upstream key (platform OPENROUTER_PLATFORM_KEY or decrypt BYOK)
+  // 4. Resolve upstream key (platform WOKEY_PLATFORM_KEY or decrypt BYOK)
   let upstreamKey: string;
   try {
     upstreamKey = await resolveUpstreamKey(
@@ -256,6 +266,13 @@ export const chatCompletions: Handler<{
   if (presetConfig) {
     outgoingBody = applyPreset(outgoingBody, presetConfig);
     c.header("X-Ahura-Preset", presetName!);
+    // Tell the caller when the preset asked for routing behaviour the current
+    // upstream cannot deliver (fallback chains, provider sort/latency/price).
+    // Without this the request succeeds and the org never learns its failover
+    // is imaginary — see lib/presets.ts.
+    if (presetRoutingIsDegraded(presetConfig)) {
+      c.header("X-Ahura-Preset-Fallback", "unsupported");
+    }
   }
 
   // 5b. Self-hosted models (FT outputs, BYO deploys) — two branches:
@@ -506,21 +523,46 @@ export const chatCompletions: Handler<{
     }
   }
 
-  // 6. Forward to OpenRouter
+  // 6. Forward to Wokey.
+  //
+  //    The model id is translated here and ONLY here. Everything else in this
+  //    handler — scope checks, cache keys, usage telemetry, response headers —
+  //    keeps using `effectiveModel`, the id the customer asked for and the id
+  //    our catalog and billing are keyed on. If the upstream spelling leaked
+  //    into telemetry, analytics would silently split one model across two
+  //    names the day an upstream renames something.
+  const upstreamBody =
+    routing?.upstream_model_id && routing.upstream_model_id !== effectiveModel
+      ? { ...outgoingBody, model: routing.upstream_model_id }
+      : outgoingBody;
+
   const upstream = await forwardJson({
     env: c.env,
-    body: outgoingBody,
+    body: upstreamBody,
     upstreamKey,
     path: "/chat/completions",
     signal: c.req.raw.signal,
-    extraHeaders: {
-      "X-Title": "AhuraCloud Inference",
-    },
   });
 
-  // 5. Error responses — pass through but tag with our headers
+  // 5. Error responses — sanitise, then tag with our headers.
+  //    This used to pass the upstream body through verbatim, which named the
+  //    upstream provider to the customer (its 404 text includes its own
+  //    console URL). Keep the status so clients retry correctly; replace the
+  //    prose. Original text goes to our logs only.
   if (!upstream.ok) {
     const text = await upstream.text();
+    const safe = sanitizeUpstreamError(upstream.status, text, requestId);
+    console.error(
+      JSON.stringify({
+        level: "error",
+        message: "upstream error",
+        requestId,
+        orgId: auth.orgId,
+        model: effectiveModel,
+        status: upstream.status,
+        upstreamBody: text.slice(0, 500),
+      })
+    );
     c.executionCtx.waitUntil(
       sendUsage(c.env, {
         ...baseUsageEvent(auth, effectiveModel, requestId, startedAt),
@@ -528,14 +570,9 @@ export const chatCompletions: Handler<{
         errorCode: `upstream_${upstream.status}`,
       })
     );
-    return new Response(text, {
-      status: upstream.status,
-      headers: {
-        "content-type":
-          upstream.headers.get("content-type") ?? "application/json",
-        "X-Ahura-Request-Id": requestId,
-        "X-Ahura-Model": effectiveModel,
-      },
+    return c.json(safe.body, upstream.status as ContentfulStatusCode, {
+      "X-Ahura-Request-Id": requestId,
+      "X-Ahura-Model": effectiveModel,
     });
   }
 
@@ -548,7 +585,7 @@ export const chatCompletions: Handler<{
           ...baseUsageEvent(auth, effectiveModel, requestId, startedAt),
           inputTokens: usage?.prompt_tokens ?? null,
           outputTokens: usage?.completion_tokens ?? null,
-          cachedTokens: usage?.prompt_tokens_details?.cached_tokens ?? null,
+          cachedTokens: clampCachedTokens(readCachedTokens(usage), usage?.prompt_tokens ?? null),
           status: "success",
         })
       );
@@ -566,7 +603,7 @@ export const chatCompletions: Handler<{
         ...baseUsageEvent(auth, effectiveModel, requestId, startedAt),
         inputTokens: data.usage?.prompt_tokens ?? null,
         outputTokens: data.usage?.completion_tokens ?? null,
-        cachedTokens: data.usage?.prompt_tokens_details?.cached_tokens ?? null,
+        cachedTokens: clampCachedTokens(readCachedTokens(data.usage), data.usage?.prompt_tokens ?? null),
         status: "success",
       })
     );

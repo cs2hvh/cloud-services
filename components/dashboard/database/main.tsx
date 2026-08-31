@@ -191,7 +191,7 @@ const DatabasePage = ({ engines }: DatabasePageProps) => {
 
   useEffect(() => {
     if (user === null) {
-      router.push("/login");
+      router.push("/signin");
       toast.error("You must be logged in to access the dashboard.");
     }
   }, [router, user]);

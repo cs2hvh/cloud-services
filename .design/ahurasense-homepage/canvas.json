@@ -1,0 +1,172 @@
+{
+  "pages": [
+    {
+      "id": "directions",
+      "name": "Directions"
+    },
+    {
+      "id": "motion",
+      "name": "Motion & components"
+    },
+    {
+      "id": "material",
+      "name": "Material — art direction"
+    },
+    {
+      "id": "homepage",
+      "name": "Homepage — your sections"
+    }
+  ],
+  "artboards": [
+    {
+      "file": "Main.dc.html",
+      "title": "00 · Foundations & new flow",
+      "page": "directions",
+      "x": 0,
+      "y": 0,
+      "w": 1240,
+      "h": 1780
+    },
+    {
+      "file": "DirectionA.dc.html",
+      "title": "A · Sovereign Grid",
+      "page": "directions",
+      "x": 1360,
+      "y": 0,
+      "w": 1280,
+      "h": 1520
+    },
+    {
+      "file": "DirectionB.dc.html",
+      "title": "B · Control Plane",
+      "page": "directions",
+      "x": 2760,
+      "y": 0,
+      "w": 1280,
+      "h": 1600
+    },
+    {
+      "file": "DirectionC.dc.html",
+      "title": "C · Editorial Sovereign",
+      "page": "directions",
+      "x": 4160,
+      "y": 0,
+      "w": 1280,
+      "h": 1680
+    },
+    {
+      "file": "Motion.dc.html",
+      "title": "M · Signature motion",
+      "page": "motion",
+      "x": 0,
+      "y": 0,
+      "w": 1280,
+      "h": 1620
+    },
+    {
+      "file": "Components.dc.html",
+      "title": "C · Component DNA",
+      "page": "motion",
+      "x": 1400,
+      "y": 0,
+      "w": 1280,
+      "h": 1560
+    },
+    {
+      "file": "Material.dc.html",
+      "title": "Material · art direction",
+      "page": "material",
+      "x": 0,
+      "y": 0,
+      "w": 1300,
+      "h": 2760
+    },
+    {
+      "file": "Homepage.dc.html",
+      "title": "Homepage · redesigned",
+      "page": "homepage",
+      "x": 0,
+      "y": 0,
+      "w": 1280,
+      "h": 6700
+    }
+  ],
+  "annotations": [
+    {
+      "id": "read-me-first",
+      "page": "directions",
+      "x": 0,
+      "y": -210,
+      "w": 620,
+      "text": "READ THIS FIRST\n\nThree directions, one shared substrate.\n\nThe board on the left is the part that is true regardless of which look you pick: the five structural causes, the new section order, one honest figure block, and the type/token layer you already own but don't use.\n\nThe three boards to the right are genuinely different aesthetic bets — not three shades of one idea. Pick one and I'll build it out properly.\n\nEvery [BRACKETED] value is a real number I refused to invent. You fill those in."
+    },
+    {
+      "id": "note-direction-a",
+      "page": "directions",
+      "x": 1360,
+      "y": -210,
+      "w": 400,
+      "text": "A · SOVEREIGN GRID — the futuristic bet\n\nThe motif is your own network: a stylised Indian backbone with packets tracing between PoPs, live-data framing, mono everywhere. Sora + IBM Plex Mono.\n\nWHY IT WORKS: makes sovereignty visual rather than a claim in copy. Closest to Cloudflare's radar register.\n\nTRADEOFF: map motifs age into gimmick fast, and it is the hardest of the three to keep clean as you add sections."
+    },
+    {
+      "id": "note-direction-b",
+      "page": "directions",
+      "x": 2760,
+      "y": -210,
+      "w": 400,
+      "text": "B · CONTROL PLANE — the safe, strong bet\n\nThe product is the hero: a provision log writing itself, showing the whole stack come up in five seconds. Near-monochrome, one accent, Geist + Geist Mono.\n\nWHY IT WORKS: this is the pattern that actually converts technical buyers — Vercel's hero is a product demo as design. Fastest to build and hardest to get wrong.\n\nTRADEOFF: it looks like the category. You'd be excellent-but-familiar, and sovereignty has to be carried by copy rather than by the visuals."
+    },
+    {
+      "id": "note-direction-c",
+      "page": "directions",
+      "x": 4160,
+      "y": -210,
+      "w": 400,
+      "text": "C · EDITORIAL SOVEREIGN — the differentiated bet\n\nInfrastructure treated as an institutional subject: Antic Didone (already loaded in your app), warm near-black, hairlines, numbered argument, a ledger panel instead of a spec table.\n\nWHY IT WORKS: nobody in GPU cloud looks like this. It speaks to the buyer who signs — a bank, a hospital, a ministry — and it makes 'sovereign' feel structural.\n\nTRADEOFF: least developer-native. A researcher picking a GPU by the hour may read it as slow and corporate."
+    },
+    {
+      "id": "note-my-pick",
+      "page": "directions",
+      "x": 0,
+      "y": 1850,
+      "w": 620,
+      "text": "MY RECOMMENDATION\n\nB for the hero mechanic, C for the register — and that combination is buildable.\n\nTake B's live provision log, because a product demo in the hero is the one pattern the research is unambiguous about. Then set it in C's typography and pacing, so the page doesn't read as another dev-tool clone.\n\nA's backbone visual is worth keeping, but as the residency section's illustration rather than the hero — that's where it earns its place instead of competing with the demo. That is exactly what M1 on the next page does."
+    },
+    {
+      "id": "note-motion",
+      "page": "motion",
+      "x": 0,
+      "y": -230,
+      "w": 620,
+      "text": "MOTION — THE TEST EACH ONE HAD TO PASS\n\nIf removing the animation costs the page an argument, it stays. If it only costs it a flourish, it goes.\n\nThat rules out both effects you ship today — the full-page ripple grid and the pixel-blast field are decoration, and they cost bundle weight and paint time for nothing.\n\nThe five here each carry a claim: containment (M1) is the sovereignty argument, the odometer (M2) is the billing model, the cascade (M3) is one-control-plane, the fabric (M4) is scale, and the reveal rhythm (M5) is just consistency.\n\nAll pure CSS. No library, no canvas, no WebGL. Dropping your two current effects likely pays for all five."
+    },
+    {
+      "id": "note-components",
+      "page": "motion",
+      "x": 1400,
+      "y": -230,
+      "w": 480,
+      "text": "COMPONENTS — HOVER AND TAB THROUGH THIS ONE\n\nThese frames are live, so the states are real: hover the buttons and cards, tab into the input, watch the nav underline grow from the left.\n\nThe before/after at the top is the honest version of the problem. Your button today is unmodified shadcn — 36px, 6px radius, an opacity change on hover, no press state, no focus ring. Nothing is wrong with it. It is simply undesigned, and it appears on every page.\n\nThe seven tokens at the bottom right are the whole system. Define those and the rest stops being per-component opinion."
+    },
+    {
+      "id": "note-material",
+      "page": "material",
+      "x": 1400,
+      "y": 0,
+      "w": 520,
+      "text": "WHY THIS BOARD IS MOSTLY GREY\n\nYou picked material/photographic, which is the right call — it is the only one of the three that cannot be mistaken for AI output, because a real photograph is the one thing that cannot be generated into existence here.\n\nThat is also its cost. I checked all 472MB of public/ and there is no photography in it: stylised isometric icons, a clip-art server stack, a 13.5MB pink light swoosh. Nothing with real tonal depth, nothing that can hold type inside the frame.\n\nSo the grey blocks are not placeholder design — they are the brief. Subject, lens, exposure, and which region of each frame has to stay dark enough for text to sit in it.\n\nStart with route 01 at the bottom. Frames 02a and 02b need one accelerator board, one switch, a macro lens and a hard light. No facility access required, authentically yours, one afternoon. That unblocks half the page immediately.\n\nThe honest warning is route 03. Stock datacentre photography on a sovereignty pitch invites exactly one question you do not want asked.\n\nAlso worth noting separately: 472MB of images ships in your build today. The single largest is 20MB. That is a performance problem independent of any of this."
+    },
+    {
+      "id": "note-homepage",
+      "page": "homepage",
+      "x": 1380,
+      "y": 0,
+      "w": 560,
+      "text": "SERVICE MOSAIC — SAME IDEA, OUR VOCABULARY\n\nStructurally it borrows what makes theirs work: an irregular stepped grid rather than a tidy row, one tall feature tile, real tiles mixed with empty texture cells that build the silhouette, and objects floating outside the mosaic edge.\n\nWHAT MAKES IT NOT A COPY\n- Their tiles are plain squares; ours carry the notch from clusters-section.tsx, on every tile, the icon chips, and the floating shapes.\n- Their icons are filled colour chips with a pixel-art M. Ours are monoline outline marks in the exact style already in hero-client.tsx — 16px grid, 1.2 stroke, square caps, miter joins — in a notched chip.\n- They use four accent colours across the tiles. We use one blue, and it only appears on the marks, the hover wash and one metric line.\n- Their floating decorations are rotated diamonds. Ours are notched squares and two blue nodes.\n\nADVANCED PARALLAX — FOUR DEPTH PLANES\nEvery element sits on a plane that scrolls at its own rate: the ambient field ±30px, tiles at ±26, ±52 and ±78, and the floating marks drifting ±96 while rotating. The spread between planes is what reads as depth — not the distance any one of them travels. Tiles also scale up from 0.94 as they enter, before the parallax takes over.\n\nONE TECHNICAL NOTE\nThe parallax animates the independent translate/rotate/scale properties rather than transform, so each tile hover lift still composes on top instead of being overridden by the running animation. Hover a tile: it rises, the notch corner lights blue, and the icon chip picks up a blue border.\n\nThe pinned horizontal rail this replaces is gone, along with its CSS — the page is about 1,200px shorter.\n\nSTILL PLACEHOLDER: the logo mark, the hero render, latency and SLA figures. And there is still no social proof anywhere."
+    }
+  ],
+  "launch": {
+    "view": "canvas",
+    "page": "homepage"
+  }
+}

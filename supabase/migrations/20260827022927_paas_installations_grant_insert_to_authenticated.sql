@@ -1,0 +1,26 @@
+-- The policy alone was not enough, and the distinction is worth writing down
+-- because the error message actively misleads.
+--
+-- TWO INDEPENDENT GATES:
+--   GRANT  — may this role touch this table at all?  (coarse)
+--   RLS    — which rows may it touch?                 (fine)
+--
+-- `installations` granted `authenticated` SELECT only, so an INSERT was refused
+-- before RLS was ever consulted. Postgres reports that as:
+--
+--   42501  permission denied for table installations
+--
+-- while an RLS refusal reads "new row violates row-level security policy". They
+-- share an SQLSTATE and look interchangeable; adding a policy in response to
+-- the first one changes nothing, which is exactly the loop this went round once
+-- before the distinction became obvious.
+--
+-- INSERT ONLY, matching installations_connect. No UPDATE (repointing an
+-- installation to another team is a takeover) and no DELETE (soft-deleting one
+-- silently breaks deploys). Both stay with the service-role reconciler.
+--
+-- Every other tenant-facing paas table already grants authenticated full CRUD
+-- and relies on RLS for the real decision; installations was the outlier, which
+-- is why self-service GitHub connection had never worked.
+
+grant insert on paas.installations to authenticated;

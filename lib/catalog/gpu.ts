@@ -40,6 +40,16 @@ export interface PublicGpu {
   observedAt: string | null;
   /** Deep link into the deploy wizard for this exact catalog id. */
   href: string;
+  /**
+   * Pod sizes the provider currently has capacity for, from the same snapshot
+   * the stock word comes from — e.g. [1,2,4,8].
+   *
+   * A real reading, not a product claim: a GPU offering 8 can actually be
+   * rented eight at a time right now. Empty when there is no capacity.
+   */
+  availableCounts: number[];
+  /** flagship | workstation | prosumer, straight from the catalog row. */
+  tier: string | null;
 }
 
 export interface PublicGpuCatalog {
@@ -54,6 +64,7 @@ interface CatalogRow {
   id: string;
   display_name: string;
   memory_gb: number;
+  tier: string | null;
   sort_order: number | null;
   is_active: boolean | null;
 }
@@ -115,7 +126,7 @@ export async function getPublicGpuCatalog(
   const [{ data: catalog }, { data: pricing }, { data: snapshots }] = await Promise.all([
     supabase
       .from("gpu_catalog")
-      .select("id, display_name, memory_gb, sort_order, is_active")
+      .select("id, display_name, memory_gb, tier, sort_order, is_active")
       .eq("is_active", true)
       .order("sort_order", { ascending: true }),
     supabase
@@ -192,6 +203,9 @@ export async function getPublicGpuCatalog(
       memoryGB: c.memory_gb,
       hourlyUSD,
       stock: publicStock(snap, now),
+      // Ascending from the provider; empty means no capacity at all.
+      availableCounts: snap?.available_counts ?? [],
+      tier: c.tier,
       observedAt: snap?.observed_at ?? null,
       href: `/dashboard/services/gpu/deploy?gpu=${encodeURIComponent(c.id)}`,
     };

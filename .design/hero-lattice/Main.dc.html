@@ -1,0 +1,471 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; background: transparent; }
+    a { color: #7fc7ff; } a:hover { color: #0095ff; }
+    .stage { position: relative; overflow: hidden; }
+    .stage > canvas { display: block; width: 100%; height: 100%; }
+    .tag {
+      position: absolute; left: 18px; bottom: 14px; z-index: 2;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 10px; text-transform: uppercase; color: #6d6d78;
+      pointer-events: none;
+    }
+  </style>
+</helmet>
+<div class="stage" style="width: 1120px; height: 630px; background: {{ bg }};">
+  <canvas ref="{{ setCanvas }}"></canvas>
+  <span class="tag">{{ caption }}</span>
+</div>
+</x-dc>
+<script data-dc-script data-props='{"$preview":{"width":1120,"height":630},"accent":{"editor":"color","default":"#0095ff","options":["#0095ff","#7fc7ff","#35d07f","#f5b324"],"section":"Look"},"density":{"editor":"range","min":120,"max":620,"step":20,"default":340,"section":"Look"},"grid":{"editor":"boolean","default":true,"section":"Look"},"backdrop":{"editor":"enum","options":["Site dark","Transparent","Paper"],"default":"Site dark","section":"Review"},"speed":{"editor":"range","min":0.2,"max":2.5,"step":0.1,"default":1,"section":"Motion"}}'>
+/* MODE: dolly | drift | pulse — the only line that differs between the three artboards. */
+var MODE = "dolly";
+
+var Z0 = 260, Z1 = 2600, FOV = 900;
+var SPAN = Z1 - Z0;
+
+function rng(seed) {
+  var a = seed >>> 0;
+  return function () {
+    a = (a + 0x6d2b79f5) >>> 0;
+    var t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function clamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    /* stable identity so re-renders do not detach the canvas */
+    this.setCanvas = (el) => this.attach(el);
+    this.raf = 0;
+    this.t0 = null;
+    this.reduced = typeof matchMedia === "function"
+      && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+
+  componentWillUnmount() { this.teardown(); }
+
+  componentDidUpdate(prev) {
+    if (prev && prev.density !== this.props.density) this.build();
+    if (this.reduced) this.draw(4.2);
+  }
+
+  teardown() {
+    if (this.raf) cancelAnimationFrame(this.raf);
+    this.raf = 0;
+    if (this.ro) { this.ro.disconnect(); this.ro = null; }
+  }
+
+  attach(el) {
+    if (el === this.cv) return;
+    if (!el) { this.teardown(); this.cv = null; return; }
+    this.cv = el;
+    this.ctx = el.getContext("2d");
+    this.build();
+    this.resize();
+    if (typeof ResizeObserver === "function") {
+      this.ro = new ResizeObserver(() => { this.resize(); if (this.reduced) this.draw(4.2); });
+      this.ro.observe(el);
+    }
+    if (this.reduced) this.draw(4.2);
+    else if (!this.raf) this.raf = requestAnimationFrame((ts) => this.frame(ts));
+  }
+
+  resize() {
+    var el = this.cv; if (!el) return;
+    var r = el.getBoundingClientRect();
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    this.w = Math.max(1, Math.round(r.width));
+    this.h = Math.max(1, Math.round(r.height));
+    el.width = Math.round(this.w * dpr);
+    el.height = Math.round(this.h * dpr);
+    this.dpr = dpr;
+    /* the vanishing point — composition weighted right of centre, as in the reference */
+    this.cx = this.w * 0.715;
+    this.cy = this.h * 0.455;
+  }
+
+  /* ---- scene ------------------------------------------------------- */
+  build() {
+    var n = Math.round(clamp(this.props.density == null ? 340 : this.props.density, 60, 700));
+    var r = rng(20260825);
+    var W = 190, H = 118;
+    var nodes = [];
+    var guard = 0;
+    while (nodes.length < n && guard++ < n * 40) {
+      var x = (r() * 2 - 1) * W;
+      var y = (r() * 2 - 1) * H;
+      var z = Z0 + r() * SPAN;
+      /* keep density high along the sight line to the core, thin at the edges */
+      var d = Math.hypot(x / W, y / H);
+      if (r() > Math.exp(-d * d * 1.55)) continue;
+      nodes.push({
+        x: x, y: y, z: z,
+        s: 7 + r() * 15,
+        rot: r() * Math.PI * 2,
+        dir: r() < 0.5 ? -1 : 1,
+        glint: r() < 0.14,
+        blue: r() < 0.07,
+        spoke: r() < 0.13
+      });
+    }
+
+    /* network edges: each node to its two nearest neighbours inside a radius */
+    var edges = [];
+    var LIM = 210;
+    for (var i = 0; i < nodes.length; i++) {
+      var best = [];
+      for (var j = 0; j < nodes.length; j++) {
+        if (i === j) continue;
+        var a = nodes[i], b = nodes[j];
+        var dd = Math.hypot(a.x - b.x, a.y - b.y, (a.z - b.z) * 0.42);
+        if (dd > LIM) continue;
+        best.push([dd, j]);
+      }
+      best.sort(function (p, q) { return p[0] - q[0]; });
+      var take = Math.min(2, best.length);
+      for (var k = 0; k < take; k++) {
+        if (best[k][1] > i) edges.push({ a: i, b: best[k][1], ph: r(), blue: r() < 0.06 });
+      }
+    }
+
+    /* screen-space rays out of the flare */
+    var rays = [];
+    for (var q = 0; q < 54; q++) {
+      rays.push({
+        ang: r() * Math.PI * 2,
+        len: 40 + Math.pow(r(), 2.1) * 470,
+        a: 0.06 + r() * 0.4,
+        blue: r() < 0.22,
+        drift: (r() * 2 - 1) * 0.05
+      });
+    }
+
+    this.nodes = nodes;
+    this.edges = edges;
+    this.rays = rays;
+  }
+
+  /* ---- camera ------------------------------------------------------ */
+  camera(t) {
+    if (MODE === "dolly") {
+      /* eased push in and pull back — returns to the start, so the loop is seamless */
+      var p = (1 - Math.cos((t / 17) * Math.PI * 2)) / 2;
+      return { z: p * SPAN * 0.56, x: Math.sin(t / 21) * 18, y: 0 };
+    }
+    if (MODE === "drift") {
+      /* continuous travel, nodes recycling through the volume, with a lateral sway */
+      return { z: (t / 26) * SPAN, x: Math.sin(t / 9.5) * 74, y: Math.sin(t / 13.5) * 30 };
+    }
+    /* pulse: camera nearly still — the motion is signal travelling the edges */
+    return { z: Math.sin(t / 19) * 90, x: Math.sin(t / 11) * 30, y: Math.cos(t / 15) * 15 };
+  }
+
+  wrap(z) {
+    var v = (z - Z0) % SPAN;
+    if (v < 0) v += SPAN;
+    return v + Z0;
+  }
+
+  /* depth fade: out at the far wall, out again as it passes the camera */
+  dof(z) {
+    var far = clamp((Z1 - z) / 1150, 0, 1);
+    var near = clamp((z - Z0) / 300, 0, 1);
+    return far * near;
+  }
+
+  /* screen falloff — the reference is bright at the core and empty to the left */
+  vig(sx, sy) {
+    var r = Math.hypot(sx - this.cx, sy - this.cy) / (this.w * 0.66);
+    return clamp(1.16 - r * 0.98, 0.04, 1);
+  }
+
+  /* ---- draw -------------------------------------------------------- */
+  frame(ts) {
+    this.raf = requestAnimationFrame((t) => this.frame(t));
+    if (this.t0 == null) this.t0 = ts;
+    var sp = this.props.speed == null ? 1 : this.props.speed;
+    this.draw(((ts - this.t0) / 1000) * sp);
+  }
+
+  draw(t) {
+    var ctx = this.ctx; if (!ctx || !this.nodes) return;
+    var w = this.w, h = this.h, cx = this.cx, cy = this.cy;
+    var accent = this.props.accent || "#0095ff";
+    var showGrid = this.props.grid !== false;
+
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.clearRect(0, 0, w, h);            /* transparent ground — never filled */
+    ctx.lineCap = "round";
+
+    var cam = this.camera(t);
+    var spin = t * 0.06;
+    var ink = "232,236,244";
+
+    /* project every node once */
+    var P = [];
+    for (var i = 0; i < this.nodes.length; i++) {
+      var n = this.nodes[i];
+      var z = this.wrap(n.z - cam.z);
+      var k = FOV / z;
+      var sx = cx + (n.x - cam.x) * k;
+      var sy = cy + (n.y - cam.y) * k;
+      P.push({ z: z, k: k, sx: sx, sy: sy, a: this.dof(z) * this.vig(sx, sy), i: i });
+    }
+
+    if (showGrid) this.drawGrid(ctx, cam);
+
+    /* ── network edges, bucketed by alpha so this is a handful of strokes ── */
+    var buckets = {};
+    for (var e = 0; e < this.edges.length; e++) {
+      var ed = this.edges[e];
+      var pa = P[ed.a], pb = P[ed.b];
+      if (!pa || !pb) continue;
+      /* a wrapped pair sits on opposite walls — skip rather than draw a line across the frame */
+      if (Math.abs(pa.z - pb.z) > SPAN * 0.5) continue;
+      var al = Math.min(pa.a, pb.a) * 0.5;
+      if (al < 0.015) continue;
+      var key = (ed.blue ? "b" : "w") + Math.round(al * 14);
+      if (!buckets[key]) buckets[key] = { blue: ed.blue, a: al, seg: [] };
+      buckets[key].seg.push(pa.sx, pa.sy, pb.sx, pb.sy);
+    }
+    for (var bk in buckets) {
+      var B = buckets[bk];
+      ctx.beginPath();
+      for (var s = 0; s < B.seg.length; s += 4) {
+        ctx.moveTo(B.seg[s], B.seg[s + 1]);
+        ctx.lineTo(B.seg[s + 2], B.seg[s + 3]);
+      }
+      ctx.strokeStyle = B.blue
+        ? this.rgba(accent, B.a * 0.85)
+        : "rgba(" + ink + "," + (B.a * 0.5).toFixed(3) + ")";
+      ctx.lineWidth = 0.7;
+      ctx.stroke();
+    }
+
+    /* ── spokes: the long lines running back into the flare ── */
+    ctx.beginPath();
+    var spokeN = 0;
+    for (var s2 = 0; s2 < P.length; s2++) {
+      var ps = P[s2];
+      if (!this.nodes[ps.i].spoke || ps.a < 0.05) continue;
+      ctx.moveTo(cx, cy); ctx.lineTo(ps.sx, ps.sy); spokeN++;
+    }
+    if (spokeN) {
+      ctx.strokeStyle = "rgba(" + ink + ",0.10)";
+      ctx.lineWidth = 0.6;
+      ctx.stroke();
+    }
+
+    /* ── pulses travelling the edges (signal mode only) ── */
+    if (MODE === "pulse") this.drawPulses(ctx, P, t, accent);
+
+    /* ── the cubes, far to near ── */
+    P.sort(function (p, q) { return q.z - p.z; });
+    var small = [];
+    for (var c = 0; c < P.length; c++) {
+      var p = P[c];
+      if (p.a < 0.02) continue;
+      var nd = this.nodes[p.i];
+      if (nd.s * p.k < 9) { small.push(p); continue; }
+      this.cube(ctx, nd, p, spin, accent, ink);
+    }
+    /* distant specks — one fill pass per alpha bucket */
+    var sb = {};
+    for (var m = 0; m < small.length; m++) {
+      var q2 = small[m];
+      var nd2 = this.nodes[q2.i];
+      var kk = Math.max(1, nd2.s * q2.k);
+      var key2 = (nd2.blue ? "b" : "w") + Math.round(q2.a * 12);
+      if (!sb[key2]) sb[key2] = { blue: nd2.blue, a: q2.a, r: [] };
+      sb[key2].r.push(q2.sx - kk / 2, q2.sy - kk / 2, kk, kk);
+    }
+    for (var k2 in sb) {
+      var S = sb[k2];
+      ctx.fillStyle = S.blue
+        ? this.rgba(accent, S.a * 0.9)
+        : "rgba(" + ink + "," + (S.a * 0.62).toFixed(3) + ")";
+      for (var v = 0; v < S.r.length; v += 4) ctx.fillRect(S.r[v], S.r[v + 1], S.r[v + 2], S.r[v + 3]);
+    }
+
+    /* ── the flare, additive, on top ── */
+    this.flare(ctx, t, accent, cam);
+  }
+
+  rgba(hex, a) {
+    var s = String(hex).replace("#", "");
+    if (s.length === 3) s = s[0] + s[0] + s[1] + s[1] + s[2] + s[2];
+    var v = parseInt(s, 16);
+    return "rgba(" + ((v >> 16) & 255) + "," + ((v >> 8) & 255) + "," + (v & 255) + "," + a.toFixed(3) + ")";
+  }
+
+  cube(ctx, nd, p, spin, accent, ink) {
+    var half = nd.s * 0.5;
+    var ang = nd.rot + spin * nd.dir;
+    var cos = Math.cos(ang), sin = Math.sin(ang);
+    /* offset between the node's own projected centre and the camera-panned one,
+       so the pan is applied once rather than per corner */
+    var ox = p.sx - (this.cx + nd.x * p.k);
+    var oy = p.sy - (this.cy + nd.y * p.k);
+    var pts = [];
+    for (var i = 0; i < 8; i++) {
+      var dx = (i & 1) ? half : -half;
+      var dy = (i & 2) ? half : -half;
+      var dz = (i & 4) ? half : -half;
+      var rx = dx * cos - dz * sin;
+      var rz = dx * sin + dz * cos;
+      var kk = FOV / Math.max(40, p.z + rz);
+      pts.push([this.cx + (nd.x + rx) * kk + ox, this.cy + (nd.y + dy) * kk + oy]);
+    }
+
+    /* glass face */
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    ctx.lineTo(pts[1][0], pts[1][1]);
+    ctx.lineTo(pts[3][0], pts[3][1]);
+    ctx.lineTo(pts[2][0], pts[2][1]);
+    ctx.closePath();
+    ctx.fillStyle = nd.blue
+      ? this.rgba(accent, p.a * 0.14)
+      : "rgba(" + ink + "," + (p.a * 0.055).toFixed(3) + ")";
+    ctx.fill();
+
+    /* twelve edges in one path */
+    ctx.beginPath();
+    var bits = [1, 2, 4];
+    for (var i2 = 0; i2 < 8; i2++) {
+      for (var b = 0; b < 3; b++) {
+        if (i2 & bits[b]) continue;
+        var j = i2 | bits[b];
+        ctx.moveTo(pts[i2][0], pts[i2][1]);
+        ctx.lineTo(pts[j][0], pts[j][1]);
+      }
+    }
+    ctx.strokeStyle = nd.blue
+      ? this.rgba(accent, p.a * 0.9)
+      : "rgba(" + ink + "," + (p.a * 0.72).toFixed(3) + ")";
+    ctx.lineWidth = Math.min(1.3, 0.5 + p.k * 0.35);
+    ctx.stroke();
+
+    /* specular glint */
+    if (nd.glint) {
+      var g = pts[5];
+      ctx.beginPath();
+      ctx.arc(g[0], g[1], Math.max(1.5, nd.s * p.k * 0.09), 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255,255,255," + (p.a * 0.95).toFixed(3) + ")";
+      ctx.fill();
+    }
+  }
+
+  drawGrid(ctx, cam) {
+    var Y = 150, X = 1500, ink = "232,236,244";
+    ctx.beginPath();
+    for (var x = -X; x <= X; x += 125) {
+      var ka = FOV / (Z0 + 40), kb = FOV / Z1;
+      ctx.moveTo(this.cx + (x - cam.x) * ka, this.cy + (Y - cam.y) * ka);
+      ctx.lineTo(this.cx + (x - cam.x) * kb, this.cy + (Y - cam.y) * kb);
+    }
+    for (var i = 0; i < 18; i++) {
+      var k = FOV / this.wrap(Z0 + (i / 18) * SPAN - cam.z);
+      ctx.moveTo(this.cx + (-X - cam.x) * k, this.cy + (Y - cam.y) * k);
+      ctx.lineTo(this.cx + (X - cam.x) * k, this.cy + (Y - cam.y) * k);
+    }
+    ctx.strokeStyle = "rgba(" + ink + ",0.055)";
+    ctx.lineWidth = 0.6;
+    ctx.stroke();
+  }
+
+  drawPulses(ctx, P, t, accent) {
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    for (var e = 0; e < this.edges.length; e += 3) {
+      var ed = this.edges[e];
+      var pa = P[ed.a], pb = P[ed.b];
+      if (!pa || !pb) continue;
+      if (Math.abs(pa.z - pb.z) > SPAN * 0.5) continue;
+      var al = Math.min(pa.a, pb.a);
+      if (al < 0.08) continue;
+      var u = (t * 0.22 + ed.ph) % 1;
+      var fade = Math.sin(u * Math.PI);
+      ctx.beginPath();
+      ctx.arc(pa.sx + (pb.sx - pa.sx) * u, pa.sy + (pb.sy - pa.sy) * u, 1.6 + fade * 1.4, 0, Math.PI * 2);
+      ctx.fillStyle = this.rgba(accent, al * fade * 0.85);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  flare(ctx, t, accent, cam) {
+    var cx = this.cx, cy = this.cy;
+    var breathe = 0.86 + Math.sin(t * 0.7) * 0.14;
+    var near = 1 + (cam.z / SPAN) * 0.55;
+    var R = 96 * breathe * near;
+
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+
+    /* rays */
+    for (var i = 0; i < this.rays.length; i++) {
+      var ry = this.rays[i];
+      var ang = ry.ang + t * ry.drift;
+      var len = ry.len * near * (0.9 + Math.sin(t * 0.5 + i) * 0.1);
+      var gx = cx + Math.cos(ang) * len, gy = cy + Math.sin(ang) * len;
+      var g = ctx.createLinearGradient(cx, cy, gx, gy);
+      g.addColorStop(0, ry.blue
+        ? this.rgba(accent, ry.a * breathe)
+        : "rgba(214,228,255," + (ry.a * breathe).toFixed(3) + ")");
+      g.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.beginPath();
+      ctx.moveTo(cx, cy); ctx.lineTo(gx, gy);
+      ctx.strokeStyle = g;
+      ctx.lineWidth = 0.85;
+      ctx.stroke();
+    }
+
+    /* horizontal lens streak */
+    var st = ctx.createLinearGradient(cx - R * 3.4, cy, cx + R * 3.4, cy);
+    st.addColorStop(0, "rgba(0,0,0,0)");
+    st.addColorStop(0.5, this.rgba(accent, 0.20 * breathe));
+    st.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = st;
+    ctx.fillRect(cx - R * 3.4, cy - 1.1, R * 6.8, 2.2);
+
+    /* core */
+    var core = ctx.createRadialGradient(cx, cy, 0, cx, cy, R);
+    core.addColorStop(0, "rgba(255,255,255," + (0.98 * breathe).toFixed(3) + ")");
+    core.addColorStop(0.06, "rgba(255,255,255," + (0.82 * breathe).toFixed(3) + ")");
+    core.addColorStop(0.22, this.rgba(accent, 0.34 * breathe));
+    core.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx.fillStyle = core;
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  renderVals() {
+    var bd = this.props.backdrop || "Site dark";
+    var bg = bd === "Transparent"
+      ? "repeating-conic-gradient(#2a2a30 0% 25%, #202026 0% 50%) 50% / 22px 22px"
+      : bd === "Paper" ? "#f2f1ec" : "#101013";
+    var caption = MODE === "dolly" ? "A · Dolly — push in, pull back"
+      : MODE === "drift" ? "B · Drift — continuous travel"
+      : "C · Signal — still camera, data moves";
+    return { setCanvas: this.setCanvas, bg: bg, caption: caption };
+  }
+}
+</script>
+</body>
+</html>

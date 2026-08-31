@@ -175,7 +175,7 @@ const PlatformAppGrid = ({
                   className="flex-1 group-hover:bg-emerald-600 group-hover:text-white transition-colors"
                   size="sm"
                 >
-                  <Link href={`/dashboard/services/apps/${app.id}`}>
+                  <Link href={`/dashboard/services/apps-v1/${app.id}`}>
                     Manage App
                     <ExternalLink className="ml-2 h-3.5 w-3.5" />
                   </Link>

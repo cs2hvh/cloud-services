@@ -367,7 +367,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
 
     // ── Provider connection ─────────────────────────────────────
     const { connectProvider: performConnection } = useProviderConnection({
-        returnTo: "/dashboard/services/apps/new",
+        returnTo: "/dashboard/services/apps-v1/new",
         mode: "integration",
     });
 
@@ -484,7 +484,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
             if (!res.ok) {
                 if (data.partial_success && data.app_id) {
                     toast.warning(data.message ?? "Deployment started, billing needs attention.");
-                    router.push(`/dashboard/services/apps/${data.app_id}`);
+                    router.push(`/dashboard/services/apps-v1/${data.app_id}`);
                     return;
                 }
                 throw new Error(data.message ?? data.error ?? "Failed to create application");
@@ -495,8 +495,8 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                 () =>
                     router.push(
                         data.app_id
-                            ? `/dashboard/services/apps/${data.app_id}`
-                            : "/dashboard/services/apps",
+                            ? `/dashboard/services/apps-v1/${data.app_id}`
+                            : "/dashboard/services/apps-v1",
                     ),
                 1500,
             );
@@ -560,7 +560,7 @@ const AppDeploymentSelect = ({ projects, pricing }: PageProps) => {
                 {/* Back link */}
                 <div className="mb-6">
                     <Link
-                        href="/dashboard/services/apps"
+                        href="/dashboard/services/apps-v1"
                         className={`${MONO} inline-flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.14em] text-white/40 hover:text-white/75 transition-colors`}
                     >
                         <ChevronLeft className="h-3.5 w-3.5" />

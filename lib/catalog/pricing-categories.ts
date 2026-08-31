@@ -119,10 +119,13 @@ export async function buildGpuPricingCategory(
         yearly: Math.round(hourly * HOURS_PER_MONTH * 12 * 100) / 100,
       },
       billingPeriod: `$${hourly.toFixed(2)} per GPU-hour, billed by the second`,
+      // bandwidth and perfFp8 are optional in GPU_EDITORIAL — a SKU whose
+      // figure has not been verified against a vendor sheet omits the spec
+      // rather than printing "undefined bandwidth".
       specs: [
         `${g.memoryGB} GB ${editorial.memoryType}`,
         editorial.perfFp8,
-        `${editorial.bandwidth} bandwidth`,
+        editorial.bandwidth ? `${editorial.bandwidth} bandwidth` : null,
         // Stock is only asserted when the reading is fresh; see lib/catalog/gpu.
         g.stock === "available"
           ? "In stock"
@@ -131,7 +134,7 @@ export async function buildGpuPricingCategory(
             : g.stock === "unavailable"
               ? "Out of stock"
               : "Check availability",
-      ],
+      ].filter((spec): spec is string => Boolean(spec)),
       features: [
         "NVLink-capable nodes",
         "NVMe-backed local storage",

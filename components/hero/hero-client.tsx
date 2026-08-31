@@ -1,158 +1,9 @@
 "use client";
 
-import { assetUrl } from "@/lib/asset-url";
 import Image from "next/image";
 import Link from "next/link";
-import { AuthAwareServiceCta } from "@/components/services/auth-aware-service-cta";
-import PixelBlast from "./pixel-blast-lazy";
 import type { PublicStock } from "@/lib/catalog/gpu";
-
-const BRAND = "#0095FF";
-
-// ─── Custom monoline marks — shared visual language ─────────────
-type MarkKind =
-    | "gpu"
-    | "compute"
-    | "k8s"
-    | "database"
-    | "storage"
-    | "app"
-    | "agent"
-    | "shield"
-    | "stack"
-    | "deploy"
-    | "arrow";
-
-function HeroMark({
-    kind,
-    className = "",
-}: {
-    kind: MarkKind;
-    className?: string;
-}) {
-    const stroke = {
-        stroke: "currentColor",
-        strokeWidth: 1.2,
-        fill: "none",
-        strokeLinecap: "square" as const,
-        strokeLinejoin: "miter" as const,
-    };
-    const svgProps = {
-        viewBox: "0 0 16 16",
-        className,
-        "aria-hidden": true,
-    } as const;
-    switch (kind) {
-        case "gpu":
-            return (
-                <svg {...svgProps}>
-                    <rect x="1.5" y="1.5" width="13" height="13" {...stroke} />
-                    <rect x="4.5" y="4.5" width="7" height="7" {...stroke} />
-                    <circle cx="1.5" cy="1.5" r="0.7" fill="currentColor" />
-                    <circle cx="14.5" cy="1.5" r="0.7" fill="currentColor" />
-                    <circle cx="1.5" cy="14.5" r="0.7" fill="currentColor" />
-                    <circle cx="14.5" cy="14.5" r="0.7" fill="currentColor" />
-                </svg>
-            );
-        case "compute":
-            return (
-                <svg {...svgProps}>
-                    <rect x="1.5" y="3" width="13" height="3" {...stroke} />
-                    <rect x="1.5" y="7.5" width="13" height="3" {...stroke} />
-                    <rect x="1.5" y="12" width="13" height="2" {...stroke} />
-                    <circle cx="3.5" cy="4.5" r="0.5" fill="currentColor" />
-                    <circle cx="3.5" cy="9" r="0.5" fill="currentColor" />
-                </svg>
-            );
-        case "k8s":
-            return (
-                <svg {...svgProps}>
-                    <polygon
-                        points="8,1.5 13.5,4.75 13.5,11.25 8,14.5 2.5,11.25 2.5,4.75"
-                        {...stroke}
-                    />
-                    <circle cx="8" cy="8" r="2" {...stroke} />
-                </svg>
-            );
-        case "database":
-            return (
-                <svg {...svgProps}>
-                    <ellipse cx="8" cy="3" rx="5.5" ry="1.5" {...stroke} />
-                    <path d="M2.5 3 V 13" {...stroke} />
-                    <path d="M13.5 3 V 13" {...stroke} />
-                    <path d="M2.5 7 Q 8 9 13.5 7" {...stroke} />
-                    <path d="M2.5 13 Q 8 15 13.5 13" {...stroke} />
-                </svg>
-            );
-        case "storage":
-            return (
-                <svg {...svgProps}>
-                    <rect x="1.5" y="1.5" width="6" height="6" {...stroke} />
-                    <rect x="8.5" y="1.5" width="6" height="6" {...stroke} />
-                    <rect x="1.5" y="8.5" width="6" height="6" {...stroke} />
-                    <rect x="8.5" y="8.5" width="6" height="6" {...stroke} />
-                </svg>
-            );
-        case "app":
-            return (
-                <svg {...svgProps}>
-                    <path d="M2.5 9 V 14 H 13.5 V 9" {...stroke} />
-                    <path
-                        d="M8 11 V 2 M4.5 5.5 L 8 2 L 11.5 5.5"
-                        {...stroke}
-                    />
-                </svg>
-            );
-        case "agent":
-            return (
-                <svg {...svgProps}>
-                    <circle cx="8" cy="8" r="2.6" {...stroke} />
-                    <path d="M8 5.4 V 1.5" {...stroke} />
-                    <path d="M5.6 9.5 L 2.5 13.5" {...stroke} />
-                    <path d="M10.4 9.5 L 13.5 13.5" {...stroke} />
-                    <circle cx="8" cy="1.5" r="0.8" fill="currentColor" />
-                    <circle cx="2.5" cy="13.5" r="0.8" fill="currentColor" />
-                    <circle cx="13.5" cy="13.5" r="0.8" fill="currentColor" />
-                </svg>
-            );
-        case "shield":
-            return (
-                <svg {...svgProps}>
-                    <path
-                        d="M8 1.5 L 13.5 3.5 V 8 Q 13.5 12 8 14.5 Q 2.5 12 2.5 8 V 3.5 Z"
-                        {...stroke}
-                    />
-                    <path d="M5.5 8 L 7.5 10 L 10.5 6.5" {...stroke} />
-                </svg>
-            );
-        case "stack":
-            return (
-                <svg {...svgProps}>
-                    <path
-                        d="M8 1.5 L 14 4.5 L 8 7.5 L 2 4.5 Z"
-                        {...stroke}
-                    />
-                    <path d="M2 8 L 8 11 L 14 8" {...stroke} />
-                    <path d="M2 11.5 L 8 14.5 L 14 11.5" {...stroke} />
-                </svg>
-            );
-        case "deploy":
-            return (
-                <svg {...svgProps}>
-                    <path d="M2 8 H 13" {...stroke} />
-                    <path d="M9 4 L 13 8 L 9 12" {...stroke} />
-                    <circle cx="2" cy="8" r="1" fill="currentColor" />
-                </svg>
-            );
-        case "arrow":
-        default:
-            return (
-                <svg {...svgProps}>
-                    <path d="M2.5 8 H 13.5 M9 3.5 L 13.5 8 L 9 12.5" {...stroke} />
-                </svg>
-            );
-    }
-}
+import { HeroLattice } from "@/components/hero/hero-lattice";
 
 export type GpuRow = {
     id: string;
@@ -168,223 +19,225 @@ export type GpuRow = {
     tier: string; // e.g. Hopper / Blackwell
 };
 
+/**
+ * Drop the supplied background render here and the CSS scaffold behind it
+ * (grid + horizon + blue wash) becomes the fallback that shows through its
+ * transparent areas. Leave it null to run on the scaffold alone — the layout
+ * is identical either way, so swapping it in changes nothing structurally.
+ */
+const HERO_BG: string | null = null;
 
-function GpuPricingRail({ gpus }: { gpus: GpuRow[] }) {
-    // Catalog unavailable: render nothing rather than an empty padded band.
-    if (gpus.length === 0) return null;
+const HEADLINE: string[][] = [
+    ["Your", "cloud,"],
+    ["On", "demand."],
+];
 
-    return (
-        <div className="relative z-20">
-            {/* Card row — horizontal scroll on mobile, 4-col grid on desktop */}
-            <div className="overflow-x-auto pb-4 pt-3 sm:overflow-visible sm:pb-5 sm:pt-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                <div className="mx-auto max-w-[1440px] px-5 sm:px-8">
-                    <div className="flex w-max gap-3 sm:grid sm:w-auto sm:grid-cols-4">
-                        {gpus.map((gpu) => {
-                            const stockBg =
-                                gpu.stock === "available"
-                                    ? "bg-emerald-400"
-                                    : gpu.stock === "limited"
-                                        ? "bg-amber-400"
-                                        : "bg-white/30";
-                            const stockText =
-                                gpu.stock === "available"
-                                    ? "In stock"
-                                    : gpu.stock === "limited"
-                                        ? "Limited"
-                                        : gpu.stock === "unavailable"
-                                            ? "Out of stock"
-                                            : "Check availability";
-                            return (
-                                <Link
-                                    key={gpu.id}
-                                    href={gpu.href}
-                                    className="group relative flex h-[130px] w-[240px] shrink-0 flex-col justify-between overflow-hidden rounded-[6px] border border-white/[0.08] bg-[#0a0c10] px-4 py-3 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/[0.18] hover:bg-[#0d1015] sm:w-auto"
-                                    style={{
-                                        boxShadow:
-                                            "inset 0 1px 0 rgba(255,255,255,0.04), 0 4px 14px -4px rgba(0,0,0,0.5)",
-                                    }}
-                                >
-                                    {/* Tier dot — top-right identity marker */}
-                                    <span
-                                        aria-hidden="true"
-                                        className="pointer-events-none absolute right-3 top-3 h-1 w-1 rounded-full"
-                                        style={{
-                                            background: gpu.tone,
-                                            boxShadow: `0 0 6px ${gpu.tone}99`,
-                                        }}
-                                    />
+/** Region count is stated once and reused, rather than restated per section. */
+const REGIONS = 15;
 
-                                    {/* Top — NVIDIA + name + memory chip */}
-                                    <div className="relative">
-                                        <div className="flex items-center gap-2.5">
-                                            <span className="shrink-0 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-white/70">
-                                                NVIDIA
-                                            </span>
-                                            <p className="flex-1 truncate pr-5 text-[15px] font-semibold leading-none tracking-tight text-[#76b900]">
-                                                {gpu.name}
-                                            </p>
-                                            <span className="shrink-0 font-mono text-[9.5px] uppercase tracking-[0.14em] tabular-nums text-white/45">
-                                                {gpu.memory} GB
-                                            </span>
-                                        </div>
-                                        <div className="mt-2 flex items-center gap-1.5">
-                                            <span className="relative flex h-1.5 w-1.5">
-                                                <span
-                                                    className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-60 ${stockBg}`}
-                                                />
-                                                <span
-                                                    className={`relative inline-flex h-1.5 w-1.5 rounded-full ${stockBg}`}
-                                                />
-                                            </span>
-                                            <span className="font-mono text-[9.5px] uppercase tracking-[0.18em] text-white/55">
-                                                {stockText}
-                                            </span>
-                                            <span className="text-white/15">·</span>
-                                            <span className="truncate font-mono text-[9.5px] uppercase tracking-[0.18em] text-white/45">
-                                                {gpu.tier}
-                                            </span>
-                                        </div>
-                                    </div>
+/**
+ * Catalog names arrive as "H200 SXM (141 GB)". The rail prints memory in its
+ * own column, so the parenthetical is dropped to avoid saying it twice.
+ */
+function shortName(name: string): string {
+    return name.replace(/\s*\(\s*\d+\s*GB\s*\)\s*$/i, "").trim();
+}
 
-                                    {/* Bottom — price + arrow */}
-                                    <div className="relative flex items-end justify-between">
-                                        <div>
-                                            <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.22em] text-white/45">
-                                                from
-                                            </p>
-                                            <p className="mt-1 font-mono text-[24px] font-semibold leading-none tabular-nums text-white">
-                                                {gpu.price === null ? "\u2014" : `$${gpu.price.toFixed(2)}`}
-                                                <span className="ml-1 text-[10.5px] font-normal text-white/55">
-                                                    /hr/gpu
-                                                </span>
-                                            </p>
-                                        </div>
-                                        <HeroMark
-                                            kind="arrow"
-                                            className="h-4 w-4 text-white/30 transition-all group-hover:translate-x-0.5 group-hover:text-white"
-                                        />
-                                    </div>
-                                </Link>
-                            );
-                        })}
-                    </div>
-                </div>
-            </div>
-
-        </div>
-    );
+/**
+ * Stock shows as a dot plus one word, and ONLY when the catalog actually knows.
+ * A reading older than STOCK_FRESHNESS_MS collapses to "unknown" so a stale
+ * "In stock" never sends someone into a deploy that will fail — and in that
+ * case the card says nothing rather than printing an identical grey
+ * placeholder on every card, which made a working rail look broken.
+ */
+function stockLabel(stock: PublicStock): { text: string; dot: string } | null {
+    switch (stock) {
+        case "available":
+            return { text: "Available", dot: "var(--ah-green)" };
+        case "limited":
+            return { text: "Limited", dot: "var(--ah-amber)" };
+        case "unavailable":
+            return { text: "Waitlist", dot: "var(--ah-muted)" };
+        default:
+            return null;
+    }
 }
 
 export default function HeroClient({ gpus }: { gpus: GpuRow[] }) {
     return (
-        <section
-            className="relative isolate min-h-[100svh] w-full overflow-hidden bg-[#04060a] text-white lg:h-[100svh] lg:min-h-[820px]"
-            aria-label="Ahura Cloud infrastructure"
-        >
-            {/* PixelBlast ambient pattern — sits behind everything, brand color, minimal density.
-                Pointer events stay enabled so clicks on empty hero space fire subtle ripples;
-                foreground links/buttons (z-10) capture their own clicks first. */}
-            <div
-                aria-hidden="true"
-                className="absolute inset-0 z-0 opacity-[0.55]"
+        <>
+            <section
+                className="ah-hero relative isolate flex w-full flex-col justify-end overflow-hidden"
+                aria-label="AhuraSense cloud infrastructure"
             >
-                <PixelBlast
-                    variant="circle"
-                    color="#0095FF"
-                    pixelSize={5}
-                    patternScale={3}
-                    patternDensity={0.7}
-                    pixelSizeJitter={0.4}
-                    enableRipples
-                    rippleSpeed={0.32}
-                    rippleThickness={0.12}
-                    rippleIntensityScale={1.2}
-                    speed={0.35}
-                    edgeFade={0.4}
-                    transparent
-                />
-            </div>
+                {/* ── background ─────────────────────────────────────────────
+                    Scaffold now, photograph later. Every layer sits behind the
+                    content and is pointer-events-none. */}
+                {HERO_BG && (
+                    <Image
+                        src={HERO_BG}
+                        alt=""
+                        fill
+                        priority
+                        sizes="100vw"
+                        aria-hidden="true"
+                        className="absolute inset-0 -z-10 object-cover"
+                    />
+                )}
+                <HeroLattice />
+                <span aria-hidden="true" className="ah-hero-vignette" />
 
-            <div className="relative z-10 mx-auto flex h-auto min-h-0 w-full max-w-[1440px] flex-col px-5 sm:px-8 lg:h-[calc(100svh-180px)] lg:min-h-[640px]">
-                <div className="grid flex-1 items-start gap-6 pb-8 pt-20 sm:gap-10 sm:pt-24 lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)] lg:items-center lg:gap-12 lg:pb-12 lg:pt-24">
-                    {/* LEFT — static, GPU-focused. The tensor cycles
-                        through formations on the right, but the pitch
-                        here doesn't shift — GPU is the main subject. */}
-                    <div className="relative max-w-[600px]">
-                        <h1 className="max-w-[680px] text-[44px] font-semibold leading-[0.95] tracking-[-0.045em] text-white sm:text-6xl lg:text-[80px]">
-                            Your cloud,
-                            <br />
-                             <span className="text-blue-500">on demand.</span>
-                        </h1>
+                <div className="relative mx-auto flex w-full max-w-[1800px] flex-col px-6 pb-10 pt-16 sm:px-10 lg:px-12 lg:pb-12 lg:pt-20">
+                    {/*
+                      Solid line over an outlined one. Each word is its own
+                      inline-block so it can rise independently on load — the
+                      stagger is what gives the line depth rather than having
+                      the whole heading fade in as one flat plate.
+                    */}
+                    <h1 className="ah-hero-h1 m-0">
+                        <span className="block">
+                            {HEADLINE[0].map((w, i) => (
+                                <span key={w} className="ah-word-wrap">
+                                    <span className="ah-word" style={{ animationDelay: `${0.06 + i * 0.09}s` }}>
+                                        {w}
+                                    </span>
+                                </span>
+                            ))}
+                        </span>
+                        <span className="ah-hero-outline block">
+                            {HEADLINE[1].map((w, i) => (
+                                <span key={w} className="ah-word-wrap">
+                                    <span className="ah-word" style={{ animationDelay: `${0.26 + i * 0.09}s` }}>
+                                        {w}
+                                    </span>
+                                </span>
+                            ))}
+                        </span>
+                    </h1>
 
-                        <p className="mt-3 max-w-[560px] text-[15px] font-medium tracking-tight text-white/60 sm:text-[16.5px]">
-                            Compute, GPUs, databases, Kubernetes, and storage —
-                            <span className="text-white/85">
-                                {" "}provisioned in seconds, billed by the second.
-                            </span>
-                        </p>
-
-                        <p className="mt-7 max-w-[540px] text-[14px] leading-[1.7] text-white/55 sm:text-[14.5px]">
-                            Spin up a single instance or scale to thousand-GPU
-                            clusters across 12 regions. Persistent state follows
-                            your workloads; idle resources cost you nothing.
-                        </p>
-
-                        <div className="mt-8 flex flex-wrap items-center gap-3">
-                            <AuthAwareServiceCta
-                                service="gpu"
-                                intent="new"
-                                className="group relative inline-flex h-12 items-center justify-center gap-2 overflow-hidden rounded-none border border-white/85 bg-white px-6 text-[13.5px] font-semibold text-black transition-colors hover:border-[#0095FF] hover:bg-[#0095FF] hover:text-white"
+                    <div className="mt-10 grid gap-8 lg:mt-14 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end lg:gap-16">
+                        <div className="ah-hero-lede ah-rise-in" style={{ animationDelay: ".46s" }}>
+                            <p
+                                className="m-0 max-w-[34rem] text-[clamp(1.05rem,1.7vw,1.4rem)] leading-[1.4]"
+                                style={{ color: "var(--ah-ink)" }}
                             >
-                                <span className="relative">Get started</span>
-                                <HeroMark
-                                    kind="arrow"
-                                    className="relative h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5"
-                                />
-                            </AuthAwareServiceCta>
-                            <Link
-                                href="/pricing"
-                                className="group inline-flex h-12 items-center justify-center gap-2 rounded-none border border-white/16 bg-white/[0.04] px-5 text-[13.5px] font-medium text-white/82 backdrop-blur transition-colors hover:border-white/30 hover:bg-white/[0.08] hover:text-white"
+                                Compute, GPUs, databases, Kubernetes, and storage, provisioned
+                                in seconds, billed by the second.
+                            </p>
+                            <p
+                                className="mt-4 max-w-[32rem] text-[13.5px] leading-[1.65]"
+                                style={{ color: "var(--ah-body)" }}
                             >
-                                View pricing
-                                <HeroMark
-                                    kind="arrow"
-                                    className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5"
-                                />
-                            </Link>
+                                Spin up a single instance or scale to thousand-GPU clusters
+                                across {REGIONS} regions. Persistent state follows your
+                                workloads; idle resources cost you nothing.
+                            </p>
                         </div>
 
-                    </div>
-
-                    {/* RIGHT — hero illustration */}
-                    <div className="relative h-[200px] w-full sm:h-[420px] md:h-[480px] lg:h-full lg:min-h-[520px]">
-                        {/* Soft brand-blue halo behind the illustration */}
-                        <div
-                            aria-hidden="true"
-                            className="pointer-events-none absolute inset-0"
-                            style={{
-                                background:
-                                    "radial-gradient(ellipse 60% 55% at 50% 50%, rgba(0,149,255,0.18), transparent 70%)",
-                                filter: "blur(48px)",
-                            }}
-                        />
-                        <Image
-                            src="https://ahurasense.cs2hvh.com/images/2026-06/yCxP4rYYDAru.png"
-                            alt="Ahura Cloud infrastructure"
-                            fill
-                            priority
-                            className="object-contain"
-                            style={{
-                                filter:
-                                    "drop-shadow(0 30px 50px rgba(0,0,0,0.55)) drop-shadow(0 0 32px rgba(0,149,255,0.16))",
-                            }}
-                            sizes="(min-width: 1024px) 50vw, 90vw"
-                        />
+                        <div className="ah-hero-actions ah-rise-in inline-flex shrink-0" style={{ animationDelay: ".56s" }}>
+                            <Link href="/signup" className="ah-hero-act">
+                                Get started
+                                <svg viewBox="0 0 14 14" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.9" aria-hidden="true">
+                                    <path d="M3.5 10.5 10.5 3.5M5 3.5h5.5V9" />
+                                </svg>
+                            </Link>
+                            <Link href="/pricing" className="ah-hero-act ah-hero-act-alt">
+                                View pricing
+                                <svg viewBox="0 0 20 14" width="16" height="11" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+                                    <path d="M1 7h16M12.5 2.5 17 7l-4.5 4.5" />
+                                </svg>
+                            </Link>
+                        </div>
                     </div>
                 </div>
-            </div>
+            </section>
 
-            <GpuPricingRail gpus={gpus} />
-        </section>
+            {/* ── GPU rail — unchanged ── */}
+            {gpus.length > 0 && (
+                <div style={{ background: "var(--ah-bg)" }}>
+                    <div className="mx-auto w-full max-w-[1800px] px-6 pb-4 pt-5 sm:px-10 lg:px-12">
+                        <div
+                            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[repeat(4,minmax(0,1fr))_auto]"
+                            style={{ border: "1px solid var(--ah-line-hi)", background: "var(--ah-elev)" }}
+                        >
+                            {gpus.map((gpu, i) => {
+                                const s = stockLabel(gpu.stock);
+                                // Every card rests the same way now — the first one no longer
+                                // carries a standing cream fill. Emphasis comes from hover
+                                // (see .ah-gpu:hover), which all four share.
+                                const meta = "var(--ah-body)";
+                                return (
+                                    <Link
+                                        key={gpu.id}
+                                        href={gpu.href}
+                                        className="ah-gpu group relative px-7 py-6"
+                                        style={{
+                                            background: "var(--ah-elev)",
+                                            color: "var(--ah-ink)",
+                                            borderRight: "1px solid var(--ah-line)",
+                                        }}
+                                    >
+                                        <span aria-hidden="true" className="ah-gpu-line" />
+
+                                        <div className="mb-3 flex items-center gap-2.5">
+                                            <span className="ah-lbl" style={{ fontSize: "9.5px", color: "#55555f" }}>
+                                                {String(i + 1).padStart(2, "0")}
+                                            </span>
+                                            <span className="ah-lbl truncate" style={{ fontSize: "9.5px", letterSpacing: "0.12em", color: meta }}>
+                                                {gpu.tier} · {gpu.memory} GB
+                                            </span>
+                                            {s && (
+                                                <span className="ml-auto inline-flex items-center gap-1.5" title={s.text}>
+                                                    <span className="relative inline-flex h-1.5 w-1.5">
+                                                        <span className="ah-ping absolute inset-0 rounded-full" style={{ background: s.dot }} />
+                                                        <span className="relative h-1.5 w-1.5 rounded-full" style={{ background: s.dot }} />
+                                                    </span>
+                                                    <span className="ah-lbl" style={{ fontSize: "9px", letterSpacing: "0.14em", color: meta }}>
+                                                        {s.text}
+                                                    </span>
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        <div className="mb-4 truncate text-[1.4rem] font-normal tracking-[-0.02em]">
+                                            {shortName(gpu.name)}
+                                        </div>
+
+                                        <div className="flex items-baseline gap-1.5">
+                                            <span className="ah-lbl" style={{ fontSize: "9px", letterSpacing: "0.16em", color: meta }}>
+                                                From
+                                            </span>
+                                            <span className="ah-gpu-price text-[1.7rem] font-normal leading-none tracking-[-0.03em] tabular-nums">
+                                                {gpu.price === null ? "N/A" : `$${gpu.price.toFixed(2)}`}
+                                            </span>
+                                            <span className="ah-lbl" style={{ fontSize: "9.5px", color: meta }}>
+                                                /hr/gpu
+                                            </span>
+                                        </div>
+                                    </Link>
+                                );
+                            })}
+
+                            <Link
+                                href="/services/gpu"
+                                className="ah-gpu-all group flex items-center justify-center gap-3 px-7 py-6 lg:flex-col lg:justify-center lg:gap-3 lg:px-8"
+                                style={{ background: "var(--ah-elev)", color: "var(--ah-ink)" }}
+                                aria-label="View all GPUs"
+                            >
+                                <span className="ah-gpu-all-ic inline-flex h-9 w-9 items-center justify-center">
+                                    <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden="true">
+                                        <path d="M3 8h9M8.5 4.5 12 8l-3.5 3.5" />
+                                    </svg>
+                                </span>
+                                <span className="ah-lbl whitespace-nowrap lg:text-center" style={{ fontSize: "9.5px", letterSpacing: "0.14em" }}>
+                                    View all
+                                    <br className="hidden lg:inline" /> GPUs
+                                </span>
+                            </Link>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </>
     );
 }

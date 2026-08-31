@@ -8,6 +8,7 @@
 // already provides them.
 
 import { useEffect, useRef } from "react";
+import Image from "next/image";
 import Link from "next/link";
 
 import PixelBlast from "@/components/hero/pixel-blast";
@@ -132,10 +133,12 @@ export default function AiUseCasesContent() {
             transparent
           />
         </div>
+        <div className="hero-grid">
+          <div className="hero-copy">
         <h1>
-          Four patterns. <span className="ital">One API.</span>
+          Four AI patterns,
           <br />
-          <span className="blue">Ship AI to production.</span>
+          <span className="ah-h2-hl">one control plane.</span>
         </h1>
         <p className="lede">
           <span className="colon" />
@@ -152,6 +155,14 @@ export default function AiUseCasesContent() {
           <Link href="/api-docs" className="btn">
             Read the docs →
           </Link>
+        </div>
+          </div>
+
+          {/* Right column, matching the inference hero: copy left, art right. */}
+          <div className="hero-art" aria-hidden="true">
+            <span className="hero-art-pool" />
+            <Image src="/images/home/uc-hero.png" alt="" width={560} height={560} priority />
+          </div>
         </div>
 
         <div className="hero-meta">
@@ -191,13 +202,11 @@ export default function AiUseCasesContent() {
       {/* ================ SECTION 01 — CHATBOTS ================ */}
       <section className="section" id="chatbots">
         <div className="section-head">
-          <div className="section-num">
-            01<span className="bar" />
-          </div>
           <div>
-            <h2>
-              <span className="blue">Conversational agents</span> that{" "}
-              <span className="ital">act,</span> not just answer.
+            <h2 className="ah-h2">
+              Conversational agents
+              <br />
+              <span className="ah-h2-hl">that take action.</span>
             </h2>
             <p className="blurb">
               <span className="colon" />
@@ -337,13 +346,11 @@ export default function AiUseCasesContent() {
       {/* ================ SECTION 02 — RAG ================ */}
       <section className="section" id="rag">
         <div className="section-head">
-          <div className="section-num">
-            02<span className="bar" />
-          </div>
           <div>
-            <h2>
-              From private docs to{" "}
-              <span className="blue">grounded, cited answers.</span>
+            <h2 className="ah-h2">
+              Private documents,
+              <br />
+              <span className="ah-h2-hl">grounded and cited.</span>
             </h2>
             <p className="blurb">
               <span className="colon" />
@@ -366,13 +373,11 @@ export default function AiUseCasesContent() {
       {/* ================ SECTION 03 — CODE GENERATION ================ */}
       <section className="section" id="code">
         <div className="section-head">
-          <div className="section-num">
-            03<span className="bar" />
-          </div>
           <div>
-            <h2>
-              Code completion, refactors, and{" "}
-              <span className="blue">autonomous</span> commits.
+            <h2 className="ah-h2">
+              Completion, refactors,
+              <br />
+              <span className="ah-h2-hl">and autonomous commits.</span>
             </h2>
             <p className="blurb">
               <span className="colon" />
@@ -489,13 +494,11 @@ export default function AiUseCasesContent() {
       {/* ================ SECTION 04 — DOCUMENT INTEL ================ */}
       <section className="section" id="docs">
         <div className="section-head">
-          <div className="section-num">
-            04<span className="bar" />
-          </div>
           <div>
-            <h2>
-              Structured data from{" "}
-              <span className="blue">unstructured docs.</span>
+            <h2 className="ah-h2">
+              Structured data from
+              <br />
+              <span className="ah-h2-hl">unstructured documents.</span>
             </h2>
             <p className="blurb">
               <span className="colon" />
@@ -739,23 +742,23 @@ export default function AiUseCasesContent() {
       {/* ================ MATRIX ================ */}
       <section className="matrix">
         <div className="mtile">
-          <span className="num">01 · IDENTITY</span>
+          <span className="num">Identity</span>
           <h4>One API key</h4>
           <p>Same auth across every model, every endpoint, every region.</p>
         </div>
         <div className="mtile">
-          <span className="num">02 · BILLING</span>
+          <span className="num">Billing</span>
           <h4>One consolidated bill</h4>
           <p>Tokens, GPUs, storage, batches — itemized, per-second.</p>
         </div>
         <div className="mtile">
-          <span className="num">03 · COMPATIBILITY</span>
+          <span className="num">Compatibility</span>
           <h4>OpenAI-compatible</h4>
           <p>Swap the base URL. Your SDKs, agents, and tooling just work.</p>
         </div>
         <div className="mtile">
-          <span className="num">04 · LOCALITY</span>
-          <h4>12 regions, sub-20ms</h4>
+          <span className="num">Locality</span>
+          <h4>Fifteen regions</h4>
           <p>Inference next to your users, your data, and your compute.</p>
         </div>
       </section>
@@ -764,14 +767,15 @@ export default function AiUseCasesContent() {
       <section className="cta">
         <div className="cta-card">
           <div>
-            <h3>
-              Pick a pattern. <span className="blue">Ship by Friday.</span>
+            <h3 className="ah-h2">
+              Pick a pattern,
+              <br />
+              <span className="ah-h2-hl">start building.</span>
             </h3>
             <p>
               <span className="colon" />
-              <span className="hl">Free $50 credit on signup.</span> No card
-              required. Every model, every region — yours to try in under two
-              minutes.
+              <span className="hl">No card required to start.</span> Every model,
+              every region, on one key — running in under two minutes.
             </p>
           </div>
           <div className="cta-actions">
@@ -843,6 +847,13 @@ export default function AiUseCasesContent() {
         .aiuc .section-divider,
         .aiuc .matrix,
         .aiuc .cta {
+          /* Mirrors components/ui/container.tsx exactly, so this page's left
+             edge matches /services/inference.
+                 92% → 85% (640) → 75% (1024) → 1600px (1536)
+             plus clamp(16px, 3vw, 80px) of gutter.
+             The previous ladder here stopped at 75% and never picked up the
+             1600px cap, so on a wide screen it sat ~90px further in than the
+             inference page it was meant to match. */
           width: 100%;
           max-width: 92%;
           margin-left: auto;
@@ -866,6 +877,15 @@ export default function AiUseCasesContent() {
           .aiuc .matrix,
           .aiuc .cta {
             max-width: 75%;
+          }
+        }
+        @media (min-width: 1536px) {
+          .aiuc .hero,
+          .aiuc .section,
+          .aiuc .section-divider,
+          .aiuc .matrix,
+          .aiuc .cta {
+            max-width: 1600px;
           }
         }
 
@@ -947,6 +967,45 @@ export default function AiUseCasesContent() {
           transform: translateY(-1px);
         }
 
+        /* Two columns, matching the inference hero: copy left, art right.
+           Collapses to one column below 1024 where the art would squeeze the
+           headline. */
+        .aiuc .hero-grid {
+          display: grid;
+          gap: 40px;
+          align-items: center;
+        }
+        @media (min-width: 1024px) {
+          .aiuc .hero-grid {
+            grid-template-columns: minmax(0, 1fr) minmax(0, 0.82fr);
+            gap: 64px;
+          }
+        }
+        .aiuc .hero-art {
+          position: relative;
+          display: none;
+          align-items: center;
+          justify-content: center;
+        }
+        @media (min-width: 1024px) {
+          .aiuc .hero-art { display: flex; }
+        }
+        .aiuc .hero-art img {
+          position: relative;
+          width: 100%;
+          max-width: 460px;
+          height: auto;
+          filter: drop-shadow(0 28px 46px rgba(0, 0, 0, 0.6));
+        }
+        .aiuc .hero-art-pool {
+          position: absolute;
+          left: 50%;
+          top: 54%;
+          width: 116%;
+          height: 104%;
+          translate: -50% -50%;
+          background: radial-gradient(closest-side, rgba(77, 141, 255, 0.18), transparent 72%);
+        }
         .aiuc .hero {
           padding-top: 120px;
           padding-bottom: 64px;
@@ -985,22 +1044,33 @@ export default function AiUseCasesContent() {
           background: var(--blue);
           box-shadow: 0 0 0 4px var(--blue-ring);
         }
+        /* Larger than .ah-h2 because it is the page heading, but the same
+           weight, leading and tracking so it reads as one type system. */
+        .aiuc .hero h1 .ah-h2-hl {
+          color: #0095ff;
+        }
         .aiuc .hero h1 {
           font-family: var(--display);
-          font-size: clamp(34px, 5vw, 60px);
-          line-height: 1.08;
-          letter-spacing: -0.02em;
+          font-size: clamp(2.25rem, 5.4vw, 5.15rem);
+          line-height: 0.96;
+          letter-spacing: -0.025em;
           font-weight: 400;
+          color: #fff;
           margin: 24px 0 22px;
           max-width: 920px;
         }
         .aiuc .hero p.lede {
-          font-size: 18.5px;
-          color: var(--muted);
+          font-family: var(--font-nunito), var(--sans);
+          font-size: 17px;
+          line-height: 32px;
+          font-weight: 400;
+          color: rgba(255, 255, 255, 0.62);
           max-width: 640px;
           margin: 0 0 32px;
-          line-height: 1.55;
-          font-weight: 500;
+        }
+        .aiuc .hero p.lede .hl {
+          color: #fff;
+          font-weight: 400;
         }
         .aiuc .hero-actions {
           display: flex;
@@ -1060,8 +1130,7 @@ export default function AiUseCasesContent() {
         }
         .aiuc .section-head {
           display: grid;
-          grid-template-columns: 80px 1fr;
-          gap: 24px;
+          grid-template-columns: 1fr;
           align-items: start;
           margin-bottom: 48px;
         }
@@ -1079,10 +1148,13 @@ export default function AiUseCasesContent() {
           background: var(--border-strong);
           margin-top: 10px;
         }
+        /* Label text is neutral — the pip beside it carries the accent. Four
+           blue section labels stacked down the page was a lot of colour for
+           something that is only a signpost. */
         .aiuc .section-tag {
           font-family: var(--mono);
           font-size: 11.5px;
-          color: var(--blue);
+          color: var(--dim);
           letter-spacing: 0.08em;
           text-transform: uppercase;
           display: inline-flex;
@@ -1096,12 +1168,10 @@ export default function AiUseCasesContent() {
           border-radius: 1px;
           box-shadow: 0 0 8px rgba(77, 141, 255, 0.6);
         }
+        /* Type comes from .ah-h2 in globals.css — the same class compute,
+           clusters, the explorer and the network section use. Only layout
+           lives here, so the two can never drift. */
         .aiuc .section h2 {
-          font-family: var(--display);
-          font-size: clamp(28px, 3.6vw, 46px);
-          line-height: 1.1;
-          letter-spacing: -0.02em;
-          font-weight: 400;
           margin: 14px 0 16px;
           max-width: 720px;
         }
@@ -1145,9 +1215,9 @@ export default function AiUseCasesContent() {
           flex: 0 0 auto;
           width: 18px;
           height: 18px;
-          border-radius: 5px;
-          background: rgba(77, 141, 255, 0.08);
-          border: 1px solid var(--blue-line);
+          border-radius: 0;
+          background: rgba(255, 255, 255, 0.04);
+          border: 1px solid rgba(255, 255, 255, 0.12);
           display: grid;
           place-items: center;
           margin-top: 2px;
@@ -1156,9 +1226,8 @@ export default function AiUseCasesContent() {
           content: "";
           width: 6px;
           height: 6px;
-          background: var(--blue);
-          border-radius: 1.5px;
-          box-shadow: 0 0 6px rgba(77, 141, 255, 0.7);
+          background: rgba(255, 255, 255, 0.55);
+          border-radius: 0;
         }
         .aiuc .feature-list .ft-title {
           font-weight: 700;
@@ -1844,6 +1913,7 @@ export default function AiUseCasesContent() {
           font-size: 11px;
           color: var(--dim);
           letter-spacing: 0.08em;
+          text-transform: uppercase;
         }
         .aiuc .mtile h4 {
           margin: 0;
@@ -1866,27 +1936,23 @@ export default function AiUseCasesContent() {
           padding-bottom: 96px;
         }
         .aiuc .cta-card {
-          border: 1px solid var(--blue-line);
-          border-radius: 24px;
+          border: 1px solid var(--border-strong);
+          border-radius: 0;
           padding: 48px;
           position: relative;
           overflow: hidden;
-          background: radial-gradient(700px 350px at 100% 0%, rgba(77, 141, 255, 0.18), transparent 60%),
-            radial-gradient(600px 300px at 0% 100%, rgba(77, 141, 255, 0.1), transparent 60%),
-            linear-gradient(180deg, #131520, #0c0d11);
+          background: radial-gradient(620px 300px at 100% 0%, rgba(77, 141, 255, 0.09), transparent 62%),
+            linear-gradient(180deg, #141418, #0c0d11);
           display: grid;
           grid-template-columns: 1fr auto;
           gap: 24px;
           align-items: center;
         }
+        /* Layout only — type comes from .ah-h2. A font-size here would beat
+           the shared class on specificity and reintroduce the drift. */
         .aiuc .cta-card h3 {
-          font-size: 34px;
-          letter-spacing: -0.02em;
-          font-weight: 400;
           margin: 0;
           max-width: 540px;
-          line-height: 1.12;
-          font-family: var(--display);
         }
         .aiuc .cta-card p {
           margin: 12px 0 0;
@@ -1957,9 +2023,6 @@ export default function AiUseCasesContent() {
           .aiuc .cta-card {
             grid-template-columns: 1fr;
             padding: 32px;
-          }
-          .aiuc .cta-card h3 {
-            font-size: 28px;
           }
         }
 

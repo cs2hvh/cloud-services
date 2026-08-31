@@ -1,0 +1,216 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;1,6..72,300&display=swap">
+  <style>
+    body { margin: 0; background: #0a0a0a; color: #e6e4e0; font-family: "Archivo", system-ui, sans-serif; }
+    a { color: #e6e4e0; text-decoration: underline; text-underline-offset: 3px; } a:hover { color: #fff; }
+    .ed { font-family: "Newsreader", Georgia, serif; }
+    .sc { font-size: 10.5px; letter-spacing: 0.16em; text-transform: uppercase; color: #6b6862; }
+    .hair { height: 1px; background: #232320; }
+    /* image slot: flat tone + hatch, deliberately unmistakable as a placeholder */
+    .slot { position: relative; background: #131312; overflow: hidden; }
+    .slot::before {
+      content: ""; position: absolute; inset: 0;
+      background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.028) 0 1px, transparent 1px 9px);
+    }
+    .slot-tag { position: absolute; top: 14px; left: 16px; font-size: 9.5px; letter-spacing: 0.15em;
+                text-transform: uppercase; color: #55524c; border: 1px solid #262622; padding: 3px 7px; }
+    .spec { font-size: 11.5px; line-height: 1.75; color: #7d7a74; }
+    .spec b { color: #b8b4ad; font-weight: 500; }
+  </style>
+</helmet>
+<div style="width: 1300px; background: #0a0a0a; box-sizing: border-box;">
+
+  <!-- masthead -->
+  <div style="padding: 54px 64px 0;">
+    <div style="display: flex; justify-content: space-between; align-items: baseline;">
+      <span class="sc">Art direction — material</span>
+      <span class="sc">Shot brief · v1</span>
+    </div>
+    <div class="hair" style="margin: 18px 0 40px;"></div>
+    <h1 class="ed" style="font-size: 62px; font-weight: 300; line-height: 1.06; letter-spacing: -0.015em; margin: 0 0 22px; max-width: 900px;">The photograph is the design. So the photograph has to be yours.</h1>
+    <div style="display: grid; grid-template-columns: 1.1fr 1fr; gap: 64px; max-width: 1060px;">
+      <p class="ed" style="font-size: 17px; font-weight: 300; line-height: 1.7; color: #a8a49d; margin: 0;">Four compositions below. Each one is built so that type sits inside the image rather than beside it — no container, no border, no gradient. That only works if the image carries real tonal depth, which no asset currently in <span style="font-family: ui-monospace, monospace; font-size: 14px;">public/</span> does.</p>
+      <p style="font-size: 13.5px; line-height: 1.75; color: #7d7a74; margin: 0;">So the grey blocks are honest placeholders, not design. Each carries the shot it needs: subject, crop, focal length, exposure, and which region of the frame has to stay dark enough to hold text. Hand it to whoever shoots, or use it to brief a licensing search.</p>
+    </div>
+    <div class="hair" style="margin: 44px 0 0;"></div>
+  </div>
+
+  <!-- 01 · full bleed hero -->
+  <div style="padding: 40px 0 0;">
+    <div style="padding: 0 64px 22px; display: flex; justify-content: space-between; align-items: baseline;">
+      <span class="sc">01 — Hero, full bleed</span>
+      <span class="sc">1300 × 620</span>
+    </div>
+    <div class="slot" style="height: 560px;">
+      <span class="slot-tag">Image 01</span>
+      <!-- type lives inside the frame -->
+      <div style="position: absolute; left: 64px; bottom: 56px; max-width: 620px;">
+        <div class="sc" style="color: #8a8680; margin-bottom: 20px;">Sovereign compute, for India</div>
+        <div class="ed" style="font-size: 58px; font-weight: 300; line-height: 1.08; letter-spacing: -0.015em; color: #fff; margin-bottom: 22px;">Your AI stack.<br>Your jurisdiction.</div>
+        <div style="font-size: 15px; line-height: 1.65; color: #cfccc6; max-width: 440px;">Inference, GPUs, Kubernetes and managed data — operated end to end inside Indian borders, billed by the second in rupees.</div>
+      </div>
+      <div style="position: absolute; right: 64px; bottom: 56px; text-align: right;">
+        <div class="ed" style="font-size: 46px; font-weight: 300; color: #fff; line-height: 1;">100%</div>
+        <div class="sc" style="margin-top: 8px;">Data resident in India</div>
+      </div>
+      <!-- the spec, rendered in-frame so it can't be mistaken for art -->
+      <div style="position: absolute; top: 56px; right: 64px; max-width: 340px; text-align: right;">
+        <div class="spec">
+          <b>Subject.</b> Rack aisle, shot long down the cold aisle — or a single populated rack if that is all you have access to.<br><br>
+          <b>Crop &amp; lens.</b> 24–35mm, camera low, aisle vanishing to the right third. Leave the lower-left quadrant free of detail.<br><br>
+          <b>Exposure.</b> Two to three stops under. Let the blacks crush. Only status LEDs and the aisle floor catch light.<br><br>
+          <b>Must hold type.</b> Lower-left 620×280 and lower-right 200×90 stay under 12% luminance.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 02 · macro diptych -->
+  <div style="padding: 64px 64px 0;">
+    <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 22px;">
+      <span class="sc">02 — Residency, macro diptych</span>
+      <span class="sc">Two frames, unequal</span>
+    </div>
+    <div style="display: grid; grid-template-columns: 1.55fr 1fr; gap: 4px;">
+      <div class="slot" style="height: 400px;">
+        <span class="slot-tag">Image 02a</span>
+        <div style="position: absolute; left: 40px; bottom: 40px; max-width: 400px;">
+          <div class="ed" style="font-size: 34px; font-weight: 300; line-height: 1.15; color: #fff;">Where your data sits is an architecture decision.</div>
+        </div>
+        <div style="position: absolute; top: 52px; left: 40px; max-width: 300px;">
+          <div class="spec">
+            <b>Subject.</b> Macro of a single accelerator board — heatsink fins, VRM, the NVLink edge connector. Shallow depth.<br><br>
+            <b>Lens.</b> 90–105mm macro, f/4. Board at a slight angle, not flat-on.<br><br>
+            <b>Light.</b> One hard raking source from the left. No fill. The fins should read as ridges of light against black.
+          </div>
+        </div>
+      </div>
+      <div class="slot" style="height: 400px;">
+        <span class="slot-tag">Image 02b</span>
+        <div style="position: absolute; left: 32px; bottom: 40px; right: 32px;">
+          <div style="font-size: 13.5px; line-height: 1.7; color: #cfccc6;">No cross-border failover. No foreign subprocessor holding your keys. Replication targets validated against an in-country allowlist — enforced in the API, not left to operator discipline.</div>
+        </div>
+        <div style="position: absolute; top: 52px; left: 32px; right: 32px;">
+          <div class="spec">
+            <b>Subject.</b> Cabling — a bundle of fibre or DAC entering a switch, tight and orderly.<br><br>
+            <b>Why.</b> It reads as craft. Tidy cabling is the visual shorthand every infrastructure buyer already trusts.<br><br>
+            <b>Tone.</b> Match 02a. Same session, same light.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 03 · figures over a quiet frame -->
+  <div style="padding: 64px 64px 0;">
+    <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 22px;">
+      <span class="sc">03 — Figures, set over a quiet frame</span>
+      <span class="sc">Type-led</span>
+    </div>
+    <div class="slot" style="height: 300px;">
+      <span class="slot-tag">Image 03</span>
+      <div style="position: absolute; inset: 0; display: flex; align-items: center; padding: 0 56px;">
+        <div style="display: flex; gap: 0; width: 100%;">
+          <sc-for list="{{figs}}" as="f" hint-placeholder-count="4">
+            <div style="flex-grow: 1; border-left: 1px solid #2c2c28; padding: 0 26px;">
+              <div class="ed" style="font-size: 42px; font-weight: 300; color: #fff; line-height: 1;">{{f.v}}</div>
+              <div class="sc" style="margin-top: 10px;">{{f.k}}</div>
+              <div style="font-size: 11px; color: #6b6862; margin-top: 8px; line-height: 1.5;">{{f.note}}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="position: absolute; bottom: 18px; left: 56px;">
+        <div class="spec"><b>Subject.</b> Almost nothing — a defocused rack wall, or floor-to-ceiling darkness with one strip of light. Under 8% luminance across the whole frame. This image exists to give the figures a ground, not to be looked at.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 04 · closing spread -->
+  <div style="padding: 64px 64px 0;">
+    <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 22px;">
+      <span class="sc">04 — Close</span>
+      <span class="sc">Half bleed</span>
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0;">
+      <div style="padding: 48px 56px 48px 0;">
+        <div class="ed" style="font-size: 40px; font-weight: 300; line-height: 1.12; color: #fff; margin-bottom: 20px;">Built for institutions that answer to a regulator, not a status page.</div>
+        <p class="ed" style="font-size: 16px; font-weight: 300; line-height: 1.72; color: #a8a49d; margin: 0 0 28px;">A global provider's region is a location. Its jurisdiction follows its parent company. Ours does not — and for a regulated Indian workload that distinction is the entire procurement conversation.</p>
+        <div style="display: flex; gap: 24px; align-items: center;">
+          <span style="font-size: 13px; font-weight: 500; color: #0a0a0a; background: #e6e4e0; padding: 13px 24px;">Request an architecture review</span>
+          <span style="font-size: 13px; color: #cfccc6; border-bottom: 1px solid #3a3a36; padding-bottom: 3px;">Read the residency model</span>
+        </div>
+      </div>
+      <div class="slot" style="height: 420px;">
+        <span class="slot-tag">Image 04</span>
+        <div style="position: absolute; top: 52px; left: 36px; right: 36px;">
+          <div class="spec">
+            <b>Subject.</b> A person. One engineer at a crash cart in an aisle, or hands seating a drive — shot from behind or in profile, never posed to camera.<br><br>
+            <b>Why it closes the page.</b> Three frames of hardware establish capability. The fourth has to establish that people operate it. Every enterprise site does this, and it is the frame most often skipped.<br><br>
+            <b>Lens.</b> 50mm, f/2, available light only.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- procurement reality -->
+  <div style="padding: 64px 64px 72px;">
+    <div class="hair" style="margin-bottom: 34px;"></div>
+    <div style="display: grid; grid-template-columns: 240px 1fr; gap: 56px;">
+      <div>
+        <div class="sc" style="margin-bottom: 10px;">Before any of this</div>
+        <div class="ed" style="font-size: 24px; font-weight: 300; line-height: 1.25; color: #fff;">Four ways to get the frames.</div>
+      </div>
+      <div style="display: flex; flex-direction: column;">
+        <sc-for list="{{routes}}" as="r" hint-placeholder-count="4">
+          <div style="display: grid; grid-template-columns: 26px 1fr 1fr; gap: 28px; padding: 20px 0; border-top: 1px solid #232320; align-items: start;">
+            <div class="ed" style="font-size: 17px; color: #4a4a45;">{{r.n}}</div>
+            <div>
+              <div style="font-size: 14.5px; font-weight: 500; color: #e6e4e0; margin-bottom: 5px;">{{r.title}}</div>
+              <div class="sc" style="color: {{r.tone}};">{{r.verdict}}</div>
+            </div>
+            <div style="font-size: 13px; line-height: 1.7; color: #8a8680;">{{r.body}}</div>
+          </div>
+        </sc-for>
+        <div style="border-top: 1px solid #232320;"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+<script data-dc-script data-props='{"warmth":{"editor":"range","default":0,"min":-6,"max":6,"step":1,"unit":"%","section":"Tone"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      figs: [
+        { v: '[N]',   k: 'Regions in operation', note: 'Live only. One source of truth.' },
+        { v: '100%',  k: 'Data resident in India', note: 'No cross-border failover path.' },
+        { v: '[N]s',  k: 'Median provision', note: 'p50, measured — not best case.' },
+        { v: '[X]%',  k: 'Availability', note: 'As defined on /sla.' },
+      ],
+      routes: [
+        { n: '01', title: 'Shoot the hardware you can reach', verdict: 'Recommended', tone: '#8fae7a',
+          body: 'You do not need a datacentre for frames 02a and 02b. One accelerator board, one switch, one afternoon with a macro lens and a hard light gets you both — and they are authentically yours. Start here; it unblocks half the page for the cost of a day.' },
+        { n: '02', title: 'Shoot inside a facility you operate in', verdict: 'Ask your provider', tone: '#c9b26a',
+          body: 'You are a paying tenant. Colocation and cloud providers sometimes permit a supervised shoot, and sometimes supply their own approved imagery to partners. Worth an email before you license anything.' },
+        { n: '03', title: 'License stock datacentre photography', verdict: 'Carries a real risk', tone: '#c98a6a',
+          body: 'Fast and cheap, and it is what most competitors do. But on a page selling sovereignty, a buyer who asks "which facility is this?" gets an answer you would rather not give. If you use it, use it only for frames where no specific facility is legible.' },
+        { n: '04', title: 'Commission a render', verdict: 'Only if honest about it', tone: '#8a8680',
+          body: 'A photoreal CG rack avoids the authenticity problem and is fully art-directable. It is also what your current isometric assets were trying to be. If you go here, brief it as photography — real optics, real falloff — not as an illustration.' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

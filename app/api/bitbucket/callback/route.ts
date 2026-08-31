@@ -3,7 +3,8 @@ import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { createHmac, timingSafeEqual } from "crypto";
 import { encryptOAuthToken } from "@/lib/security/token-crypto";
 import { getAppBaseUrl } from "@/lib/api/get-app-base-url";
-import { getOAuthStateSecret, sanitizeReturnTo } from "@/lib/api/oauth-state";
+import { DEFAULT_OAUTH_RETURN_TO, getOAuthStateSecret, sanitizeReturnTo } from "@/lib/api/oauth-state";
+import { withReturnToParam } from "@/lib/api/return-to";
 
 /**
  * Bitbucket OAuth callback handler
@@ -105,12 +106,12 @@ function parseSignedState(state: string): ParsedStateResult {
 function readReturnToFromSignedPayloadUnsafe(state: string): string {
   try {
     const [payloadB64] = state.split(".");
-    if (!payloadB64) return "/dashboard/settings";
+    if (!payloadB64) return DEFAULT_OAUTH_RETURN_TO;
     const payloadRaw = Buffer.from(payloadB64, "base64url").toString("utf8");
     const payload = JSON.parse(payloadRaw) as { returnTo?: string };
     return safeReturnPath(payload.returnTo);
   } catch {
-    return "/dashboard/settings";
+    return DEFAULT_OAUTH_RETURN_TO;
   }
 }
 
@@ -123,12 +124,12 @@ export async function GET(request: NextRequest) {
     const state = searchParams.get("state");
     
     if (!code || !state) {
-      return NextResponse.redirect(`${domain}/dashboard/settings?error=missing_code`);
+      return NextResponse.redirect(`${domain}${withReturnToParam(DEFAULT_OAUTH_RETURN_TO, "error", "missing_code")}`);
     }
 
     // Decode state to extract userId and returnTo path
     let userId = "";
-    let returnTo = "/dashboard/settings";
+    let returnTo = DEFAULT_OAUTH_RETURN_TO;
     let usedLegacyState = false;
     const hasSignedFormat = state.includes(".");
     const parsedState: ParsedStateResult = hasSignedFormat ? parseSignedState(state) : { ok: false, reason: "format" as const };
@@ -140,7 +141,7 @@ export async function GET(request: NextRequest) {
       // Signed state present but invalid (signature/expiry/secret mismatch).
       // Do not fall back to legacy parsing for security.
       returnTo = readReturnToFromSignedPayloadUnsafe(state);
-      return NextResponse.redirect(`${domain}${returnTo}?error=invalid_state`);
+      return NextResponse.redirect(`${domain}${withReturnToParam(returnTo, "error", "invalid_state")}`);
     } else {
       usedLegacyState = true;
       // Backward compatibility with old state format
@@ -155,7 +156,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (!userId) {
-      return NextResponse.redirect(`${domain}${returnTo}?error=invalid_state`);
+      return NextResponse.redirect(`${domain}${withReturnToParam(returnTo, "error", "invalid_state")}`);
     }
     
     const supabase = await createClient();
@@ -166,7 +167,7 @@ export async function GET(request: NextRequest) {
     // Legacy unsigned state is only accepted when an authenticated session matches.
     // Signed state can continue even if session cookies are stale or belong to a different tab/account.
     if (usedLegacyState && (!user || user.id !== userId)) {
-      return NextResponse.redirect(`${domain}${returnTo}?error=invalid_user`);
+      return NextResponse.redirect(`${domain}${withReturnToParam(returnTo, "error", "invalid_user")}`);
     }
 
     const clientId = process.env.BITBUCKET_CLIENT_ID;
@@ -175,7 +176,7 @@ export async function GET(request: NextRequest) {
 
     if (!clientId || !clientSecret) {
       console.error('Bitbucket OAuth credentials not configured');
-      return NextResponse.redirect(`${domain}${returnTo}?error=config_error`);
+      return NextResponse.redirect(`${domain}${withReturnToParam(returnTo, "error", "config_error")}`);
     }
 
     // Create Basic Auth header (Bitbucket requires Basic Auth for token exchange)
@@ -204,14 +205,14 @@ export async function GET(request: NextRequest) {
 
     if (!tokenResponse.ok) {
       console.error('Bitbucket token exchange failed with status:', tokenResponse.status);
-      return NextResponse.redirect(`${domain}${returnTo}?error=token_exchange_failed`);
+      return NextResponse.redirect(`${domain}${withReturnToParam(returnTo, "error", "token_exchange_failed")}`);
     }
 
     const tokenData = await tokenResponse.json();
     
     if (tokenData.error) {
       console.error('Bitbucket token error:', tokenData.error);
-      return NextResponse.redirect(`${domain}${returnTo}?error=token_exchange_failed`);
+      return NextResponse.redirect(`${domain}${withReturnToParam(returnTo, "error", "token_exchange_failed")}`);
     }
 
     const accessToken = tokenData.access_token;
@@ -220,7 +221,7 @@ export async function GET(request: NextRequest) {
     
     if (!accessToken) {
       console.error('No access token received from Bitbucket');
-      return NextResponse.redirect(`${domain}${returnTo}?error=no_token`);
+      return NextResponse.redirect(`${domain}${withReturnToParam(returnTo, "error", "no_token")}`);
     }
 
     // Get Bitbucket user info to store username
@@ -233,7 +234,7 @@ export async function GET(request: NextRequest) {
 
     if (!userResponse.ok) {
       console.error('Failed to get Bitbucket user info');
-      return NextResponse.redirect(`${domain}${returnTo}?error=user_info_failed`);
+      return NextResponse.redirect(`${domain}${withReturnToParam(returnTo, "error", "user_info_failed")}`);
     }
 
     const bitbucketUser = await userResponse.json();
@@ -262,7 +263,7 @@ export async function GET(request: NextRequest) {
 
     if (insertError) {
       console.error('Failed to store Bitbucket token:', insertError);
-      return NextResponse.redirect(`${domain}${returnTo}?error=token_storage_failed`);
+      return NextResponse.redirect(`${domain}${withReturnToParam(returnTo, "error", "token_storage_failed")}`);
     }
 
     if (!refreshToken) {
@@ -270,11 +271,11 @@ export async function GET(request: NextRequest) {
     }
 
     // Redirect back to the page where the user initiated the connection
-    return NextResponse.redirect(`${domain}${returnTo}?bitbucket_connected=true`);
+    return NextResponse.redirect(`${domain}${withReturnToParam(returnTo, "bitbucket_connected", "true")}`);
 
   } catch (error) {
     console.error("[Bitbucket Callback] Error:", error);
-    const returnTo = '/dashboard/settings'; // Default fallback
-    return NextResponse.redirect(`${domain}${returnTo}?error=unknown`);
+    const returnTo = DEFAULT_OAUTH_RETURN_TO; // Default fallback
+    return NextResponse.redirect(`${domain}${withReturnToParam(returnTo, "error", "unknown")}`);
   }
 }
