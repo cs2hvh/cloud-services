@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { createServiceClient } from "@/lib/supabase/server";
 import { PageHeader } from "@admin/components/page-header";
 import { Callout } from "@admin/components/deploy/bits";
 import { PriceBook } from "@admin/components/pricing/price-book";
-import type { PriceRow, ServicePlan } from "@admin/lib/pricing";
+import { SWEEP_SCHEDULED, type PriceRow, type ServicePlan } from "@admin/lib/pricing";
 
 export const dynamic = "force-dynamic";
 
@@ -81,17 +82,35 @@ export default async function PricingPage() {
             The platform has zero live prices.
           </strong>{" "}
           Nothing can be priced, provisioned or billed until plans below are
-          priced (or the archive seed is approved). Unpriced hours are refused
-          by the sweep — never billed as zero.
+          priced. Unpriced hours are refused by the sweep — never billed as
+          zero.{" "}
+          <Link href="/pricing/seed" className="underline">
+            Review &amp; seed from the archive →
+          </Link>
         </Callout>
       ) : (
-        unpricedCount > 0 && (
-          <Callout tone="warning">
-            {unpricedCount} of {plans.length} active plans have no live price.
-            An unpriced plan provisions nothing and bills nothing — the sweep
-            refuses its hours.
-          </Callout>
-        )
+        <>
+          {!SWEEP_SCHEDULED && (
+            <Callout tone="warning">
+              <strong className="font-semibold">
+                Prices exist but the billing sweep is not scheduled yet
+              </strong>{" "}
+              — nothing is being billed. A fully-priced book that is not being
+              swept reads as &quot;billing is live&quot;, and that misreading
+              is what let six days of unbilled usage pass unnoticed.
+            </Callout>
+          )}
+          {unpricedCount > 0 && (
+            <Callout tone="warning">
+              {unpricedCount} of {plans.length} active plans have no live
+              price. An unpriced plan provisions nothing and bills nothing —
+              the sweep refuses its hours.{" "}
+              <Link href="/pricing/seed" className="underline">
+                Seed screen →
+              </Link>
+            </Callout>
+          )}
+        </>
       )}
 
       <PriceBook plans={plans} prices={prices} />

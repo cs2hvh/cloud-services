@@ -10,6 +10,26 @@
 
 export const HOURS_IN_MONTH = 720;
 
+/**
+ * Flipped by hand when the billing lane deploys the sweep timer (they ping
+ * this lane — agreed mechanism). While false and prices exist, /pricing warns
+ * that a fully-priced book is NOT being billed; that misreading is what let
+ * six days of unbilled usage pass unnoticed.
+ */
+export const SWEEP_SCHEDULED = false;
+
+/** One row from billing.price_seed_candidates() — archive-derived, unconverted. */
+export interface SeedCandidate {
+  service_type: string;
+  plan_key: string;
+  plan_name: string;
+  rate_model: RateModel;
+  amount: number;
+  unit: string;
+  source: string;
+  review_flag: string | null;
+}
+
 export type RateModel = "fixed_hourly" | "markup" | "per_gb_hour";
 
 export const RATE_MODELS: RateModel[] = ["fixed_hourly", "markup", "per_gb_hour"];
