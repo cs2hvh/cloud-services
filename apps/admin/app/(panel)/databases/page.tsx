@@ -5,6 +5,8 @@ import { requireAdmin } from "@/lib/supabase/auth";
 import AdminDatabases from "@/components/admin/databases/admin-databases";
 import { Database_Clusters } from "@/lib/supabase/queries/database_clusters";
 import { getCachedProducts } from "@/lib/cache/query-cache";
+import { planCatalogOffline } from "@admin/lib/catalog-status";
+import { CatalogOfflineBanner } from "@admin/components/catalog-offline-banner";
 
 export const dynamic = "force-dynamic";
 
@@ -14,17 +16,21 @@ const AdminDatabasesSuspense = async () => {
     notFound();
   }
 
-  const [databases, databaseProducts] = await Promise.all([
+  const [databases, databaseProducts, catalogOffline] = await Promise.all([
     Database_Clusters.get_all_for_admin(),
     getCachedProducts.byType("database"),
+    planCatalogOffline(),
   ]);
 
   return (
-    <AdminDatabases
-      all_databases={databases}
-      all_products={databaseProducts}
-      basePath="/databases"
-    />
+    <>
+      {catalogOffline && <CatalogOfflineBanner />}
+      <AdminDatabases
+        all_databases={databases}
+        all_products={databaseProducts}
+        basePath="/databases"
+      />
+    </>
   );
 };
 

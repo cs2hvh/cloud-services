@@ -8,6 +8,8 @@ import { Users } from "@/lib/supabase/queries/users";
 import { Clusters } from "@/lib/supabase/queries/clusters";
 import { Products } from "@/lib/supabase/queries/products";
 import { vmLocations } from "@/config/locations";
+import { planCatalogOffline } from "@admin/lib/catalog-status";
+import { CatalogOfflineBanner } from "@admin/components/catalog-offline-banner";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +23,12 @@ const AdminKubernetesAssignSuspense = async () => {
   const usersData = await Users.get_all_profiles();
   const clusters = await Clusters.get_all_for_admin();
   const products = await Products.get_by_type("kubernetes");
+  const catalogOffline = await planCatalogOffline();
+
+  if (catalogOffline) {
+    // No plans exist to provision against; the form would dead-end.
+    return <CatalogOfflineBanner />;
+  }
 
   // Map users to the format expected by NewClusterForm
   const allUsers = usersData

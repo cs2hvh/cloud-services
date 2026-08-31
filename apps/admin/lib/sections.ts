@@ -69,7 +69,7 @@ export const ADMIN_SECTIONS: AdminSection[] = [
   { title: "Domains", slug: "domains", icon: Globe, migrated: true, description: "Registrations and transfers", group: "Services" },
   { title: "Cluster Monitor", slug: "cluster-monitor", icon: Activity, migrated: false, description: "Internal cluster health", group: "Services" },
 
-  { title: "Pricing", slug: "pricing", icon: BadgeDollarSign, migrated: false, description: "Plans, promos, categories", group: "Commerce" },
+  { title: "Pricing", slug: "pricing", icon: BadgeDollarSign, migrated: true, description: "Price book rebuild — status", group: "Commerce" },
   { title: "Coupons", slug: "coupons", icon: TicketPercent, migrated: false, description: "Discount codes", group: "Commerce" },
 ];
 

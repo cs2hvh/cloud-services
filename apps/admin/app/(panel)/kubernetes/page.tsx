@@ -5,6 +5,8 @@ import { requireAdmin } from "@/lib/supabase/auth";
 import AdminKubernetes from "@/components/admin/kubernetes/admin-kubernetes";
 import { Clusters } from "@/lib/supabase/queries/clusters";
 import { getCachedProducts } from "@/lib/cache/query-cache";
+import { planCatalogOffline } from "@admin/lib/catalog-status";
+import { CatalogOfflineBanner } from "@admin/components/catalog-offline-banner";
 
 export const dynamic = "force-dynamic";
 
@@ -14,17 +16,21 @@ const AdminKubernetesSuspense = async () => {
     notFound();
   }
 
-  const [clusters, kubernetesProducts] = await Promise.all([
+  const [clusters, kubernetesProducts, catalogOffline] = await Promise.all([
     Clusters.get_all_for_admin(),
     getCachedProducts.byType("kubernetes"),
+    planCatalogOffline(),
   ]);
 
   return (
-    <AdminKubernetes
-      all_clusters={clusters}
-      all_products={kubernetesProducts}
-      basePath="/kubernetes"
-    />
+    <>
+      {catalogOffline && <CatalogOfflineBanner />}
+      <AdminKubernetes
+        all_clusters={clusters}
+        all_products={kubernetesProducts}
+        basePath="/kubernetes"
+      />
+    </>
   );
 };
 
