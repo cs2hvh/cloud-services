@@ -16,6 +16,7 @@ import {
 import { getCaller } from "../../_lib/auth";
 import { kube, loadKubeconfig } from "@/lib/paas/k8s/client.ts";
 import { toCustomerFacing } from "@/lib/paas/errors";
+import { deleteCustomHostname } from "@/lib/paas/edge/cloudflare";
 import {
   json,
   unauthenticated,
@@ -259,6 +260,42 @@ export async function DELETE(_request: Request, { params }: Params) {
     .is("released_at", null);
   if (released.error) {
     console.error("[v2/projects/:ref] releasing aliases failed:", released.error);
+  }
+
+  // CUSTOM DOMAINS GO WITH THE PROJECT, and they are the customer's property
+  // rather than ours. Leaving the row behind keeps their own domain claimed by
+  // a project that no longer exists — `UNIQUE (domain) WHERE state <> 'removed'`
+  // means they cannot re-add it anywhere else — and leaves a Cloudflare custom
+  // hostname we are billed for.
+  //
+  // Marked removed FIRST, then the edge is cleaned up. That order is deliberate:
+  // releasing the claim is what unblocks the customer, and it must not be
+  // contingent on Cloudflare answering. A stranded hostname at the edge is a
+  // cost; a stranded claim is a customer who cannot use their own domain.
+  const { data: releasedDomains, error: domainError } = await caller.db
+    .from("domains")
+    .update({ state: "removed" })
+    .eq("project_id", projectId)
+    .neq("state", "removed")
+    .select("domain,cf_hostname_id");
+
+  if (domainError) {
+    console.error("[v2/projects/:ref] releasing domains failed:", JSON.stringify(domainError));
+  }
+
+  // Best effort, and reported rather than thrown. The project IS deleted by
+  // this point; failing the request now would tell the customer nothing
+  // happened when almost everything did. domain-reconcile sweeps what is left.
+  for (const d of (releasedDomains ?? []) as Array<{ domain: string; cf_hostname_id: string | null }>) {
+    if (!d.cf_hostname_id) continue;
+    try {
+      await deleteCustomHostname(d.cf_hostname_id);
+    } catch (e) {
+      console.error(
+        `[v2/projects/:ref] custom hostname for ${d.domain} not removed:`,
+        toCustomerFacing(e, "domain", "[v2/projects/:ref]").reference ?? "",
+      );
+    }
   }
 
   // The namespace takes the Deployments, Services and Ingress with it — the

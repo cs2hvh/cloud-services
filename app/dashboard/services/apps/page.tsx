@@ -57,7 +57,13 @@ export default async function ProjectsPage() {
   const [projects, aliases, deployments, installations] = await Promise.all([
     db
       .from("projects")
+      // DELETED PROJECTS ARE NOT PROJECTS. Delete is a soft delete, so without
+      // this filter the list keeps rendering them — and the detail page DOES
+      // filter, so clicking one gave a 404 on a row the list had just shown.
+      // Third time this exact shape has appeared here: a list query missing the
+      // filter its detail query has. See docs/v2/00-PROJECT.md.
       .select("id,ref,name,slug,repo_full_name,tier,instance_count,production_branch")
+      .is("deleted_at", null)
       .order("created_at"),
     db.from("aliases").select("project_id,hostname,kind,released_at"),
     db.from("deployments").select("project_id,state,ready_at,queued_at").order("queued_at", { ascending: false }),
