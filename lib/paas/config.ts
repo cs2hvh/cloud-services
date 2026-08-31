@@ -7,7 +7,7 @@
  * from a path OUTSIDE every git repo so it can never be committed.
  */
 
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 
 function required(name: string): string {
   const v = process.env[name];
@@ -39,6 +39,36 @@ export const paasConfig = {
       _githubPrivateKey = readFileSync(path, "utf8");
       return _githubPrivateKey;
     },
+  },
+
+  /**
+   * Where the cluster credentials are.
+   *
+   * THIS USED TO BE `process.env.V2_KUBECONFIG ?? "C:/ahura-secrets/..."`,
+   * repeated in five places. On Linux that path does not exist, so every
+   * cluster call from the server failed — namespace teardown on delete, runtime
+   * logs, pod logs, the reconciler and the operator view — and the only symptom
+   * a customer saw was "its workload could not be torn down" after every
+   * delete. A default that fits the only machine that existed when it was
+   * written is exactly the landmine docs/v2/00-PROJECT.md warns about, and this
+   * is it going off.
+   *
+   * The dev path is still honoured, but only when it is really there. Anywhere
+   * else this throws naming the variable, which is a fixable message rather
+   * than a silent failure five layers down.
+   */
+  kubeconfigPath: (): string => {
+    const set = process.env.V2_KUBECONFIG;
+    if (set && set.trim()) return set.trim();
+
+    const devDefault = "C:/ahura-secrets/kubeconfig-v2-dev.yaml";
+    if (existsSync(devDefault)) return devDefault;
+
+    throw new Error(
+      "[paas/config] V2_KUBECONFIG is not set and no local kubeconfig was found. " +
+        "The server cannot reach the cluster without it — set it to the path of the " +
+        "kubeconfig on this machine.",
+    );
   },
 
   linode: {

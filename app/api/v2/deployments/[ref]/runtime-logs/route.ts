@@ -28,6 +28,7 @@
  * drift apart.
  */
 
+import { paasConfig } from "@/lib/paas/config";
 import { loadKubeconfig, kube } from "@/lib/paas/k8s/client.ts";
 import {
   clampLogRequest,
@@ -103,7 +104,7 @@ export async function GET(request: Request, { params }: Params) {
 
   const k = kube(
     loadKubeconfig(
-      process.env.V2_KUBECONFIG ?? "C:/ahura-secrets/kubeconfig-v2-dev.yaml"
+      paasConfig.kubeconfigPath()
     )
   );
 

@@ -7,6 +7,7 @@
  * takeover cannot be reintroduced through this route.
  */
 
+import { paasConfig } from "@/lib/paas/config";
 import {
   TIERS,
   tierById,
@@ -304,7 +305,7 @@ export async function DELETE(_request: Request, { params }: Params) {
   let teardownError: string | null = null;
   try {
     const k = kube(
-      loadKubeconfig(process.env.V2_KUBECONFIG ?? "C:/ahura-secrets/kubeconfig-v2-dev.yaml"),
+      loadKubeconfig(paasConfig.kubeconfigPath()),
     );
     await k.delete(`/api/v1/namespaces/app-${(data as { ref: string }).ref}`, true);
     tornDown = true;
