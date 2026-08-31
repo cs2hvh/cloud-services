@@ -1,0 +1,69 @@
+# Has billing stopped?
+#
+# This deliberately runs on GitHub's infrastructure and NOT on the Linode box
+# that runs the sweep. That is the entire point of it.
+#
+# On 2026-08-24 the billing cron died and nobody noticed for six days. It did
+# not die quietly: systemd restarted it every ten seconds and reported
+# "activating" the whole time. The failure was perfectly visible to anything
+# that looked from outside. Nothing looked from outside.
+#
+# So this asks the DATABASE what it has been paid — not the sweep whether it
+# feels well, not systemd whether the unit is up, not a log. An observer that
+# shares a failure domain with the thing it observes goes silent at exactly the
+# moment it is needed. The paas-v2 lane has the same blind spot from the other
+# direction and says so in lib/paas/k8s/sweeps.ts: "an observer running inside
+# the thing it observes cannot report on it when that thing breaks".
+#
+# GitHub's scheduler is unreliable by 10-30 minutes. That would matter for a
+# biller; it does not matter for a staleness check with a 3-hour threshold.
+
+name: Billing dead-man
+
+on:
+  schedule:
+    # Every two hours. The threshold is 3h, so a skipped run cannot by itself
+    # turn a real stoppage into a missed alert.
+    - cron: '35 */2 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: billing-deadman
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      # The check needs @supabase/supabase-js and nothing else. Installing the
+      # whole repo would take minutes and pull in the entire app for a query
+      # that reads two tables.
+      - name: Install the one dependency
+        run: npm install --no-save --no-audit --no-fund @supabase/supabase-js
+
+      - name: Has billing stopped?
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BILLING_STALE_AFTER_HOURS: '3'
+        run: node --experimental-strip-types scripts/billing/deadman.ts
+
+# Exit codes, and why 1 and 2 are not the same:
+#   0  billing is current, or there is genuinely nothing to bill
+#   1  BILLING HAS STOPPED — meters are open and charges are stale
+#   2  COULD NOT CHECK — bad config, unreachable database
+#
+# A red run means one of the last two. Collapsing "it is broken" into "I could
+# not tell" is how a monitor quietly becomes decoration, which is the same
+# defect class as reading an empty query result as a healthy one.
+#
+# REQUIRED REPOSITORY SECRETS: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
+# Without them this exits 2 on every run, which is a visible red rather than a
+# silent pass — deliberately.
