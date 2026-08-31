@@ -48,6 +48,13 @@ const CHIP_TONE: Record<string, StatusTone> = {
   stale: "warning",
   foreign: "neutral",
   reclaimable: "serious",
+  // drift_observations kinds not already covered above
+  unrecorded: "critical",
+  denied: "serious",
+  unpriced: "warning",
+  expired: "warning",
+  resolved: "good",
+  open: "warning",
   // signal severities
   critical: "critical",
   warn: "warning",

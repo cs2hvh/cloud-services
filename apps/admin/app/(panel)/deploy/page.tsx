@@ -7,18 +7,27 @@ import {
   DollarSign,
   AlertTriangle,
   Boxes,
+  Loader2,
 } from "lucide-react";
-import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { requireAdmin } from "@/lib/supabase/auth";
 import {
-  operatorView,
   queueView,
+  fleetView,
+  hostnameView,
+  workloadView,
+  r2View,
+  usageView,
+  metricsView,
+  sweepView,
   type QueueView,
+  type FleetView,
+  type UsageView,
 } from "@/lib/paas/telemetry/operator";
+import { db } from "@/lib/paas/db.ts";
 import { PageHeader } from "@admin/components/page-header";
 import { StatCard } from "@admin/components/stat-card";
 import { RefreshButton } from "@admin/components/deploy/refresh-button";
-import { money } from "@admin/components/deploy/bits";
+import { Panel, money } from "@admin/components/deploy/bits";
 import { QueueSection } from "@admin/components/deploy/queue-section";
 import { FleetSection } from "@admin/components/deploy/fleet-section";
 import { WorkloadsSection } from "@admin/components/deploy/workloads-section";
@@ -27,34 +36,46 @@ import { StorageSection } from "@admin/components/deploy/storage-section";
 import { UsageSection } from "@admin/components/deploy/usage-section";
 import { MetricsSection } from "@admin/components/deploy/metrics-section";
 import { SweepsSection } from "@admin/components/deploy/sweeps-section";
+import {
+  DriftHistorySection,
+  type DriftObservationRow,
+} from "@admin/components/deploy/drift-history-section";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 /**
- * Deploy v2 operations. A server component that calls
- * lib/paas/telemetry/operator.ts directly, exactly like the main app's
- * operator page — the HTTP routes exist for scripts and alerting, and a page
- * taking a round trip to its own process would add a failure mode for
- * nothing. Every section settles independently: an operator page is most
- * useful precisely when something is broken.
+ * Deploy v2 operations. Every view is kicked off once, in parallel, and each
+ * section awaits only its own promise inside its own Suspense boundary — a
+ * slow Linode or R2 read streams in late instead of stalling the page, and a
+ * failed one renders as that section saying why. Never cached: "is this
+ * current" is the question these views exist to answer.
  */
-const DeployLive = async () => {
-  const checkAdmin = await requireAdmin();
-  if (!checkAdmin.ok) {
-    notFound();
-  }
 
-  const [view, queue] = await Promise.all([
-    operatorView(),
-    queueView().catch(
-      (e): { error: string } => ({ error: (e as Error).message.slice(0, 200) }),
-    ) as Promise<QueueView | { error: string }>,
-  ]);
+type Settled<T> = T | { error: string };
+const settle = <T,>(p: Promise<T>): Promise<Settled<T>> =>
+  p.catch((e) => ({ error: (e as Error).message.slice(0, 300) }));
 
+const loadDriftHistory = () =>
+  db.select<DriftObservationRow>(
+    "drift_observations",
+    "select=kind,resource_type,cloud_id,ref,hourly_usd,detail,observed_at,resolved_at" +
+      "&order=observed_at.desc&limit=200",
+  );
+
+async function KpiRow({
+  queueP,
+  fleetP,
+  usageP,
+}: {
+  queueP: Promise<Settled<QueueView>>;
+  fleetP: Promise<Settled<FleetView>>;
+  usageP: Promise<Settled<UsageView>>;
+}) {
+  const [queue, fleet, usage] = await Promise.all([queueP, fleetP, usageP]);
   const q = "error" in queue ? null : queue;
-  const fleet = "error" in view.fleet ? null : view.fleet;
-  const usage = "error" in view.usage ? null : view.usage;
+  const f = "error" in fleet ? null : fleet;
+  const u = "error" in usage ? null : usage;
 
   return (
     <>
@@ -80,52 +101,67 @@ const DeployLive = async () => {
         />
         <StatCard
           label="Standing spend"
-          value={fleet ? `${money(fleet.monthly.standing)}` : "—"}
+          value={f ? money(f.monthly.standing) : "—"}
           hint="per month, build VMs excluded"
           icon={DollarSign}
         />
         <StatCard
           label="Unaccounted"
-          value={fleet ? `${money(fleet.drift.unaccountedHourly, 4)}/hr` : "—"}
+          value={f ? `${money(f.drift.unaccountedHourly, 4)}/hr` : "—"}
           hint="Linode bills it, no row admits it"
           icon={AlertTriangle}
-          tone={fleet ? (fleet.drift.unaccountedHourly > 0 ? "critical" : "good") : undefined}
+          tone={f ? (f.drift.unaccountedHourly > 0 ? "critical" : "good") : undefined}
         />
         <StatCard
           label="Apps running"
-          value={usage ? usage.apps.length : "—"}
+          value={u ? u.apps.length : "—"}
           hint={
-            usage
-              ? usage.summary.quiet
+            u
+              ? u.summary.quiet
                 ? "no signals"
-                : `${usage.summary.critical} critical · ${usage.summary.warn} warn`
+                : `${u.summary.critical} critical · ${u.summary.warn} warn`
               : "usage unreadable"
           }
           icon={Boxes}
-          tone={usage && usage.summary.critical > 0 ? "critical" : undefined}
+          tone={u && u.summary.critical > 0 ? "critical" : undefined}
         />
       </div>
-
       <p className="mt-3 text-xs text-muted-foreground">
-        Live read, generated {new Date(view.generatedAt).toUTCString()}. Nothing
-        on this page changes anything.
+        Live read, generated {new Date().toUTCString()}. Nothing on this page
+        changes anything.
       </p>
-
-      <div className="mt-6 space-y-6">
-        <QueueSection queue={queue} />
-        <FleetSection fleet={view.fleet} />
-        <WorkloadsSection workloads={view.workloads} />
-        <HostnamesSection hostnames={view.hostnames} />
-        <StorageSection storage={view.storage} />
-        <UsageSection usage={view.usage} />
-        <MetricsSection metrics={view.metrics} />
-        <SweepsSection sweeps={view.sweeps} />
-      </div>
     </>
   );
-};
+}
 
-export default function DeployAdminPage() {
+function SectionFallback({ title }: { title: string }) {
+  return (
+    <Panel title={title} subtitle="Live read in progress">
+      <div className="flex items-center gap-2 py-6 text-xs text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        reading upstream…
+      </div>
+    </Panel>
+  );
+}
+
+export default async function DeployAdminPage() {
+  const checkAdmin = await requireAdmin();
+  if (!checkAdmin.ok) {
+    notFound();
+  }
+
+  // All nine reads start here, together. Sections consume their own promise.
+  const queueP = settle(queueView());
+  const fleetP = settle(fleetView());
+  const workloadsP = settle(workloadView());
+  const hostnamesP = settle(hostnameView());
+  const storageP = settle(r2View());
+  const usageP = settle(usageView());
+  const metricsP = settle(metricsView());
+  const sweepsP = settle(sweepView());
+  const driftP = settle(loadDriftHistory());
+
   return (
     <div>
       <PageHeader
@@ -133,19 +169,47 @@ export default function DeployAdminPage() {
         description="PaaS operations — build queue, fleet cost, drift, and the sweeps that watch it all"
         actions={<RefreshButton />}
       />
+
       <Suspense
         fallback={
-          <div className="flex flex-col items-center justify-center gap-3 py-20">
-            <LoadingSpinner />
-            <p className="text-xs text-muted-foreground">
-              Reading Linode, the cluster, Cloudflare, and R2 live — the slow
-              sections are fleet and storage.
-            </p>
+          <div className="flex items-center gap-2 py-8 text-xs text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            reading queue, fleet and usage…
           </div>
         }
       >
-        <DeployLive />
+        <KpiRow queueP={queueP} fleetP={fleetP} usageP={usageP} />
       </Suspense>
+
+      <div className="mt-6 space-y-6">
+        <Suspense fallback={<SectionFallback title="Build queue" />}>
+          {queueP.then((queue) => <QueueSection queue={queue} />)}
+        </Suspense>
+        <Suspense fallback={<SectionFallback title="Fleet" />}>
+          {fleetP.then((fleet) => <FleetSection fleet={fleet} />)}
+        </Suspense>
+        <Suspense fallback={<SectionFallback title="Workloads" />}>
+          {workloadsP.then((w) => <WorkloadsSection workloads={w} />)}
+        </Suspense>
+        <Suspense fallback={<SectionFallback title="Hostnames" />}>
+          {hostnamesP.then((h) => <HostnamesSection hostnames={h} />)}
+        </Suspense>
+        <Suspense fallback={<SectionFallback title="Object storage" />}>
+          {storageP.then((s) => <StorageSection storage={s} />)}
+        </Suspense>
+        <Suspense fallback={<SectionFallback title="Running now" />}>
+          {usageP.then((u) => <UsageSection usage={u} />)}
+        </Suspense>
+        <Suspense fallback={<SectionFallback title="Metrics" />}>
+          {metricsP.then((m) => <MetricsSection metrics={m} />)}
+        </Suspense>
+        <Suspense fallback={<SectionFallback title="Sweeps" />}>
+          {sweepsP.then((s) => <SweepsSection sweeps={s} />)}
+        </Suspense>
+        <Suspense fallback={<SectionFallback title="Drift history" />}>
+          {driftP.then((rows) => <DriftHistorySection rows={rows} />)}
+        </Suspense>
+      </div>
     </div>
   );
 }

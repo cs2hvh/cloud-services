@@ -72,3 +72,28 @@ end-to-end from day one.
 - Serve it on a dedicated subdomain and (recommended) put Cloudflare Access
   or an IP allowlist in front; the app's own auth still applies behind it.
 - The app sends `X-Robots-Tag: noindex` and a restrictive CSP by default.
+
+## Deploy v2 section (/deploy)
+
+Presentation over the v2 operator API (`app/api/v2/admin/*`, contract in
+`_lib/guard.ts` — read it in full before touching any v2 route). The page
+calls `lib/paas/telemetry/operator.ts` views directly, one Suspense boundary
+per section, so a slow or failed upstream renders as that section saying why.
+Never add caching here: "is this current" is the question these views answer.
+
+Per-section env (everything needs `NEXT_PUBLIC_SUPABASE_URL` +
+`SUPABASE_SERVICE_ROLE_KEY`; kubeconfig defaults to
+`C:/ahura-secrets/kubeconfig-v2-dev.yaml`, namespace to `ahura-system`):
+
+| Section | Additionally needs |
+|---|---|
+| sweeps, usage, workloads, metrics | `V2_KUBECONFIG`, `V2_PAAS_NAMESPACE` (defaults exist) |
+| hostnames | `V2_CF_API_TOKEN`, `V2_CF_ZONE_ID`, `V2_CF_ZONE_NAME`, `V2_APP_DOMAIN` |
+| fleet | `V2_LINODE_TOKEN` (`V2_LINODE_REGION`, `V2_LINODE_API_URL` optional) |
+| storage | `V2_R2_ACCOUNT_ID`, `V2_R2_BUCKET`, `V2_R2_ENDPOINT`, `V2_R2_ACCESS_KEY_ID`, `V2_R2_SECRET_ACCESS_KEY` |
+
+With only the kubeconfig, five of nine sections work and the rest show
+Unavailable — a sane degraded state. Do NOT copy `V2_R2_SECRET_ACCESS_KEY`
+or other full-access credentials into this app's env without explicit
+sign-off. `V2_ENV_MASTER_KEY` is never needed here — no operator view
+decrypts anything. The v2 test suite is `npm run test:paas` (not `npm test`).
