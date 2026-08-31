@@ -56,12 +56,28 @@ type Settled<T> = T | { error: string };
 const settle = <T,>(p: Promise<T>): Promise<Settled<T>> =>
   p.catch((e) => ({ error: (e as Error).message.slice(0, 300) }));
 
-const loadDriftHistory = () =>
-  db.select<DriftObservationRow>(
-    "drift_observations",
-    "select=kind,resource_type,cloud_id,ref,hourly_usd,detail,observed_at,resolved_at" +
-      "&order=observed_at.desc&limit=200",
-  );
+const DRIFT_COLUMNS =
+  "select=kind,resource_type,cloud_id,ref,hourly_usd,detail,observed_at,resolved_at";
+
+/**
+ * Open set is UNBOUNDED on purpose: rows resolve only when the aggregator is
+ * run by hand, so open grows monotonically between runs, and a page that
+ * silently truncates open findings is the exact lie this lane exists to call
+ * out. Only the recently-resolved list is capped.
+ */
+const loadDriftHistory = async () => {
+  const [open, resolved] = await Promise.all([
+    db.select<DriftObservationRow>(
+      "drift_observations",
+      `${DRIFT_COLUMNS}&resolved_at=is.null&order=observed_at.asc`,
+    ),
+    db.select<DriftObservationRow>(
+      "drift_observations",
+      `${DRIFT_COLUMNS}&resolved_at=not.is.null&order=resolved_at.desc&limit=20`,
+    ),
+  ]);
+  return { open, resolved };
+};
 
 async function KpiRow({
   queueP,
@@ -207,7 +223,7 @@ export default async function DeployAdminPage() {
           {sweepsP.then((s) => <SweepsSection sweeps={s} />)}
         </Suspense>
         <Suspense fallback={<SectionFallback title="Drift history" />}>
-          {driftP.then((rows) => <DriftHistorySection rows={rows} />)}
+          {driftP.then((h) => <DriftHistorySection history={h} />)}
         </Suspense>
       </div>
     </div>
