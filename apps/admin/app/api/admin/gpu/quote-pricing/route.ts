@@ -58,17 +58,32 @@ export async function PUT(request: Request) {
 
   try {
     const supabase = await createServiceClient();
-    const { data: result, error: rpcError } = await supabase
+    const baseArgs = {
+      p_gpu_catalog_id: gpuCatalogId,
+      p_cloud_type: cloudType,
+      p_interruptible: interruptible,
+      p_markup_pct: markup,
+      p_floor_per_hour: floor,
+      p_note: note,
+      p_actor: admin.userId,
+    };
+
+    // Forward-compatible with the DB-side blanket guard (p_blanket): pass the
+    // flag, and if the deployed function predates the parameter (PostgREST
+    // cannot match the signature), retry with the current one. Lets the
+    // billing lane apply the guard with no coordinated deploy window.
+    let { data: result, error: rpcError } = await supabase
       .schema("billing")
-      .rpc("set_gpu_markup", {
-        p_gpu_catalog_id: gpuCatalogId,
-        p_cloud_type: cloudType,
-        p_interruptible: interruptible,
-        p_markup_pct: markup,
-        p_floor_per_hour: floor,
-        p_note: note,
-        p_actor: admin.userId,
-      });
+      .rpc("set_gpu_markup", { ...baseArgs, p_blanket: blanket });
+    if (
+      rpcError &&
+      /PGRST202|could not find|does not exist/i.test(`${rpcError.code ?? ""} ${rpcError.message}`)
+    ) {
+      console.warn("[Admin GPU] set_gpu_markup has no p_blanket yet — calling current signature");
+      ({ data: result, error: rpcError } = await supabase
+        .schema("billing")
+        .rpc("set_gpu_markup", baseArgs));
+    }
 
     if (rpcError) {
       console.error("[Admin GPU] set_gpu_markup rpc failed:", rpcError.message);
