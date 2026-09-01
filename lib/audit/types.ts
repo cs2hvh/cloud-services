@@ -18,7 +18,8 @@ export type AuditServiceType =
   | 'compute'
   | 'pricing'
   | 'discount'
-  | 'billing';
+  | 'billing'
+  | 'gpu';
 
 export type AuditUserRole = 'user' | 'admin' | 'system';
 

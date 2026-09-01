@@ -56,7 +56,7 @@ export const ADMIN_SECTIONS: AdminSection[] = [
   { title: "Servers", slug: "servers", icon: Server, migrated: true, description: "Customer VMs — fleet, actions, revenue", group: "Compute" },
   { title: "Linode Console", slug: "servers/linode", icon: Cloud, migrated: true, description: "Catalog, pricing, kill-switch", group: "Compute" },
   { title: "Hosts", slug: "hosts", icon: HardDrive, migrated: false, description: "Proxmox hypervisors", group: "Compute" },
-  { title: "GPU", slug: "gpu", icon: Cpu, migrated: false, description: "GPU inventory and sync", group: "Compute" },
+  { title: "GPU Pods", slug: "gpu", icon: Cpu, migrated: true, description: "RunPod resale — fleet, drift, price books", group: "Compute" },
   { title: "Game", slug: "game", icon: Gamepad2, migrated: false, description: "Game hosting console", group: "Compute" },
   { title: "Kubernetes", slug: "kubernetes", icon: Boxes, migrated: true, description: "Managed clusters", group: "Compute" },
 

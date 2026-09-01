@@ -42,7 +42,7 @@ export async function requireCustomerDataAccess(): Promise<
 /** One audit row per customer-data page view. Fire-and-forget is forbidden — await it. */
 export async function auditCustomerRead(params: {
   admin: { userId: string; email: string };
-  serviceType: Extract<AuditServiceType, "platform_apps" | "billing">;
+  serviceType: Extract<AuditServiceType, "platform_apps" | "billing" | "gpu">;
   /** The customer/project the read was about, e.g. "prj-…" or a user id. */
   subjectId: string;
   subjectName: string;
