@@ -21,6 +21,7 @@ import {
   ScrollText,
   Sparkles,
   Rocket,
+  FolderGit2,
 } from "lucide-react";
 
 /**
@@ -60,6 +61,7 @@ export const ADMIN_SECTIONS: AdminSection[] = [
   { title: "Kubernetes", slug: "kubernetes", icon: Boxes, migrated: true, description: "Managed clusters", group: "Compute" },
 
   { title: "Deploy v2", slug: "deploy", icon: Rocket, migrated: true, description: "PaaS ops — queue, fleet, drift", group: "Services" },
+  { title: "V2 Projects", slug: "deploy/projects", icon: FolderGit2, migrated: true, description: "All projects — deleted included, reads audited", group: "Services" },
   { title: "AI Labs", slug: "ai", icon: Sparkles, migrated: true, description: "Inference — usage, models, health", group: "Services" },
   { title: "AI Agents", slug: "ai-agents", icon: Bot, migrated: false, description: "Agent builder product", group: "Services" },
   { title: "Databases", slug: "databases", icon: Database, migrated: true, description: "Managed databases", group: "Services" },

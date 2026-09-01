@@ -14,7 +14,9 @@ import {
   ChevronRight,
   Copy,
   UserCog,
+  Wallet,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -95,6 +97,7 @@ const ROLE_OPTIONS = [
 ];
 
 export function UsersView() {
+  const router = useRouter();
   const [overview, setOverview] = useState<UsersOverview | null>(null);
   const [rows, setRows] = useState<UserRow[]>([]);
   const [pagination, setPagination] = useState<{
@@ -395,6 +398,11 @@ export function UsersView() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={() => router.push(`/users/${u.id}`)}
+                        >
+                          <Wallet className="mr-2 h-4 w-4" /> Billing
+                        </DropdownMenuItem>
                         <DropdownMenuItem
                           onClick={() => {
                             setRoleDraft(u.roles ?? ["member"]);

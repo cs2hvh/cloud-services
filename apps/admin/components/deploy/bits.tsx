@@ -57,6 +57,10 @@ const CHIP_TONE: Record<string, StatusTone> = {
   open: "warning",
   live: "good",
   exhausted: "neutral",
+  deleted: "neutral",
+  arrears: "serious",
+  completed: "good",
+  pending: "warning",
   // signal severities
   critical: "critical",
   warn: "warning",

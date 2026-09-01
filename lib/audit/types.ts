@@ -17,7 +17,8 @@ export type AuditServiceType =
   | 'domain'
   | 'compute'
   | 'pricing'
-  | 'discount';
+  | 'discount'
+  | 'billing';
 
 export type AuditUserRole = 'user' | 'admin' | 'system';
 
