@@ -70,7 +70,7 @@ export const ADMIN_SECTIONS: AdminSection[] = [
   { title: "Cluster Monitor", slug: "cluster-monitor", icon: Activity, migrated: false, description: "Internal cluster health", group: "Services" },
 
   { title: "Pricing", slug: "pricing", icon: BadgeDollarSign, migrated: true, description: "Price book — the one place a price is set", group: "Commerce" },
-  { title: "Coupons", slug: "coupons", icon: TicketPercent, migrated: false, description: "Discount codes", group: "Commerce" },
+  { title: "Coupons & Discounts", slug: "coupons", icon: TicketPercent, migrated: true, description: "Credit grants · rate discounts", group: "Commerce" },
 ];
 
 export function sectionHref(section: AdminSection): string {

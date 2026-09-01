@@ -55,6 +55,8 @@ const CHIP_TONE: Record<string, StatusTone> = {
   expired: "warning",
   resolved: "good",
   open: "warning",
+  live: "good",
+  exhausted: "neutral",
   // signal severities
   critical: "critical",
   warn: "warning",

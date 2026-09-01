@@ -16,7 +16,8 @@ export type AuditServiceType =
   | 'knowledge_base'
   | 'domain'
   | 'compute'
-  | 'pricing';
+  | 'pricing'
+  | 'discount';
 
 export type AuditUserRole = 'user' | 'admin' | 'system';
 
