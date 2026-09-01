@@ -9,6 +9,7 @@ import { currencyIconUrl, type Currency } from "@/config/currencies";
 import { useState, useEffect, useMemo } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import {
+    AlertCircle,
     ArrowRight,
     ChevronLeft,
     ChevronRight,
@@ -448,23 +449,23 @@ function BalanceTab({
 }) {
     const formattedBalance = Number.isFinite(balance) ? balance : 0;
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-6">
-            {/* Balance + top-up */}
-            <Section
-                num="01"
-                title="Available balance"
-                desc="Credits available for compute, storage, and managed services."
-            >
-                {/* Balance hero */}
-                <div className="relative border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden mb-5">
-                    <div
-                        className="pointer-events-none absolute inset-0"
-                        style={{
-                            background:
-                                "radial-gradient(circle at 80% 0%, rgba(0,149,255,0.08), transparent 60%)",
-                        }}
-                    />
-                    <div className="relative p-6">
+        <div className="space-y-9">
+            {/*
+              Balance is the headline, so it spans the full width rather than
+              being squeezed into a half-width column. The previous 50/50 grid
+              gave a $54px hero number the same room as a three-field form,
+              which is what produced the dead space down the middle.
+            */}
+            <div className="relative border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
+                <div
+                    className="pointer-events-none absolute inset-0"
+                    style={{
+                        background:
+                            "radial-gradient(circle at 88% 0%, rgba(0,149,255,0.09), transparent 55%)",
+                    }}
+                />
+                <div className="relative flex flex-col gap-5 p-6 sm:flex-row sm:items-center sm:justify-between sm:gap-8 sm:px-8 sm:py-7">
+                    <div className="min-w-0">
                         <div
                             className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/45 mb-2`}
                         >
@@ -473,7 +474,7 @@ function BalanceTab({
                         <div className="flex items-baseline gap-1">
                             <span
                                 style={{ ...SERIF_STYLE, color: "rgba(74,222,128,0.6)" }}
-                                className="text-[24px] font-medium leading-none"
+                                className="text-[22px] font-medium leading-none"
                             >
                                 $
                             </span>
@@ -483,31 +484,50 @@ function BalanceTab({
                                     color: "#4ade80",
                                     textShadow: "0 0 26px rgba(74,222,128,0.28)",
                                 }}
-                                className="text-[54px] font-bold tabular-nums tracking-[-0.035em] leading-none"
+                                className="text-[42px] sm:text-[52px] font-bold tabular-nums tracking-[-0.035em] leading-none"
                             >
                                 {formattedBalance.toFixed(2)}
                             </span>
                         </div>
+                    </div>
+
+                    {/* Status sits beside the number instead of under it, so the
+                        band keeps a single line of sight left-to-right. */}
+                    <div className="sm:text-right sm:max-w-[320px]">
                         {formattedBalance <= 0 ? (
-                            <p className={`${MONO} mt-3 inline-flex items-center gap-1.5 text-[10.5px] text-red-300/90`}>
-                                <span className="h-1.5 w-1.5 rounded-full bg-red-400 shrink-0" style={{ boxShadow: "0 0 6px #f87171" }} />
+                            <p className={`${MONO} inline-flex items-start gap-1.5 text-[10.5px] leading-relaxed text-red-300/90`}>
+                                <span className="mt-[5px] h-1.5 w-1.5 rounded-full bg-red-400 shrink-0" style={{ boxShadow: "0 0 6px #f87171" }} />
                                 Balance depleted — running services may be suspended. Top up to keep them online.
                             </p>
                         ) : formattedBalance <= 5 ? (
-                            <p className={`${MONO} mt-3 inline-flex items-center gap-1.5 text-[10.5px] text-amber-300/85`}>
-                                <span className="h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" style={{ boxShadow: "0 0 6px #fbbf24" }} />
+                            <p className={`${MONO} inline-flex items-start gap-1.5 text-[10.5px] leading-relaxed text-amber-300/85`}>
+                                <span className="mt-[5px] h-1.5 w-1.5 rounded-full bg-amber-400 shrink-0" style={{ boxShadow: "0 0 6px #fbbf24" }} />
                                 Low balance — top up to avoid service interruption.
                             </p>
                         ) : (
-                            <p className={`${MONO} mt-3 text-[10.5px] text-white/40`}>
+                            <p className={`${MONO} text-[10.5px] leading-relaxed text-white/40`}>
                                 Auto-deducted hourly for running services
                             </p>
                         )}
                     </div>
                 </div>
+            </div>
 
-                {/* Top-up form */}
-                <form onSubmit={onTopup} className="space-y-4">
+            {/*
+              Two genuinely parallel actions, so an even split is honest here in
+              a way it was not for balance-vs-form. gap-x-10 with a divider rule
+              on the left edge of the second column reads as structure rather
+              than as a gap somebody forgot to close.
+            */}
+            <div className="grid grid-cols-1 gap-y-10 lg:grid-cols-2 lg:gap-x-10 xl:gap-x-14">
+                {/* Top up */}
+                <Section
+                    bare
+                    num="01"
+                    title="Top up"
+                    desc="Add credit for compute, storage, and managed services."
+                >
+                    <form onSubmit={onTopup} className="space-y-4">
                     <div>
                         <FieldLabel hint="USD · max $10,000">
                             Top up amount
@@ -622,15 +642,18 @@ function BalanceTab({
                             )}
                         </button>
                     )}
-                </form>
-            </Section>
+                    </form>
+                </Section>
 
-            {/* Auto top-up */}
-            <Section
-                num="02"
-                title="Auto top-up"
-                desc="Scheduled recurring payments to keep your balance funded."
-            >
+                {/* Auto top-up. The rule on the left edge divides the columns
+                    on wide screens and disappears once they stack. */}
+                <div className="lg:border-l lg:border-white/[0.06] lg:pl-10 xl:pl-14">
+                    <Section
+                        bare
+                        num="02"
+                        title="Auto top-up"
+                        desc="Scheduled recurring payments to keep your balance funded."
+                    >
                 {recurringTopup && (
                     <div className="mb-4 flex items-center justify-between gap-3 border border-white/[0.06] bg-[#111216] rounded-[6px] px-4 py-3">
                         <div className="min-w-0">
@@ -771,26 +794,32 @@ function BalanceTab({
                         </button>
                     )}
 
-                {/* Stripe info card */}
-                <div className="mt-6 border border-white/[0.06] bg-[#111216] rounded-[6px] p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                        <Shield className="h-3.5 w-3.5 text-emerald-300" />
-                        <span
-                            className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/55`}
-                        >
-                            Secure payments by Stripe
-                        </span>
-                    </div>
-                    <p
-                        className={`${MONO} text-[10.5px] text-white/45 leading-relaxed`}
-                    >
-                        Card details never touch our servers. All payment
-                        processing is handled by Stripe (PCI Level 1
-                        certified). Crypto deposits are settled by our payment
-                        provider.
-                    </p>
+                    </Section>
                 </div>
-            </Section>
+            </div>
+
+            {/*
+              Reassurance about both payment methods, so it belongs to the page
+              rather than to the auto top-up column it used to sit in — where it
+              padded that column out and made the two look mismatched in height.
+            */}
+            <div className="flex flex-col gap-2.5 border-t border-white/[0.06] pt-6 sm:flex-row sm:items-start sm:gap-3">
+                <div className="flex items-center gap-2 shrink-0">
+                    <Shield className="h-3.5 w-3.5 text-emerald-300" />
+                    <span
+                        className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/55`}
+                    >
+                        Secure payments
+                    </span>
+                </div>
+                <p
+                    className={`${MONO} text-[10.5px] text-white/40 leading-relaxed sm:max-w-[640px]`}
+                >
+                    Card details never touch our servers. All payment processing
+                    is handled by Stripe (PCI Level 1 certified). Crypto
+                    deposits are settled by our payment provider.
+                </p>
+            </div>
         </div>
     );
 }
@@ -1036,6 +1065,8 @@ type ServiceTypeFilter =
     | "domain"
     | "compute"
     | "gpu_pod"
+    | "gpu_pod_storage"
+    | "gpu_volume"
     | "custom_image"
     | "inference_finetune"
     | "inference_serving"
@@ -1052,6 +1083,11 @@ const CREDIT_TRANSACTION_TYPES = new Set([
 function TransactionsTab() {
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [loading, setLoading] = useState(true);
+    // "the request failed" and "you have no transactions" are different
+    // answers. Collapsing them told a customer their history was empty when
+    // the API was down — the same shape as reading an empty query result as a
+    // healthy one, which is the defect the billing rebuild exists to remove.
+    const [loadError, setLoadError] = useState(false);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [total, setTotal] = useState(0);
@@ -1068,6 +1104,7 @@ function TransactionsTab() {
 
     const fetchTransactions = async (p: number) => {
         setLoading(true);
+        setLoadError(false);
         try {
             const params = new URLSearchParams();
             params.set("page", String(p));
@@ -1089,8 +1126,12 @@ function TransactionsTab() {
             setTotal(data.pagination?.total ?? 0);
             setTotalPages(data.pagination?.totalPages ?? 1);
             setPage(data.pagination?.page ?? 1);
-        } catch {
+        } catch (e) {
+            console.error("[billing] failed to load transactions", e);
             setTransactions([]);
+            setTotal(0);
+            setTotalPages(1);
+            setLoadError(true);
         } finally {
             setLoading(false);
         }
@@ -1214,7 +1255,9 @@ function TransactionsTab() {
                         options={[
                             { value: "", label: "All services" },
                             { value: "compute", label: "Compute (VPS)" },
-                            { value: "gpu_pod", label: "GPU" },
+                            { value: "gpu_pod", label: "GPU Compute" },
+                            { value: "gpu_pod_storage", label: "GPU Pod Storage" },
+                            { value: "gpu_volume", label: "GPU Volume" },
                             { value: "kubernetes", label: "Kubernetes" },
                             { value: "database", label: "Database" },
                             { value: "objectspace", label: "Object Storage" },
@@ -1257,6 +1300,29 @@ function TransactionsTab() {
             {loading ? (
                 <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] flex items-center justify-center py-16">
                     <Loader2 className="h-5 w-5 animate-spin text-white/40" />
+                </div>
+            ) : loadError ? (
+                <div className="relative border border-white/[0.06] bg-[#111216] rounded-[6px] px-8 py-14 text-center overflow-hidden">
+                    <div
+                        className="relative z-10 h-12 w-12 mb-5 mx-auto inline-flex items-center justify-center border border-amber-400/25 bg-amber-500/[0.06] rounded-[8px]"
+                        style={{ color: "#fbbf24" }}
+                    >
+                        <AlertCircle className="h-5 w-5" />
+                    </div>
+                    <h3 className="relative z-10 text-[16px] font-semibold tracking-[-0.015em] text-white">
+                        Couldn&apos;t load your transactions
+                    </h3>
+                    <p className={`${MONO} relative z-10 mt-2 text-[11px] text-white/45`}>
+                        Something went wrong on our side. Your balance and
+                        charges are unaffected — please try again in a moment.
+                    </p>
+                    <button
+                        type="button"
+                        onClick={() => fetchTransactions(page)}
+                        className={`${MONO} relative z-10 mt-5 inline-flex h-9 items-center gap-2 px-4 text-[10.5px] uppercase tracking-[0.12em] font-semibold border border-white/[0.12] bg-[#16181d] text-white/80 hover:text-white hover:bg-white/[0.05] rounded-[5px] transition-colors`}
+                    >
+                        Try again
+                    </button>
                 </div>
             ) : filteredTransactions.length === 0 ? (
                 <div className="relative border border-white/[0.06] bg-[#111216] rounded-[6px] px-8 py-14 text-center overflow-hidden">
@@ -1467,16 +1533,34 @@ function Section({
     title,
     desc,
     rightMeta,
+    bare,
     children,
 }: {
     num: string;
     title: string;
     desc: string;
     rightMeta?: string;
+    /**
+     * Drop the stacked-document chrome (top rule + vertical padding).
+     *
+     * The default styling assumes sections are stacked VERTICALLY: each draws
+     * a rule above itself and `first:` removes it from the topmost one. Put two
+     * side by side in a grid and `first:` only clears the left-hand column, so
+     * the right one grows a rule that spans half the page and floats above
+     * nothing, and its py-8 pushes its heading out of line with its neighbour.
+     * Grid siblings pass `bare` and let the parent own the spacing.
+     */
+    bare?: boolean;
     children: React.ReactNode;
 }) {
     return (
-        <section className="border-t border-white/[0.06] py-8 first:border-t-0 first:pt-0">
+        <section
+            className={
+                bare
+                    ? ""
+                    : "border-t border-white/[0.06] py-8 first:border-t-0 first:pt-0"
+            }
+        >
             <header className="mb-5 flex items-start justify-between gap-4 flex-wrap">
                 <div className="flex items-start gap-4">
                     <span

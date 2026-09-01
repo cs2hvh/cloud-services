@@ -91,7 +91,7 @@ export async function createDepositPayment(
             pay_asset_id: payAssetId,
             amount_usd: String(validatedAmount),
             callback_url: `${process.env.DOMAIN}/api/billing/crypto-callback`,
-            fallback_url: `${process.env.DOMAIN}/dashboard/nav/billing`,
+            fallback_url: `${process.env.DOMAIN}/dashboard/billing`,
         };
 
         const response = await zxgateway.post<ZxPaymentResponse>('/payments', payload);

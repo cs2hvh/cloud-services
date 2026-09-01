@@ -86,8 +86,8 @@ export async function POST(request: Request) {
         interval,
         recurring_topup: "true",
       },
-      success_url: `${baseUrl}/dashboard/nav/billing?status=recurring_success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${baseUrl}/dashboard/nav/billing?status=recurring_cancelled`,
+      success_url: `${baseUrl}/dashboard/billing?status=recurring_success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/dashboard/billing?status=recurring_cancelled`,
     });
 
     const stripeSubscriptionId =

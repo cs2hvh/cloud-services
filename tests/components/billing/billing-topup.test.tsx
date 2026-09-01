@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import BillingTabs from "@/app/dashboard/nav/billing/BillingTabs";
+import BillingTabs from "@/app/dashboard/billing/BillingTabs";
 
 vi.mock("motion/react", () => ({
   motion: {

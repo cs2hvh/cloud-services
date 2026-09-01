@@ -107,8 +107,8 @@ describe("POST /api/billing/create-checkout-session", () => {
           user_id: "user-123",
           amount: "50",
         }),
-        success_url: `${TEST_DOMAIN}/dashboard/nav/billing?status=success&session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${TEST_DOMAIN}/dashboard/nav/billing?status=cancelled`,
+        success_url: `${TEST_DOMAIN}/dashboard/billing?status=success&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${TEST_DOMAIN}/dashboard/billing?status=cancelled`,
         line_items: [
           expect.objectContaining({
             price_data: expect.objectContaining({
@@ -210,10 +210,10 @@ describe("POST /api/billing/create-checkout-session", () => {
 
       const args = mockStripe.checkout.sessions.create.mock.calls[0][0];
       expect(args.success_url).toBe(
-        `${expectedBase}/dashboard/nav/billing?status=success&session_id={CHECKOUT_SESSION_ID}`
+        `${expectedBase}/dashboard/billing?status=success&session_id={CHECKOUT_SESSION_ID}`
       );
       expect(args.cancel_url).toBe(
-        `${expectedBase}/dashboard/nav/billing?status=cancelled`
+        `${expectedBase}/dashboard/billing?status=cancelled`
       );
       expect(args.success_url).toContain("{CHECKOUT_SESSION_ID}");
     }

@@ -101,7 +101,7 @@ const QUICK_LINKS: Array<{
     {
         label: "Billing",
         description: "Balance, invoices & payment",
-        href: "/dashboard/nav/billing",
+        href: "/dashboard/billing",
         icon: CreditCard,
     },
     {

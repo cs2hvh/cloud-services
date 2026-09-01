@@ -415,8 +415,8 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
                       <UserMenuItem
                         icon={CreditCard}
                         label="Billing"
-                        active={pathname?.startsWith("/dashboard/nav/billing")}
-                        onClick={() => { router.push("/dashboard/nav/billing"); setDropdownOpen(false); }}
+                        active={pathname?.startsWith("/dashboard/billing")}
+                        onClick={() => { router.push("/dashboard/billing"); setDropdownOpen(false); }}
                       />
                     </div>
 
@@ -712,7 +712,7 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
                     <button onClick={() => { router.push("/dashboard"); setIsOpen(false); }} className="cursor-pointer w-full text-left block px-3 py-2.5 text-[13px] text-white/60 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors duration-200">
                       Dashboard
                     </button>
-                    <button onClick={() => { router.push("/dashboard/nav/billing"); setIsOpen(false); }} className="cursor-pointer w-full text-left block px-3 py-2.5 text-[13px] text-white/60 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors duration-200">
+                    <button onClick={() => { router.push("/dashboard/billing"); setIsOpen(false); }} className="cursor-pointer w-full text-left block px-3 py-2.5 text-[13px] text-white/60 hover:text-white hover:bg-white/[0.04] rounded-lg transition-colors duration-200">
                       Billing
                     </button>
                     <button onClick={() => { handleSignOut(); setIsOpen(false); }} className="cursor-pointer w-full text-left px-3 py-2.5 text-[13px] text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors duration-200">

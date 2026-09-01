@@ -87,7 +87,7 @@ export function DashboardHeader({ children }: { children?: React.ReactNode }) {
             <div className="ml-auto flex items-center gap-1.5 shrink-0">
                 {children}
                 <Link
-                    href="/dashboard/nav/billing"
+                    href="/dashboard/billing"
                     className="group inline-flex items-center gap-2 h-8 px-2.5 rounded-[7px] border border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.06] hover:border-white/[0.16] transition-colors"
                     style={{ boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)" }}
                     title="Billing — your balance"

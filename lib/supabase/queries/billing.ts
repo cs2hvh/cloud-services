@@ -59,12 +59,25 @@ const isTransactionHistorySchemaMismatch = (error: unknown): boolean => {
     message.includes("period_end") ||
     message.includes("metadata");
 
+  // The account_ledger VIEW is newer than the extended columns, so a database
+  // that predates it fails with "relation does not exist" (42P01 / PGRST205)
+  // rather than a column error. That is the same situation — an older schema —
+  // and has to reach the same legacy fallback, or the statement page 500s
+  // instead of degrading.
+  const missingLedgerView =
+    message.includes("account_ledger") &&
+    (maybeError.code === "42P01" ||
+      maybeError.code === "PGRST205" ||
+      message.includes("does not exist") ||
+      message.includes("could not find the table"));
+
   return Boolean(
-    mentionsNewColumn &&
-      (maybeError.code === "PGRST204" ||
-        maybeError.code === "42703" ||
-        message.includes("could not find the") ||
-        message.includes("column"))
+    missingLedgerView ||
+      (mentionsNewColumn &&
+        (maybeError.code === "PGRST204" ||
+          maybeError.code === "42703" ||
+          message.includes("could not find the") ||
+          message.includes("column")))
   );
 };
 
@@ -1526,7 +1539,12 @@ export const Billing = {
       }
       if (
         opts?.serviceType &&
-        ["kubernetes", "database", "objectspace", "spectrum", "platform_apps", "domain", "compute", "gpu_pod", "custom_image", "inference_finetune", "inference_serving", "inference_deployment", "inference_vector"].includes(opts.serviceType)
+        // gpu_pod_storage and gpu_volume are v2 service types that bill today —
+        // a pod opens TWO meters (compute + local disk) and a network volume a
+        // third. They were missing here, and an unknown value is silently
+        // DROPPED rather than rejected, so filtering by them returned the
+        // unfiltered list. Keep in step with ServiceTypeFilter in BillingTabs.
+        ["kubernetes", "database", "objectspace", "spectrum", "platform_apps", "domain", "compute", "gpu_pod", "gpu_pod_storage", "gpu_volume", "custom_image", "inference_finetune", "inference_serving", "inference_deployment", "inference_vector"].includes(opts.serviceType)
       ) {
         nextQuery = nextQuery.eq("service_type", opts.serviceType);
       }
@@ -1541,9 +1559,21 @@ export const Billing = {
     };
 
     if (shouldAttemptServiceLedger()) {
+      // account_ledger, NOT transactions.
+      //
+      // billing.transactions holds only money the customer MOVED — top-ups,
+      // refunds, coupons. It has never held metered usage: charge_service_hour
+      // writes billing.service_charges and deducts the balance directly. On
+      // 2026-09-01 that meant 65 ledger rows, all type='topup', against 86 real
+      // hourly charges — a customer could watch their balance fall with nothing
+      // in their history explaining why.
+      //
+      // The view unions both and rolls usage up per service per day. See
+      // 20260901120000_billing_v2_account_ledger_view.sql for why it is derived
+      // rather than written.
       let ledgerQuery = supabase
         .schema("billing")
-        .from("transactions")
+        .from("account_ledger")
         .select(
           "id, stripe_session_id, stripe_invoice_id, amount, currency, status, type, balance_after, description, receipt_url, service_id, service_type, period_start, period_end, metadata, created_at",
           { count: "exact" }

@@ -342,7 +342,7 @@ function SingleCluster({
           | { error?: string; message?: string; balance?: number; required?: number }
           | null;
         toast.error(errorData?.message || errorData?.error || "Insufficient credits to start this cluster.");
-        router.push("/dashboard/nav/billing");
+        router.push("/dashboard/billing");
         return;
       }
 

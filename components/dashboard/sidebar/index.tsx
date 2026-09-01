@@ -472,7 +472,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
     };
 
     const support: NavItem[] = [
-        { label: "Billing", href: "/dashboard/nav/billing", icon: BadgeDollarSign, matchPrefix: true },
+        { label: "Billing", href: "/dashboard/billing", icon: BadgeDollarSign, matchPrefix: true },
         { label: "Settings", href: "/dashboard/settings", icon: Settings, matchPrefix: true },
         { label: "Help Center", href: "/dashboard/support", icon: HelpCircle, matchPrefix: true },
         { label: "API Documentation", href: "/api-docs", icon: FileText },

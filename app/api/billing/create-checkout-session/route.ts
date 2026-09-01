@@ -75,8 +75,8 @@ export async function POST(request: Request) {
         user_id: user.id,
         amount: String(amount),
       },
-      success_url: `${baseUrl}/dashboard/nav/billing?status=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${baseUrl}/dashboard/nav/billing?status=cancelled`,
+      success_url: `${baseUrl}/dashboard/billing?status=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/dashboard/billing?status=cancelled`,
     });
 
     return NextResponse.json({ url: session.url });

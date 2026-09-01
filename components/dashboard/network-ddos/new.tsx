@@ -317,7 +317,7 @@ const SpectrumAppCreate = ({
                 toast.error(
                     "Insufficient balance. Please top up your account.",
                 );
-                router.push("/dashboard/nav/billing");
+                router.push("/dashboard/billing");
             } else {
                 toast.error(
                     "We are temporarily unable to process your request. Please try again later.",
