@@ -225,9 +225,12 @@ export function decidePrevious(pod: PodLike): PreviousDecision {
   if (crashLooping) {
     return {
       previous: true,
+      // CrashLoopBackOff, OOMKilled and the rest are Kubernetes' words for our
+      // own scheduler. They name nothing the reader can act on and nothing they
+      // chose, so the state is described instead of quoted.
       reason:
-        "This container is in CrashLoopBackOff. Showing the previous instance's " +
-        "logs, which contain the failure; the current one has only just started.",
+        "This instance is starting and failing repeatedly. These are the logs " +
+        "from the run that failed — the current one has only just started.",
       restarts,
       crashLooping: true,
     };
@@ -236,12 +239,15 @@ export function decidePrevious(pod: PodLike): PreviousDecision {
   const terminated = statuses.find((c) => c.lastState?.terminated);
   if (restarts > 0 && terminated) {
     const t = terminated.lastState!.terminated!;
-    const how = t.reason === "OOMKilled" ? "was OOM-killed" : `exited ${t.exitCode ?? "?"}`;
+    const how =
+      t.reason === "OOMKilled"
+        ? "ran out of memory"
+        : `stopped with exit code ${t.exitCode ?? "unknown"}`;
     return {
       previous: true,
       reason:
-        `This container has restarted ${restarts} time${restarts === 1 ? "" : "s"}; the ` +
-        `previous instance ${how}. Showing its logs, which explain the restart.`,
+        `This instance has restarted ${restarts} time${restarts === 1 ? "" : "s"}. The ` +
+        `previous run ${how}; these are its logs.`,
       restarts,
       crashLooping: false,
     };
@@ -250,7 +256,7 @@ export function decidePrevious(pod: PodLike): PreviousDecision {
   if (restarts > 0) {
     return {
       previous: true,
-      reason: `This container has restarted ${restarts} time${restarts === 1 ? "" : "s"}. Showing the previous instance's logs.`,
+      reason: `This instance has restarted ${restarts} time${restarts === 1 ? "" : "s"}. These are the logs from the previous run.`,
       restarts,
       crashLooping: false,
     };
@@ -270,20 +276,34 @@ export function explainEmptyLog(pod: PodLike): string | null {
   const waiting = statuses.find((c) => c.state?.waiting?.reason)?.state?.waiting;
 
   if (waiting?.reason) {
+    /*
+      DESCRIBED, NOT QUOTED. These keys are Kubernetes' vocabulary for our own
+      infrastructure. Leading with the raw reason — "ImagePullBackOff — the
+      image could not be pulled" — asks the reader to learn our substrate before
+      they can read their own error, and the code is the half they cannot act on.
+
+      An unrecognised reason still returns a SENTENCE, never null. Falling
+      through to null would render a blocked app as an ordinary quiet one, which
+      is the failure this whole function exists to prevent — and it would do it
+      precisely for the states nobody has seen before. The raw reason is dropped
+      rather than printed, because it is ours and the reader cannot act on it;
+      it stays in our telemetry where support can find it.
+    */
     const known: Record<string, string> = {
-      ImagePullBackOff: "The image could not be pulled. The build may not have published it.",
-      ErrImagePull: "The image could not be pulled. The build may not have published it.",
+      ImagePullBackOff: "The application image could not be loaded. The build may not have finished publishing it.",
+      ErrImagePull: "The application image could not be loaded. The build may not have finished publishing it.",
       CreateContainerConfigError:
-        "The container could not be configured — usually a missing environment variable or secret.",
-      CrashLoopBackOff: "The container started and exited repeatedly.",
-      ContainerCreating: "The container is still being created.",
+        "The application could not be configured to start — usually a missing environment variable.",
+      CrashLoopBackOff: "The application started and stopped repeatedly.",
+      ContainerCreating: "The application is still being prepared.",
     };
-    const extra = known[waiting.reason];
-    return `${waiting.reason}${extra ? ` — ${extra}` : ""}`;
+    return known[waiting.reason] ?? "This app has not started. Contact support if it stays this way.";
   }
 
   if (phase === "Pending") {
-    return "The pod is Pending — it has not been scheduled onto a node yet.";
+    // "Unschedulable" and "Insufficient memory" are true and are OURS. What the
+    // reader needs is that the delay is on our side and not their code.
+    return "Waiting for capacity — no server is available to start this app yet.";
   }
 
   return null;

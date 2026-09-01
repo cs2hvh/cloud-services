@@ -411,21 +411,25 @@ export default async function ProjectPage({
                             ? "bad"
                             : "default"
                     }
-                    hint="of time we could observe"
+                    hint="monitored period"
                   />
-                  <Stat label="Serving" value={humanDuration(health.warmSeconds)} hint="at least one pod ready" />
+                  <Stat label="Serving" value={humanDuration(health.warmSeconds)} hint="at least one instance running" />
                   <Stat
                     label="Restarts"
                     value={health.restarts}
                     tone={health.restarts > 0 ? "warn" : "default"}
-                    hint={health.restarts > 0 ? "a crash loop shows up here first" : undefined}
+                    hint={health.restarts > 0 ? "repeated restarts indicate a startup failure" : undefined}
                   />
-                  <Stat label="Peak pods" value={health.peakPods} hint="most running at once" />
+                  <Stat label="Peak instances" value={health.peakPods} hint="maximum running concurrently" />
                 </div>
 
+                {/*
+                  One sentence, with its window inside it. This read
+                  "…of observed time. Last 7 days." — a trailing fragment in a
+                  fainter colour, which is a caption pretending to be a sentence.
+                */}
                 <p className="mt-3 text-xs text-white/50">
-                  {verdict.reason}{" "}
-                  <span className="text-white/30">Last 7 days.</span>
+                  {verdict.reason} <span className="text-white/30">Based on the last 7 days.</span>
                 </p>
 
                 {/*
@@ -435,8 +439,8 @@ export default async function ProjectPage({
                 */}
                 {health.unobservedSeconds > 0 ? (
                   <p className="mt-1 text-xs text-white/35">
-                    {humanDuration(health.unobservedSeconds)} of this window could not be measured and is
-                    excluded from the percentage — that is a gap in our sampling, not downtime.
+                    {humanDuration(health.unobservedSeconds)} of this period could not be measured and is
+                    excluded from the figure above. This reflects a gap in monitoring, not downtime.
                   </p>
                 ) : null}
               </>
@@ -977,22 +981,23 @@ export default async function ProjectPage({
                     <Stat
                       label="At this size"
                       value={`${monthly.toFixed(2)}`}
-                      hint="per month if it never sleeps"
+                      hint="estimated, running continuously"
                     />
                   ) : null}
                 </div>
 
                 {summary.unreadable > 0 ? (
                   <p className="mt-3 text-xs text-amber-300">
-                    {summary.unreadable} charge row(s) could not be read and are excluded from the total
-                    above. Please contact support before relying on this figure.
+                    {summary.unreadable} charge{summary.unreadable === 1 ? "" : "s"} could not be read and
+                    {summary.unreadable === 1 ? " is" : " are"} excluded from the total above. Please contact
+                    support before relying on this figure.
                   </p>
                 ) : null}
 
                 {summary.hoursBilled === 0 ? (
                   <p className="mt-3 text-xs text-white/40">
-                    Nothing charged yet. Metering runs hourly and only bills hours the app was actually
-                    running — an app asleep or stopped costs nothing.
+                    No charges yet. Billing is hourly and covers only the hours this app was running —
+                    a stopped or sleeping app is not charged.
                   </p>
                 ) : (
                   <ul className="mt-3 space-y-1">

@@ -142,7 +142,10 @@ test("a CrashLoopBackOff pod resolves to the previous container's logs", () => {
   assert.equal(d.previous, true);
   assert.equal(d.crashLooping, true);
   assert.equal(d.restarts, 7);
-  assert.match(d.reason, /previous instance/);
+  assert.match(d.reason, /the run that failed/);
+  // The state is described, not quoted — "CrashLoopBackOff" is our scheduler's
+  // word and names nothing the reader can act on.
+  assert.doesNotMatch(d.reason, /CrashLoopBackOff/);
 });
 
 test("an OOM-killed restart says so, since the fix is different from a crash", () => {
@@ -162,7 +165,9 @@ test("an OOM-killed restart says so, since the fix is different from a crash", (
 
   assert.equal(d.previous, true);
   assert.equal(d.crashLooping, false);
-  assert.match(d.reason, /OOM-killed/);
+  // Still distinguished from an ordinary crash, which is the point of the test:
+  // running out of memory is fixed by resizing, a crash by changing the code.
+  assert.match(d.reason, /ran out of memory/);
 });
 
 test("a healthy pod that has never restarted reads its current logs", () => {
@@ -203,8 +208,10 @@ test("an image that will not pull is explained, not reported as 'no logs'", () =
       containerStatuses: [{ name: "app", ready: false, state: { waiting: { reason: "ImagePullBackOff" } } }],
     }),
   );
-  assert.match(msg as string, /ImagePullBackOff/);
-  assert.match(msg as string, /build may not have published it/);
+  // The STATE is explained; the Kubernetes reason code is not quoted. It names
+  // our scheduler rather than anything the reader chose or can act on.
+  assert.doesNotMatch(msg as string, /ImagePullBackOff/);
+  assert.match(msg as string, /image could not be loaded/);
 });
 
 test("a missing env var is named as a config error, not a crash", () => {
@@ -215,11 +222,14 @@ test("a missing env var is named as a config error, not a crash", () => {
       ],
     }),
   );
-  assert.match(msg as string, /environment variable or secret/);
+  assert.match(msg as string, /environment variable/);
+  assert.doesNotMatch(msg as string, /CreateContainerConfigError/);
 });
 
-test("an unscheduled pod says so", () => {
-  assert.match(explainEmptyLog(pod({ phase: "Pending" })) as string, /not been scheduled/);
+test("an app waiting for capacity says so without naming the scheduler", () => {
+  const msg = explainEmptyLog(pod({ phase: "Pending" })) as string;
+  assert.match(msg, /Waiting for capacity/);
+  assert.doesNotMatch(msg, /schedul/i);
 });
 
 test("a healthy running pod needs no explanation", () => {
@@ -229,9 +239,21 @@ test("a healthy running pod needs no explanation", () => {
   );
 });
 
-test("an unrecognised waiting reason is still surfaced verbatim", () => {
+test("an unrecognised waiting reason still produces a sentence, not silence", () => {
   const msg = explainEmptyLog(
     pod({ containerStatuses: [{ name: "app", state: { waiting: { reason: "SomethingNewFromUpstream" } } }] }),
   );
-  assert.equal(msg, "SomethingNewFromUpstream");
+  /*
+    THIS ASSERTION CHANGED DELIBERATELY. It used to require the raw reason be
+    echoed verbatim, which kept an unknown state visible at the cost of printing
+    a Kubernetes term at the customer.
+
+    What it was really protecting is that a BLOCKED app must never render as an
+    ordinary quiet one — the empty-versus-unknown distinction this codebase keeps
+    rediscovering. That still holds, and it matters most for reasons nobody has
+    seen before. So the requirement is now: say something, and do not leak the
+    code. The raw reason stays in telemetry, where support can still find it.
+  */
+  assert.ok(msg && msg.length > 0);
+  assert.doesNotMatch(msg as string, /SomethingNewFromUpstream/);
 });

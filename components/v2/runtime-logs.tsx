@@ -100,7 +100,7 @@ export function RuntimeLogs({
   }, [data, follow]);
 
   if (loading && !data) {
-    return <p className="text-xs text-white/40">Reading pod output…</p>;
+    return <p className="text-xs text-white/40">Loading logs…</p>;
   }
 
   if (error) {
@@ -120,11 +120,16 @@ export function RuntimeLogs({
   return (
     <div>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <p className="font-mono text-[11px] text-white/40">
+        {/*
+          "1 pod · app-prj-8729ff60496e" was two leaks in eleven characters: our
+          scheduler's vocabulary, and the internal namespace, which is a name the
+          customer never chose and cannot use. Instances are the unit they resize
+          in Settings, so that is the unit they are counted in.
+        */}
+        <p className="text-[11px] text-white/40">
           {pods.length > 0
-            ? `${pods.length} pod${pods.length === 1 ? "" : "s"}`
-            : "no pods"}
-          {data?.namespace ? ` · ${data.namespace}` : ""}
+            ? `${pods.length} instance${pods.length === 1 ? "" : "s"} running`
+            : "No instances running"}
         </p>
         <div className="flex items-center gap-2">
           <button
@@ -156,7 +161,7 @@ export function RuntimeLogs({
           <p className="text-xs text-white/50">
             {emptyExplanation?.what ??
               data?.reason ??
-              "No output. This deployment has no running pods."}
+              "No output yet. This app has no running instances."}
           </p>
           {emptyExplanation?.action ? (
             <p className="mx-auto mt-2 max-w-md text-xs text-white/35">{emptyExplanation.action}</p>
@@ -172,15 +177,24 @@ export function RuntimeLogs({
         </div>
       ) : (
         <div className="space-y-3">
-          {pods.map((pod) => (
+          {pods.map((pod, i) => (
             <div key={pod.pod}>
               <div className="mb-1 flex flex-wrap items-baseline gap-2">
-                <span className="font-mono text-[11px] text-white/60">{pod.pod}</span>
+                {/*
+                  Numbered, not named. `dpl-ddc632988b16-58cb775578-rsltv` is a
+                  scheduler identifier: it changes on every restart, means nothing
+                  to the person reading it, and is not something they can use in a
+                  support conversation. The v1 logs panel already masks these —
+                  this one was the outlier.
+                */}
+                <span className="text-[11px] font-medium text-white/60">
+                  {pods.length === 1 ? "Instance" : `Instance ${i + 1}`}
+                </span>
                 {pod.previous ? (
-                  // Worth saying loudly: these lines are from the container that
-                  // DIED, which is the only place the reason for a crash loop is.
+                  // Worth saying loudly: these lines are from the run that FAILED,
+                  // which is the only place the reason for a restart loop is.
                   <span className="rounded border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">
-                    previous container
+                    previous run
                   </span>
                 ) : null}
               </div>

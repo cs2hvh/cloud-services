@@ -126,7 +126,7 @@ export function healthVerdict(h: HealthSummary): {
       // sampler runs every 15 minutes, so a new app is blank for a few minutes
       // by design — without that, four dashes and "nothing has measured this"
       // reads like something is broken on the day somebody signs up.
-      reason: "Not measured yet. Figures appear within about fifteen minutes of the first deploy.",
+      reason: "No data yet. Metrics appear about 15 minutes after the first deployment.",
     };
   }
   if (h.uptimePct >= 99) {
@@ -134,14 +134,17 @@ export function healthVerdict(h: HealthSummary): {
       state: "healthy",
       reason:
         h.restarts > 0
-          ? `Serving ${h.uptimePct}% of observed time, with ${h.restarts} restart${h.restarts === 1 ? "" : "s"}.`
-          : `Serving ${h.uptimePct}% of observed time.`,
+          ? `Available ${h.uptimePct}% of the monitored period, with ${h.restarts} restart${h.restarts === 1 ? "" : "s"}.`
+          : `Available ${h.uptimePct}% of the monitored period.`,
     };
   }
+  // No "only". The number is the judgement; adding a word to it is editorial,
+  // and the same figure reads differently to somebody running a staging app
+  // than to somebody running a shop.
   if (h.uptimePct >= 50) {
-    return { state: "degraded", reason: `Serving only ${h.uptimePct}% of observed time.` };
+    return { state: "degraded", reason: `Available ${h.uptimePct}% of the monitored period.` };
   }
-  return { state: "down", reason: `Serving ${h.uptimePct}% of observed time.` };
+  return { state: "down", reason: `Available ${h.uptimePct}% of the monitored period.` };
 }
 
 /** Seconds as something a person reads. */
