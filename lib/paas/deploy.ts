@@ -36,6 +36,7 @@ import { kube } from "./k8s/client.ts";
 import { PAAS_NAMESPACE, REGISTRY_PUSH, publisherJob } from "./k8s/manifests.ts";
 import { reconcileProject, kubeContextFromEnv, tenantNamespace } from "./reconciler.ts";
 import { buildFailureMessage, customerError, GENERIC } from "./errors.ts";
+import { notifyAppEventRemote } from "./notify-hook.ts";
 import { db, teams, projects, environments, deployments, aliases, envVars, type DeploymentRow, type ProjectRow, type AliasRow } from "./db.ts";
 import { decryptEnvValue, pgHexToBytes } from "./secrets.ts";
 import { appHostname } from "./config.ts";
@@ -1141,12 +1142,21 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
   }
 
   if (!rollout.ok) {
+    const rolloutMessage =
+      "Your app was built and published, but it did not start. Check Runtime logs for what it " +
+      "printed as it exited.";
     await deployments.setState(d.ref, {
       state: "error",
       errorCode: "rollout_failed",
-      errorMessage:
-        "Your app was built and published, but it did not start. Check Runtime logs for what it " +
-        "printed as it exited.",
+      errorMessage: rolloutMessage,
+    });
+    // The customer-facing text, not `rollout.reason` — that one carries the
+    // scheduler's own words and is for our logs.
+    await notifyAppEventRemote({
+      projectRef: project.ref,
+      event: "failed",
+      reason: rolloutMessage,
+      commit: d.git_sha?.slice(0, 7) ?? null,
     });
     throw new Error(`rollout failed for ${d.ref}: ${rollout.reason}`);
   }
@@ -1191,6 +1201,15 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
   // converged, and a pod is actually serving.
   await deployments.setState(d.ref, { state: "ready", readyAt: true });
   say("ready", `${alias.hostname} is serving`);
+
+  // AFTER the state is recorded, never before. An email saying an app is live
+  // must not be the first thing that is true about it.
+  await notifyAppEventRemote({
+    projectRef: project.ref,
+    event: "deployed",
+    hostname: alias.hostname,
+    commit: d.git_sha?.slice(0, 7) ?? null,
+  });
 
   return {
     project,

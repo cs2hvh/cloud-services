@@ -18,6 +18,7 @@ import { getCaller } from "../../_lib/auth";
 import { kube, loadKubeconfig } from "@/lib/paas/k8s/client.ts";
 import { toCustomerFacing } from "@/lib/paas/errors";
 import { deleteCustomHostname } from "@/lib/paas/edge/cloudflare";
+import { notifyAppEvent } from "@/lib/paas/notifications";
 import {
   json,
   unauthenticated,
@@ -321,6 +322,11 @@ export async function DELETE(_request: Request, { params }: Params) {
     // without naming the orchestrator that refused.
     teardownError = toCustomerFacing(err, "deploy", "[v2/projects/:ref]").message;
   }
+
+  // Sent whether or not the teardown succeeded, because the DELETE did: the
+  // row is gone from their dashboard and billing has stopped either way, and
+  // a failed sweep is ours to finish rather than theirs to hear about.
+  await notifyAppEvent({ projectRef: (data as { ref: string }).ref, event: "deleted" });
 
   return json({
     ref: (data as { ref: string }).ref,

@@ -22,6 +22,7 @@
 
 import { deployments, projects } from "../../lib/paas/db.ts";
 import { toCustomerFacing } from "../../lib/paas/errors.ts";
+import { notifyAppEventRemote } from "../../lib/paas/notify-hook.ts";
 import { deployFromRepo } from "../../lib/paas/deploy.ts";
 import { kube, loadKubeconfig } from "../../lib/paas/k8s/client.ts";
 import { PAAS_NAMESPACE } from "../../lib/paas/k8s/manifests.ts";
@@ -113,6 +114,17 @@ async function buildOne(ref: string): Promise<void> {
           errorMessage: shown.message,
         });
         console.log(`   recorded   ${d.ref} -> error (it would otherwise retry forever)`);
+
+        // INSIDE this branch on purpose. deployFromRepo emails about the
+        // failures it records itself; this covers the ones it never got far
+        // enough to record. Notifying unconditionally out here would send a
+        // second "deployment failed" for every one of those.
+        await notifyAppEventRemote({
+          projectRef: project.ref,
+          event: "failed",
+          reason: shown.message,
+          commit: d.git_sha?.slice(0, 7) ?? null,
+        });
       }
     } catch (inner) {
       // Loud, because the consequence is the retry loop this exists to end.

@@ -6,6 +6,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { json, unauthenticated, invalid, conflict, apiError, fromPostgrestError } from "../_lib/http";
 import { validateCreateProject } from "./create";
+import { notifyAppEvent } from "@/lib/paas/notifications";
 
 export async function createProject(req: Request): Promise<Response> {
   const supabase = await createClient();
@@ -123,6 +124,12 @@ export async function createProject(req: Request): Promise<Response> {
 
   // `id` is internal — refs are the public identifier everywhere else in this
   // API, and leaking a uuid invites callers to start addressing rows by it.
+  // Awaited rather than fired off, because a serverless runtime reclaims the
+  // process the moment this handler returns — a floating promise here is a mail
+  // that sometimes sends. notifyAppEvent never throws, so it cannot turn a
+  // created project into a failed request.
+  await notifyAppEvent({ projectRef: created.ref as string, event: "created" });
+
   const { id: _internal, ...publicView } = created;
   return json({ project: publicView }, 201);
 }
