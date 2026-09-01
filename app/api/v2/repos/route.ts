@@ -108,10 +108,15 @@ export async function GET() {
   const errors = failed.map((f) => ({
     provider: f.provider,
     account:
-      live
-        .filter((i) => i.provider === f.provider)
-        .map((i) => i.account_login)
-        .join(", ") || f.provider,
+      // DEDUPED. One account can hold several installation rows — a customer
+      // who installs the App more than once gets one row per attempt — and
+      // joining them raw produced "deep-aghera-001, deep-aghera-001", which
+      // reads as two different accounts failing.
+      [
+        ...new Set(
+          live.filter((i) => i.provider === f.provider).map((i) => i.account_login),
+        ),
+      ].join(", ") || f.provider,
     message: f.error,
   }));
 

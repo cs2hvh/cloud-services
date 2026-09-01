@@ -148,9 +148,19 @@ export function GitConnections() {
       {installations === null ? (
         <p className={`${V2_MONO} text-[11.5px] text-white/35`}>Reading your connections…</p>
       ) : installations.length === 0 ? (
+        /*
+          TWO SENTENCES THAT CONTRADICTED EACH OTHER. With nothing usable AND a
+          stale reference, this said "No git account is connected yet" and the
+          notice below said "A GitHub connection no longer exists" — a customer
+          reading both cannot tell whether they connected something or not.
+
+          Both were true, which is exactly why it needed one sentence rather
+          than two: the row exists and the installation behind it does not.
+        */
         <p className="text-[12.5px] leading-[1.7] text-white/50">
-          No git account is connected yet. Connecting one lets us read its repositories — it is
-          separate from the account you signed in with.
+          {warning
+            ? "The GitHub App this team used has been removed or reinstalled, so we can no longer read its repositories. Connect again below to restore access."
+            : "No git account is connected yet. Connecting one lets us read its repositories — it is separate from the account you signed in with."}
         </p>
       ) : (
         <ul className="divide-y divide-white/[0.06]">
@@ -295,9 +305,12 @@ export function GitConnections() {
         </div>
       ) : null}
 
-      {warning ? (
+      {/* Only alongside connections that DO work — otherwise the sentence above
+          has already said it, and saying it twice is what made the screen
+          contradict itself. */}
+      {warning && (installations?.length ?? 0) > 0 ? (
         <div className="mt-4">
-          <Notice tone="blocked" title="A GitHub connection no longer exists">
+          <Notice tone="blocked" title="One connection no longer works">
             {warning}
           </Notice>
         </div>
