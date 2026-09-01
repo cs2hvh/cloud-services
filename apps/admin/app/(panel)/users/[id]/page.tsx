@@ -49,8 +49,11 @@ export default async function UserBillingPage({
       supabase.auth.admin.getUserById(id),
       supabase.from("user_profiles").select("username, display_name, roles, suspend").eq("id", id).limit(1),
       billing.from("user_credits").select("credit_balance, created_at").eq("user_id", id).limit(1),
+      // account_ledger, NOT transactions: charge_service_hour deducts the
+      // balance without writing a transaction row, so raw transactions show
+      // top-ups only and hide every hourly charge. The view unions both.
       billing
-        .from("transactions")
+        .from("account_ledger")
         .select("created_at, type, status, amount, balance_after, description, service_type")
         .eq("user_id", id)
         .order("created_at", { ascending: false })
@@ -118,8 +121,8 @@ export default async function UserBillingPage({
 
       <div className="mt-6 space-y-6">
         <Panel
-          title="Transactions"
-          subtitle="billing.transactions — the wallet ledger; Stripe references omitted by design"
+          title="Account ledger"
+          subtitle="billing.account_ledger — top-ups AND usage charges (raw transactions hide hourly deductions); Stripe references omitted by design"
         >
           {transactions.length > 0 ? (
             <Table head={["when", "type", "status", "amount", "balance after", "description"]}>

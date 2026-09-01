@@ -70,6 +70,7 @@ const CHIP_TONE: Record<string, StatusTone> = {
   drift: "critical",
   unmetered: "critical",
   unbillable: "critical",
+  "half-billed": "critical",
   // signal severities
   critical: "critical",
   warn: "warning",

@@ -81,10 +81,14 @@ export function GpuView(props: Props) {
     () => new Map(props.catalog.map((c) => [c.id, c.display_name])),
     [props.catalog],
   );
+  // Keyed by type:serviceId — a pod is fully billed only when BOTH its
+  // gpu_pod and gpu_pod_storage meters are open.
   const openMeterIds = useMemo(
     () =>
       new Set(
-        props.meters.filter((m) => m.ended_at === null).map((m) => m.service_id),
+        props.meters
+          .filter((m) => m.ended_at === null)
+          .map((m) => `${m.service_type}:${m.service_id}`),
       ),
     [props.meters],
   );
@@ -271,7 +275,7 @@ export function GpuView(props: Props) {
                   <td className="py-1.5 pr-4">{money(Number(v.monthly_cost_usd) || 0)}</td>
                   <td className="py-1.5 pr-4 text-muted-foreground">{money(Number(v.runpod_cost_per_month_usd) || 0)}</td>
                   <td className="py-1.5 pr-4">
-                    {v.billing_service_id && openMeterIds.has(v.billing_service_id) ? (
+                    {v.billing_service_id && openMeterIds.has(`gpu_volume:${v.billing_service_id}`) ? (
                       wallets.has(v.owner_id) ? (
                         <StatusChip status="live" />
                       ) : (
@@ -373,13 +377,15 @@ function PodsTab({
                   {m === 0 ? <span className="text-muted-foreground">$0 (at cost)</span> : money(m, 4)}
                 </td>
                 <td className="py-1.5 pr-4">
-                  {p.billing_service_id && openMeterIds.has(p.billing_service_id) ? (
-                    wallets.has(p.owner_id) ? <StatusChip status="live" /> : <StatusChip status="unbillable" />
-                  ) : p.status === "terminated" ? (
-                    <span className="text-xs text-muted-foreground">closed</span>
-                  ) : (
-                    <StatusChip status="unmetered" />
-                  )}
+                  {(() => {
+                    if (p.status === "terminated")
+                      return <span className="text-xs text-muted-foreground">closed</span>;
+                    const compute = p.billing_service_id && openMeterIds.has(`gpu_pod:${p.billing_service_id}`);
+                    const storage = p.billing_service_id && openMeterIds.has(`gpu_pod_storage:${p.billing_service_id}`);
+                    if (!compute && !storage) return <StatusChip status="unmetered" />;
+                    if (!compute || !storage) return <StatusChip status="half-billed" />;
+                    return wallets.has(p.owner_id) ? <StatusChip status="live" /> : <StatusChip status="unbillable" />;
+                  })()}
                 </td>
                 <td className="py-1.5 pr-4"><StatusChip status={p.status} /></td>
                 <td className="py-1.5 text-right">

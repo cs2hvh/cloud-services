@@ -127,8 +127,14 @@ export function deriveGpuFindings(input: {
   ownersWithWallet: Set<string>;
 }): GpuFinding[] {
   const findings: GpuFinding[] = [];
-  const openMeterByServiceId = new Map(
-    input.meters.filter((m) => m.ended_at === null).map((m) => [m.service_id, m]),
+  // Keyed by type AND service id: a pod opens TWO meters (gpu_pod +
+  // gpu_pod_storage), so presence of one is not "billed" — compute metered
+  // with storage unmetered is a real, silent half-billed state. At most one
+  // open meter per (type, service) exists by unique index; no check needed.
+  const openMeter = new Set(
+    input.meters
+      .filter((m) => m.ended_at === null)
+      .map((m) => `${m.service_type}:${m.service_id}`),
   );
   const liveServiceIds = new Set<string>();
 
@@ -136,12 +142,28 @@ export function deriveGpuFindings(input: {
     if (!LIVE_POD_STATUSES.has(pod.status)) continue;
     if (pod.billing_service_id) liveServiceIds.add(pod.billing_service_id);
 
-    if (!pod.billing_service_id || !openMeterByServiceId.has(pod.billing_service_id)) {
+    const compute = pod.billing_service_id
+      ? openMeter.has(`gpu_pod:${pod.billing_service_id}`)
+      : false;
+    const storage = pod.billing_service_id
+      ? openMeter.has(`gpu_pod_storage:${pod.billing_service_id}`)
+      : false;
+
+    if (!compute && !storage) {
       findings.push({
         severity: "critical",
         title: `Pod "${pod.name}" (${pod.owner_email ?? pod.owner_id}) has no open meter`,
         detail: `Status ${pod.status}, ${pod.gpu_count}× ${pod.gpu_catalog_id} — running unbilled since ${pod.billing_start ?? pod.created_at}.`,
-        action: "Open a meter or stop the pod; every unmetered hour is free.",
+        action: "Open both meters or stop the pod; every unmetered hour is free.",
+      });
+    } else if (!compute || !storage) {
+      const missing = compute ? "gpu_pod_storage" : "gpu_pod";
+      const present = compute ? "gpu_pod" : "gpu_pod_storage";
+      findings.push({
+        severity: "critical",
+        title: `Pod "${pod.name}" (${pod.owner_email ?? pod.owner_id}) is HALF-billed`,
+        detail: `The ${present} meter is open but ${missing} is not — a pod opens two meters, and this state bills one and silently gives the other away.`,
+        action: `Open the ${missing} meter (or close both and stop the pod).`,
       });
     }
     if (!input.ownersWithWallet.has(pod.owner_id)) {
@@ -159,7 +181,7 @@ export function deriveGpuFindings(input: {
     if (vol.status !== "available" || !vol.owner_id) continue;
     if (vol.billing_service_id) liveServiceIds.add(vol.billing_service_id);
 
-    if (!vol.billing_service_id || !openMeterByServiceId.has(vol.billing_service_id)) {
+    if (!vol.billing_service_id || !openMeter.has(`gpu_volume:${vol.billing_service_id}`)) {
       findings.push({
         severity: "critical",
         title: `Volume "${vol.name}" (${vol.owner_email ?? vol.owner_id}, ${vol.size_gb} GB) has no open meter`,
