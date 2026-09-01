@@ -14,7 +14,6 @@ import {
     ChevronLeft,
     ChevronRight,
     Download,
-    ExternalLink,
     Loader2,
     Receipt,
     Search,
@@ -519,7 +518,13 @@ function BalanceTab({
               on the left edge of the second column reads as structure rather
               than as a gap somebody forgot to close.
             */}
-            <div className="grid grid-cols-1 gap-y-10 lg:grid-cols-2 lg:gap-x-10 xl:gap-x-14">
+            {/* Capped while the page runs edge to edge. Two forms are a
+                reading task, not a scanning one — past roughly 1,300px the
+                columns stop being columns and become two distant things. The
+                balance band above and the transactions table both stay full
+                width, because a headline number and a table both benefit from
+                the room. */}
+            <div className="grid max-w-[1280px] grid-cols-1 gap-y-10 lg:grid-cols-2 lg:gap-x-10 xl:gap-x-14">
                 {/* Top up */}
                 <Section
                     bare

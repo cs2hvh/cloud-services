@@ -174,7 +174,10 @@ const SettingsPage = () => {
                 />
             </div>
 
-            <div className="relative z-10 mx-auto w-full max-w-6xl px-6 py-8 sm:px-10 sm:py-10">
+            {/* Full-bleed, matching every other dashboard page. See the note in
+                app/dashboard/billing/page.tsx — both pages carried the same
+                max-w-6xl cap and were the only two that did. */}
+            <div className="relative z-10 px-6 py-7 sm:px-10 sm:py-9">
                 {/* Hero */}
                 <h1 className="text-[34px] sm:text-[40px] leading-[1.05] tracking-[-0.025em] text-white font-semibold mb-2">
                     Account{" "}

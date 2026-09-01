@@ -75,7 +75,15 @@ export default async function BillingPage({
         />
       </div>
 
-      <div className="relative z-10 mx-auto w-full max-w-6xl px-6 py-8 sm:px-10 sm:py-10">
+      {/*
+        Full-bleed, matching every other dashboard page (services/compute/vps,
+        services/gpu, support). This used to be `mx-auto w-full max-w-6xl`,
+        which capped the page at 1152px and centred it — so on any screen wider
+        than that, billing sat in a narrow column with dead margins either side
+        while every neighbouring page ran edge to edge. Individual blocks cap
+        their own width where it helps readability; the PAGE does not.
+      */}
+      <div className="relative z-10 px-6 py-7 sm:px-10 sm:py-9">
         <Suspense
           fallback={
             <div className="flex items-center justify-center py-20">

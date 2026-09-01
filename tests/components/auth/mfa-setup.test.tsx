@@ -4,20 +4,58 @@ import userEvent from '@testing-library/user-event';
 import EnableTotp from '@/components/dashboard/2fa/page';
 
 // Mock motion/react
-vi.mock('motion/react', () => ({
-  motion: {
-    div: ({
-      children,
-      className,
-      ...rest
-    }: React.PropsWithChildren<{ className?: string }>) => (
-      <div className={className} {...rest}>
-        {children}
-      </div>
-    ),
-    img: (props: React.ImgHTMLAttributes<HTMLImageElement>) => <img {...props} />,
-  },
-}));
+// Stub every motion element, not a list of two.
+//
+// This used to name `div` and `img` explicitly. The moment the component used
+// a third — motion.p — that element resolved to `undefined` and React threw
+// "Element type is invalid", failing all 17 tests at render with an error that
+// points at the component rather than at this mock. A styling change has no
+// business breaking a test suite about MFA enrollment.
+//
+// The Proxy returns a plain host element for whatever tag is asked for, so the
+// animation props are dropped (which is the point) and the mock cannot drift
+// out of step with the component again.
+// Async factory so React can be imported here — vi.mock factories are hoisted
+// above the file's own imports, so a top-level `import React` is not in scope.
+vi.mock('motion/react', async () => {
+  const React = await import('react');
+
+  const ANIMATION_PROPS = new Set([
+    'initial', 'animate', 'exit', 'transition',
+    'whileHover', 'whileTap', 'whileInView', 'variants', 'layout', 'layoutId',
+  ]);
+
+  // Cache per tag. Without this the Proxy hands back a NEW function object on
+  // every property read, so React sees a different component type on each
+  // render, unmounts the subtree and remounts it — a controlled input then
+  // loses focus after one keystroke and only the first character survives.
+  const cache = new Map<string, React.ComponentType<Record<string, unknown>>>();
+
+  const stub = new Proxy({} as Record<string, unknown>, {
+    get: (_target, tag: string) => {
+      const cached = cache.get(tag);
+      if (cached) return cached;
+
+      const Element = ({
+        children,
+        ...rest
+      }: React.PropsWithChildren<Record<string, unknown>>) => {
+        // Animation-only props are not valid DOM attributes; React warns
+        // loudly about each one, so drop them rather than spread them.
+        // Filtered by key rather than destructured, so there are no unused
+        // bindings for lint to complain about.
+        const domProps = Object.fromEntries(
+          Object.entries(rest).filter(([key]) => !ANIMATION_PROPS.has(key))
+        );
+        return React.createElement(tag, domProps, children);
+      };
+      Element.displayName = `motion.${tag}`;
+      cache.set(tag, Element);
+      return Element;
+    },
+  });
+  return { motion: stub, AnimatePresence: ({ children }: React.PropsWithChildren) => children };
+});
 
 // Mock sonner
 vi.mock('sonner', () => ({

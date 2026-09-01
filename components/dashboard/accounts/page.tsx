@@ -17,6 +17,21 @@ import { useProviderConnection } from "@/lib/hooks/use-provider-connection";
 import { toast } from "sonner";
 
 /* ------------------------------------------------------------------ */
+/*  Design tokens                                                      */
+/*                                                                     */
+/*  The same set used by the settings shell that renders this, and by  */
+/*  billing and the service pages. This tab previously used none of    */
+/*  them: translucent white/[0.03] cards instead of the solid #111216  */
+/*  surface, square corners where everything else is rounded-[6px], a  */
+/*  raw bg-blue-500 button instead of the accent gradient, and no mono */
+/*  face on labels. It read as a different product.                    */
+/* ------------------------------------------------------------------ */
+
+const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+const ACCENT = "#0095FF";
+const CARD = "border border-white/[0.06] bg-[#111216] rounded-[6px]";
+
+/* ------------------------------------------------------------------ */
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
 
@@ -98,35 +113,54 @@ function RepoConnectionRow({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.06 }}
-      className="border border-white/[0.08] bg-white/[0.03] p-4 transition-colors hover:border-white/[0.14] hover:bg-white/[0.05]"
+      className={twMerge(CARD, "p-5 transition-colors hover:border-white/[0.12]")}
     >
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="flex min-w-0 items-start gap-4">
-          <div className={twMerge("flex h-11 w-11 items-center justify-center border border-white/[0.08] bg-white/[0.04]", meta.accentClassName)}>
+          <div
+            className={twMerge(
+              "flex h-11 w-11 shrink-0 items-center justify-center rounded-[6px] border border-white/[0.08] bg-[#0d0e11]",
+              meta.accentClassName
+            )}
+          >
             {meta.icon}
           </div>
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="text-sm font-semibold text-white">{meta.label}</div>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <span className="text-[14px] font-semibold tracking-[-0.01em] text-white">
+                {meta.label}
+              </span>
+              {/* Dot + label, the status treatment used across the dashboard —
+                  green reads as healthy at a glance without a coloured chip
+                  competing with the provider name. */}
               <span
                 className={twMerge(
-                  "inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-medium",
-                  connected
-                    ? "border-cyan-500/20 bg-cyan-500/10 text-cyan-300"
-                    : "border-white/[0.08] bg-white/[0.04] text-white/55"
+                  `${MONO} inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.12em]`,
+                  connected ? "text-emerald-300/90" : "text-white/40"
                 )}
               >
+                <span
+                  className={twMerge(
+                    "h-1.5 w-1.5 rounded-full shrink-0",
+                    connected ? "bg-emerald-400" : "bg-white/25"
+                  )}
+                  style={connected ? { boxShadow: "0 0 6px #34d399" } : undefined}
+                />
                 {connected ? "Connected" : "Not connected"}
               </span>
               {connected && username && (
-                <span className="text-[11px] text-white/40">@{username}</span>
+                <span className={`${MONO} text-[10.5px] text-white/40`}>
+                  @{username}
+                </span>
               )}
             </div>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/45">{meta.repoDescription}</p>
+            <p className={`${MONO} mt-2 max-w-[560px] text-[11px] leading-relaxed text-white/45`}>
+              {meta.repoDescription}
+            </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           {connected ? (
             <>
               <button
@@ -134,15 +168,15 @@ function RepoConnectionRow({
                 disabled={loading}
                 onClick={() => onReconnect(item.provider as OAuthProvider)}
                 className={twMerge(
-                  "inline-flex items-center justify-center gap-2 border px-4 py-2 text-sm font-medium transition-colors",
-                  "border-white/[0.1] bg-white/[0.03] text-white/80 hover:bg-white/[0.08]",
-                  loading && "cursor-not-allowed opacity-60"
+                  `${MONO} inline-flex h-9 items-center justify-center gap-2 rounded-[5px] border px-3.5 text-[10.5px] font-semibold uppercase tracking-[0.12em] transition-colors`,
+                  "border-white/[0.1] bg-[#16181d] text-white/80 hover:bg-white/[0.06] hover:text-white",
+                  loading && "cursor-not-allowed opacity-50"
                 )}
               >
                 {loading ? (
-                  <><Loader2 className="h-4 w-4 animate-spin" /> Please wait...</>
+                  <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Please wait</>
                 ) : (
-                  <><RefreshCw className="h-4 w-4" /> Reconnect</>
+                  <><RefreshCw className="h-3.5 w-3.5" /> Reconnect</>
                 )}
               </button>
               <button
@@ -150,12 +184,12 @@ function RepoConnectionRow({
                 disabled={loading}
                 onClick={() => onDisconnect(item.provider as OAuthProvider)}
                 className={twMerge(
-                  "inline-flex items-center justify-center gap-2 border px-4 py-2 text-sm font-medium transition-colors",
-                  "border-red-500/20 bg-red-500/10 text-red-300 hover:bg-red-500/20",
-                  loading && "cursor-not-allowed opacity-60"
+                  `${MONO} inline-flex h-9 items-center justify-center gap-2 rounded-[5px] border px-3.5 text-[10.5px] font-semibold uppercase tracking-[0.12em] transition-colors`,
+                  "border-red-500/25 bg-red-500/[0.06] text-red-300 hover:bg-red-500/[0.14] hover:text-red-200",
+                  loading && "cursor-not-allowed opacity-50"
                 )}
               >
-                <Unplug className="h-4 w-4" /> Disconnect
+                <Unplug className="h-3.5 w-3.5" /> Disconnect
               </button>
             </>
           ) : (
@@ -164,15 +198,19 @@ function RepoConnectionRow({
               disabled={loading}
               onClick={() => onConnect(item.provider as OAuthProvider)}
               className={twMerge(
-                "inline-flex items-center justify-center gap-2 border px-4 py-2 text-sm font-medium transition-colors",
-                "border-blue-400/25 bg-blue-500/90 text-white hover:bg-blue-500",
-                loading && "cursor-not-allowed opacity-60"
+                `${MONO} inline-flex h-9 items-center justify-center gap-2 rounded-[5px] px-4 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-white transition-all`,
+                loading && "cursor-not-allowed opacity-50"
               )}
+              style={{
+                background: `linear-gradient(135deg, ${ACCENT}, #0066B3)`,
+                boxShadow:
+                  "0 8px 20px rgba(0,149,255,0.18), inset 0 1px 0 rgba(255,255,255,0.15)",
+              }}
             >
               {loading ? (
-                <><Loader2 className="h-4 w-4 animate-spin" /> Please wait...</>
+                <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Please wait</>
               ) : (
-                <><Link2 className="h-4 w-4" /> Connect</>
+                <><Link2 className="h-3.5 w-3.5" /> Connect</>
               )}
             </button>
           )}
@@ -368,22 +406,38 @@ const Accounts = () => {
   );
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-start gap-3 rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-4">
-        <div className="flex h-10 w-10 items-center justify-center border border-emerald-500/20 bg-emerald-500/10 text-emerald-300">
+    // Capped rather than full-bleed: these are single-column rows, and a
+    // provider name with two buttons stretched across an ultrawide monitor
+    // puts the action a screen's width away from the thing it acts on. The
+    // PAGE runs edge to edge; this block chooses its own measure.
+    <div className="max-w-[900px] space-y-3">
+      <div className={twMerge(CARD, "flex items-start gap-3.5 px-5 py-4")}>
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[6px] border border-emerald-500/20 bg-emerald-500/[0.08] text-emerald-300">
           <GitBranch className="h-4 w-4" />
         </div>
-        <div>
-          <div className="text-sm font-medium text-white">Repository Connections</div>
-          <p className="mt-1 text-sm leading-6 text-white/45">
-            Connect a Git provider to access repositories for application deployments.
-            These can be different accounts from your login method.
+        <div className="min-w-0">
+          <p className="text-[13px] font-semibold tracking-[-0.01em] text-white">
+            Repository connections
+          </p>
+          <p className={`${MONO} mt-1.5 text-[11px] leading-relaxed text-white/45`}>
+            Connect a Git provider to access repositories for application
+            deployments. These can be different accounts from the one you sign
+            in with.
           </p>
         </div>
       </div>
 
-      <div className="space-y-3">
-        {repoConnections.map((item, index) => (
+      {/* An empty list here means the provider fetch failed — fetchProviders
+          toasts on error and leaves the array empty. Saying "none available"
+          would read as a settled fact rather than a failed request. */}
+      {repoConnections.length === 0 ? (
+        <div className={twMerge(CARD, "px-5 py-10 text-center")}>
+          <p className={`${MONO} text-[11px] text-white/45`}>
+            Loading providers — if this persists, refresh the page.
+          </p>
+        </div>
+      ) : (
+        repoConnections.map((item, index) => (
           <RepoConnectionRow
             key={item.provider}
             index={index}
@@ -393,8 +447,8 @@ const Accounts = () => {
             onDisconnect={handleDisconnectRepo}
             onReconnect={handleReconnectRepo}
           />
-        ))}
-      </div>
+        ))
+      )}
     </div>
   );
 };

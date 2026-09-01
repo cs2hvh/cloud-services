@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
+// Button is still used inside the modal dialogs below, which stay on shadcn.
+// Input and Label are gone — the inline form now uses the dashboard's own
+// field styling rather than a second, differently-shaped one.
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -31,6 +32,35 @@ import {
   getMFAStatus,
   update2FAStatus,
 } from "@/lib/api/mfa";
+
+/* ------------------------------------------------------------------ */
+/*  Design tokens                                                      */
+/*                                                                     */
+/*  This tab was built against the shadcn primitives (Button, Label,   */
+/*  text-muted-foreground) while the settings shell around it, billing */
+/*  and the service pages all use the dashboard's own tokens. The two  */
+/*  do not agree on surface colour, corner radius, type scale or       */
+/*  button weight, so Security read as a page from a different app     */
+/*  bolted into the tab strip.                                         */
+/*                                                                     */
+/*  The modal dialogs below are deliberately left on shadcn: they are  */
+/*  overlays with their own consistent treatment, and restyling them   */
+/*  risks their focus and dismissal behaviour for a surface the user   */
+/*  sees for two seconds.                                              */
+/* ------------------------------------------------------------------ */
+
+const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
+const ACCENT = "#0095FF";
+const CARD = "border border-white/[0.06] bg-[#111216] rounded-[6px]";
+
+const PRIMARY_BTN = `${MONO} inline-flex h-10 items-center justify-center gap-2 rounded-[5px] px-4 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed`;
+const PRIMARY_STYLE: React.CSSProperties = {
+  background: `linear-gradient(135deg, ${ACCENT}, #0066B3)`,
+  boxShadow:
+    "0 8px 20px rgba(0,149,255,0.18), inset 0 1px 0 rgba(255,255,255,0.15)",
+};
+const DANGER_BTN = `${MONO} inline-flex h-10 items-center justify-center gap-2 rounded-[5px] border border-red-500/25 bg-red-500/[0.06] px-4 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-red-300 transition-colors hover:bg-red-500/[0.14] hover:text-red-200 disabled:opacity-50 disabled:cursor-not-allowed`;
+const FIELD_LABEL = `${MONO} block text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45 mb-2`;
 
 export default function EnableTotp() {
   const [factorId, setFactorId] = useState<string>("");
@@ -162,35 +192,43 @@ export default function EnableTotp() {
 
   if (loading) {
     return (
-      // Updated class to match dashboard spacing pattern
-      <div className="space-y-4">
-        <motion.div 
+      <div className={`${CARD} max-w-[720px] px-5 py-10 text-center`}>
+        <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="text-sm text-muted-foreground"
+          className={`${MONO} text-[11px] text-white/45`}
         >
           Loading 2FA settings...
-        </motion.div>
+        </motion.p>
       </div>
     );
   }
 
   return (
-    // Updated class to remove max-width constraint to match dashboard spacing
-    <div className="space-y-4">
+    // Capped: this is a single column of prose, a QR and a six-digit field.
+    // The PAGE runs edge to edge; a 6-character input has no business being
+    // 1,800px from its own label.
+    <div className="max-w-[720px] space-y-4">
       {!has2FA ? (
         !showSetup ? (
-          // Show enable button when 2FA is not set up
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
+            className={`${CARD} p-5`}
           >
-            <p className="text-sm text-muted-foreground mb-4">
-              Two-factor authentication adds an extra layer of security to your account by requiring more than just a password to sign in.
+            <div className="flex items-center gap-2.5 mb-3">
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-white/25" />
+              <span className={`${MONO} text-[10px] uppercase tracking-[0.12em] text-white/40`}>
+                Not enabled
+              </span>
+            </div>
+            <p className={`${MONO} text-[11px] leading-relaxed text-white/45 mb-5`}>
+              Two-factor authentication adds an extra layer of security to your
+              account by requiring more than just a password to sign in.
             </p>
-            <Button onClick={startEnrollment}>
+            <button type="button" onClick={startEnrollment} className={PRIMARY_BTN} style={PRIMARY_STYLE}>
               Enable Two-Factor Authentication
-            </Button>
+            </button>
           </motion.div>
         ) : (
           // Show setup flow when user has clicked enable
@@ -199,8 +237,11 @@ export default function EnableTotp() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
+              className={`${CARD} p-5`}
             >
-              <Label>Scan this QR in your Authenticator app</Label>
+              <span className={FIELD_LABEL}>
+                Scan this QR in your Authenticator app
+              </span>
               {qrSvg ? (
                 <motion.img
                   initial={{ opacity: 0, scale: 0.95 }}
@@ -208,7 +249,9 @@ export default function EnableTotp() {
                   transition={{ delay: 0.2 }}
                   alt="TOTP QR Code"
                   src={qrSvg}
-                  className="mt-2 border rounded-md w-48 h-48 object-contain bg-white"
+                  // White plate is deliberate — a QR needs light quiet zones to
+                  // scan, so it cannot inherit the dark surface.
+                  className="h-48 w-48 rounded-[6px] border border-white/[0.08] bg-white object-contain p-2"
                   onError={() => {
                     console.error("QR Code failed to load:", qrSvg);
                     setError(
@@ -220,29 +263,30 @@ export default function EnableTotp() {
                   }}
                 />
               ) : (
-                <motion.div 
+                <motion.p
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.2 }}
-                  className="text-sm text-muted-foreground mt-2"
+                  className={`${MONO} text-[11px] text-white/45`}
                 >
                   Generating QR…
-                </motion.div>
+                </motion.p>
               )}
               {totpSecret && (
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.3 }}
-                  className="mt-2"
+                  className="mt-5"
                 >
-                  <Label className="text-xs">Secret Key (for manual entry):</Label>
-                  <div className="text-xs font-mono bg-black/20 p-2 rounded mt-1 break-all">
+                  <span className={FIELD_LABEL}>Secret Key (for manual entry):</span>
+                  <div
+                    className={`${MONO} break-all rounded-[5px] border border-white/[0.08] bg-[#0d0e11] px-3 py-2.5 text-[11px] text-white/80`}
+                  >
                     {totpSecret}
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Enter this key manually in your authenticator app if you
-                    can&apos;t scan the QR code.
+                  <p className={`${MONO} mt-2 text-[10.5px] leading-relaxed text-white/40`}>
+                    Use this if your device can&apos;t scan the code.
                   </p>
                 </motion.div>
               )}
@@ -252,9 +296,12 @@ export default function EnableTotp() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
+              className={`${CARD} p-5`}
             >
-              <Label htmlFor="totp">Enter the 6-digit code</Label>
-              <Input
+              <label htmlFor="totp" className={FIELD_LABEL}>
+                Enter the 6-digit code
+              </label>
+              <input
                 id="totp"
                 inputMode="numeric"
                 autoComplete="one-time-code"
@@ -266,56 +313,68 @@ export default function EnableTotp() {
                   setCode(value);
                 }}
                 maxLength={6}
+                className={`${MONO} h-11 w-full max-w-[220px] rounded-[5px] border border-white/[0.08] bg-[#0d0e11] px-3.5 text-[16px] tracking-[0.28em] text-white outline-none transition-colors placeholder:tracking-[0.28em] placeholder:text-white/25 focus:border-[#0095FF]/50`}
               />
-              <p className="text-xs text-muted-foreground mt-1">
-                Make sure your device&apos;s clock is synchronized for the code to
-                work properly.
+              <p className={`${MONO} mt-2.5 text-[10.5px] leading-relaxed text-white/40`}>
+                Codes rotate every 30 seconds. If yours is rejected, check your
+                device&apos;s clock is set automatically.
               </p>
-              {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
-            </motion.div>
+              {error && (
+                <p className={`${MONO} mt-3 inline-flex items-start gap-1.5 text-[10.5px] leading-relaxed text-red-300/90`}>
+                  <span className="mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full bg-red-400" />
+                  {error}
+                </p>
+              )}
 
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 }}
-            >
-              <Button
-                onClick={onVerify}
-                disabled={busy || !factorId || code.length < 6}
-              >
-                {busy ? "Enabling…" : "Enable 2FA"}
-              </Button>
+              <div className="mt-5">
+                <button
+                  type="button"
+                  onClick={onVerify}
+                  disabled={busy || !factorId || code.length < 6}
+                  className={PRIMARY_BTN}
+                  style={PRIMARY_STYLE}
+                >
+                  {busy ? "Enabling…" : "Enable 2FA"}
+                </button>
+              </div>
             </motion.div>
           </>
         )
       ) : (
         <>
-          <motion.div 
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="space-y-2"
-          >
-            <Label>
-              Two-factor authentication is currently{" "}
-              <span className="font-semibold">Enabled</span>.
-            </Label>
-            <p className="text-sm text-muted-foreground">
-              You&apos;ll be asked for a code each time you sign in.
-            </p>
-            {error && <p className="text-sm text-red-600">{error}</p>}
-          </motion.div>
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
+            className={`${CARD} p-5`}
           >
-            <Button
-              variant="destructive"
-              onClick={() => setShowDisableConfirmDialog(true)}
-              disabled={busy}
-            >
-              {busy ? "Disabling…" : "Disable 2FA"}
-            </Button>
+            <div className="flex items-center gap-2.5 mb-3">
+              <span
+                className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400"
+                style={{ boxShadow: "0 0 6px #34d399" }}
+              />
+              <span className={`${MONO} text-[10px] uppercase tracking-[0.12em] text-emerald-300/90`}>
+                Enabled
+              </span>
+            </div>
+            <p className={`${MONO} text-[11px] leading-relaxed text-white/45`}>
+              You&apos;ll be asked for a code each time you sign in.
+            </p>
+            {error && (
+              <p className={`${MONO} mt-3 inline-flex items-start gap-1.5 text-[10.5px] leading-relaxed text-red-300/90`}>
+                <span className="mt-[5px] h-1.5 w-1.5 shrink-0 rounded-full bg-red-400" />
+                {error}
+              </p>
+            )}
+            <div className="mt-5">
+              <button
+                type="button"
+                onClick={() => setShowDisableConfirmDialog(true)}
+                disabled={busy}
+                className={DANGER_BTN}
+              >
+                {busy ? "Disabling…" : "Disable 2FA"}
+              </button>
+            </div>
           </motion.div>
         </>
       )}
