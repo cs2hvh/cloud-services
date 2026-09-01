@@ -1,0 +1,58 @@
+-- Retire the v1 pricing tables. Requested 2026-08-31 as part of moving pricing
+-- onto billing.service_pricing and the admin panel.
+--
+-- DROP, NOT DELETE — and the distinction matters more than it looks.
+--
+-- ratesFromProduct() in config/pricing.ts reads price/fixed_price off a product
+-- row and returns { initialCost: 0, hourlyRate: 0 } when the row is absent. So
+-- EMPTYING these tables would not stop billing; it would silently set every
+-- service to FREE, and every provision would succeed while metering nothing.
+-- That is the same "an empty result read as a good result" failure this entire
+-- rebuild exists to remove, and it would be the largest instance of it yet.
+--
+-- Dropping makes those code paths throw instead. Loud beats silent when the
+-- alternative is giving the product away.
+--
+-- WHAT THIS BREAKS, immediately and on purpose:
+--   * VPS deploy — instance_plans drives plan selection and the quote
+--   * v1 rate lookups for database, kubernetes, objectspace, spectrum,
+--     platform_apps, inference_vector (all of config/pricing.ts)
+--   * GPU quoting — gpu_pricing.markup_pct feeds computeResalePerHour()
+--   * /pricing and the marketing pages that read products
+--
+-- The replacement (billing.service_pricing) is live but currently holds ZERO
+-- live prices by request, so nothing can be priced until the admin panel
+-- writes fresh ones.
+--
+-- FULL RESTORE PATH: every row was copied first to schema
+-- pricing_archive_20260831 (products 63, instance_plans 14, gpu_pricing 192,
+-- pricing_categories 7, pricing_promos 2, game_server_plans 12). To restore:
+--   create table public.products as select * from pricing_archive_20260831.products;
+-- Constraints, defaults and indexes are NOT carried by that copy and must be
+-- re-added from the migration history.
+--
+-- CASCADE drops one dependent object: the FK game_servers.plan -> products.
+-- The 3 rows in game_servers are untouched; only the constraint goes.
+--
+-- ─────────────────────────────────────────────────────────────────────────
+-- WHAT THIS GOT WRONG, recorded here rather than quietly corrected elsewhere
+--
+-- Dropping gpu_pricing was a mistake and was reverted the next day by
+-- 20260901000002_restore_gpu_pricing.sql. The table was not dead v1 pricing:
+-- createPod() reads it and THROWS without it, so GPU pod creation was broken
+-- from this migration until the restore. It stayed hidden for a day because
+-- the inventory sync only touches gpu_pricing during auto-discovery and logs
+-- that failure non-fatally.
+--
+-- The general lesson, since it will recur: "unused" has to be proven by
+-- reading the callers. It cannot be inferred from a table's name, its age, or
+-- the fact that a replacement exists.
+-- ─────────────────────────────────────────────────────────────────────────
+--
+-- RECOVERED 2026-09-01 from supabase_migrations.schema_migrations (version
+-- 20260831075245). Applied to production 2026-08-31; the file was never
+-- written.
+
+drop table if exists public.instance_plans cascade;
+drop table if exists public.gpu_pricing    cascade;
+drop table if exists public.products       cascade;

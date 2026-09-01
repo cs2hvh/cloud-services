@@ -123,6 +123,41 @@ a bare hourly rate. The unit travels with the number everywhere it goes.
 | hour-boundary CHECK on `effective_from`/`effective_to` | a price created at 10:30 not covering the 10:00 hour → silent `no-price` |
 | `one_live_per_plan` (partial unique) | two live prices making the charged rate depend on row order |
 
+### `billing.set_price()` is the only way in
+
+The rule below used to be a convention every client had to remember. It is now
+enforced: `service_role` holds only `SELECT` on `billing.service_pricing`, and
+all writes go through `billing.set_price()` (SECURITY DEFINER, so it still
+works). A client that forgets the discipline and `UPDATE`s in place cannot —
+the grant table refuses it.
+
+`set_price` validates the plan exists in `public.service_plans`, dry-runs the
+model/unit pairing through `resolve_hourly_rate` before writing, takes
+`FOR UPDATE` on the live row, then closes it and inserts the replacement
+atomically at an hour boundary.
+
+The fiddly case is a price corrected **within the same hour it was created**.
+Closing it at `date_trunc('hour', now())` would set `effective_to =
+effective_from` — a zero-length window the `window_ordered` CHECK refuses. That
+case is a correction, not a change: the sweep bills the hour that has
+*completed*, so a price set at 10:15 and revised at 10:45 never priced anything.
+It updates in place and returns `corrected`. Any earlier price is closed, never
+edited, because it may have priced real charges.
+
+### `public.service_plans` — the catalog
+
+What plans exist, separate from what they cost: slug, display name, specs,
+provider size mapping. **It carries no price columns.**
+
+This exists because dropping `products` and `instance_plans` as "pricing tables"
+also destroyed the plan *definitions* that `plan_key` references — leaving
+`plan_key` pointing at identifiers nothing defined. Caught by the admin-panel
+lane, not by me.
+
+It lives in `public`, not `billing`, deliberately: provisioning needs to know
+which sizes exist and shouldn't have to reach into the billing schema to find
+out. The price book prices the catalog; the catalog knows nothing about money.
+
 ### Prices are versioned, never updated
 
 A change **closes** the current row and **inserts** a new one. Two reasons:
@@ -237,11 +272,16 @@ charge_service_hour(service_type, service_id, user_id, period_start,
                     plan_key, upstream_cost, quantity, units) → text
 ```
 
-Returns one of: `charged` · `already-charged` · `insufficient` · `no-price` ·
-`zero-cost` · `invalid-amount`.
+Returns one of: `charged` · `charged-free` · `already-charged` · `insufficient` ·
+`no-price` · `zero-cost` · `invalid-amount`.
 
 **Every outcome is a named string, not an exception.** The sweep can count them,
 and "already charged" is a normal result rather than an error to be swallowed.
+
+`charged-free` is the hour a free-hours allowance covered: claimed and recorded,
+but no money moved. It is deliberately distinct from `zero-cost` (nothing to
+bill) and from `charged` (money moved), because collapsing them would report a
+working free tier as either a fault or as revenue.
 
 ### The savepoint, which is the whole point
 
@@ -476,6 +516,17 @@ PK and CHECK constraints re-added by hand). **The lesson is the general one:
 | `…20260831000001_billing_v2_gpu_volume_billing_key.sql` | `billing_service_id` on `gpu_network_volumes` |
 | `…20260831000002_billing_v2_seed_price_book.sql` | the live catalogue |
 | `…20260831000003_billing_v2_discounts.sql` | discounts + grants |
+| `…20260831063455_billing_v2_fix_phantom_ledger_row.sql` | the savepoint fix |
+| `…20260831073236_billing_v2_monthly_sanity_bound.sql` | the $10,000/mo and $10/GB ceilings |
+| `…20260831073727_billing_v2_grant_charge_to_service_role.sql` | the EXECUTE grant the REVOKE stripped |
+| `…20260831075245_billing_v2_drop_legacy_pricing_tables.sql` | retires v1 pricing (and drops `gpu_pricing` in error) |
+| `…20260831081120_billing_v2_charge_applies_discounts.sql` | discounts inside the charge; adds `charged-free` |
+| `…20260831081330_billing_v2_redeem_discount_code.sql` | code → grant |
+| `…20260831083039_billing_v2_service_plan_catalog.sql` | `public.service_plans` |
+| `…20260831083128_billing_v2_set_price_function.sql` | `set_price` |
+| `…20260831083229_billing_v2_markup_unit_validated.sql` | markup unit check; `set_price` error shape |
+| `…20260831084114_billing_v2_price_seed_candidates.sql` | archive → candidate rows, no arithmetic |
+| `…20260831084156_billing_v2_price_writes_only_via_set_price.sql` | revokes direct writes on the price book |
 | `scripts/billing/sweep.ts` | the hourly sweep |
 | `scripts/billing/deadman.ts` | staleness watchdog |
 | `lib/billing/meters.ts` | open/close helpers, `normalizePlanKey` |
@@ -483,6 +534,37 @@ PK and CHECK constraints re-added by hand). **The lesson is the general one:
 | `deploy/systemd/ahura-billing-sweep.*` | timer + unit + README |
 | `.github/workflows/billing-deadman.yml` | watchdog schedule |
 | `docs/billing/ADMIN-PANEL-HANDOFF.md` | contract with the admin-panel lane |
+
+### Migration drift, and how it was found
+
+On 2026-09-01 the database held **20 applied migrations and the repo held 9
+files**. Eleven migrations existed only in production — including the phantom-
+ledger fix, `set_price`, `service_plans`, the discount application inside
+`charge_service_hour`, and the `service_role` grant that makes the sweep work
+at all. A rebuild from the repo would have produced a billing system that was
+subtly and dangerously different from the live one.
+
+Cause: `apply_migration` writes to the database and to
+`supabase_migrations.schema_migrations`, but not to `supabase/migrations/`.
+Applying eleven of them without writing the files was my own omission, spread
+across a day's work where each individual skip looked harmless.
+
+All eleven were recovered from `schema_migrations.statements` and written back,
+using their real applied version numbers so `supabase db push` treats them as
+already applied. The check that catches this is one query:
+
+```sql
+select version, name from supabase_migrations.schema_migrations
+where version >= '20260830' order by version;
+```
+
+Compare it against `ls supabase/migrations/`. They should be the same length.
+
+> Note: the six earliest files carry invented version numbers
+> (`20260830000001`…) that do not match their applied versions
+> (`20260831063017`…). Their *content* is correct and their sort order replays
+> correctly; only the filenames differ. Renaming them would be tidier, but they
+> are committed and other lanes pull this branch, so they are left as they are.
 
 ### Permissions
 
