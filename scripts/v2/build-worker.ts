@@ -24,6 +24,8 @@ import { deployments, projects } from "../../lib/paas/db.ts";
 import { toCustomerFacing } from "../../lib/paas/errors.ts";
 import { notifyAppEventRemote } from "../../lib/paas/notify-hook.ts";
 import { deployFromRepo } from "../../lib/paas/deploy.ts";
+import { BUILD_VM_TAG, destroyBuildVm } from "../../lib/paas/build/vm.ts";
+import { instances } from "../../lib/paas/linode/client.ts";
 import { kube, loadKubeconfig } from "../../lib/paas/k8s/client.ts";
 import { PAAS_NAMESPACE } from "../../lib/paas/k8s/manifests.ts";
 
@@ -46,9 +48,27 @@ function stamp(): string {
   return new Date().toISOString().replace("T", " ").slice(0, 19);
 }
 
+/**
+ * The deployment this process is building right now, for the shutdown handler.
+ *
+ * Set before the first write that leaves the queue and cleared in `finally`, so
+ * a signal arriving at any point during a build finds it — and a signal arriving
+ * between builds finds nothing to clean up.
+ */
+let inFlight: string | null = null;
+
 async function buildOne(ref: string): Promise<void> {
   const d = await deployments.byRef(ref);
   if (!d) return;
+  inFlight = ref;
+  try {
+    await buildOneInner(d);
+  } finally {
+    inFlight = null;
+  }
+}
+
+async function buildOneInner(d: NonNullable<Awaited<ReturnType<typeof deployments.byRef>>>): Promise<void> {
 
   const project = (await projects.list()).find((p) => p.id === d.project_id);
   if (!project) {
@@ -143,8 +163,76 @@ async function pass(): Promise<number> {
   // Sequential on purpose. Builds lease Linodes, and a queue that fans out is a
   // queue that can spend an unbounded amount of money in one pass. Concurrency
   // here needs a cap tied to a budget, not just a Promise.all.
-  for (const d of queue) await buildOne(d.ref);
+  for (const d of queue) {
+    if (stopping) break; // a signal arrived mid-queue: do not start another
+    await buildOne(d.ref);
+  }
   return queue.length;
+}
+
+/* ── shutdown ───────────────────────────────────────────────────────────────
+ *
+ * A DEPLOY RESTARTS THIS PROCESS, AND A BUILD CAN BE IN FLIGHT WHEN IT DOES.
+ *
+ * Without this, systemd stops the worker, the build VM keeps running with
+ * nobody polling it, and the deployment sits in `building` forever. The
+ * customer sees a spinner that never resolves; we keep paying for the instance
+ * until something reaps it. That is where the four `building` rows from
+ * 2026-08-27 and 08-31 came from, and it happened again on dpl-8fb1c89620d1
+ * the first time a deploy restarted this worker mid-build.
+ *
+ * NOT a graceful drain. Waiting for the build to finish would mean a stop
+ * taking up to ten minutes on every deploy, and systemd would SIGKILL through
+ * it anyway. Failing the deployment honestly and releasing the instance is
+ * bounded, and "interrupted, deploy again" is a far better answer than a
+ * spinner that never stops.
+ */
+let stopping = false;
+
+async function shutdown(signal: string): Promise<void> {
+  if (stopping) return; // a second signal must not race the first's cleanup
+  stopping = true;
+  console.log(`[${stamp()}] ${signal} — stopping`);
+
+  const ref = inFlight;
+  if (!ref) {
+    process.exit(0);
+  }
+
+  console.log(`   ${ref} was building; failing it rather than leaving it queued forever`);
+  try {
+    await deployments.setState(ref, {
+      state: "error",
+      errorCode: "interrupted",
+      errorMessage:
+        "This deployment was interrupted while the platform restarted. Nothing was changed — " +
+        "deploy again and it will build from the same commit.",
+    });
+  } catch (e) {
+    console.log(`   WARNING could not record the interruption: ${(e as Error).message.slice(0, 140)}`);
+  }
+
+  // Its instance is identified by the deployment's own tag, so this works even
+  // when the build_vms row was never written.
+  try {
+    const leaked = (await instances.listByTag(BUILD_VM_TAG)).filter(
+      (i) => i.label === `bld-${ref}` || (i.tags ?? []).includes(`dpl:${ref}`),
+    );
+    for (const i of leaked) {
+      await destroyBuildVm(i.id);
+      console.log(`   released ${i.label}`);
+    }
+  } catch (e) {
+    console.log(`   WARNING could not release the build instance: ${(e as Error).message.slice(0, 140)}`);
+  }
+
+  process.exit(0);
+}
+
+for (const sig of ["SIGTERM", "SIGINT"] as const) {
+  process.on(sig, () => {
+    void shutdown(sig);
+  });
 }
 
 if (ONCE) {
