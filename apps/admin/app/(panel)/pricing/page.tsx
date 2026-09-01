@@ -118,6 +118,17 @@ export default async function PricingPage() {
               deliberately backdated.
             </Callout>
           )}
+          {SWEEP_STATUS === "watched" && (
+            <p className="mb-4 text-xs text-muted-foreground">
+              Billing active since{" "}
+              {new Date(BILLING_ACTIVE_SINCE).toUTCString().slice(0, 22)} UTC —
+              no earlier hour can ever be billed unless a price is deliberately
+              backdated. The sweep runs hourly and a watchdog checks it every
+              2h (3h staleness threshold). Monitored, not self-healing: a
+              stoppage is detected, not fixed, and a red run is only seen by
+              someone watching the Actions tab.
+            </p>
+          )}
           {unpricedCount > 0 && (
             <Callout tone="warning">
               {unpricedCount} of {plans.length} active plans have no live

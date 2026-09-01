@@ -16,12 +16,14 @@ export const HOURS_IN_MONTH = 720;
  * but unwatched" is precisely the condition that let six days of unbilled
  * usage pass, so it must not render the same as either neighbour.
  *
- * 2026-08-31: ahura-billing-sweep.timer deployed (hourly at :10, --apply);
- * the deadman workflow exists but needs two repository secrets, so the sweep
- * is scheduled_unwatched until those land.
+ * 2026-08-31: ahura-billing-sweep.timer deployed (hourly at :10, --apply).
+ * 2026-09-01: deadman watchdog armed — repo secrets added, workflow runs on
+ * GitHub every 2h against a 3h staleness threshold. Watched means monitored,
+ * NOT self-healing: it detects a stoppage, it restarts nothing, and a red
+ * run is only seen by someone watching the Actions tab.
  */
 export type SweepStatus = "unscheduled" | "scheduled_unwatched" | "watched";
-export const SWEEP_STATUS: SweepStatus = "scheduled_unwatched";
+export const SWEEP_STATUS: SweepStatus = "watched";
 
 /**
  * Prices became effective 2026-08-31 09:00 UTC and the sweep bills only
