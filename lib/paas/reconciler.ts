@@ -58,7 +58,12 @@ export interface ReconcileReport {
   actions: ReconcileAction[];
 }
 
-function tenantNamespace(project: ProjectRow): string {
+/**
+ * Exported because the deploy path waits on this namespace's rollout before
+ * calling a deployment ready, and rebuilding the name there would be a second
+ * copy of the same fact — free to drift from this one.
+ */
+export function tenantNamespace(project: ProjectRow): string {
   return `app-${project.ref}`;
 }
 

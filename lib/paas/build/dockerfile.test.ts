@@ -755,3 +755,47 @@ test("THE RUNTIME IS STILL DISTROLESS, which only a static binary can use", () =
   assert.match(df, /FROM gcr\.io\/distroless\/static-debian12:nonroot/);
   assert.match(df, /-extldflags "-static"/);
 });
+
+// ── next.js output:'standalone' ─────────────────────────────────────────────
+
+const standaloneDetection = detect(["package.json", "next.config.js"], {
+  "package.json": JSON.stringify({ dependencies: { next: "15" }, scripts: { build: "next build" } }),
+  "next.config.js": "module.exports = { output: 'standalone' }",
+});
+
+test("output:'standalone' is carried as a fact, not inferred from the start command", () => {
+  assert.equal(standaloneDetection.standalone, true);
+  assert.equal(standaloneDetection.startCommand, "node server.js");
+  // The ordinary Next.js app must not pick up the standalone layout.
+  assert.notEqual(nextDetection.standalone, true);
+  assert.equal(nextDetection.startCommand, "start");
+});
+
+test("a standalone build copies the server to /app, where its CMD looks for it", () => {
+  const df = generateDockerfile(input({ detection: standaloneDetection }))!;
+
+  // The whole bug in one assertion: `node server.js` resolves /app/server.js,
+  // so .next/standalone must land at the WORKDIR root and not one level down.
+  assert.match(df, /COPY --from=builder --chown=1000:1000 \/app\/\.next\/standalone \.\//);
+  assert.match(df, /COPY --from=builder --chown=1000:1000 \/app\/\.next\/static \.\/\.next\/static/);
+  assert.match(df, /COPY --from=builder --chown=1000:1000 \/app\/public \.\/public/);
+  assert.match(df, /CMD \["sh","-c","node server\.js"\]/);
+
+  // Copying the tree wholesale is what put server.js out of reach.
+  assert.doesNotMatch(df, /COPY --from=builder --chown=1000:1000 \/app \.\//);
+});
+
+test("public/ is created in the builder, because COPY fails on a missing source", () => {
+  const df = generateDockerfile(input({ detection: standaloneDetection }))!;
+  const mkdir = df.indexOf("RUN mkdir -p /app/public");
+  const copy = df.indexOf("/app/public ./public");
+  assert.ok(mkdir > 0, "builder stage should guarantee public/ exists");
+  assert.ok(mkdir < copy, "the directory must exist before the runner copies it");
+});
+
+test("a non-standalone Next.js app still copies the whole tree", () => {
+  const df = generateDockerfile(input({ detection: nextDetection }))!;
+  assert.match(df, /COPY --from=builder --chown=1000:1000 \/app \.\//);
+  assert.doesNotMatch(df, /\.next\/standalone/);
+  assert.doesNotMatch(df, /RUN mkdir -p \/app\/public/);
+});

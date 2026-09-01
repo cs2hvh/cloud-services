@@ -26,6 +26,19 @@ export interface Detection {
   confidence: "certain" | "likely" | "fallback";
   /** Human-readable reason, surfaced in the build log so users can see why. */
   reason: string;
+  /**
+   * Next.js `output: 'standalone'` — the build writes a self-contained server
+   * to `.next/standalone` instead of leaving one to `next start`.
+   *
+   * THIS IS A FACT ABOUT THE LAYOUT, NOT JUST THE COMMAND, and it is stated
+   * here because both halves need it and only one of them used to know. The
+   * start command became `node server.js` while the Dockerfile went on copying
+   * the tree wholesale, which puts server.js at `/app/.next/standalone/server.js`
+   * — so every standalone app crash-looped on `Cannot find module '/app/server.js'`.
+   * Re-deriving it downstream by matching the command string would leave the
+   * same two facts free to disagree again.
+   */
+  standalone?: boolean;
 }
 
 export interface RepoFiles {
@@ -244,6 +257,7 @@ export function detectFramework(files: RepoFiles): Detection {
         port: 3000,
         confidence: "certain",
         reason: `Found "next" in dependencies${standalone ? " with output:'standalone'" : ""}.`,
+        standalone,
       };
     }
 

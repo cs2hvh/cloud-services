@@ -34,7 +34,7 @@ import { presign, deleteObject, r2Keys } from "./build/r2.ts";
 import { imageIsDurable } from "./build/registry.ts";
 import { kube } from "./k8s/client.ts";
 import { PAAS_NAMESPACE, REGISTRY_PUSH, publisherJob } from "./k8s/manifests.ts";
-import { reconcileProject, kubeContextFromEnv } from "./reconciler.ts";
+import { reconcileProject, kubeContextFromEnv, tenantNamespace } from "./reconciler.ts";
 import { buildFailureMessage, customerError, GENERIC } from "./errors.ts";
 import { db, teams, projects, environments, deployments, aliases, envVars, type DeploymentRow, type ProjectRow, type AliasRow } from "./db.ts";
 import { decryptEnvValue, pgHexToBytes } from "./secrets.ts";
@@ -412,6 +412,68 @@ export function aliasesToPoint(
   return isPreview
     ? allAliases.filter((a) => a.kind === "branch" && a.hostname === hostname)
     : allAliases.filter((a) => a.kind !== "branch");
+}
+
+interface KubeDeployment {
+  spec?: { replicas?: number };
+  status?: { readyReplicas?: number; replicas?: number };
+}
+
+/**
+ * Why the pods for this deployment are not ready, in one line, or null while
+ * they are simply still starting.
+ *
+ * Only states that will NOT resolve on their own are reported. "ContainerCreating"
+ * and "Pending" during an image pull are the normal path and saying anything
+ * about them would train people to ignore this line; CrashLoopBackOff,
+ * ImagePullBackOff and an unschedulable pod will still be true in four minutes.
+ */
+async function podTrouble(
+  k: ReturnType<typeof kube>,
+  namespace: string,
+  deploymentRef: string,
+): Promise<string | null> {
+  interface PodList {
+    items: Array<{
+      status?: {
+        conditions?: Array<{ type: string; status: string; reason?: string; message?: string }>;
+        containerStatuses?: Array<{
+          restartCount: number;
+          state?: Record<string, { reason?: string; message?: string; exitCode?: number }>;
+          lastState?: Record<string, { reason?: string; exitCode?: number }>;
+        }>;
+      };
+    }>;
+  }
+
+  let pods: PodList | null = null;
+  try {
+    pods = await k.get<PodList>(
+      `/api/v1/namespaces/${namespace}/pods?labelSelector=ahura.cloud/deployment=${deploymentRef}`,
+      true,
+    );
+  } catch {
+    return null; // unreadable is not the same as unhealthy
+  }
+
+  for (const p of pods?.items ?? []) {
+    const sched = (p.status?.conditions ?? []).find((c) => c.type === "PodScheduled");
+    if (sched && sched.status === "False" && sched.reason === "Unschedulable") {
+      // The scheduler's own words. "Insufficient memory" is the difference
+      // between the customer's bug and ours, and guessing has been wrong.
+      return `pod cannot be scheduled — ${(sched.message ?? "no reason given").slice(0, 200)}`;
+    }
+    for (const cs of p.status?.containerStatuses ?? []) {
+      const waiting = cs.state?.waiting;
+      if (waiting?.reason === "CrashLoopBackOff" || waiting?.reason === "ImagePullBackOff" ||
+          waiting?.reason === "ErrImagePull" || waiting?.reason === "CreateContainerConfigError") {
+        const exit = cs.lastState?.terminated?.exitCode;
+        return `container ${waiting.reason}${exit !== undefined ? ` (exit ${exit})` : ""}` +
+          `${cs.restartCount ? `, ${cs.restartCount} restarts` : ""}`;
+      }
+    }
+  }
+  return null;
 }
 
 export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult> {
@@ -893,13 +955,20 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
 
   // image_digest is write-once at the database level, so a late or duplicate
   // finalizer cannot rewrite it.
+  //
+  // NOT `ready` HERE. Publishing means the image reached the registry — it says
+  // nothing about whether anything runs it, and the workload does not even
+  // exist yet: routing and convergence are two steps below. Marking ready here
+  // meant a deployment reported ready while its pod was Pending for want of
+  // memory, and again while it crash-looped on a missing module. Both times the
+  // customer saw a ready badge and a dead site, which is worse than an error,
+  // because an error is actionable. `ready` is now set after the rollout is
+  // observed at the end of this function.
   await deployments.setState(d.ref, {
-    state: "ready",
-    readyAt: true,
     imageRepo: project.ref,
     imageDigest: result.imageDigest!,
   });
-  say("publish", "ready");
+  say("publish", "image published");
 
   // ── 3b. reclaim the transfer artifact ─────────────────────────────────────
   //
@@ -1024,6 +1093,65 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
   const report = await reconcileProject(kubeContextFromEnv(), project, { appDomain: "" });
   for (const a of report.actions) say("converge", `${a.kind} ${a.target} — ${a.detail}`);
 
+  // ── 5b. does it actually run? ─────────────────────────────────────────────
+  //
+  // The workload exists now, which is not the same as serving. A pod can sit
+  // Pending because the node has no memory left, or come up and crash-loop on
+  // its first line — and until this check existed, both reported `ready`.
+  //
+  // What we wait for is the Deployment's own readiness count, because that is
+  // the same condition the Service uses to decide whether to send traffic. If
+  // it never gets there, the deploy failed, and saying so with the reason is
+  // the whole point.
+  const ns = tenantNamespace(project);
+  const rolloutDeadline = Date.now() + 4 * 60_000;
+  let rollout: { ok: boolean; reason: string } = { ok: false, reason: "rollout did not start" };
+
+  while (Date.now() < rolloutDeadline) {
+    let live: KubeDeployment | null = null;
+    try {
+      live = await k.get<KubeDeployment>(`/apis/apps/v1/namespaces/${ns}/deployments/${d.ref}`, true);
+    } catch {
+      /* transient API blip: keep polling rather than failing a good deploy */
+    }
+
+    const desired = live?.spec?.replicas ?? null;
+    // Deliberately asleep is not a failure. An app with scale to zero on can be
+    // converged at zero replicas, and waiting for a pod that nothing intends to
+    // start would turn a working configuration into a failed deploy.
+    if (desired === 0) { rollout = { ok: true, reason: "scaled to zero — nothing to wait for" }; break; }
+
+    const ready = live?.status?.readyReplicas ?? 0;
+    if (desired !== null && ready >= desired && ready > 0) {
+      rollout = { ok: true, reason: `${ready}/${desired} replicas ready` };
+      break;
+    }
+
+    // Name the reason WHILE waiting, not only at the end — a four-minute silence
+    // followed by "timed out" hides a pod that said CrashLoopBackOff at second
+    // twenty.
+    const why = await podTrouble(k, ns, d.ref);
+    if (why) {
+      say("rollout", why);
+      rollout = { ok: false, reason: why };
+    } else {
+      say("rollout", `${ready}/${desired ?? "?"} ready…`);
+    }
+    await new Promise((r) => setTimeout(r, 5000));
+  }
+
+  if (!rollout.ok) {
+    await deployments.setState(d.ref, {
+      state: "error",
+      errorCode: "rollout_failed",
+      errorMessage:
+        "Your app was built and published, but it did not start. Check Runtime logs for what it " +
+        "printed as it exited.",
+    });
+    throw new Error(`rollout failed for ${d.ref}: ${rollout.reason}`);
+  }
+  say("rollout", rollout.reason);
+
   // ── 6. DNS, last ──────────────────────────────────────────────────────────
   // After convergence, so a record never points at a hostname that cannot yet
   // serve. publish-app.ts already refuses to overwrite a record pointing
@@ -1055,6 +1183,14 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
     // ends in an app nobody can reach.
     say("dns", `SKIPPED — no gateway address given, so ${alias.hostname} will not resolve`);
   }
+
+  // ── 7. ready, and only now ────────────────────────────────────────────────
+  //
+  // Everything the word promises is true at this point and not before: the
+  // image is published, the alias points at this deployment, the workload has
+  // converged, and a pod is actually serving.
+  await deployments.setState(d.ref, { state: "ready", readyAt: true });
+  say("ready", `${alias.hostname} is serving`);
 
   return {
     project,
