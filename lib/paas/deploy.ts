@@ -1091,7 +1091,15 @@ export async function deployFromRepo(opts: DeployOptions): Promise<DeployResult>
   const alias = toPoint.find((a) => a.hostname === hostname) ?? production!;
 
   // ── 5. converge ───────────────────────────────────────────────────────────
-  const report = await reconcileProject(kubeContextFromEnv(), project, { appDomain: "" });
+  // RE-READ, because the row in `d` predates this function's own writes: the
+  // image digest was recorded during publish, and the reconciler builds the pod
+  // spec from it. Passing the stale row would converge a deployment with no
+  // image.
+  const converging = (await deployments.byRef(d.ref)) ?? d;
+  const report = await reconcileProject(kubeContextFromEnv(), project, {
+    appDomain: "",
+    converging,
+  });
   for (const a of report.actions) say("converge", `${a.kind} ${a.target} — ${a.detail}`);
 
   // ── 5b. does it actually run? ─────────────────────────────────────────────

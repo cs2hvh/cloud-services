@@ -317,18 +317,47 @@ async function collectOrphanedRoutes(
 export async function reconcileProject(
   ctx: KubeContext,
   project: ProjectRow,
-  opts: { dryRun?: boolean; appDomain: string } = { appDomain: "ahurasense.com" },
+  opts: {
+    dryRun?: boolean;
+    appDomain: string;
+    /**
+     * A deployment to converge that is not `ready` YET, because it is being
+     * deployed right now and readiness is what this convergence will establish.
+     *
+     * Without this the deploy path deadlocks against itself. `ready` used to be
+     * written the moment the image was published — before routing, before
+     * convergence, before any pod existed — so a deployment reported ready while
+     * its pod sat Pending for want of memory, and again while it crash-looped.
+     * Moving that write after the rollout check fixed the lie and created this
+     * gap: the selection below reads `state = ready`, so the deployment being
+     * deployed was invisible to the thing that creates its workload, convergence
+     * no-op'd, and nothing ever started.
+     *
+     * ONLY the deploy path passes this. The background loop and the sweeps keep
+     * converging exactly what is ready, which is what they should do — a
+     * half-finished deploy is not their business to complete.
+     */
+    converging?: DeploymentRow;
+  } = { appDomain: "ahurasense.com" },
 ): Promise<ReconcileReport> {
   const k = kube(ctx);
   const ns = tenantNamespace(project);
   const actions: ReconcileAction[] = [];
   const dry = opts.dryRun === true;
 
-  const [projectAliases, ready, projectEnvs] = await Promise.all([
+  const [projectAliases, readyRows, projectEnvs] = await Promise.all([
     aliases.forProject(project.id),
     deployments.readyForProject(project.id),
     environments.forProject(project.id),
   ]);
+
+  // Deduped by id: a caller may pass a deployment that has since become ready,
+  // and the same deployment appearing twice would have the second pass scale
+  // down what the first just brought up.
+  const ready =
+    opts.converging && !readyRows.some((r) => r.id === opts.converging!.id)
+      ? [opts.converging, ...readyRows]
+      : readyRows;
 
   // Which environments are previews, so sizing can differ from the project's
   // tier. A deployment whose environment is NOT positively known to be a preview
