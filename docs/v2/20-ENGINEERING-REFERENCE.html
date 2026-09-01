@@ -1,0 +1,1644 @@
+<title>AhuraCloud Deploy v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+  /* ─────────────────────────────────────────────────────────────────
+     Blueprint. Prussian ink on drafting paper.
+
+     The complete light palette lives on bare :root. The dark blocks
+     redefine TOKENS ONLY, so nothing is ever coloured from inside a
+     media query — that is the bug where a page renders one theme's
+     text on the other theme's ground.
+     ───────────────────────────────────────────────────────────────── */
+  :root {
+    --bg:        #E9EEF3;
+    --surface:   #FFFFFF;
+    --surface-2: #F2F6FA;
+    --ink:       #0D1B2A;
+    --ink-2:     #3E566E;
+    --ink-3:     #6C8399;
+    --rule:      #C5D3E0;
+    --rule-soft: #DBE4EC;
+    --accent:    #10618E;
+    --accent-bg: #10618E14;
+
+    --pass:      #17805A;
+    --pass-bg:   #17805A16;
+    --warn:      #9C6B0D;
+    --warn-bg:   #9C6B0D16;
+    --fail:      #A93A31;
+    --fail-bg:   #A93A3116;
+
+    --measure: 74ch;
+    --shadow: 0 1px 2px #0d1b2a0a, 0 8px 24px -12px #0d1b2a1f;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:        #091320;
+      --surface:   #0F1D2C;
+      --surface-2: #132435;
+      --ink:       #DEE9F3;
+      --ink-2:     #95AABE;
+      --ink-3:     #6A8098;
+      --rule:      #1C3049;
+      --rule-soft: #16283C;
+      --accent:    #57ABDD;
+      --accent-bg: #57ABDD1F;
+
+      --pass:      #3FBF8C;
+      --pass-bg:   #3FBF8C1C;
+      --warn:      #D7A11E;
+      --warn-bg:   #D7A11E1C;
+      --fail:      #E9736A;
+      --fail-bg:   #E9736A1C;
+
+      --shadow: 0 1px 2px #0006, 0 10px 30px -14px #000A;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg:        #091320;
+    --surface:   #0F1D2C;
+    --surface-2: #132435;
+    --ink:       #DEE9F3;
+    --ink-2:     #95AABE;
+    --ink-3:     #6A8098;
+    --rule:      #1C3049;
+    --rule-soft: #16283C;
+    --accent:    #57ABDD;
+    --accent-bg: #57ABDD1F;
+
+    --pass:      #3FBF8C;
+    --pass-bg:   #3FBF8C1C;
+    --warn:      #D7A11E;
+    --warn-bg:   #D7A11E1C;
+    --fail:      #E9736A;
+    --fail-bg:   #E9736A1C;
+
+    --shadow: 0 1px 2px #0006, 0 10px 30px -14px #000A;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    font-size: 15.5px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    margin: 0;
+  }
+
+  /* ── shell ───────────────────────────────────────────────────── */
+  .shell {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0;
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 0 24px 120px;
+  }
+  @media (min-width: 1080px) {
+    .shell { grid-template-columns: 224px minmax(0, 1fr); gap: 56px; padding-right: 40px; }
+  }
+
+  /* ── section rail ────────────────────────────────────────────── */
+  .rail { display: none; }
+  @media (min-width: 1080px) {
+    .rail {
+      display: block;
+      position: sticky;
+      top: 0;
+      align-self: start;
+      max-height: 100vh;
+      overflow-y: auto;
+      padding: 40px 0 40px;
+      border-right: 1px solid var(--rule-soft);
+      margin-right: -32px;
+      padding-right: 24px;
+    }
+  }
+  .rail-label {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin: 0 0 14px;
+  }
+  .rail ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+  .rail a {
+    display: grid;
+    grid-template-columns: 2.2em 1fr;
+    gap: 8px;
+    padding: 4px 6px 4px 0;
+    color: var(--ink-2);
+    text-decoration: none;
+    font-size: 13px;
+    line-height: 1.4;
+    border-radius: 3px;
+  }
+  .rail a:hover { color: var(--accent); background: var(--accent-bg); }
+  .rail a:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .rail a .n {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    color: var(--ink-3);
+    padding-top: 1px;
+  }
+
+  main { min-width: 0; padding-top: 40px; }
+
+  /* ── masthead ────────────────────────────────────────────────── */
+  .masthead {
+    border-top: 3px solid var(--ink);
+    padding-top: 22px;
+    margin-bottom: 40px;
+  }
+  .eyebrow {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 14px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: baseline;
+  }
+  .eyebrow .sep { color: var(--ink-3); }
+  h1 {
+    font-family: Archivo, ui-sans-serif, system-ui, sans-serif;
+    font-weight: 700;
+    font-size: clamp(38px, 6.2vw, 62px);
+    line-height: 1.02;
+    letter-spacing: -0.028em;
+    margin: 0 0 18px;
+    text-wrap: balance;
+  }
+  .standfirst {
+    font-size: 18.5px;
+    line-height: 1.6;
+    color: var(--ink-2);
+    max-width: 62ch;
+    margin: 0 0 30px;
+  }
+  .standfirst strong { color: var(--ink); font-weight: 600; }
+
+  /* ── figures strip ───────────────────────────────────────────── */
+  .figures {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .fig { padding: 14px 16px; border-right: 1px solid var(--rule-soft); }
+  .fig:last-child { border-right: 0; }
+  .fig dt {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 9.5px;
+    font-weight: 500;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin-bottom: 5px;
+  }
+  .fig dd {
+    margin: 0;
+    font-family: Archivo, sans-serif;
+    font-weight: 600;
+    font-size: 23px;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+  .fig dd small {
+    display: block;
+    font-family: "IBM Plex Sans", sans-serif;
+    font-size: 11.5px;
+    font-weight: 400;
+    letter-spacing: 0;
+    color: var(--ink-3);
+    margin-top: 3px;
+  }
+
+  /* ── sections ────────────────────────────────────────────────── */
+  section { margin-top: 62px; scroll-margin-top: 24px; }
+  .sec-head {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 14px;
+    align-items: baseline;
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 10px;
+    margin-bottom: 22px;
+  }
+  .sec-num {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.04em;
+  }
+  h2 {
+    font-family: Archivo, sans-serif;
+    font-weight: 600;
+    font-size: clamp(22px, 3vw, 28px);
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    margin: 0;
+    text-wrap: balance;
+  }
+  h3 {
+    font-family: Archivo, sans-serif;
+    font-weight: 600;
+    font-size: 17px;
+    letter-spacing: -0.012em;
+    margin: 34px 0 10px;
+    text-wrap: balance;
+  }
+  h4 {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin: 26px 0 8px;
+  }
+  p { margin: 0 0 14px; max-width: var(--measure); }
+  ul, ol { max-width: var(--measure); padding-left: 20px; margin: 0 0 14px; }
+  li { margin-bottom: 7px; }
+  li::marker { color: var(--ink-3); }
+  strong { font-weight: 600; }
+  a { color: var(--accent); }
+
+  code, .mono {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 0.885em;
+  }
+  p code, li code, td code {
+    background: var(--surface-2);
+    border: 1px solid var(--rule-soft);
+    border-radius: 3px;
+    padding: 0.5px 4px;
+    white-space: nowrap;
+  }
+
+  /* ── tables ──────────────────────────────────────────────────── */
+  .tw {
+    overflow-x: auto;
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    background: var(--surface);
+    margin: 0 0 18px;
+  }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  th {
+    text-align: left;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--rule);
+    background: var(--surface-2);
+    white-space: nowrap;
+  }
+  td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--rule-soft);
+    vertical-align: top;
+    line-height: 1.55;
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.mono, th.mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12.5px; }
+  .nw { white-space: nowrap; }
+
+  /* ── verdict chips ───────────────────────────────────────────── */
+  .chip {
+    display: inline-block;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 3px;
+    white-space: nowrap;
+    border: 1px solid transparent;
+  }
+  .chip.pass { color: var(--pass); background: var(--pass-bg); border-color: var(--pass); }
+  .chip.warn { color: var(--warn); background: var(--warn-bg); border-color: var(--warn); }
+  .chip.fail { color: var(--fail); background: var(--fail-bg); border-color: var(--fail); }
+  .chip.info { color: var(--accent); background: var(--accent-bg); border-color: var(--accent); }
+  .chip.off  { color: var(--ink-3); border-color: var(--rule); }
+
+  /* ── annotation blocks — the blueprint marginal note ─────────── */
+  .note {
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--accent);
+    background: var(--surface);
+    border-radius: 0 4px 4px 0;
+    padding: 14px 18px;
+    margin: 0 0 18px;
+    max-width: var(--measure);
+  }
+  .note.warnbox { border-left-color: var(--warn); }
+  .note.failbox { border-left-color: var(--fail); }
+  .note.passbox { border-left-color: var(--pass); }
+  .note > :last-child { margin-bottom: 0; }
+  .note-title {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin: 0 0 7px;
+  }
+
+  /* ── pipeline diagram ────────────────────────────────────────── */
+  .flow {
+    overflow-x: auto;
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    background: var(--surface);
+    padding: 18px 20px;
+    margin: 0 0 18px;
+  }
+  .flow pre {
+    margin: 0;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12px;
+    line-height: 1.72;
+    color: var(--ink-2);
+    white-space: pre;
+  }
+  .flow pre b { color: var(--ink); font-weight: 600; }
+  .flow pre i { color: var(--accent); font-style: normal; }
+
+  /* ── stage list — genuinely sequential, so numbered ──────────── */
+  .stages { list-style: none; padding: 0; margin: 0 0 18px; max-width: var(--measure); }
+  .stages > li {
+    display: grid;
+    grid-template-columns: 2.6em 1fr;
+    gap: 14px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--rule-soft);
+    margin: 0;
+  }
+  .stages > li:last-child { border-bottom: 0; }
+  .stages .sn {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent);
+    padding-top: 3px;
+  }
+  .stages .st {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+    display: block;
+    margin-bottom: 2px;
+  }
+  .stages p { margin: 0; font-size: 14px; color: var(--ink-2); }
+
+  /* ── two-column comparison ───────────────────────────────────── */
+  .vs {
+    display: grid;
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 0 0 18px;
+  }
+  @media (min-width: 720px) { .vs { grid-template-columns: 1fr 1fr; } }
+  .vs > div { background: var(--surface); padding: 16px 18px; }
+  .vs h4 { margin-top: 0; }
+  .vs p:last-child { margin-bottom: 0; }
+
+  footer {
+    margin-top: 72px;
+    padding-top: 18px;
+    border-top: 1px solid var(--rule);
+    font-size: 12.5px;
+    color: var(--ink-3);
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  }
+  html { scroll-behavior: smooth; }
+</style>
+
+<div class="shell">
+
+  <nav class="rail" aria-label="Sections">
+    <p class="rail-label">Contents</p>
+    <ol>
+      <li><a href="#s01"><span class="n">01</span><span>Why there is a v2</span></a></li>
+      <li><a href="#s02"><span class="n">02</span><span>What the substrate forced</span></a></li>
+      <li><a href="#s03"><span class="n">03</span><span>Architecture</span></a></li>
+      <li><a href="#s04"><span class="n">04</span><span>The deploy pipeline</span></a></li>
+      <li><a href="#s05"><span class="n">05</span><span>Build isolation</span></a></li>
+      <li><a href="#s06"><span class="n">06</span><span>The data model</span></a></li>
+      <li><a href="#s07"><span class="n">07</span><span>Runtime isolation</span></a></li>
+      <li><a href="#s08"><span class="n">08</span><span>Routing, TLS, domains</span></a></li>
+      <li><a href="#s09"><span class="n">09</span><span>Immutable deployments</span></a></li>
+      <li><a href="#s10"><span class="n">10</span><span>Git providers</span></a></li>
+      <li><a href="#s11"><span class="n">11</span><span>Environment variables</span></a></li>
+      <li><a href="#s12"><span class="n">12</span><span>Metering and billing</span></a></li>
+      <li><a href="#s13"><span class="n">13</span><span>Observability</span></a></li>
+      <li><a href="#s14"><span class="n">14</span><span>Pricing and economics</span></a></li>
+      <li><a href="#s15"><span class="n">15</span><span>Framework support</span></a></li>
+      <li><a href="#s16"><span class="n">16</span><span>v1 versus v2</span></a></li>
+      <li><a href="#s17"><span class="n">17</span><span>How it is tested</span></a></li>
+      <li><a href="#s18"><span class="n">18</span><span>Operating it</span></a></li>
+      <li><a href="#s19"><span class="n">19</span><span>What is not done</span></a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+    <header class="masthead">
+      <p class="eyebrow">
+        <span>AhuraCloud</span><span class="sep">/</span><span>Application Platform</span>
+        <span class="sep">/</span><span>28 Aug 2026</span>
+        <span class="sep">/</span><span>branch feat/deploy-v2</span>
+      </p>
+      <h1>Deploy v2</h1>
+      <p class="standfirst">
+        A Vercel-class application platform rebuilt from zero on Linode, Cloudflare and Kubernetes —
+        after an audit found <strong>fourteen critical defects</strong> in the version it replaces, including
+        remote command execution from a normal user account. This is the complete technical record:
+        what was built, why each decision went the way it did, and <strong>what has been proven by
+        running it</strong> rather than by reading the code.
+      </p>
+
+      <dl class="figures">
+        <div class="fig"><dt>Git providers</dt><dd>3<small>all proven live</small></dd></div>
+        <div class="fig"><dt>Tests</dt><dd>1,079<small>0 failing</small></dd></div>
+        <div class="fig"><dt>Runtimes</dt><dd>10<small>node → jvm → php</small></dd></div>
+        <div class="fig"><dt>Scheduled sweeps</dt><dd>10<small>in-cluster CronJobs</small></dd></div>
+        <div class="fig"><dt>Standing cost</dt><dd>$116<small>per month, $0 unaccounted</small></dd></div>
+        <div class="fig"><dt>Leaked VMs</dt><dd>0<small>across ~105 builds</small></dd></div>
+      </dl>
+    </header>
+
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <section id="s01">
+      <div class="sec-head"><span class="sec-num">01</span><h2>Why there is a v2</h2></div>
+
+      <p>
+        v1 — the <code>platform_apps</code> service — was audited against real code by a 32-agent process:
+        six subsystem audits, six research tracks each fact-checked by an independent skeptic, two
+        substrate capability studies, and three competing architectures each scored by three adversarial
+        judges. The audit returned <strong>14 CRITICAL and 30+ HIGH findings</strong>.
+      </p>
+
+      <p>
+        The decisive fact for planning: <strong><code>platform_apps</code> was empty in production.</strong>
+        Zero apps had ever shipped. There was no migration burden, and therefore no reason to carry any
+        of it forward.
+      </p>
+
+      <h3>The sharpest findings</h3>
+      <div class="tw">
+        <table>
+          <thead>
+            <tr><th>#</th><th>Finding</th><th>Why it was critical</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mono num">1</td>
+              <td>RCE via the app's <strong>git branch name</strong></td>
+              <td>The branch was <code>z.string().min(1)</code> — no charset, no length — and was interpolated
+                  unquoted into <code>git clone --branch ${branch}</code> inside a Jenkins <code>sh</code> block.
+                  That agent held <code>KUBECONFIG</code> and the platform-wide webhook secret.
+                  <strong>Full cluster compromise from a normal user account.</strong></td>
+            </tr>
+            <tr>
+              <td class="mono num">2</td>
+              <td>The hardening pass <strong>silently did nothing</strong></td>
+              <td><code>hardenPipelineXml</code>'s regex required a whitespace-free branch. A branch containing a
+                  space skipped hardening entirely — no error, no log line, no test — leaving the original
+                  injectable line verbatim.</td>
+            </tr>
+            <tr>
+              <td class="mono num">4</td>
+              <td><strong>No tenant isolation of any kind</strong></td>
+              <td>Every customer app ran in the shared <code>default</code> namespace. No NetworkPolicy, no
+                  ResourceQuota, no PodSecurity, no <code>securityContext</code>, no sandbox. A grep for all
+                  eleven isolation primitives returned <strong>zero hits</strong> across the repository.</td>
+            </tr>
+            <tr>
+              <td class="mono num">6, 10</td>
+              <td><strong>Rename-to-take-over</strong></td>
+              <td><code>name</code> was the K8s Deployment, Service and Ingress name, the Jenkins job name, the
+                  TLS secret name and the public hostname — with no UNIQUE constraint and no validation on the
+                  <em>update</em> path (create validated; update did not). Rename onto a victim's app, press
+                  Redeploy, and their live workload and hostname are yours.</td>
+            </tr>
+            <tr>
+              <td class="mono num">3</td>
+              <td>Deleted apps <strong>leaked plaintext secrets</strong></td>
+              <td>The delete pipeline targeted <code>{name}-app-env-secret</code>; the Secret that existed was
+                  <code>{name}-env-secret</code>. Every deleted app left its DB URLs and API keys in the shared
+                  namespace forever — and the verification stage then printed <code>[PASS]</code>.</td>
+            </tr>
+            <tr>
+              <td class="mono num">7</td>
+              <td>Billing outlived the app it billed</td>
+              <td>No FK, no cascade, and the delete endpoint passed the <em>caller's</em> user id where the
+                  <em>owner's</em> was required. <strong>This had already happened five times in production and the
+                  meters were still running.</strong></td>
+            </tr>
+            <tr>
+              <td class="mono num">8</td>
+              <td>Apps ran <strong>forever, unbilled</strong></td>
+              <td>A rate lookup failure returned <code>hourlyRate 0</code>, which violates the meter's CHECK
+                  constraint, so activation hard-failed — and the failure was downgraded to a warning string
+                  while the deploy reported success.</td>
+            </tr>
+            <tr>
+              <td class="mono num">5</td>
+              <td>Hostname takeover with DNS verification skipped</td>
+              <td>The registrar ownership probe queried one shared Name.com account with <strong>no user
+                  scoping</strong> and only tested that the response was truthy. Any domain in the platform's
+                  account auto-verified for any authenticated user.</td>
+            </tr>
+            <tr>
+              <td class="mono num">14</td>
+              <td>A false claim that changed user behaviour</td>
+              <td>The wizard said "the platform probes this endpoint before routing traffic." Probes were
+                  <code>tcpSocket</code>-only and the configured path was explicitly discarded.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>The four root causes</h3>
+      <p>Most of the 14 collapse into four decisions, and v2 is largely the inversion of them:</p>
+      <ul>
+        <li><strong>A mutable <code>name</code> as the primary key of all infrastructure addressing.</strong>
+            One decision, three separate critical findings.</li>
+        <li><strong>Shell and XML built by string interpolation</strong> — ~10k lines of near-duplicate
+            Jenkins pipeline XML generated by template literals, with user input flowing straight in.</li>
+        <li><strong>One shared everything</strong> — one namespace, one Docker Hub credential, one webhook
+            secret, one registrar account.</li>
+        <li><strong>Billing decoupled from lifecycle</strong>, with failures downgraded to warnings.</li>
+      </ul>
+
+      <div class="note passbox">
+        <p class="note-title">What v1 got right, and v2 kept</p>
+        <p>
+          The audit was not a demolition. Carried forward: the Linode client's retry/backoff and capacity
+          detection; <code>bill_service_cycle_atomic</code>'s <code>FOR UPDATE</code> + CAS metering primitive;
+          digest-pinned image refs; timing-safe per-app webhook HMAC; the section-allowlist build-log
+          sanitiser; and the <code>UNIQUE (domain) WHERE status &lt;&gt; 'removed'</code> partial index, which is
+          exactly the right shape for domain claims.
+        </p>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <section id="s02">
+      <div class="sec-head"><span class="sec-num">02</span><h2>What the substrate forced</h2></div>
+
+      <p>
+        Three capability studies removed options rather than expressing preferences. These are constraints,
+        not choices.
+      </p>
+
+      <h3>Linode has no hardware virtualization, anywhere</h3>
+      <p>
+        Nested virtualization is disabled platform-wide — it conflicts with Live Migration, and that has been
+        a consistent staff position for eight years. Akamai also sells no bare metal: there is no
+        <code>metal</code> class in the API type enum.
+      </p>
+      <p>
+        <strong>Therefore Kata Containers, Firecracker, Cloud Hypervisor and every in-cluster microVM design
+        are impossible here.</strong> The sandbox must be <strong>gVisor (runsc)</strong>, a userspace kernel
+        that needs no <code>/dev/kvm</code>.
+      </p>
+
+      <h3>LKE's pod ceiling makes a fleet mandatory</h3>
+      <div class="tw">
+        <table>
+          <thead><tr><th></th><th>Standard LKE</th><th>LKE Enterprise</th></tr></thead>
+          <tbody>
+            <tr><td>Max nodes</td><td class="num">250</td><td class="num">500</td></tr>
+            <tr><td><strong>Max pods per cluster</strong></td><td class="num"><strong>1,000</strong></td><td class="num"><strong>5,000</strong></td></tr>
+            <tr><td>Control plane</td><td>Free (HA +$60/mo)</td><td>$300/mo per cluster</td></tr>
+            <tr><td>Version lifecycle</td><td>Force-upgraded at EOL</td><td>Not force-upgraded</td></tr>
+            <tr><td>Availability</td><td>Self-serve</td><td>Requires Akamai approval</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        At one pod per app, 10,000 apps fit in neither tier. A cluster-placement and sharding layer is
+        required in the control plane <strong>from day one</strong> — it cannot be retrofitted. Two further
+        traps: the HA control plane is <strong>irreversible and destroys all nodes when enabled</strong>, so
+        every cluster must be created with it on; and LKE-E is gated on a sales conversation.
+      </p>
+
+      <h3>Cloudflare removes the TLS ceiling</h3>
+      <p>
+        v1's model — one Let's Encrypt certificate per app on a shared apex — caps growth at roughly 50 new
+        apps per week. Cloudflare for SaaS removes it: <strong>platform subdomains cost zero custom
+        hostnames</strong>, covered by one proxied wildcard record. Customer BYO domains are custom
+        hostnames — 100 included, then $0.10/hostname/month, with a 50,000 self-serve ceiling.
+        DCV Delegation makes renewals fully automatic.
+      </p>
+      <div class="note warnbox">
+        <p class="note-title">Gates worth knowing now</p>
+        <p>
+          Per-tenant WAF, wildcard custom hostnames and more than one rate-limit rule are
+          <strong>Enterprise-only</strong>. At 10k untrusted tenants, per-tenant WAF is a requirement rather
+          than a nicety — and this is still an open commercial decision.
+        </p>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <section id="s03">
+      <div class="sec-head"><span class="sec-num">03</span><h2>Architecture</h2></div>
+
+      <div class="note">
+        <p style="font-size:16px;margin:0">
+          <strong>Postgres holds every app; Kubernetes holds only the warm ones. Cloudflare terminates all
+          public TLS; builds run one-per-throwaway-VM and hold no cluster credentials.</strong>
+        </p>
+      </div>
+
+      <div class="flow">
+<pre>git push ──▶ <b>webhook</b> (signature over raw bytes) ──▶ <b>Postgres</b>: desired state row
+                                                       │
+                          build claimed by a worker; one throwaway Linode VM leased
+                                                       │
+     <b>VM</b>: rootless BuildKit. Holds ONLY the tenant's source, a short-lived
+     git credential for one repository, and three presigned R2 URLs.
+     Holds <i>NO</i> kubeconfig, <i>NO</i> registry push credential, <i>NO</i> route to any cluster.
+                                                       │
+                          OCI tarball ──▶ <b>R2</b> ──▶ VM destroyed
+                                                       │
+     trusted in-cluster <b>publisher</b>: scan gate ──▶ push to the private registry
+                                                       │
+     <b>reconciler</b>: Postgres desired state ──▶ Deployment + Service + NetworkPolicy
+                        + Ingress, <i>digest-pinned</i>
+                                                       │
+     <b>Cloudflare</b> ──▶ NodeBalancer ──▶ Traefik ──▶ pod (gVisor sandbox)</pre>
+      </div>
+
+      <h3>Component decisions</h3>
+      <div class="tw">
+        <table>
+          <thead><tr><th>Layer</th><th>Choice</th><th>Why this and not the alternative</th></tr></thead>
+          <tbody>
+            <tr><td class="nw">Runtime</td><td class="nw">Plain Deployments</td>
+              <td><strong>Not Knative.</strong> Its ~3,300 Service/cluster ceiling collides with a 10k target,
+                  and it injects a queue-proxy per pod plus an activator in the request path. Two research
+                  tracks argued against it independently.</td></tr>
+            <tr><td class="nw">Orchestration</td><td class="nw">LKE, K8s 1.36</td>
+              <td>1.36 is where user namespaces went GA. The pod cap forces a fleet, so placement is modelled
+                  from day one.</td></tr>
+            <tr><td class="nw">Isolation</td><td class="nw">gVisor + dropped caps</td>
+              <td>Kata is impossible on this substrate. Three runC escapes in Nov 2025 mean plain containers
+                  are not a boundary.</td></tr>
+            <tr><td class="nw">Build</td><td class="nw">One throwaway Linode per build</td>
+              <td>Buys the microVM property by <em>renting</em> the VM instead of nesting it. The boundary is
+                  Linode's own hypervisor — the same one separating Linode's customers.</td></tr>
+            <tr><td class="nw">Edge</td><td class="nw">Cloudflare + Traefik v3</td>
+              <td>Removes the Let's Encrypt ceiling. ingress-nginx is retired — archived read-only
+                  2026-03-24, no further security patches.</td></tr>
+            <tr><td class="nw">Registry</td><td class="nw">Docker Distribution on R2</td>
+              <td>Never publicly exposed. v1 pushed every tenant into one shared Docker Hub namespace under
+                  one shared credential.</td></tr>
+            <tr><td class="nw">Control plane</td><td class="nw">Postgres desired state + reconciler</td>
+              <td>Level-triggered convergence, not imperative <code>kubectl</code>. The reconciler is the only
+                  writer to Kubernetes.</td></tr>
+            <tr><td class="nw">Secrets</td><td class="nw">AES-256-GCM, per-project HKDF</td>
+              <td>Ciphertext in Postgres, master key outside every repo. Vault is BUSL under IBM.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note">
+        <p class="note-title">Where the built system diverged from the plan</p>
+        <p>
+          The proposal named Harbor, Envoy Gateway and OpenBao. What shipped is Docker Distribution,
+          Traefik v3 and AES-GCM-in-Postgres. Each swap traded a service to operate for one less thing that
+          can break at 3am — the plan's own stated constraint was that <em>operability is a first-class
+          constraint</em> for a small team, and three fewer standing services is that constraint applied.
+        </p>
+      </div>
+
+      <h3>Live infrastructure today</h3>
+      <div class="tw">
+        <table>
+          <tbody>
+            <tr><td class="nw">Cluster</td><td class="mono">LKE 647920 · ahura-v2-dev · Kubernetes v1.36.3 · in-bom-2 (Mumbai)</td></tr>
+            <tr><td class="nw">Nodes</td><td>2 × <code>g6-standard-4</code> — one <code>system</code> (untainted), one <code>runtime</code> (tainted <code>NoSchedule</code>)</td></tr>
+            <tr><td class="nw">Gateway</td><td>Traefik v3 behind Linode NodeBalancer <code>172.236.185.23</code></td></tr>
+            <tr><td class="nw">TLS</td><td>One Cloudflare Origin CA certificate for <code>*.ahurasense.com</code>, valid to 2041</td></tr>
+            <tr><td class="nw">Origin</td><td>Linode Cloud Firewall 143239782 attached — direct connections to the origin IP time out; every hostname still answers through Cloudflare</td></tr>
+            <tr><td class="nw">Sandbox</td><td>gVisor release <code>20260817</code>, <code>RuntimeClass: gvisor</code></td></tr>
+            <tr><td class="nw">Code</td><td>79 source modules + 73 test modules in <code>lib/paas</code> · 39 API routes · 39 operator scripts</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <section id="s04">
+      <div class="sec-head"><span class="sec-num">04</span><h2>The deploy pipeline</h2></div>
+
+      <p>
+        <code>deployFromRepo</code> in <code>lib/paas/deploy.ts</code> is the spine. It reports nine stages, and
+        they are genuinely sequential — each depends on the last, which is why they are numbered here.
+      </p>
+
+      <ol class="stages">
+        <li><span class="sn">01</span><div>
+          <span class="st">detect</span>
+          <p>Ask the provider for the default branch — never guess it. List the root directory in one call
+             where the provider supports it, then read only the marker files that exist. Detection yields a
+             framework, a runtime, a build command, an output directory and a port.</p>
+        </div></li>
+        <li><span class="sn">02</span><div>
+          <span class="st">project</span>
+          <p>Resolve or create the project row, scoped to the caller's team. Records the provider, the
+             repository, the production branch and the root directory.</p>
+        </div></li>
+        <li><span class="sn">03</span><div>
+          <span class="st">deployment</span>
+          <p>An immutable row, keyed <code>(environment, sha)</code>. A database trigger refuses updates to the
+             fields that identify a build.</p>
+        </div></li>
+        <li><span class="sn">04</span><div>
+          <span class="st">build</span>
+          <p>Lease one Linode, run rootless BuildKit against a generated (or repository-supplied) Dockerfile,
+             stream the log to R2, destroy the VM. The lease row carries a hard <code>expires_at</code> so an
+             orphan is reapable without control-plane memory.</p>
+        </div></li>
+        <li><span class="sn">05</span><div>
+          <span class="st">publish</span>
+          <p>A trusted in-cluster Job pulls the tarball from R2 and pushes it into the private registry.
+             The image is addressed by <strong>digest</strong> from here on.</p>
+        </div></li>
+        <li><span class="sn">06</span><div>
+          <span class="st">reclaim</span>
+          <p>Delete the R2 tarball — but only after confirming the registry holds <em>both</em> the manifest blob
+             and the repository revision link. The blob alone is shared across repositories, so a correct
+             digest under the wrong repository would report 1 of 2 present.</p>
+        </div></li>
+        <li><span class="sn">07</span><div>
+          <span class="st">route</span>
+          <p>Create or reuse the alias row for the hostname. Aliases are scoped by environment, so a preview
+             build cannot repoint production.</p>
+        </div></li>
+        <li><span class="sn">08</span><div>
+          <span class="st">converge</span>
+          <p>The reconciler reads desired state from Postgres and writes Deployment, Service, NetworkPolicy
+             and one Ingress per alias. Level-triggered: it converges from whatever the cluster currently is.</p>
+        </div></li>
+        <li><span class="sn">09</span><div>
+          <span class="st">dns</span>
+          <p>Upsert the proxied Cloudflare record. Platform subdomains sit under the wildcard and cost no
+             custom hostname.</p>
+        </div></li>
+      </ol>
+
+      <h3>Detection: what it reads, and what it refuses</h3>
+      <p>
+        The detector recognises <strong>10 runtimes</strong> — node, python, php, java, ruby, go, rust, static,
+        hugo and repository-supplied docker — across roughly thirty framework shapes. It also
+        <strong>refuses</strong>, which matters as much: a repository with no framework marker, a library that
+        merely looks like an app, or a workspace root with no build script is turned away <em>at detect,
+        in seconds, without leasing a machine</em>.
+      </p>
+      <div class="note">
+        <p class="note-title">Empty is not the same as unknown</p>
+        <p>
+          This is the single most repeated defect class in the project, and detection is where it bites
+          hardest. A private repository read without a credential returns 404 — identical to a file that does
+          not exist — so every marker probe came back empty and 36 of the operator's 49 repositories were
+          undeployable with the blame pointed at their code. The same shape returned twice more: a rate-limit
+          429 read as an absent file, and a default branch <em>guessed</em> as <code>master</code> that
+          <code>raw.githubusercontent.com</code> still served for a repository whose branches were
+          <code>main</code> and two others. <strong>Null now means absent; unknown throws.</strong>
+        </p>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <section id="s05">
+      <div class="sec-head"><span class="sec-num">05</span><h2>Build isolation</h2></div>
+
+      <p>
+        v1's build agent held the cluster kubeconfig and the platform-wide webhook secret, which is what
+        turned a branch-name injection into full cluster compromise. v2's build VM is designed around the
+        inverse question: <em>what is the worst thing an attacker who fully owns this machine can do?</em>
+      </p>
+
+      <div class="vs">
+        <div>
+          <h4>The VM holds</h4>
+          <ul style="margin-bottom:0">
+            <li>The tenant's own source</li>
+            <li>A short-lived git credential scoped to <strong>one repository</strong>, written to a 0600
+                credential file and deleted after the clone</li>
+            <li>Three presigned R2 URLs — log, metadata, image — each for <strong>one key</strong></li>
+            <li>Build secrets via <code>--mount=type=secret</code>, which does not persist into a layer</li>
+          </ul>
+        </div>
+        <div>
+          <h4>The VM does not hold</h4>
+          <ul style="margin-bottom:0">
+            <li>Any kubeconfig</li>
+            <li>Any registry push credential</li>
+            <li>Any route to any cluster</li>
+            <li>Any other tenant's cache, source or secret</li>
+            <li>Any long-lived platform credential at all</li>
+          </ul>
+        </div>
+      </div>
+
+      <p>
+        The credential never appears in a URL. <code>build/vm.ts</code> <strong>refuses at render time</strong>
+        to emit a clone URL of the form <code>https://user:token@host/...</code> — because git echoes the remote
+        URL in its own error output, and that output is teed into a log served to team members.
+      </p>
+
+      <h3>Public versus private environment variables</h3>
+      <p>
+        Values prefixed <code>NEXT_PUBLIC_</code>, <code>VITE_</code> and friends are public by definition — they
+        end up readable in the shipped JavaScript either way — so they are passed as build args. Everything
+        else is mounted as a build secret, which BuildKit keeps out of the image layers entirely. This split
+        is inherited from v1, which got it right.
+      </p>
+      <div class="note">
+        <p class="note-title">A defect this found</p>
+        <p>
+          A Next.js app validating its environment <em>at build time</em> (<code>@t3-oss/env-nextjs</code>)
+          failed with <code>DATABASE_URL</code> missing — and revealed that <strong>no environment variable
+          reached the builder at all</strong>. Every app needing build-time config had been failing for a
+          reason nothing reported.
+        </p>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <section id="s06">
+      <div class="sec-head"><span class="sec-num">06</span><h2>The data model</h2></div>
+
+      <p>
+        Everything lives in a dedicated <code>paas</code> schema in Supabase Postgres: <strong>15 tables,
+        10 enums, 17 functions</strong>. Row-level security is on for every table.
+      </p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Table</th><th>Holds</th><th class="nw">Live rows</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">teams</td><td>The billing and ownership boundary. Everything hangs off a team, not a user.</td><td class="num">3</td></tr>
+            <tr><td class="mono">team_members</td><td>Membership with a role — owner, admin, member, viewer.</td><td class="num">—</td></tr>
+            <tr><td class="mono">installations</td><td>Git connections, keyed <code>(provider, external_id)</code>. Holds encrypted OAuth tokens for GitLab and Bitbucket.</td><td class="num">1</td></tr>
+            <tr><td class="mono">projects</td><td>One repository, one production branch, a tier and an instance count.</td><td class="num">5</td></tr>
+            <tr><td class="mono">environments</td><td>production · preview · development. One per branch for previews.</td><td class="num">88</td></tr>
+            <tr><td class="mono">deployments</td><td>Immutable build records with a digest. The unit of promote and rollback.</td><td class="num">102</td></tr>
+            <tr><td class="mono">aliases</td><td>Hostname → deployment. <strong>Promote and rollback are one UPDATE of this table.</strong></td><td class="num">10</td></tr>
+            <tr><td class="mono">domains</td><td>Customer BYO domains and their Cloudflare custom-hostname state.</td><td class="num">1</td></tr>
+            <tr><td class="mono">env_vars</td><td>AES-256-GCM ciphertext plus a DEK id. Never plaintext.</td><td class="num">34</td></tr>
+            <tr><td class="mono">clusters</td><td>Fleet inventory. Service-role only: RLS enabled with <em>no policy</em>, deliberately.</td><td class="num">1</td></tr>
+            <tr><td class="mono">deployment_placements</td><td>Which cluster a deployment landed on.</td><td class="num">—</td></tr>
+            <tr><td class="mono">build_vms</td><td>Build leases with a hard <code>expires_at</code>, so an orphan is reapable without control-plane memory.</td><td class="num">105</td></tr>
+            <tr><td class="mono">usage_samples</td><td>Append-only metering facts. <strong>Must outlive the project</strong> — the final bill and any dispute both arrive after deletion.</td><td class="num">27</td></tr>
+            <tr><td class="mono">project_charges</td><td>One row per project per billed hour. <code>UNIQUE (project_id, period_start)</code> is what makes charging idempotent.</td><td class="num">35</td></tr>
+            <tr><td class="mono">drift_observations</td><td>Append-and-resolve log. Answers "when did this appear and how long did it persist", which a point-in-time reconciler cannot.</td><td class="num">15 open</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Refs, not names</h3>
+      <p>
+        Every row carries an opaque <code>ref</code> generated by <code>paas.gen_ref()</code> —
+        <code>prj-e873172c1b7f</code>, <code>dpl-3c245e10f4bb</code>, <code>als-381e4107cf85</code>. Refs are the
+        public identifier everywhere in the API; internal UUIDs never leave the server. A trigger makes
+        <code>ref</code> immutable.
+      </p>
+      <p>
+        <strong>This is the direct inversion of v1's root cause.</strong> Nothing addressable is a
+        user-chosen mutable string, so there is no rename that can collide with another tenant's
+        infrastructure.
+      </p>
+
+      <h3>Two independent gates</h3>
+      <div class="note failbox">
+        <p class="note-title">GRANT and RLS fail with near-identical errors</p>
+        <p>
+          <code>42501 permission denied for table</code> versus <code>new row violates row-level security
+          policy</code>. A full debugging round was lost to exactly that pair. Both gates are now stated
+          explicitly in every migration, and it is the stated reason the multi-provider work kept
+          <strong>one</strong> installations table rather than three: three tables would be six chances to
+          repeat it, on the table whose entire job is authorization.
+        </p>
+      </div>
+      <p>
+        Privileged writes go through <code>SECURITY DEFINER</code> functions that <strong>re-check membership
+        themselves</strong> — <code>link_installation</code>, <code>rollback_project</code>,
+        <code>charge_project_hour</code>. A definer function that skips its own authorization is a privilege
+        escalation with extra steps.
+      </p>
+
+      <h3>The enums</h3>
+      <div class="tw">
+        <table>
+          <thead><tr><th>Enum</th><th>Values</th></tr></thead>
+          <tbody>
+            <tr><td class="mono nw">deployment_state</td><td class="mono">queued · building · publishing · ready · error · canceled</td></tr>
+            <tr><td class="mono nw">deployment_trigger</td><td class="mono">git_push · pull_request · manual · redeploy · rollback</td></tr>
+            <tr><td class="mono nw">alias_kind</td><td class="mono">production · branch · deployment · custom</td></tr>
+            <tr><td class="mono nw">environment_kind</td><td class="mono">production · preview · development</td></tr>
+            <tr><td class="mono nw">domain_state</td><td class="mono">pending · verifying · active · failed · removed</td></tr>
+            <tr><td class="mono nw">git_provider</td><td class="mono">github · gitlab · bitbucket</td></tr>
+            <tr><td class="mono nw">build_vm_state</td><td class="mono">requested · provisioning · running · releasing · destroyed · leaked</td></tr>
+            <tr><td class="mono nw">drift_kind</td><td class="mono">unrecorded · stale · denied · unpriced · expired · claimable</td></tr>
+            <tr><td class="mono nw">cluster_state</td><td class="mono">provisioning · ready · draining · retired</td></tr>
+            <tr><td class="mono nw">team_role</td><td class="mono">owner · admin · member · viewer</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <section id="s07">
+      <div class="sec-head"><span class="sec-num">07</span><h2>Runtime isolation</h2></div>
+
+      <p>Against v1's zero isolation primitives, every tenant pod now carries all of these:</p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Control</th><th>Setting</th></tr></thead>
+          <tbody>
+            <tr><td>Namespace</td><td>One per project — <code>app-prj-&lt;ref&gt;</code>, never shared</td></tr>
+            <tr><td>Sandbox</td><td><code>runtimeClassName: gvisor</code> — tenant pods report <code>Linux version 4.19.0-gvisor</code></td></tr>
+            <tr><td>Service account token</td><td><code>automountServiceAccountToken: false</code></td></tr>
+            <tr><td>User</td><td><code>runAsNonRoot: true</code>, uid from the image, <code>seccompProfile: RuntimeDefault</code></td></tr>
+            <tr><td>Capabilities</td><td><code>drop: ["ALL"]</code>, <code>allowPrivilegeEscalation: false</code></td></tr>
+            <tr><td>Network</td><td>NetworkPolicy <code>tenant-isolation</code> — ingress only from the platform namespace</td></tr>
+            <tr><td>Resources</td><td>ResourceQuota + LimitRange per namespace</td></tr>
+            <tr><td>Images</td><td>Digest-pinned, from the private registry, behind a scan gate</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note failbox">
+        <p class="note-title">An <code>except</code> list cannot protect an address the policy never sees</p>
+        <p>
+          The egress policy allows <code>0.0.0.0/0</code> with private ranges in an <code>except</code> list. The
+          Kubernetes service ClusterIP <code>10.128.0.1</code> sits inside <code>10.0.0.0/8</code> and
+          <em>looks</em> covered. It is not: <strong>kube-proxy DNATs the ClusterIP to the real endpoint before
+          egress policy is evaluated</strong>, and on LKE that endpoint is a public address — so the policy
+          sees a public destination and allows it.
+        </p>
+        <p>
+          Measured, not reasoned about: a busybox pod in a tenant namespace, under the same RuntimeClass as
+          real workloads, completed a TCP connection to <code>10.128.0.1:443</code> while cross-tenant traffic
+          to <code>10.2.0.33</code> was correctly refused. The API server CIDRs are now blocked explicitly.
+          The private-range block is real for direct pod-to-pod traffic and does nothing for anything DNAT'd.
+        </p>
+      </div>
+
+      <div class="note warnbox">
+        <p class="note-title">Kubernetes accepts a quota smaller than current usage</p>
+        <p>
+          Existing pods keep running; only the <em>next</em> admission fails. So applying a ResourceQuota to a
+          live namespace can silently create a namespace that cannot deploy again. The quota module measures
+          the namespace first and reports whether the policy is enforceable before writing it.
+        </p>
+      </div>
+
+      <h3>Scale to zero</h3>
+      <p>
+        An activator holds the request while the pod is woken, so it is <em>sleep</em> rather than downtime.
+        Idleness is <strong>measured</strong>, not assumed from elapsed time. It is built, proven, and
+        currently <strong>opt-in and off</strong> — see §14 for why that is a commercial decision rather than
+        a technical one.
+      </p>
+      <div class="note">
+        <p class="note-title">The judges' verdict, kept verbatim because it still governs the design</p>
+        <p>
+          <em>An unauthenticated request that causes a pod to be scheduled is a DoS amplifier.</em> Waking must
+          be authenticated, rate-limited per hostname, and bounded by a per-tenant concurrent-wake budget.
+        </p>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <section id="s08">
+      <div class="sec-head"><span class="sec-num">08</span><h2>Routing, TLS and domains</h2></div>
+
+      <div class="flow">
+<pre>browser ──▶ <b>Cloudflare</b> (public TLS, WAF, rate limit)
+              │  proxied A record
+              ▼
+        <b>Linode NodeBalancer</b> 172.236.185.23   ← firewalled: Cloudflare ranges only
+              │
+              ▼
+        <b>Traefik v3</b>  ── one Ingress per <i>alias</i>, from paas.aliases
+              │
+              ▼
+        <b>pod</b> in app-prj-&lt;ref&gt;, gVisor sandbox</pre>
+      </div>
+
+      <p>
+        One Cloudflare Origin CA certificate covers <code>*.ahurasense.com</code> to 2041. Platform subdomains
+        consume no custom hostnames. Customer domains become Cloudflare custom hostnames and the UI shows the
+        <strong>complete record set</strong> — the ownership TXT, the DCV TXT and the routing CNAME — each
+        labelled with what it is <em>for</em>. A customer shown only the ownership TXT has been told how to
+        prove they own the domain and nothing about how to make it answer.
+      </p>
+
+      <div class="note passbox">
+        <p class="note-title">Origin lockdown — verified in both directions</p>
+        <p>
+          Four preconditions were checked rather than assumed: Traefik carries no ACME arguments, so nothing
+          at the origin needs port 80 from outside Cloudflare; the firewall rules match Cloudflare's live list
+          (15 v4, 7 v6, nothing missing, nothing extra); the firewall was attached to nothing; and all 26 A
+          records are proxied — including two in <em>other zones</em> that the first check would have missed.
+        </p>
+        <p>
+          The apply script probes every live hostname, attaches, probes again, and <strong>detaches
+          automatically</strong> if something that was answering has stopped. A revert nobody is awake to
+          perform is not a revert. The first direct-access test returned 404, which looked like failure and
+          was not — the same request timed out a minute later once the edge caught up.
+        </p>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <section id="s09">
+      <div class="sec-head"><span class="sec-num">09</span><h2>Immutable deployments</h2></div>
+
+      <p>These are the Vercel-class semantics, and each maps to one concrete mechanism.</p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Capability</th><th>Mechanism</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Immutable deployments</strong></td><td>Every build produces a digest-pinned image and a permanent URL. Nothing is ever rebuilt to promote.</td></tr>
+            <tr><td><strong>Preview per branch</strong></td><td>A push to a non-production branch lands in its own preview environment, named after the raw branch so <code>feature/foo</code> and <code>feature-foo</code> stay distinct. Free, 48h from last push, Starter-sized, always 1 instance.</td></tr>
+            <tr><td><strong>Promote</strong></td><td>One <code>UPDATE</code> of <code>aliases.deployment_id</code>. No rebuild.</td></tr>
+            <tr><td><strong>Rollback</strong></td><td>The same write, pointing at an earlier digest. v1's rollback depended on a Docker Hub tag nothing pruned or guaranteed.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note failbox">
+        <p class="note-title">Two defects previews found, both latent until the day they were not</p>
+        <p>
+          <strong>The idempotency key was <code>(project, sha)</code></strong> — correct only while every push
+          builds production. A branch cut from the production head pushes a commit that is <em>already
+          deployed</em>, so the key answered "already recorded" and the preview was never created. Silently,
+          because 200 is what a successful retry looks like. Now keyed on <code>(environment, sha)</code>.
+        </p>
+        <p>
+          <strong>And the serious one:</strong> <code>deployFromRepo</code> pointed <em>every</em> alias of the
+          project at whatever built last. Correct while a project's hostnames all served one build — and a
+          production outage the moment previews existed. <strong>Pushing any feature branch would have
+          replaced production with that branch.</strong> Aliases are now scoped by environment.
+        </p>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <section id="s10">
+      <div class="sec-head"><span class="sec-num">10</span><h2>Git providers</h2></div>
+
+      <p>
+        GitHub, GitLab and Bitbucket are all supported, and all three have been proven by deploying a real
+        public repository end to end and serving a 200.
+      </p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Provider</th><th>Auth</th><th>Clone username</th><th>Webhook</th><th>Proven</th></tr></thead>
+          <tbody>
+            <tr><td>GitHub</td><td>App installation token, minted per request, 1h</td><td class="mono">x-access-token</td><td>App-level, all repos in the installation</td><td><span class="chip pass">200</span></td></tr>
+            <tr><td>GitLab</td><td>OAuth, refreshable token stored encrypted</td><td class="mono">oauth2</td><td>Per repository, shared token</td><td><span class="chip pass">200</span></td></tr>
+            <tr><td>Bitbucket</td><td>OAuth, refreshable token stored encrypted</td><td class="mono">x-token-auth</td><td>Per repository, HMAC secret</td><td><span class="chip pass">200</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note">
+        <p class="note-title">The asymmetry is deliberate and worth naming</p>
+        <p>
+          GitHub App tokens are minted from a private key and expire in an hour, so the platform stores
+          <strong>no</strong> GitHub credential. GitLab and Bitbucket are OAuth: the platform holds a
+          refreshable token for as long as the connection exists. <strong>Connecting GitLab gives us a durable
+          credential to a customer's account and connecting GitHub does not.</strong> A breach of those columns
+          is a different severity from a breach of the env-var table, and the columns are named so nobody has
+          to infer that.
+        </p>
+      </div>
+
+      <h3>What was actually missing</h3>
+      <p>
+        The OAuth flows, webhook receivers, per-provider clients and multi-provider columns all existed
+        before this work. What did not exist was any code path that <strong>named</strong> the provider — so a
+        GitLab connection could be recorded, its pushes received, and then the build would try to clone it
+        from <code>github.com</code>. Three hardcodes, each load-bearing:
+      </p>
+      <ul>
+        <li>the clone URL, built unconditionally as <code>https://github.com/&lt;repo&gt;.git</code>;</li>
+        <li><code>provider: "github"</code> on both project-creation paths;</li>
+        <li>the build VM's credential file, which named <code>github.com</code> as the host.</li>
+      </ul>
+      <p>
+        That last one is the subtle one. <strong>git matches a credential entry by host</strong>, so a file
+        naming github.com is silently ignored when cloning gitlab.com — and the clone then fails as
+        "authentication failed" on a token that is perfectly good. The host is now derived from the clone URL
+        itself, so the credential and the remote cannot disagree.
+      </p>
+
+      <div class="note warnbox">
+        <p class="note-title">Bitbucket's anonymous budget is sixty calls an hour</p>
+        <p>
+          Detection probed about forty marker files, one call each — so one deploy consumed most of an hour
+          and the next failed. The fix was two-sided: a <strong>429 now throws</strong> instead of returning
+          null (null means <em>absent</em> to detection, which would have told a customer to add a
+          <code>package.json</code> they already had), and the root directory is listed in
+          <strong>one call</strong> so absent files cost nothing. GitHub is deliberately exempt — it reads
+          through <code>raw.githubusercontent.com</code>, which does not share that budget.
+        </p>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <section id="s11">
+      <div class="sec-head"><span class="sec-num">11</span><h2>Environment variables</h2></div>
+
+      <p>
+        Values are encrypted with <strong>AES-256-GCM</strong> under a per-project key derived by HKDF from a
+        master key that lives outside every repository. The database stores ciphertext and a DEK id, never
+        plaintext. Provider OAuth tokens use the same primitive in a <strong>separate HKDF context</strong>, so
+        an env-var ciphertext fed to the connection decrypt is refused by scheme name rather than failing
+        somewhere less legible.
+      </p>
+      <p>
+        At runtime, values are injected via <code>envFrom</code> — which Kubernetes reads
+        <strong>once, at container start</strong>. That single fact drives the product behaviour: changing an
+        environment variable does not affect a running app until it is redeployed, and the UI says so plainly
+        rather than claiming a restart it does not perform.
+      </p>
+      <div class="note failbox">
+        <p class="note-title">A UI that lied, caught by reading its own server's note</p>
+        <p>
+          The editor said "restarting to apply". Nothing reconciles on an env change. The server-side comment
+          next to the write had been correct the whole time — the interface had drifted away from it.
+        </p>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <section id="s12">
+      <div class="sec-head"><span class="sec-num">12</span><h2>Metering and billing</h2></div>
+
+      <p>
+        Billing is <strong>live</strong> as of 28 Aug 2026. The first real pass charged 5 projects
+        $0.047945 for the hour; a second pass charged $0.000000 and reported all five already-charged.
+      </p>
+
+      <div class="note passbox">
+        <p class="note-title">Verified against balances, not against the sweep's own report</p>
+        <p>
+          <code>777.151506 → 777.122739</code> is exactly three projects, and
+          <code>656042108.091267 → 656042108.072089</code> is exactly two. <strong>A sweep that says it charged
+          and a balance that moved are different claims</strong> — and v1's defining billing defect was
+          precisely a system that reported success while the meter did something else.
+        </p>
+      </div>
+
+      <p>Three mechanisms carry the v1 lessons directly:</p>
+      <ul>
+        <li><strong>Idempotent by construction.</strong> <code>UNIQUE (project_id, period_start)</code> means a
+            retry, a double cron fire or a concurrent worker cannot bill the same hour twice.</li>
+        <li><strong>Teardown was enabled first</strong> and had converged to zero before metering was turned
+            on. Billing a project whose pods were never torn down is v1's $543.17 defect exactly.</li>
+        <li><strong>Usage samples outlive the project.</strong> The final bill and any dispute about it both
+            arrive after deletion, so the facts cannot be deleted with the row.</li>
+      </ul>
+      <p>
+        Customers can see what they were charged at <code>GET /api/v2/projects/{ref}/usage</code>. The summing
+        lives in <code>lib/paas/usage.ts</code> because that is the part that fails quietly: auth and a query
+        fail with a status code, whereas arithmetic produces something that <em>looks like a bill</em>.
+        <code>Number(null)</code> is 0 and <code>Number("abc")</code> is NaN, which survives
+        <code>Math.round</code> to serialise as JSON <code>null</code> — a blank where a figure belongs, with
+        nothing reporting a fault. <strong>An unreadable amount is counted, never added.</strong>
+      </p>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <section id="s13">
+      <div class="sec-head"><span class="sec-num">13</span><h2>Observability</h2></div>
+
+      <p>
+        Ten CronJobs run in-cluster on staggered minutes, so no two sweeps contend. Each is a small script
+        mounted from a ConfigMap with its own ServiceAccount and its own Secret.
+      </p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Sweep</th><th class="nw">Cadence</th><th>What it answers</th><th class="nw">Acts</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">usage-sample</td><td class="mono nw">*/15</td><td>Warm-seconds, pod-seconds and traffic shape per hostname, on one tick</td><td><span class="chip off">observe</span></td></tr>
+            <tr><td class="mono">meter-apps</td><td class="mono nw">:04</td><td>Charge the hour</td><td><span class="chip info">apply</span></td></tr>
+            <tr><td class="mono">workload-drift</td><td class="mono nw">:08 :23 :38 :53</td><td>Deployments that exist but are not Ready — the defect fleet reconciliation cannot see</td><td><span class="chip off">observe</span></td></tr>
+            <tr><td class="mono">r2-drift</td><td class="mono nw">:12</td><td>Objects in R2 with no owner in the control plane</td><td><span class="chip off">observe</span></td></tr>
+            <tr><td class="mono">project-teardown</td><td class="mono nw">:18</td><td>Deleted projects whose namespaces still exist</td><td><span class="chip info">apply</span></td></tr>
+            <tr><td class="mono">dns-drift</td><td class="mono nw">:26</td><td>DNS versus Ingress versus aliases — three sources that must agree</td><td><span class="chip off">observe</span></td></tr>
+            <tr><td class="mono">domain-reconcile</td><td class="mono nw">:33</td><td>Cloudflare custom-hostname state versus ours</td><td><span class="chip off">observe</span></td></tr>
+            <tr><td class="mono">preview-reap</td><td class="mono nw">:36</td><td>Previews past 48h from last push</td><td><span class="chip off">observe</span></td></tr>
+            <tr><td class="mono">fleet-drift</td><td class="mono nw">:44</td><td>Linode reality versus the control plane, priced</td><td><span class="chip off">observe</span></td></tr>
+            <tr><td class="mono">netpolicy-drift</td><td class="mono nw">:51</td><td>Namespaces whose NetworkPolicy is missing or weakened</td><td><span class="chip off">observe</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        Drift is recorded as an <strong>append-and-resolve log</strong> rather than a point-in-time snapshot,
+        which is what lets it answer <em>how long has this been broken</em>. Six kinds are distinguished:
+        unrecorded, stale, denied, unpriced, expired and claimable.
+      </p>
+
+      <h3>Warmth and traffic, measured over the same window</h3>
+      <div class="flow">
+<pre>dpl-e2404975a02e   99.9% warm   <i>ALWAYS WARM; ORGANIC</i>
+dpl-e2215252040c   99.9% warm   <i>ALWAYS WARM; NO-TRAFFIC; warmth NOT justified</i></pre>
+      </div>
+      <p>
+        Identical warm fraction, identical cost, opposite answers. <strong>Warm fraction alone cannot tell
+        them apart, and neither can CPU.</strong> This was built as an input to warm-time pricing; pricing is
+        now flat, so it has become an abuse-and-margin signal instead — under a flat rate the second row is a
+        customer paying the same as the first and costing the same as the first, for nobody.
+      </p>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <section id="s14">
+      <div class="sec-head"><span class="sec-num">14</span><h2>Pricing and unit economics</h2></div>
+
+      <p>
+        Six tiers, DigitalOcean-shaped, flat per instance. Costs are <strong>measured-derived, not
+        estimated</strong>. Billing divides by 730 hours per month.
+      </p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>Tier</th><th>Class</th><th class="nw">Memory</th><th class="nw">vCPU</th><th class="nw">Transfer</th><th class="nw">Price</th><th class="nw">Cost</th><th class="nw">Margin</th></tr></thead>
+          <tbody>
+            <tr><td>Starter</td><td>shared</td><td class="num">512 MiB</td><td class="num">1</td><td class="num">200 GB</td><td class="num">$7</td><td class="num">$4.46</td><td class="num">36.3%</td></tr>
+            <tr><td>Basic</td><td>shared</td><td class="num">1 GiB</td><td class="num">1</td><td class="num">300 GB</td><td class="num">$12</td><td class="num">$8.49</td><td class="num">29.3%</td></tr>
+            <tr><td>Standard</td><td>shared</td><td class="num">2 GiB</td><td class="num">2</td><td class="num">500 GB</td><td class="num">$23</td><td class="num">$16.36</td><td class="num">28.9%</td></tr>
+            <tr><td>Plus</td><td>shared</td><td class="num">4 GiB</td><td class="num">2</td><td class="num">750 GB</td><td class="num">$45</td><td class="num">$33.97</td><td class="num">24.5%</td></tr>
+            <tr><td>Pro</td><td>dedicated</td><td class="num">2 GiB</td><td class="num">1</td><td class="num">500 GB</td><td class="num">$35</td><td class="num">$24.53</td><td class="num">29.9%</td></tr>
+            <tr><td>Pro Plus</td><td>dedicated</td><td class="num">4 GiB</td><td class="num">2</td><td class="num">1000 GB</td><td class="num">$69</td><td class="num">$50.95</td><td class="num">26.2%</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Transfer is per <em>app</em> and never multiplied by instance count — the one thing about this price people get wrong.</p>
+
+      <h3>The number the whole model rests on</h3>
+      <div class="note warnbox">
+        <p class="note-title">Warm fraction measured 1.0</p>
+        <p>
+          Across three independent measurements, <strong>every app holds a pod all day at 2–3 millicores with
+          zero requests.</strong> That is the ~$52k/month model at 10,000 apps, not the $18–20k the plan
+          assumes. Scale-to-zero is built and proven but opt-in and off — turning it on is the single largest
+          lever on unit economics, and it trades a cold start on the first request for most of that
+          difference. <strong>A product decision, not a technical one.</strong>
+        </p>
+      </div>
+
+      <p>
+        Two measurement corrections got the cost model to where it is, and both moved it in the expensive
+        direction: <strong>the kubelet reserves 24.5% of a node before any pod schedules</strong>, and the
+        gVisor sandbox charge was declared at 128Mi against 42 MiB measured. Cutting the declaration to 64Mi
+        took density from 89 to 99 pods per node. <strong>Prices did not move with the second correction</strong>
+        — the margin sits as buffer, because repricing twice against one number spends confidence in the list.
+      </p>
+      <p>
+        The earlier estimate of "~65 tenant pods/node" was really 42. The lesson recorded from that:
+        <strong>the sentences that go stale are the ones asserting a STATE rather than a RULE.</strong>
+        "65 pods/node" is a state and rotted in a day; "the transitive closure is the credential surface" is a
+        rule and has not.
+      </p>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <section id="s15">
+      <div class="sec-head"><span class="sec-num">15</span><h2>Framework support</h2></div>
+
+      <div class="note">
+        <p class="note-title">The rule for the matrix</p>
+        <p>
+          A row is only green if <strong>a real deploy of a real repository served a real request.</strong>
+          Detection returning the right framework name is not support. A build that produces an image nobody
+          routed is not support. Apps are deleted after each test — the platform is not a graveyard of
+          fixtures, and an accumulating fleet would bill and would hide the next failure in noise.
+        </p>
+      </div>
+
+      <p><strong>Proven serving, end to end, then torn down:</strong></p>
+      <div class="tw">
+        <table>
+          <thead><tr><th>Stack</th><th>Repository</th><th class="nw">Result</th></tr></thead>
+          <tbody>
+            <tr><td>Next.js</td><td class="mono">vercel/ai-chatbot</td><td><span class="chip pass">307</span></td></tr>
+            <tr><td>Next.js — pnpm workspace monorepo</td><td class="mono">vercel/commerce</td><td><span class="chip pass">200</span></td></tr>
+            <tr><td>Next.js — <code>output: 'export'</code></td><td class="mono">pages/nextjs (GitLab)</td><td><span class="chip pass">200</span></td></tr>
+            <tr><td>Nuxt 3</td><td class="mono">nuxt/movies</td><td><span class="chip pass">200</span></td></tr>
+            <tr><td>Create React App</td><td class="mono">gothinkster/react-redux-realworld-example-app</td><td><span class="chip pass">200</span></td></tr>
+            <tr><td>Astro</td><td class="mono">withastro/astro · examples/blog</td><td><span class="chip pass">200</span></td></tr>
+            <tr><td>Gatsby</td><td class="mono">gatsbyjs/gatsby-starter-blog</td><td><span class="chip pass">200</span></td></tr>
+            <tr><td>Angular 22</td><td class="mono">ganatan/angular-bootstrap</td><td><span class="chip pass">200</span></td></tr>
+            <tr><td>NestJS</td><td class="mono">nestjs/typescript-starter</td><td><span class="chip pass">200</span></td></tr>
+            <tr><td>Express</td><td class="mono">heroku/node-js-getting-started</td><td><span class="chip pass">200</span></td></tr>
+            <tr><td>Flask</td><td class="mono">Azure-Samples/python-docs-hello-world</td><td><span class="chip pass">200</span></td></tr>
+            <tr><td>Spring Boot / Maven</td><td class="mono">spring-projects/spring-petclinic</td><td><span class="chip pass">200</span></td></tr>
+            <tr><td>Laravel / PHP</td><td class="mono">laravel/laravel</td><td><span class="chip pass">200</span></td></tr>
+            <tr><td>Hugo</td><td class="mono">gohugoio/hugoDocs</td><td><span class="chip pass">200</span></td></tr>
+            <tr><td>Go / Gin + SQLite via cgo</td><td class="mono">gothinkster/golang-gin-realworld-example-app</td><td><span class="chip pass">200 at /api/articles</span></td></tr>
+            <tr><td>Repository-supplied Dockerfile</td><td class="mono">docker/welcome-to-docker</td><td><span class="chip pass">200</span></td></tr>
+            <tr><td>Static site</td><td class="mono">pages/plain-html (GitLab) · tutorials (Bitbucket)</td><td><span class="chip pass">200</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>What the sweep found that no template would have</h3>
+      <p>Each of these was a real defect reached by deploying something, not by reading code:</p>
+      <ul>
+        <li><strong>Every static site crash-looped</strong> — on an nginx pidfile substitution matching a path
+            nginx no longer uses. Hidden because everything deployed until then was a Node server or a
+            repo-supplied Dockerfile.</li>
+        <li><strong>No repository without a lockfile could build.</strong> Every frozen-install flag is a hard
+            error without one, and the generated Dockerfile always chose the frozen form.</li>
+        <li><strong>No monorepo could install</strong> — the deps stage copied only the root manifest, so a
+            workspace dependency could not resolve.</li>
+        <li><strong>No native dependency could compile</strong> — no python3, make or g++ in the image, so
+            anything falling back from a prebuilt binary died inside node-gyp.</li>
+        <li><strong>Public environment variables reached nothing</strong> — not the bundle, not the container.
+            The reconciler skipped them as already baked in, and nothing baked them.</li>
+        <li><strong>Gatsby and Docusaurus were not detected at all</strong> and ran as generic Node apps with
+            no server to start.</li>
+        <li><strong>The Node major was hardcoded to 22</strong> and every pin a repository offered was ignored.</li>
+        <li><strong>A Next.js app with <code>output: 'export'</code> crash-looped on every provider</strong> —
+            <code>next start</code> cannot serve an exported build, and detection called it a node app.</li>
+      </ul>
+
+      <div class="note passbox">
+        <p class="note-title">And one regression caused, then caught</p>
+        <p>
+          Honouring <code>.nvmrc</code> as a hard pin broke <code>sveltejs/realworld</code>, which had been
+          serving: its <code>.nvmrc</code> says 20 while a package in its tree demands <code>&gt;=22.12.0</code>.
+          <code>engines.node</code> is published and enforced; <code>.nvmrc</code> is a local note that goes stale
+          silently. So engines decides — including downward — and <code>.nvmrc</code> may only raise the floor.
+          <strong>This is the argument for keeping green targets in the sweep instead of retiring them.</strong>
+        </p>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <section id="s16">
+      <div class="sec-head"><span class="sec-num">16</span><h2>v1 versus v2</h2></div>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th></th><th>v1 — <span class="mono">platform_apps</span></th><th>v2 — <span class="mono">paas</span></th></tr></thead>
+          <tbody>
+            <tr><td class="nw"><strong>Addressing</strong></td>
+              <td>Mutable user-chosen <code>name</code>, no UNIQUE, no charset check on update</td>
+              <td>Opaque immutable <code>ref</code> per row, enforced by trigger</td></tr>
+            <tr><td class="nw"><strong>Build</strong></td>
+              <td>Jenkins, ~10k lines of pipeline XML built by string interpolation</td>
+              <td>One throwaway Linode per build, rootless BuildKit, destroyed after</td></tr>
+            <tr><td class="nw"><strong>Build credentials</strong></td>
+              <td>Agent held <code>KUBECONFIG</code> and the platform-wide webhook secret</td>
+              <td>One repo-scoped git credential and three single-key presigned URLs. No cluster route.</td></tr>
+            <tr><td class="nw"><strong>Tenancy</strong></td>
+              <td>Shared <code>default</code> namespace, zero isolation primitives</td>
+              <td>Namespace per project + gVisor + NetworkPolicy + quota + dropped caps</td></tr>
+            <tr><td class="nw"><strong>Registry</strong></td>
+              <td>Shared Docker Hub namespace, one shared credential</td>
+              <td>Private Distribution on R2, never publicly exposed, digest-pinned</td></tr>
+            <tr><td class="nw"><strong>TLS</strong></td>
+              <td>One Let's Encrypt cert per app on a shared apex — caps at ~50 new apps/week</td>
+              <td>One Cloudflare Origin CA wildcard; platform subdomains cost zero hostnames</td></tr>
+            <tr><td class="nw"><strong>DNS</strong></td>
+              <td>A records pointing at a hardcoded <code>KUBE_IP</code></td>
+              <td>Proxied through Cloudflare; the origin is firewalled and unreachable directly</td></tr>
+            <tr><td class="nw"><strong>Rollback</strong></td>
+              <td>Depended on a Docker Hub tag nothing pruned or guaranteed</td>
+              <td>One <code>UPDATE</code> of <code>aliases.deployment_id</code> to an earlier digest</td></tr>
+            <tr><td class="nw"><strong>Previews</strong></td>
+              <td>None</td>
+              <td>Per branch, environment-scoped aliases, 48h, Starter-sized</td></tr>
+            <tr><td class="nw"><strong>Env vars</strong></td>
+              <td>Plaintext K8s Secret; leaked permanently on delete</td>
+              <td>AES-256-GCM, per-project HKDF, ciphertext at rest</td></tr>
+            <tr><td class="nw"><strong>Billing</strong></td>
+              <td>Meters outlived apps; 0-rate failures downgraded to warnings; apps ran unbilled</td>
+              <td>Idempotent per <code>(project, hour)</code>; teardown converged before metering was enabled; verified against balances</td></tr>
+            <tr><td class="nw"><strong>Image scanning</strong></td>
+              <td>Trivy stage present and <strong>never blocking</strong> — contradicting its own documented contract</td>
+              <td>Blocking gate: pass / fail / <strong>could-not-determine also blocks</strong></td></tr>
+            <tr><td class="nw"><strong>Bandwidth limiting</strong></td>
+              <td>An ingress-nginx <code>server-snippet</code> rejected twice over by any stock ≥1.9 — almost certainly never functioned</td>
+              <td>Metered and attributed. Enforcement still open — see §19</td></tr>
+            <tr><td class="nw"><strong>Git providers</strong></td>
+              <td>GitHub only in practice</td>
+              <td>GitHub, GitLab, Bitbucket — each proven serving</td></tr>
+            <tr><td class="nw"><strong>Dashboard claims</strong></td>
+              <td>Advertised auto-scaling, global CDN, 99.99% uptime, multi-AZ, per-second billing — none implemented</td>
+              <td>Ships claims that match the implementation</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <section id="s17">
+      <div class="sec-head"><span class="sec-num">17</span><h2>How it is tested</h2></div>
+
+      <p>
+        <strong>1,079 tests, 0 failing.</strong> They run on Node's own test runner
+        (<code>npm run test:paas</code>) with no framework dependency, so the whole <code>lib/paas</code> tree
+        stays dependency-free. 73 test modules sit beside the 79 source modules they cover.
+      </p>
+
+      <h3>Three ways a green suite lies, all three met here</h3>
+      <div class="tw">
+        <table>
+          <thead><tr><th>Failure</th><th>What happened</th></tr></thead>
+          <tbody>
+            <tr>
+              <td class="nw">A glob that matches nothing</td>
+              <td><code>npm test</code> was vitest with <code>include: ['tests/**']</code>, and every deploy-v2
+                  test lives in <code>lib/paas/**</code>. <strong>No script ran them.</strong> Every regression
+                  guard written during the framework sweep — including ones written <em>because a bug had
+                  already shipped once</em> — sat unrun while the suite reported green.</td>
+            </tr>
+            <tr>
+              <td class="nw">A runner that dies before it starts</td>
+              <td><code>tsx</code> cannot compile a top-level <code>await</code> to CommonJS. The batch script had
+                  one, never reached a single repository — and because the run was piped, the pipeline's exit
+                  code was reported instead of the script's. <strong>Two independent green signals, neither of
+                  which had run anything.</strong></td>
+            </tr>
+            <tr>
+              <td class="nw">A checker that exits 0 on broken input</td>
+              <td><code>node --experimental-strip-types --check</code> exits 0 on an unterminated string
+                  literal. Every "parses clean" claim made with that command was weaker than stated.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>The working rules that came out of that:</p>
+      <ul>
+        <li><strong>Verify by running, not by reading.</strong> Three unpiped runs before quoting an exit code.</li>
+        <li><strong>Skip is not pass.</strong> Live-enum mirror tests <em>skip</em> when the database is
+            unreachable — skip means "could not check", pass means "checked and fine", and conflating them is
+            how a suite goes green while asserting nothing.</li>
+        <li><strong>Prove the guard by breaking it.</strong> A new guard is mutation-tested: remove it and the
+            test must fail. The rate-limit guard in §10 was proven exactly this way.</li>
+        <li><strong>A proof that calls a working feature a bug is how a red line stops being read.</strong>
+            A proof script printed "non-production branch DEPLOYS — BUG" on every run after previews shipped.</li>
+      </ul>
+
+      <div class="note">
+        <p class="note-title">Three ways a guard goes vacuous, and they look identical from outside</p>
+        <p>
+          A count that stays true while coverage is lost; a check placed above the branch it was meant to
+          catch; and a <code>CASE</code> with no <code>ELSE</code> in a CHECK constraint — which returns NULL
+          for an unmatched value, and <strong>a CHECK constraint passes on NULL</strong>. Adding a fourth git
+          provider would have silently switched the account-name grammar off for it: still listed, still
+          green, enforcing nothing. That constraint now ends <code>else false</code>.
+        </p>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <section id="s18">
+      <div class="sec-head"><span class="sec-num">18</span><h2>Operating it</h2></div>
+
+      <h3>The surfaces</h3>
+      <div class="tw">
+        <table>
+          <tbody>
+            <tr><td class="nw">Customer UI</td><td class="mono">/dashboard/services/apps</td><td>List, create, and a per-app view with overview, deployments, environment, domains and settings tabs</td></tr>
+            <tr><td class="nw">API</td><td class="mono">/api/v2/*</td><td>39 routes — projects, deployments, aliases, domains, env, usage, rollback, repos, webhooks</td></tr>
+            <tr><td class="nw">Operator API</td><td class="mono">/api/v2/admin/*</td><td>Fleet, workloads, storage, usage, hostnames, pod logs — behind an admin boundary with its own enforcement test</td></tr>
+            <tr><td class="nw">Scripts</td><td class="mono">scripts/v2/*.ts</td><td>39 operator scripts</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>The scripts that matter most</h3>
+      <div class="tw">
+        <table>
+          <tbody>
+            <tr><td class="mono nw">framework-probe.ts</td><td>Deploy one repository end to end, report the served status, then tear it down. Takes <code>--provider github|gitlab|bitbucket</code>, <code>--branch</code>, <code>--root</code>, <code>--keep</code>.</td></tr>
+            <tr><td class="mono nw">build-worker.ts</td><td>Claims queued deployments and builds them. This is the webhook redeploy path.</td></tr>
+            <tr><td class="mono nw">reconcile.ts</td><td>Converge one project, or the fleet, from Postgres desired state.</td></tr>
+            <tr><td class="mono nw">cluster-status.ts</td><td>Cluster health, nodes, namespaces, RuntimeClasses.</td></tr>
+            <tr><td class="mono nw">origin-lockdown-apply.ts</td><td>Attach the firewall with a probe-before/probe-after and automatic detach on regression. <code>--detach</code> reverses it.</td></tr>
+            <tr><td class="mono nw">teardown.ts</td><td>Remove a project and everything it owns, reporting the exact hourly cost released.</td></tr>
+            <tr><td class="mono nw">install-sweeps.ts</td><td>Install or update the ten CronJobs.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>Run the test suite</h4>
+      <div class="flow"><pre>npm run test:paas</pre></div>
+
+      <h4>Deploy one repository, any provider</h4>
+      <div class="flow"><pre>node --experimental-strip-types --env-file-if-exists=.env.local \
+  scripts/v2/framework-probe.ts pages/plain-html --provider gitlab --root public</pre></div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <section id="s19">
+      <div class="sec-head"><span class="sec-num">19</span><h2>What is not done</h2></div>
+
+      <p>
+        Stated plainly, because a half-built platform that reads as finished is worse than one that reads as
+        unfinished.
+      </p>
+
+      <h3>Engineering still open</h3>
+      <div class="tw">
+        <table>
+          <thead><tr><th>Item</th><th>State</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Egress bandwidth is unbounded.</strong> The actual abuse vector, and the last item on the untrusted-signups list.</td><td><span class="chip fail">open</span></td></tr>
+            <tr><td><strong>No abuse response</strong> — no crypto-mining heuristics, no automated action.</td><td><span class="chip fail">open</span></td></tr>
+            <tr><td><strong>Webhook registration for GitLab and Bitbucket.</strong> The module is written and tested; nothing calls it yet. GitHub needs none — the App receives events for every repository in the installation.</td><td><span class="chip warn">built, unwired</span></td></tr>
+            <tr><td><strong>Push-to-deploy on GitLab and Bitbucket has never fired.</strong> Both receivers create deployments through the same path GitHub uses and the worker passes the project's provider — but it needs a public URL and a registered hook to exercise.</td><td><span class="chip warn">untested</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Decisions, not work — these block engineering rather than the reverse</h3>
+      <div class="tw">
+        <table>
+          <thead><tr><th>Decision</th><th>What it blocks</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Turn scale-to-zero on fleet-wide?</strong> Built and proven, on for one project.</td><td>The single largest lever on unit economics — roughly $52k/mo versus $18–20k at 10k apps.</td></tr>
+            <tr><td><strong>Cloudflare plan tier.</strong> Per-tenant WAF and &gt;1 rate-limit rule are Enterprise.</td><td>Egress limiting and abuse response.</td></tr>
+            <tr><td><strong>Free tier — is there one?</strong></td><td>Quota and abuse design. With untrusted public signups this is the largest single determinant of both abuse load and cost.</td></tr>
+            <tr><td><strong>Preview lifetime and who pays.</strong></td><td>A preview that never expires and is free is the abuse vector.</td></tr>
+            <tr><td><strong>GitLab and Bitbucket OAuth apps.</strong> Six environment variables.</td><td>Connecting an account through the UI. Public repositories deploy today without any of it.</td></tr>
+            <tr><td><strong>ACM ($10/mo).</strong> Deferred.</td><td>Apps sit at <code>&lt;app&gt;.ahurasense.com</code> under the free wildcard rather than <code>&lt;app&gt;.apps.ahurasense.com</code>.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Honest schedule</h3>
+      <p>
+        The original plan put a credible, chargeable product at 8–10 months and the full enterprise bar at
+        12–16, assuming roughly four engineers — after the judges corrected every proposed schedule by 2–3×.
+        What exists today covers the substance of phases 1 through 5: foundation, build tier, control plane,
+        product surface, and metering. What remains before untrusted public signups is concentrated in
+        <strong>abuse containment</strong>, and most of it is waiting on a commercial decision rather than on
+        code.
+      </p>
+    </section>
+
+    <footer>
+      Deploy v2 · branch <span style="color:var(--ink-2)">feat/deploy-v2</span> · ~350 commits ·
+      1,079 tests passing · compiled from <span style="color:var(--ink-2)">docs/v2/</span>, the live
+      <span style="color:var(--ink-2)">paas</span> schema, and the running cluster · 28 Aug 2026
+    </footer>
+
+  </main>
+</div>

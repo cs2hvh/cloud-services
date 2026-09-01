@@ -1,0 +1,765 @@
+<title>Deploy v2 Build Sheet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600;700&family=Roboto+Mono:wght@400;500&display=swap">
+
+<style>
+  /* ───────────────────────────────────────────────────────────────
+     A build sheet. Slate, with one petrol accent for the sequence
+     and a three-value portability scale that is the document's
+     real argument: what survives a move, what gets rewritten, and
+     what is a decision rather than a task.
+     ─────────────────────────────────────────────────────────────── */
+  :root {
+    --bg:        #EDEEEF;
+    --surface:   #FFFFFF;
+    --surface-2: #F6F7F7;
+    --ink:       #15181B;
+    --ink-2:     #4A5157;
+    --ink-3:     #7B838A;
+    --rule:      #D6D9DB;
+    --rule-soft: #E4E6E8;
+    --accent:    #10606F;
+    --accent-bg: #10606F12;
+
+    --keep:    #17805A;   /* survives a move as it stands   */
+    --keep-bg: #17805A14;
+    --redo:    #8F6410;   /* same shape, new implementation */
+    --redo-bg: #8F641014;
+    --lock:    #A5384A;   /* vendor decision, not a task    */
+    --lock-bg: #A5384A14;
+
+    --measure: 74ch;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:        #0D0F11;
+      --surface:   #14171A;
+      --surface-2: #1A1E21;
+      --ink:       #E4E7EA;
+      --ink-2:     #9BA3AA;
+      --ink-3:     #6E767D;
+      --rule:      #262B2F;
+      --rule-soft: #1D2226;
+      --accent:    #4FB0C4;
+      --accent-bg: #4FB0C41C;
+
+      --keep:    #3FBF8C;
+      --keep-bg: #3FBF8C1C;
+      --redo:    #D6A438;
+      --redo-bg: #D6A4381C;
+      --lock:    #E4788B;
+      --lock-bg: #E4788B1C;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg:        #0D0F11;
+    --surface:   #14171A;
+    --surface-2: #1A1E21;
+    --ink:       #E4E7EA;
+    --ink-2:     #9BA3AA;
+    --ink-3:     #6E767D;
+    --rule:      #262B2F;
+    --rule-soft: #1D2226;
+    --accent:    #4FB0C4;
+    --accent-bg: #4FB0C41C;
+
+    --keep:    #3FBF8C;
+    --keep-bg: #3FBF8C1C;
+    --redo:    #D6A438;
+    --redo-bg: #D6A4381C;
+    --lock:    #E4788B;
+    --lock-bg: #E4788B1C;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: Barlow, ui-sans-serif, system-ui, -apple-system, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    margin: 0;
+  }
+
+  .sheet { max-width: 960px; margin: 0 auto; padding: 0 20px 100px; }
+
+  /* ── masthead ────────────────────────────────────────────── */
+  header.top { padding-top: 44px; border-bottom: 2px solid var(--ink); padding-bottom: 24px; }
+  .eyebrow {
+    font-family: "Roboto Mono", ui-monospace, monospace;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin: 0 0 10px;
+  }
+  h1 {
+    font-family: "Barlow Semi Condensed", sans-serif;
+    font-weight: 700;
+    font-size: clamp(38px, 6vw, 60px);
+    line-height: 0.98;
+    letter-spacing: -0.015em;
+    margin: 0 0 14px;
+    text-transform: uppercase;
+  }
+  .lede { font-size: 18px; color: var(--ink-2); max-width: 62ch; margin: 0; }
+  .lede strong { color: var(--ink); font-weight: 600; }
+
+  /* ── the portability legend, which is this document's argument ── */
+  .scale {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    margin: 26px 0 0;
+  }
+  .scale > div { background: var(--surface); padding: 11px 14px; }
+  .scale dt {
+    font-family: "Roboto Mono", monospace;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 3px;
+  }
+  .scale dd { margin: 0; font-size: 13px; color: var(--ink-3); line-height: 1.45; }
+  .s-keep { color: var(--keep); }
+  .s-redo { color: var(--redo); }
+  .s-lock { color: var(--lock); }
+
+  /* ── sections ────────────────────────────────────────────── */
+  section { margin-top: 52px; }
+  h2 {
+    font-family: "Barlow Semi Condensed", sans-serif;
+    font-weight: 600;
+    font-size: clamp(23px, 3vw, 30px);
+    letter-spacing: -0.005em;
+    text-transform: uppercase;
+    margin: 0 0 4px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .sub { font-size: 15px; color: var(--ink-3); margin: 0 0 22px; max-width: var(--measure); }
+  h3 {
+    font-family: "Barlow Semi Condensed", sans-serif;
+    font-weight: 600;
+    font-size: 19px;
+    margin: 30px 0 8px;
+  }
+  h4 {
+    font-family: "Roboto Mono", monospace;
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin: 22px 0 7px;
+  }
+  p { margin: 0 0 12px; max-width: var(--measure); }
+  ul, ol { max-width: var(--measure); padding-left: 19px; margin: 0 0 12px; }
+  li { margin-bottom: 5px; }
+  li::marker { color: var(--ink-3); }
+
+  code { font-family: "Roboto Mono", ui-monospace, monospace; font-size: 0.86em; }
+  p code, li code, td code {
+    background: var(--surface-2);
+    border: 1px solid var(--rule-soft);
+    border-radius: 2px;
+    padding: 0.5px 4px;
+  }
+
+  /* ── the steps — genuinely a sequence, so genuinely numbered ── */
+  .step {
+    display: grid;
+    grid-template-columns: 46px minmax(0, 1fr);
+    gap: 18px;
+    border-top: 1px solid var(--rule);
+    padding: 20px 0;
+  }
+  .step:last-of-type { border-bottom: 1px solid var(--rule); }
+  .step .n {
+    font-family: "Barlow Semi Condensed", sans-serif;
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+  }
+  .step .head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+  .step .title {
+    font-family: "Barlow Semi Condensed", sans-serif;
+    font-size: 20px;
+    font-weight: 600;
+  }
+  .step p { margin-bottom: 10px; font-size: 15px; }
+  .step p:last-child { margin-bottom: 0; }
+
+  .chip {
+    font-family: "Roboto Mono", monospace;
+    font-size: 9.5px;
+    font-weight: 500;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border: 1px solid currentColor;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+  .c-keep { color: var(--keep); background: var(--keep-bg); }
+  .c-redo { color: var(--redo); background: var(--redo-bg); }
+  .c-lock { color: var(--lock); background: var(--lock-bg); }
+
+  pre.sh {
+    font-family: "Roboto Mono", ui-monospace, monospace;
+    font-size: 12.5px;
+    line-height: 1.6;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--accent);
+    padding: 11px 14px;
+    overflow-x: auto;
+    margin: 0 0 12px;
+    color: var(--ink-2);
+    white-space: pre;
+  }
+  pre.sh b { color: var(--ink); font-weight: 500; }
+  pre.sh i { color: var(--ink-3); font-style: normal; }
+
+  .warn {
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--lock);
+    background: var(--surface);
+    padding: 11px 15px;
+    margin: 0 0 12px;
+    max-width: var(--measure);
+    font-size: 14.5px;
+  }
+  .warn > :last-child { margin-bottom: 0; }
+  .warn-t {
+    font-family: "Roboto Mono", monospace;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--lock);
+    margin: 0 0 5px;
+  }
+
+  .tw {
+    overflow-x: auto;
+    border: 1px solid var(--rule);
+    background: var(--surface);
+    margin: 0 0 16px;
+  }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  th {
+    text-align: left;
+    font-family: "Roboto Mono", monospace;
+    font-size: 9.5px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    padding: 9px 13px;
+    border-bottom: 1px solid var(--rule);
+    background: var(--surface-2);
+    white-space: nowrap;
+  }
+  td { padding: 9px 13px; border-bottom: 1px solid var(--rule-soft); vertical-align: top; line-height: 1.5; }
+  tbody tr:last-child td { border-bottom: 0; }
+  .nw { white-space: nowrap; }
+  td.mono { font-family: "Roboto Mono", monospace; font-size: 12.5px; }
+
+  footer {
+    margin-top: 56px;
+    padding-top: 14px;
+    border-top: 1px solid var(--rule);
+    font-family: "Roboto Mono", monospace;
+    font-size: 12px;
+    color: var(--ink-3);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+
+<div class="sheet">
+
+  <header class="top">
+    <p class="eyebrow">AhuraCloud · Deploy v2 · provisioning</p>
+    <h1>Build Sheet</h1>
+    <p class="lede">
+      Everything the platform stands on, in the order it has to be built, with the command for each step
+      and what breaks if you skip it. Every step is marked for <strong>what a host migration would cost
+      it</strong> — because the reason to write this down is that one day some of it moves.
+    </p>
+
+    <dl class="scale">
+      <div><dt class="s-keep">Portable</dt><dd>Survives a move as it stands. Standard Kubernetes, S3, Postgres.</dd></div>
+      <div><dt class="s-redo">Rewrite</dt><dd>Same shape, different API. Bounded work, no design decisions.</dd></div>
+      <div><dt class="s-lock">Decision</dt><dd>Not a task. The substrate's own limits force the answer.</dd></div>
+    </dl>
+  </header>
+
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <section>
+    <h2>Before anything</h2>
+    <p class="sub">Five accounts and one directory. Nothing below works without all of them.</p>
+
+    <div class="tw">
+      <table>
+        <thead><tr><th>Account</th><th>What it holds</th><th class="nw">Move cost</th></tr></thead>
+        <tbody>
+          <tr><td class="nw">Linode</td><td>The Kubernetes cluster, the NodeBalancer, the firewall, and every throwaway build VM</td><td><span class="chip c-lock">decision</span></td></tr>
+          <tr><td class="nw">Cloudflare</td><td>DNS, public TLS, the WAF, and customer domains via Cloudflare for SaaS</td><td><span class="chip c-redo">rewrite</span></td></tr>
+          <tr><td class="nw">Cloudflare R2</td><td>Build logs, image tarballs, and the container registry's blob store</td><td><span class="chip c-keep">portable</span></td></tr>
+          <tr><td class="nw">Supabase</td><td>The <code>paas</code> schema — every project, deployment, alias and charge</td><td><span class="chip c-keep">portable</span></td></tr>
+          <tr><td class="nw">GitHub / GitLab / Bitbucket</td><td>An App or OAuth consumer per provider you want to support</td><td><span class="chip c-keep">portable</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h4>The secrets directory</h4>
+    <p>
+      Three files live <strong>outside every git repository</strong>. Nothing in the codebase reads a
+      credential from anywhere else.
+    </p>
+    <pre class="sh">&lt;secrets-dir&gt;/kubeconfig-v2-dev.yaml   <i># cluster access — written by step 1</i>
+&lt;secrets-dir&gt;/origin-v2.crt           <i># Cloudflare Origin CA cert</i>
+&lt;secrets-dir&gt;/origin-v2.key           <i># its private key</i>
+&lt;secrets-dir&gt;/env-master-key.txt      <i># AES-256 root for every customer secret</i></pre>
+
+    <div class="warn">
+      <p class="warn-t">The master key has no recovery</p>
+      <p>
+        <code>V2_ENV_MASTER_KEY</code> is the root of the HKDF that derives a key per project. It encrypts
+        every customer environment variable and every stored GitLab and Bitbucket OAuth token.
+        <strong>Lose it and all of that is permanently unreadable; leak it and all of it is readable.</strong>
+        44 characters, base64 of 32 bytes. Mode 600, and never in a repository, a ticket or a chat.
+      </p>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <section>
+    <h2>The build order</h2>
+    <p class="sub">
+      Each step depends on the one before it. Every script is idempotent and every script has a dry run —
+      run without <code>--apply</code> first, always.
+    </p>
+
+    <div class="step">
+      <div class="n">01</div>
+      <div>
+        <div class="head"><span class="title">The database schema</span><span class="chip c-keep">portable</span></div>
+        <p>
+          Apply the migrations to a Postgres with the <code>paas</code> schema. This comes first because
+          <strong>step 2 refuses to run without it</strong> — provisioning that cannot record what it
+          created is how a cluster ends up running with nothing tracking it.
+        </p>
+        <p>
+          Plain Postgres with RLS. Nothing here is Supabase-specific except <code>auth.users</code>, which
+          team ownership references.
+        </p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="n">02</div>
+      <div>
+        <div class="head"><span class="title">The cluster</span><span class="chip c-redo">rewrite</span></div>
+        <pre class="sh">node --env-file=.env --env-file=.env.local scripts/v2/provision-cluster.ts
+node --env-file=.env --env-file=.env.local scripts/v2/provision-cluster.ts <b>--apply</b></pre>
+        <p>
+          Creates an LKE cluster tagged <code>ahura-v2</code> — idempotent, so an existing tagged cluster in
+          the region is reused rather than duplicated. It checks the region really offers Kubernetes, VPCs
+          and NodeBalancers before it starts, and writes the kubeconfig to the secrets directory.
+        </p>
+        <p>
+          <strong>Two node pools, and the split is the isolation model.</strong> <code>system</code> carries
+          the gateway, registry and observability; <code>runtime</code> is tainted <code>NoSchedule</code>
+          and is the only pool that will carry gVisor. Customer pods never land on <code>system</code>.
+        </p>
+        <p>
+          There is deliberately <strong>no build pool</strong> — see step 9.
+        </p>
+      </div>
+    </div>
+
+    <div class="warn">
+      <p class="warn-t">Decide HA before you create, not after</p>
+      <p>
+        The HA control plane costs $60/month and <strong>enabling it later is irreversible and recreates
+        every node.</strong> The dev cluster runs without it. The first cluster that will ever serve
+        production must be created with it already on — there is no upgrade path, only a rebuild.
+      </p>
+    </div>
+
+    <div class="step">
+      <div class="n">03</div>
+      <div>
+        <div class="head"><span class="title">The platform namespace and registry</span><span class="chip c-keep">portable</span></div>
+        <pre class="sh">node --env-file=.env --env-file=.env.local scripts/v2/bootstrap-cluster.ts --apply</pre>
+        <p>
+          Creates <code>ahura-system</code>, the R2 credential secret, and Docker Distribution backed by R2.
+          The registry is <strong>never publicly exposed</strong>; it is reachable only inside the cluster.
+        </p>
+        <p>
+          It also installs a <code>registry-proxy</code> DaemonSet, and the reason is worth knowing before
+          you delete it: the kubelet pulls over <code>127.0.0.1</code> because containerd resolves image
+          hostnames with the <em>node's</em> resolver, which cannot see <code>*.svc.cluster.local</code> —
+          and LKE gives no way to edit node configuration. The proxy exists because that door is shut.
+        </p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="n">04</div>
+      <div>
+        <div class="head"><span class="title">The sandbox</span><span class="chip c-lock">decision</span></div>
+        <pre class="sh">node --env-file=.env --env-file=.env.local scripts/v2/install-gvisor.ts --apply</pre>
+        <p>
+          Installs gVisor onto the runtime pool and proves it by reading the kernel a tenant pod reports —
+          <code>Linux version 4.19.0-gvisor</code>, not the host's. It restarts containerd on that node,
+          which restarts what is running there.
+        </p>
+        <p>
+          <strong>This is a decision the substrate made, not a preference.</strong> Linode has no nested
+          virtualisation and sells no bare metal, so Kata, Firecracker and every microVM design are
+          impossible. gVisor is a userspace kernel and needs no <code>/dev/kvm</code>. On a host that does
+          offer nested virtualisation, this step and step 9 both change completely.
+        </p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="n">05</div>
+      <div>
+        <div class="head"><span class="title">The gateway and the public address</span><span class="chip c-redo">rewrite</span></div>
+        <pre class="sh">node --env-file=.env --env-file=.env.local scripts/v2/install-gateway.ts --apply</pre>
+        <p>
+          Installs Traefik and a <code>LoadBalancer</code> Service, which makes Linode create a
+          NodeBalancer — about $10/month. It reports the public IP it lands on. Write that down: it is what
+          DNS points at, and what the firewall in step 10 protects.
+        </p>
+        <p>
+          It also loads the Cloudflare Origin CA certificate from the secrets directory into a Kubernetes
+          Secret. One certificate covers the whole wildcard, so no per-app certificate exists and there is
+          no Let's Encrypt rate limit to hit.
+        </p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="n">06</div>
+      <div>
+        <div class="head"><span class="title">Metrics</span><span class="chip c-keep">portable</span></div>
+        <pre class="sh">node --env-file=.env --env-file=.env.local scripts/v2/install-metrics-server.ts --apply</pre>
+        <p>
+          Stock metrics-server, hand-authored rather than pulled from a chart. Usage metering reads
+          <code>metrics.k8s.io</code> to tell an idle app from a busy one; without this, warm-fraction and
+          per-app CPU are simply absent.
+        </p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="n">07</div>
+      <div>
+        <div class="head"><span class="title">The activator</span><span class="chip c-keep">portable</span></div>
+        <pre class="sh">node --env-file=.env --env-file=.env.local scripts/v2/install-activator.ts --apply</pre>
+        <p>
+          Holds the first request to a sleeping app, wakes it, and proxies once it is ready. It is verified
+          by asking it to serve a request, not by asking Kubernetes whether it looks ready.
+        </p>
+        <p>
+          Only needed if scale-to-zero will ever be switched on — but install it first. An app that scales
+          down and cannot come back is just an app that is down.
+        </p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="n">08</div>
+      <div>
+        <div class="head"><span class="title">The scheduled sweeps</span><span class="chip c-keep">portable</span></div>
+        <pre class="sh">node --env-file=.env --env-file=.env.local scripts/v2/install-sweeps.ts --apply</pre>
+        <p>
+          Ten CronJobs on staggered minutes. Each gets its own ServiceAccount and only the Secret it needs —
+          <strong>no sweep pod ever holds more than one external credential.</strong> That is why there are
+          ten narrow jobs and not one wide one: the aggregator that would need all of them is deliberately
+          never scheduled, because concentrating every platform credential in one pod is precisely the shape
+          that gave v1 a cluster-wide compromise.
+        </p>
+        <p>
+          Two of the ten write: <code>meter-apps</code> charges the hour, and <code>project-teardown</code>
+          removes deleted projects' workloads. <strong>Enable teardown first and let it converge to zero
+          before metering goes on</strong> — billing an app whose pods were never removed is v1's defect
+          exactly.
+        </p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="n">09</div>
+      <div>
+        <div class="head"><span class="title">Nothing — the build tier needs no setup</span><span class="chip c-lock">decision</span></div>
+        <p>
+          There is no build cluster, no runner pool and no CI to install. <strong>Every build leases its own
+          throwaway Linode, runs rootless BuildKit on it, and destroys it.</strong> The isolation boundary is
+          Linode's own hypervisor — the same one separating Linode's customers from each other.
+        </p>
+        <p>
+          This exists because of step 4's constraint. With no nested virtualisation available, renting a whole
+          machine is the only way to get a hardware boundary around untrusted build code. It costs about
+          $0.002 per build.
+        </p>
+        <p>
+          <strong>On a host with nested virtualisation this design is unnecessary</strong> and a microVM
+          runner inside the cluster would be cheaper and faster. Listed as a step precisely so nobody
+          reimplements it after moving somewhere it is not needed.
+        </p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="n">10</div>
+      <div>
+        <div class="head"><span class="title">Close the origin</span><span class="chip c-redo">rewrite</span></div>
+        <pre class="sh">node --env-file=.env --env-file=.env.local scripts/v2/origin-lockdown.ts         <i># probe only</i>
+node --env-file=.env --env-file=.env.local scripts/v2/origin-lockdown-apply.ts --apply
+node --env-file=.env --env-file=.env.local scripts/v2/origin-lockdown-apply.ts --detach</pre>
+        <p>
+          Until this runs, the NodeBalancer answers on its public IP and <strong>anyone who learns that
+          address walks straight past Cloudflare's WAF and rate limiting.</strong> A Linode Cloud Firewall
+          permitting Cloudflare's ranges only closes it.
+        </p>
+        <p>
+          The script is not one curl because of what surrounds the call: it probes every live hostname
+          <em>first</em> so "it was already broken" and "we broke it" cannot be confused afterwards,
+          attaches, probes again, and <strong>detaches automatically if anything that was answering has
+          stopped.</strong> A revert nobody is awake to perform is not a revert.
+        </p>
+      </div>
+    </div>
+
+    <div class="warn">
+      <p class="warn-t">Do not trust the firewall's label</p>
+      <p>
+        The live firewall is named <code>UNATTACHED-cf-only-origin</code> from when it genuinely was
+        unattached. It is attached. <strong>Trust the device count, not the name</strong> — and verify with
+        the probe script, which tests behaviour rather than reading labels.
+      </p>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <section>
+    <h2>Wiring the edge</h2>
+    <p class="sub">Cloudflare, in the order the pieces depend on each other.</p>
+
+    <div class="tw">
+      <table>
+        <thead><tr><th>#</th><th>Set up</th><th>Why it is in this order</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">1</td><td>Zone for your apex domain</td><td>Everything else hangs off it.</td></tr>
+          <tr><td class="mono">2</td><td><strong>Origin CA certificate</strong> for <code>*.&lt;domain&gt;</code></td><td>Needed by step 5 above. Issued from the Cloudflare dashboard, valid up to 15 years. Save both halves into the secrets directory.</td></tr>
+          <tr><td class="mono">3</td><td>Proxied <code>A</code> record per app hostname → the NodeBalancer IP</td><td>Created automatically by the deploy path. <strong>Platform subdomains cost zero custom hostnames</strong> — the single biggest cost avoidance in the design.</td></tr>
+          <tr><td class="mono">4</td><td><strong>Fallback origin</strong> — one hostname customer domains CNAME to</td><td>Cloudflare for SaaS routes every customer domain through it. Ours is <code>fallback.&lt;domain&gt;</code>, and it is a reserved label so no tenant can claim it.</td></tr>
+          <tr><td class="mono">5</td><td>Cloudflare for SaaS, then <code>V2_ACM_ENABLED=true</code></td><td>Customer domains become custom hostnames. 100 included, then $0.10/hostname/month, 50,000 self-serve ceiling.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="warn">
+      <p class="warn-t">Two limits to know before you sell against them</p>
+      <p>
+        <strong>Per-tenant WAF and more than one rate-limit rule are Enterprise-only.</strong> On the free
+        plan you get one rate-limit rule for the whole platform and no per-tenant isolation at the edge. At
+        any real number of untrusted tenants that is a requirement, not a nicety — and it is a commercial
+        decision, not something the code can route around.
+      </p>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <section>
+    <h2>Wiring the application</h2>
+    <p class="sub">What the server needs to know, grouped by who it is for.</p>
+
+    <div class="tw">
+      <table>
+        <thead><tr><th>Group</th><th>Variables</th></tr></thead>
+        <tbody>
+          <tr><td class="nw">Database</td><td class="mono">NEXT_PUBLIC_SUPABASE_URL · SUPABASE_SERVICE_ROLE_KEY</td></tr>
+          <tr><td class="nw">Compute</td><td class="mono">V2_LINODE_TOKEN · V2_LINODE_REGION · V2_LINODE_API_URL</td></tr>
+          <tr><td class="nw">Cluster</td><td class="mono">V2_KUBECONFIG · V2_PAAS_NAMESPACE · V2_ORIGIN_CERT · V2_ORIGIN_KEY</td></tr>
+          <tr><td class="nw">Edge</td><td class="mono">V2_CF_API_TOKEN · V2_CF_ACCOUNT_ID · V2_CF_ZONE_ID · V2_CF_ZONE_NAME · V2_ACM_ENABLED</td></tr>
+          <tr><td class="nw">Storage</td><td class="mono">V2_R2_ACCOUNT_ID · V2_R2_BUCKET · V2_R2_ENDPOINT · V2_R2_ACCESS_KEY_ID · V2_R2_SECRET_ACCESS_KEY</td></tr>
+          <tr><td class="nw">Secrets</td><td class="mono">V2_ENV_MASTER_KEY · V2_ENV_MASTER_KEY_ID</td></tr>
+          <tr><td class="nw">Platform</td><td class="mono">V2_APP_DOMAIN · V2_PUBLIC_APP_URL · ADMIN_EMAILS</td></tr>
+          <tr><td class="nw">GitHub</td><td class="mono">V2_GITHUB_APP_ID · V2_GITHUB_APP_CLIENT_ID · V2_GITHUB_APP_CLIENT_SECRET · V2_GITHUB_APP_WEBHOOK_SECRET · V2_GITHUB_APP_PRIVATE_KEY_PATH</td></tr>
+          <tr><td class="nw">GitLab</td><td class="mono">V2_GITLAB_CLIENT_ID · V2_GITLAB_CLIENT_SECRET · V2_GITLAB_WEBHOOK_SECRET · V2_GITLAB_HOST</td></tr>
+          <tr><td class="nw">Bitbucket</td><td class="mono">V2_BITBUCKET_CLIENT_ID · V2_BITBUCKET_CLIENT_SECRET · V2_BITBUCKET_WEBHOOK_SECRET</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="warn">
+      <p class="warn-t">Absolute paths are the trap this platform has fallen into twice</p>
+      <p>
+        Four of these are <em>paths</em>, not values: the kubeconfig, both halves of the origin certificate,
+        and the GitHub App key. A path that is right on a developer's machine is wrong on the server, and
+        <strong>nothing reads them at startup</strong> — they fail at the first request that needs them,
+        which is never the request anybody is watching.
+      </p>
+      <p>
+        It has happened twice here. The GitHub App key shipped as a Windows path onto a Linux box. And
+        <code>V2_KUBECONFIG</code> was not set at all, so five call sites fell through to a hardcoded default
+        — the server had <strong>no cluster access whatsoever</strong> for its first day, and the only
+        symptom was deletes reporting that they could not tear anything down.
+      </p>
+      <p>
+        When you move hosts: <strong>grep the source, not just the config.</strong> A missing variable has
+        nothing to grep for.
+      </p>
+    </div>
+
+    <h3>Git providers</h3>
+    <p>
+      All three are optional and independent — the platform runs with only one configured, and public
+      repositories deploy on any provider with no credential at all. Callback URLs are
+      <code>&lt;app-url&gt;/api/v2/&lt;provider&gt;/callback</code>.
+    </p>
+    <div class="tw">
+      <table>
+        <thead><tr><th>Provider</th><th>Create</th><th>Scopes</th></tr></thead>
+        <tbody>
+          <tr><td class="nw">GitHub</td><td>A GitHub <strong>App</strong>, not an OAuth app</td><td>Contents, Metadata; webhook on push</td></tr>
+          <tr><td class="nw">GitLab</td><td>User settings → Applications</td><td><code>api</code>, <code>read_user</code></td></tr>
+          <tr><td class="nw">Bitbucket</td><td>Workspace settings → <strong>OAuth clients</strong></td><td>Account: read · Repositories: read · Webhooks: read+write</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      GitHub stores <strong>no</strong> credential — tokens are minted per request from the App key and
+      expire in an hour. GitLab and Bitbucket are OAuth, so the platform holds a refreshable token for as
+      long as the connection lives. <strong>That asymmetry means connecting GitLab gives us a durable
+      credential to a customer's account and connecting GitHub does not</strong>, and it is why those
+      columns are encrypted separately from environment variables.
+    </p>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <section>
+    <h2>If this moves</h2>
+    <p class="sub">What a migration actually costs, by layer. The short answer is that the control plane is portable and the substrate assumptions are not.</p>
+
+    <div class="tw">
+      <table>
+        <thead><tr><th>Layer</th><th class="nw">Cost</th><th>What is involved</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="nw"><strong>Control plane</strong></td>
+            <td><span class="chip c-keep">portable</span></td>
+            <td>Postgres and a reconciler. Desired state in rows, level-triggered convergence, no imperative calls. Moves to any Postgres unchanged.</td>
+          </tr>
+          <tr>
+            <td class="nw"><strong>Kubernetes layer</strong></td>
+            <td><span class="chip c-keep">portable</span></td>
+            <td>Namespaces, Deployments, Services, NetworkPolicy, Ingress — all stock objects as typed JSON. Runs on any conformant cluster.</td>
+          </tr>
+          <tr>
+            <td class="nw"><strong>Object storage</strong></td>
+            <td><span class="chip c-keep">portable</span></td>
+            <td>R2 is reached with SigV4. Any S3-compatible store works by changing the endpoint.</td>
+          </tr>
+          <tr>
+            <td class="nw"><strong>Git providers</strong></td>
+            <td><span class="chip c-keep">portable</span></td>
+            <td>Nothing host-specific. New OAuth apps with new callback URLs.</td>
+          </tr>
+          <tr>
+            <td class="nw"><strong>Compute API</strong></td>
+            <td><span class="chip c-redo">rewrite</span></td>
+            <td>One client, four API groups: instances, LKE, NodeBalancers, regions. Bounded and mechanical — the shape is the same on every provider.</td>
+          </tr>
+          <tr>
+            <td class="nw"><strong>Edge</strong></td>
+            <td><span class="chip c-redo">rewrite</span></td>
+            <td>DNS and certificates are generic. <strong>Cloudflare for SaaS custom hostnames are not</strong> — a move means finding an equivalent or building per-domain certificate issuance, which is the thing this design exists to avoid.</td>
+          </tr>
+          <tr>
+            <td class="nw"><strong>Build isolation</strong></td>
+            <td><span class="chip c-lock">decision</span></td>
+            <td>The throwaway-VM model exists <em>only</em> because Linode offers no nested virtualisation and no bare metal. Somewhere that does, this is the wrong design — use microVMs in-cluster instead.</td>
+          </tr>
+          <tr>
+            <td class="nw"><strong>Sandbox</strong></td>
+            <td><span class="chip c-lock">decision</span></td>
+            <td>gVisor for the same reason. With <code>/dev/kvm</code> available, Kata gives a stronger boundary at lower CPU cost.</td>
+          </tr>
+          <tr>
+            <td class="nw"><strong>Fleet sizing</strong></td>
+            <td><span class="chip c-lock">decision</span></td>
+            <td>LKE caps pods per cluster at 1,000 (5,000 Enterprise), which is what forces a multi-cluster fleet and the placement layer. A host with a higher ceiling removes that requirement entirely.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>The three questions to ask a replacement host</h3>
+    <ol>
+      <li><strong>Does it offer nested virtualisation or bare metal?</strong> Yes collapses two of the three decisions above and makes the build tier simpler and cheaper.</li>
+      <li><strong>What is the pod ceiling per cluster?</strong> This, not CPU or memory, is what determines how many clusters you operate.</li>
+      <li><strong>Is there a SaaS custom-hostname product?</strong> Without one, per-customer TLS becomes your problem, and that is the ceiling this whole edge design was chosen to remove.</li>
+    </ol>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <section>
+    <h2>Proving it works</h2>
+    <p class="sub">One command. If it returns 200, every layer above is correctly wired.</p>
+
+    <pre class="sh">node --experimental-strip-types --env-file-if-exists=.env.local \
+  scripts/v2/framework-probe.ts <b>pages/plain-html</b> --provider gitlab --root public</pre>
+
+    <p>
+      It detects the framework, leases a build VM, builds, publishes to the registry, creates the alias,
+      converges the cluster, creates DNS, waits for the hostname to answer, reports the status, and tears
+      the whole thing down. <strong>A 200 exercises every step on this sheet.</strong>
+    </p>
+    <p>
+      Flags: <code>--keep</code> leaves it running, <code>--team &lt;slug&gt;</code> puts it in a specific
+      team, <code>--provider</code> and <code>--branch</code> and <code>--root</code> do what they say.
+    </p>
+
+    <h4>And check nothing leaked</h4>
+    <pre class="sh">node --experimental-strip-types --env-file-if-exists=.env.local scripts/v3/fleet-drift.ts
+node --experimental-strip-types --env-file-if-exists=.env.local scripts/v2/cluster-status.ts</pre>
+    <p>
+      The first prices what the provider is billing against what the control plane admits exists. The second
+      reports nodes, namespaces and RuntimeClasses. <strong>Build VMs should be zero</strong> when no build
+      is running; anything else is a leak and it is charging by the hour.
+    </p>
+  </section>
+
+  <footer>
+    Deploy v2 · compiled from scripts/v2, scripts/v3 and lib/paas · 1 Sep 2026 ·
+    companion to the engineering reference and the field guide
+  </footer>
+
+</div>

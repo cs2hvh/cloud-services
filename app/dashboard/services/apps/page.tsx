@@ -15,6 +15,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Boxes, GitBranch, Plug, Plus } from "lucide-react";
+import { Notice } from "@/components/v2/notice";
 import { createClient } from "@/lib/supabase/server";
 import {
   Card,
@@ -40,7 +41,52 @@ import { AutoRefresh } from "@/components/v2/auto-refresh";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export default async function ProjectsPage() {
+/**
+ * What the connect callback is telling us, in the customer's terms.
+ *
+ * The codes are ours. `state_mismatch` precisely describes a CSRF check and
+ * means nothing to the person reading it; what they need is the action that
+ * resolves it.
+ */
+const CONNECT_RESULT: Record<string, { tone: "info" | "blocked"; title: string; body: string }> = {
+  connected: {
+    tone: "info",
+    title: "Git account connected",
+    body: "Your repositories are available below. Create an app to deploy one.",
+  },
+  pending: {
+    tone: "blocked",
+    title: "Waiting for approval",
+    body:
+      "The install needs an owner of that organisation to approve it. It will appear here once they do.",
+  },
+  error: {
+    tone: "blocked",
+    title: "That account was not connected",
+    body: "Nothing was changed. Start again from Connect below.",
+  },
+};
+
+/** Only where the reason changes what the customer should do next. */
+const CONNECT_DETAIL: Record<string, string> = {
+  sign_in_required: "Your session had expired by the time GitHub sent you back. Sign in and try again.",
+  awaiting_approval: "An owner of that organisation has to approve the install.",
+  state_mismatch: "This link had already been used or had expired. Start again from Connect below.",
+  state_missing: "This link had already been used or had expired. Start again from Connect below.",
+  state_malformed: "This link had already been used or had expired. Start again from Connect below.",
+  ownership_unproven:
+    "We could not confirm the install belongs to you. If you own it, try connecting again.",
+  link_refused: "That account is already connected to another team.",
+};
+
+export default async function ProjectsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ connect?: string; detail?: string }>;
+}) {
+  const { connect, detail } = await searchParams;
+  const result = connect ? CONNECT_RESULT[connect] ?? CONNECT_RESULT.error : null;
+  const detailText = detail ? CONNECT_DETAIL[detail] ?? null : null;
   const supabase = await createClient();
   const {
     data: { user },
@@ -113,6 +159,18 @@ export default async function ProjectsPage() {
           </Link>
         }
       />
+
+      {/*
+        The result of a connect attempt, which used to be computed, encoded
+        into the query string, and then read by nothing at all.
+      */}
+      {result ? (
+        <div className="mb-4">
+          <Notice tone={result.tone} title={result.title}>
+            {detailText ?? result.body}
+          </Notice>
+        </div>
+      ) : null}
 
       {/*
         The list is where somebody watches a fleet come up. `building` is

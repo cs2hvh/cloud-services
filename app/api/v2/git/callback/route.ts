@@ -42,7 +42,12 @@ function back(status: string, detail?: string): Response {
   if (detail) query.set("detail", detail);
   return new Response(null, {
     status: 303,
-    headers: { Location: `/dashboard/v2?${query.toString()}` },
+    // /dashboard/v2 has not existed since v2 became the Apps service — it
+    // holds an admin subdirectory and no page. Every successful connection
+    // landed on a 404 with the installation already created on GitHub and
+    // already recorded here, which reads as failure and invites a second
+    // install.
+    headers: { Location: `/dashboard/services/apps?${query.toString()}` },
   });
 }
 

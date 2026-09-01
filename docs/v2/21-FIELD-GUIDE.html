@@ -1,0 +1,861 @@
+<title>Deploy v2 Field Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chivo:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Source+Sans+3:wght@400;500;600&display=swap">
+
+<style>
+  /* ─────────────────────────────────────────────────────────────
+     Five layers, five hues. The colour is a legend the reader
+     learns once and then reads everywhere — it says WHICH VENDOR
+     OWNS THIS, which is the question a new engineer keeps asking.
+     Complete light palette on bare :root; dark blocks redefine
+     tokens only.
+     ───────────────────────────────────────────────────────────── */
+  :root {
+    --bg:        #F3F2F0;
+    --surface:   #FFFFFF;
+    --surface-2: #FAF9F7;
+    --ink:       #1A1917;
+    --ink-2:     #524E48;
+    --ink-3:     #837D74;
+    --rule:      #DCD8D2;
+    --rule-soft: #E9E6E1;
+
+    --edge:      #B26206;   /* Cloudflare  — the public edge   */
+    --compute:   #0B6E77;   /* Linode      — machines          */
+    --orch:      #3A4BA8;   /* Kubernetes  — scheduling        */
+    --plane:     #6D31C4;   /* Supabase    — desired state     */
+    --store:     #A6374F;   /* R2          — artifacts         */
+
+    --edge-bg:    #B2620614;
+    --compute-bg: #0B6E7714;
+    --orch-bg:    #3A4BA814;
+    --plane-bg:   #6D31C414;
+    --store-bg:   #A6374F14;
+
+    --ok:   #1C7A4F;
+    --warn: #96660A;
+
+    --measure: 72ch;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:        #141311;
+      --surface:   #1C1B18;
+      --surface-2: #232220;
+      --ink:       #EDEAE5;
+      --ink-2:     #ABA49A;
+      --ink-3:     #7D766C;
+      --rule:      #322F2B;
+      --rule-soft: #262421;
+
+      --edge:      #E8992F;
+      --compute:   #35B6C0;
+      --orch:      #8093EE;
+      --plane:     #B18BF5;
+      --store:     #EE8199;
+
+      --edge-bg:    #E8992F1F;
+      --compute-bg: #35B6C01F;
+      --orch-bg:    #8093EE1F;
+      --plane-bg:   #B18BF51F;
+      --store-bg:   #EE81991F;
+
+      --ok:   #4FC98A;
+      --warn: #DCA82C;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --bg:        #141311;
+    --surface:   #1C1B18;
+    --surface-2: #232220;
+    --ink:       #EDEAE5;
+    --ink-2:     #ABA49A;
+    --ink-3:     #7D766C;
+    --rule:      #322F2B;
+    --rule-soft: #262421;
+
+    --edge:      #E8992F;
+    --compute:   #35B6C0;
+    --orch:      #8093EE;
+    --plane:     #B18BF5;
+    --store:     #EE8199;
+
+    --edge-bg:    #E8992F1F;
+    --compute-bg: #35B6C01F;
+    --orch-bg:    #8093EE1F;
+    --plane-bg:   #B18BF51F;
+    --store-bg:   #EE81991F;
+
+    --ok:   #4FC98A;
+    --warn: #DCA82C;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Source Sans 3", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    font-size: 16px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+    margin: 0;
+  }
+
+  .wrap { max-width: 940px; margin: 0 auto; padding: 0 22px 110px; }
+
+  /* ── masthead ─────────────────────────────────────────────── */
+  header.top { padding-top: 46px; }
+  .kicker {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin: 0 0 12px;
+  }
+  h1 {
+    font-family: Chivo, ui-sans-serif, system-ui, sans-serif;
+    font-weight: 700;
+    font-size: clamp(36px, 5.6vw, 56px);
+    line-height: 1.03;
+    letter-spacing: -0.03em;
+    margin: 0 0 16px;
+    text-wrap: balance;
+  }
+  .lede {
+    font-size: 19px;
+    line-height: 1.58;
+    color: var(--ink-2);
+    max-width: 60ch;
+    margin: 0 0 28px;
+  }
+  .lede strong { color: var(--ink); font-weight: 600; }
+
+  /* ── the legend, taught once ──────────────────────────────── */
+  .legend {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 44px;
+  }
+  .legend > div { background: var(--surface); padding: 12px 14px; }
+  .legend .who {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-bottom: 4px;
+  }
+  .legend .who::before {
+    content: "";
+    width: 9px; height: 9px;
+    border-radius: 2px;
+    background: currentColor;
+    flex: none;
+  }
+  .legend .what { font-size: 13px; color: var(--ink-3); line-height: 1.4; }
+
+  .l-edge    { color: var(--edge); }
+  .l-compute { color: var(--compute); }
+  .l-orch    { color: var(--orch); }
+  .l-plane   { color: var(--plane); }
+  .l-store   { color: var(--store); }
+
+  /* ── sections ─────────────────────────────────────────────── */
+  section { margin-top: 54px; scroll-margin-top: 20px; }
+  h2 {
+    font-family: Chivo, sans-serif;
+    font-weight: 600;
+    font-size: clamp(21px, 2.9vw, 27px);
+    letter-spacing: -0.022em;
+    line-height: 1.16;
+    margin: 0 0 6px;
+    text-wrap: balance;
+    padding-bottom: 9px;
+    border-bottom: 2px solid var(--ink);
+  }
+  .sub {
+    font-size: 15px;
+    color: var(--ink-3);
+    margin: 0 0 20px;
+    max-width: var(--measure);
+  }
+  h3 {
+    font-family: Chivo, sans-serif;
+    font-weight: 600;
+    font-size: 17px;
+    letter-spacing: -0.012em;
+    margin: 30px 0 9px;
+  }
+  h4 {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin: 24px 0 8px;
+  }
+  p { margin: 0 0 13px; max-width: var(--measure); }
+  ul, ol { max-width: var(--measure); padding-left: 19px; margin: 0 0 13px; }
+  li { margin-bottom: 6px; }
+  li::marker { color: var(--ink-3); }
+  a { color: var(--orch); }
+
+  code {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 0.86em;
+  }
+  p code, li code, td code {
+    background: var(--surface-2);
+    border: 1px solid var(--rule-soft);
+    border-radius: 3px;
+    padding: 1px 4px;
+  }
+
+  /* ── the stack figure ─────────────────────────────────────── */
+  .stack { margin: 0 0 20px; display: flex; flex-direction: column; gap: 0; }
+  .tier {
+    display: grid;
+    grid-template-columns: 108px 1fr;
+    gap: 0;
+    border: 1px solid var(--rule);
+    border-bottom: 0;
+    background: var(--surface);
+  }
+  .tier:last-child { border-bottom: 1px solid var(--rule); }
+  .tier:first-child { border-radius: 3px 3px 0 0; }
+  .tier:last-child { border-radius: 0 0 3px 3px; }
+  .tier .owner {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    padding: 13px 10px;
+    border-right: 3px solid currentColor;
+    display: flex;
+    align-items: center;
+  }
+  .tier .body { padding: 12px 16px; min-width: 0; }
+  .tier .name {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--ink);
+    display: block;
+    margin-bottom: 2px;
+    overflow-wrap: anywhere;
+  }
+  .tier .desc { font-size: 13.5px; color: var(--ink-2); line-height: 1.5; }
+  .arrow {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 13px;
+    color: var(--ink-3);
+    padding: 3px 0 3px 108px;
+  }
+
+  /* ── tables ───────────────────────────────────────────────── */
+  .tw {
+    overflow-x: auto;
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    background: var(--surface);
+    margin: 0 0 17px;
+  }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+  th {
+    text-align: left;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    padding: 9px 13px;
+    border-bottom: 1px solid var(--rule);
+    background: var(--surface-2);
+    white-space: nowrap;
+  }
+  td {
+    padding: 9px 13px;
+    border-bottom: 1px solid var(--rule-soft);
+    vertical-align: top;
+    line-height: 1.5;
+  }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.mono, th.mono { font-family: "JetBrains Mono", monospace; font-size: 12.5px; }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .nw { white-space: nowrap; }
+
+  /* ── callouts ─────────────────────────────────────────────── */
+  .note {
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--ink-3);
+    background: var(--surface);
+    border-radius: 0 3px 3px 0;
+    padding: 13px 16px;
+    margin: 0 0 17px;
+    max-width: var(--measure);
+  }
+  .note.gotcha { border-left-color: var(--warn); }
+  .note.why    { border-left-color: var(--orch); }
+  .note > :last-child { margin-bottom: 0; }
+  .note-t {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+    margin: 0 0 6px;
+  }
+
+  /* ── shell blocks ─────────────────────────────────────────── */
+  pre.sh {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 12.5px;
+    line-height: 1.65;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 13px 15px;
+    overflow-x: auto;
+    margin: 0 0 17px;
+    color: var(--ink-2);
+    white-space: pre;
+  }
+  pre.sh b { color: var(--ink); font-weight: 600; }
+  pre.sh i { color: var(--ink-3); font-style: normal; }
+
+  /* ── chips ────────────────────────────────────────────────── */
+  .chip {
+    display: inline-block;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 1px solid currentColor;
+    white-space: nowrap;
+  }
+  .c-edge{color:var(--edge);background:var(--edge-bg)}
+  .c-compute{color:var(--compute);background:var(--compute-bg)}
+  .c-orch{color:var(--orch);background:var(--orch-bg)}
+  .c-plane{color:var(--plane);background:var(--plane-bg)}
+  .c-store{color:var(--store);background:var(--store-bg)}
+  .c-ok{color:var(--ok);border-color:var(--ok)}
+  .c-warn{color:var(--warn);border-color:var(--warn)}
+
+  footer {
+    margin-top: 62px;
+    padding-top: 16px;
+    border-top: 1px solid var(--rule);
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+    color: var(--ink-3);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  }
+  html { scroll-behavior: smooth; }
+</style>
+
+<div class="wrap">
+
+  <header class="top">
+    <p class="kicker">AhuraCloud · Deploy v2 · onboarding</p>
+    <h1>Deploy v2 Field Guide</h1>
+    <p class="lede">
+      Where every piece of this platform physically lives, what each vendor is responsible for, how a
+      request and a deploy actually travel through it, and where in the codebase to go when you need to
+      change something. Written to be <strong>handed to somebody on their first day</strong>.
+    </p>
+
+    <div class="legend">
+      <div><div class="who l-edge">Edge</div><div class="what">Cloudflare — public TLS, DNS, WAF, customer domains</div></div>
+      <div><div class="who l-compute">Compute</div><div class="what">Linode — the cluster's machines and every build VM</div></div>
+      <div><div class="who l-orch">Orchestration</div><div class="what">Kubernetes (LKE) — scheduling and routing inside the cluster</div></div>
+      <div><div class="who l-plane">Control plane</div><div class="what">Supabase Postgres — desired state, the source of truth</div></div>
+      <div><div class="who l-store">Storage</div><div class="what">Cloudflare R2 — build logs, image tarballs, the registry</div></div>
+    </div>
+    <p class="sub" style="margin-top:-30px">
+      Those five colours recur throughout this document. Wherever you see one, it tells you which vendor
+      owns the thing being described — which is the question you will keep asking for the first fortnight.
+    </p>
+  </header>
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <section>
+    <h2>1 · What happens when someone visits an app</h2>
+    <p class="sub">Top to bottom, this is the whole request path. Nothing else is in it.</p>
+
+    <div class="stack">
+      <div class="tier"><div class="owner l-edge">Cloudflare</div><div class="body">
+        <span class="name">ahurasense.com — proxied DNS</span>
+        <span class="desc">Terminates public TLS. One Origin CA certificate covers <code>*.ahurasense.com</code>
+        and is valid to 2041. Customer domains ride on Cloudflare for SaaS custom hostnames. WAF and rate
+        limiting sit here, not in our code.</span>
+      </div></div>
+      <div class="arrow">│ proxied A record → origin</div>
+      <div class="tier"><div class="owner l-compute">Linode</div><div class="body">
+        <span class="name">NodeBalancer 2437817 · 172.236.185.23</span>
+        <span class="desc">The only public entry point to the cluster. Firewall <code>143239782</code> is
+        attached to it and permits Cloudflare's IP ranges only — a direct connection to that address times
+        out.</span>
+      </div></div>
+      <div class="arrow">│</div>
+      <div class="tier"><div class="owner l-orch">Kubernetes</div><div class="body">
+        <span class="name">traefik · ahura-system</span>
+        <span class="desc">Reads one Ingress per <em>alias</em>. An alias is a row in <code>paas.aliases</code>
+        mapping a hostname to a specific deployment, which is why promote and rollback are a database write
+        rather than a rebuild.</span>
+      </div></div>
+      <div class="arrow">│</div>
+      <div class="tier"><div class="owner l-orch">Kubernetes</div><div class="body">
+        <span class="name">the app's pod · app-prj-&lt;ref&gt;</span>
+        <span class="desc">One namespace per project. The pod runs under the <code>gvisor</code> RuntimeClass
+        with all capabilities dropped, no service-account token, and a NetworkPolicy that only lets the
+        gateway reach it.</span>
+      </div></div>
+    </div>
+
+    <div class="note gotcha">
+      <p class="note-t">If the app is asleep</p>
+      <p>
+        Scale-to-zero is opt-in and currently on for one project. When it is on and the pod is down, the
+        request is held by the <strong>activator</strong> in <code>ahura-system</code>, which wakes the app
+        and proxies once it is ready. The visitor waits a few seconds rather than seeing a 503 — that is the
+        difference between "asleep" and "down", and it is the whole reason the feature is safe to enable.
+      </p>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <section>
+    <h2>2 · The five vendors, and exactly what we have with each</h2>
+    <p class="sub">Real IDs. If you are looking at a console and want to know whether you are in the right place, match these.</p>
+
+    <h3><span class="chip c-compute">Linode</span> &nbsp;compute</h3>
+    <div class="tw">
+      <table>
+        <tbody>
+          <tr><td class="nw">Cluster</td><td class="mono">LKE 647920 · ahura-v2-dev · Kubernetes 1.36 · region in-bom-2 (Mumbai)</td></tr>
+          <tr><td class="nw">Nodes</td><td class="mono">103602119 · lke647920-954481-bq6q2 — <code>g6-standard-4</code>, pool <b>system</b>, untainted<br>103602122 · lke647920-954482-m9w7p — <code>g6-standard-4</code>, pool <b>runtime</b>, tainted <code>NoSchedule</code></td></tr>
+          <tr><td class="nw">NodeBalancer</td><td class="mono">2437817 → 172.236.185.23</td></tr>
+          <tr><td class="nw">Firewall</td><td class="mono">143239782 — Cloudflare ranges only, attached to the NodeBalancer</td></tr>
+          <tr><td class="nw">Build VMs</td><td>Created and destroyed per build. If you ever see one that has outlived its build, that is a leak — see §6.</td></tr>
+          <tr><td class="nw">HA control plane</td><td><span class="chip c-warn">off</span> on this dev cluster. Enabling it is <b>irreversible and destroys all nodes</b>, so production clusters must be created with it already on.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note gotcha">
+      <p class="note-t">A label that will mislead you</p>
+      <p>
+        The firewall is <em>named</em> <code>UNATTACHED-cf-only-origin</code> — from when it genuinely was
+        unattached. It is attached now and reports one device. <strong>Trust the device count, not the
+        name.</strong> Verify with <code>scripts/v2/origin-lockdown.ts</code>, which probes rather than reads
+        labels.
+      </p>
+    </div>
+
+    <h3><span class="chip c-edge">Cloudflare</span> &nbsp;edge</h3>
+    <div class="tw">
+      <table>
+        <tbody>
+          <tr><td class="nw">Zone</td><td class="mono">ahurasense.com</td></tr>
+          <tr><td class="nw">Platform apps</td><td>Served at <code>&lt;app&gt;.ahurasense.com</code> under a proxied wildcard. <b>These cost zero custom hostnames</b> — the single biggest cost avoidance in the design.</td></tr>
+          <tr><td class="nw">Customer domains</td><td>Cloudflare for SaaS custom hostnames. 100 included, then $0.10/hostname/month, 50,000 self-serve ceiling.</td></tr>
+          <tr><td class="nw">Origin TLS</td><td>One Origin CA certificate for <code>*.ahurasense.com</code>, valid to 2041. Held outside the repo at <code>C:/ahura-secrets/origin-v2.{crt,key}</code>.</td></tr>
+          <tr><td class="nw">Plan limits</td><td><span class="chip c-warn">free plan</span> — per-tenant WAF and more than one rate-limit rule are Enterprise-only. This is an open commercial decision.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3><span class="chip c-store">R2</span> &nbsp;object storage</h3>
+    <div class="tw">
+      <table>
+        <tbody>
+          <tr><td class="nw">Bucket</td><td class="mono">cloud-app-deploy</td></tr>
+          <tr><td class="nw">Endpoint</td><td class="mono">a0f425f4…r2.cloudflarestorage.com</td></tr>
+          <tr><td class="nw">Build artifacts</td><td class="mono">builds/&lt;deploymentRef&gt;/build.log · image.tar · meta.json</td></tr>
+          <tr><td class="nw">Build cache</td><td class="mono">cache/&lt;teamRef&gt;/&lt;projectRef&gt;</td></tr>
+          <tr><td class="nw">Registry backing</td><td>The in-cluster Docker Distribution stores its blobs in R2 too.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      The build VM never holds an R2 credential. It gets <strong>three presigned URLs, each valid for one
+      key</strong> — log, metadata, image — and nothing else.
+    </p>
+
+    <h3><span class="chip c-plane">Supabase</span> &nbsp;control plane</h3>
+    <div class="tw">
+      <table>
+        <tbody>
+          <tr><td class="nw">Project</td><td class="mono">xafjjpgazdxhktpfeuri · ap-south-1</td></tr>
+          <tr><td class="nw">Schema</td><td class="mono">paas</td>
+          </tr>
+          <tr><td class="nw">Contents</td><td>15 tables, 10 enums, 17 functions. RLS on every table.</td></tr>
+          <tr><td class="nw">Shared with v1</td><td>Same database, different schema. v1 lives in <code>public</code> and <code>billing</code> and is untouched by v2's migrations.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note why">
+      <p class="note-t">Postgres is the source of truth, not Kubernetes</p>
+      <p>
+        This is the single most important idea in the system. <strong>Postgres holds every app; Kubernetes
+        holds only the warm ones.</strong> The reconciler reads desired state from Postgres and converges
+        the cluster toward it — it is level-triggered, so it works from whatever the cluster currently is,
+        and it is the <em>only</em> writer to Kubernetes. Nothing else runs <code>kubectl</code>.
+      </p>
+      <p>
+        The practical consequence for you: <b>to change what is running, change a row.</b> Do not patch the
+        cluster by hand — the next reconcile will undo it, and you will have spent an afternoon learning
+        that.
+      </p>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <section>
+    <h2>3 · What is running inside the cluster</h2>
+    <p class="sub">Everything platform-owned lives in <code>ahura-system</code>. Everything customer-owned lives in its own <code>app-prj-*</code> namespace.</p>
+
+    <div class="tw">
+      <table>
+        <thead><tr><th>Workload</th><th>Kind</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">traefik</td><td class="nw">Deployment</td><td>The gateway. One Ingress per alias, generated by the reconciler.</td></tr>
+          <tr><td class="mono">registry</td><td class="nw">Deployment</td><td>Docker Distribution on R2. <b>Never publicly exposed.</b> Push address is <code>registry.ahura-system.svc.cluster.local:5000</code>.</td></tr>
+          <tr><td class="mono">activator</td><td class="nw">Deployment</td><td>Holds the first request to a sleeping app, wakes it, then proxies.</td></tr>
+          <tr><td class="mono">registry-proxy</td><td class="nw">DaemonSet</td><td>On every node, so kubelet can pull from <code>localhost:5000</code> without the registry being reachable from outside.</td></tr>
+          <tr><td class="mono">gvisor-installer</td><td class="nw">DaemonSet</td><td>Installs <code>runsc</code> on the runtime node and registers the RuntimeClass. Pinned to release <code>20260817</code>.</td></tr>
+          <tr><td class="mono">sweep-*</td><td class="nw">CronJob × 10</td><td>See §6.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h4>Namespaces today</h4>
+    <pre class="sh">ahura-system            <i>← everything above</i>
+app-prj-13cc6161e14a    <i>┐</i>
+app-prj-560214c8fa34    <i>│</i>
+app-prj-93554a654e0e    <i>├ one per customer project</i>
+app-prj-e873172c1b7f    <i>│</i>
+app-prj-fee9eb8a8221    <i>┘</i>
+default · kube-*        <i>← stock, unused by us</i></pre>
+
+    <h4>What every tenant pod carries, without exception</h4>
+    <div class="tw">
+      <table>
+        <tbody>
+          <tr><td class="nw">Sandbox</td><td><code>runtimeClassName: gvisor</code> — the pod reports <code>Linux 4.19.0-gvisor</code>, not the host kernel</td></tr>
+          <tr><td class="nw">Identity</td><td><code>automountServiceAccountToken: false</code>, <code>runAsNonRoot: true</code></td></tr>
+          <tr><td class="nw">Capabilities</td><td><code>drop: ["ALL"]</code>, <code>allowPrivilegeEscalation: false</code>, <code>seccompProfile: RuntimeDefault</code></td></tr>
+          <tr><td class="nw">Network</td><td>NetworkPolicy <code>tenant-isolation</code> — ingress only from <code>ahura-system</code></td></tr>
+          <tr><td class="nw">Resources</td><td>ResourceQuota + LimitRange, sized from the project's tier</td></tr>
+          <tr><td class="nw">Image</td><td>Digest-pinned, from the private registry, past the scan gate</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <section>
+    <h2>4 · What happens when someone deploys</h2>
+    <p class="sub">Nine stages. <code>deployFromRepo</code> in <code>lib/paas/deploy.ts</code> runs all of them and reports each by name — those names are what you see in the build output and in the UI.</p>
+
+    <div class="tw">
+      <table>
+        <thead><tr><th class="nw">Stage</th><th class="nw">Owner</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">detect</td><td><span class="chip c-plane">read</span></td><td>Ask the git provider for the default branch, list the root directory in one call, read only the marker files that exist. Produces a framework, runtime, build command, output directory and port.</td></tr>
+          <tr><td class="mono">project</td><td><span class="chip c-plane">Supabase</span></td><td>Find or create the project row, scoped to the caller's team.</td></tr>
+          <tr><td class="mono">deployment</td><td><span class="chip c-plane">Supabase</span></td><td>An immutable row keyed <code>(environment, sha)</code>. A trigger refuses updates to the fields that identify a build.</td></tr>
+          <tr><td class="mono">build</td><td><span class="chip c-compute">Linode</span></td><td>Lease one throwaway VM, run rootless BuildKit, stream the log to R2, destroy the VM on every exit path including a throw.</td></tr>
+          <tr><td class="mono">publish</td><td><span class="chip c-orch">K8s</span></td><td>An in-cluster Job pulls the tarball from R2 and pushes it into the registry. From here the image is addressed by digest.</td></tr>
+          <tr><td class="mono">reclaim</td><td><span class="chip c-store">R2</span></td><td>Delete the tarball — but only after confirming the registry holds <b>both</b> the manifest blob and the repository link.</td></tr>
+          <tr><td class="mono">route</td><td><span class="chip c-plane">Supabase</span></td><td>Create or reuse the alias row. Aliases are scoped by environment, so a preview cannot repoint production.</td></tr>
+          <tr><td class="mono">converge</td><td><span class="chip c-orch">K8s</span></td><td>The reconciler writes Deployment, Service, NetworkPolicy and one Ingress per alias.</td></tr>
+          <tr><td class="mono">dns</td><td><span class="chip c-edge">Cloudflare</span></td><td>Upsert the proxied record.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>The build VM — read this before you change anything in it</h3>
+    <p>
+      v1's build agent held the cluster kubeconfig and the platform-wide webhook secret, which is how a
+      branch name became full cluster compromise. v2's VM is designed around the inverse question:
+      <em>what is the worst an attacker who fully owns this machine can do?</em>
+    </p>
+    <div class="tw">
+      <table>
+        <thead><tr><th>It holds</th><th>It does not hold</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>
+              The tenant's source · a short-lived git credential scoped to <b>one repository</b>, in a 0600
+              file deleted after the clone · three presigned R2 URLs, one key each · build secrets via
+              <code>--mount=type=secret</code>, which never enters a layer
+            </td>
+            <td>
+              Any kubeconfig · any registry push credential · any route to any cluster · any other tenant's
+              cache, source or secret · any long-lived platform credential at all
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note why">
+      <p class="note-t">A rule enforced in code, not by convention</p>
+      <p>
+        <code>build/vm.ts</code> <strong>refuses at render time</strong> to emit a clone URL shaped
+        <code>https://user:token@host/…</code>. Git echoes the remote URL in its own error output, and that
+        output is teed into a log served to team members. The credential goes in a separate file, and the
+        host for that file is derived from the clone URL so the two cannot disagree.
+      </p>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <section>
+    <h2>5 · The codebase, in the order you will need it</h2>
+    <p class="sub">Everything platform-side is under <code>lib/paas</code>. It is dependency-free on purpose — it runs under Node's own test runner with no framework.</p>
+
+    <h4>Start here</h4>
+    <div class="tw">
+      <table>
+        <tbody>
+          <tr><td class="mono nw">lib/paas/deploy.ts</td><td>The deploy orchestrator, and the <b>only</b> path that should ever create an app. If you are lost, read this file top to bottom first.</td></tr>
+          <tr><td class="mono nw">lib/paas/reconciler.ts</td><td>Desired state → Kubernetes. The only writer to the cluster.</td></tr>
+          <tr><td class="mono nw">lib/paas/db.ts</td><td>Control-plane database access. A thin PostgREST wrapper, <b>not</b> supabase-js — filters go in the query string.</td></tr>
+          <tr><td class="mono nw">docs/v2/00-PROJECT.md</td><td>The living tracker: current state, what is not done, and a traps section that will save you a day each time you read it.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h4>Building an app</h4>
+    <div class="tw">
+      <table>
+        <tbody>
+          <tr><td class="mono nw">build/detect.ts</td><td>Framework detection — and refusal, which matters as much.</td></tr>
+          <tr><td class="mono nw">build/dockerfile.ts</td><td>Dockerfile generation per runtime.</td></tr>
+          <tr><td class="mono nw">build/node-version.ts</td><td>Which Node major. <code>engines</code> decides; <code>.nvmrc</code> may only raise the floor.</td></tr>
+          <tr><td class="mono nw">build/vm.ts</td><td>The build VM controller and the shell it runs.</td></tr>
+          <tr><td class="mono nw">build/r2.ts</td><td>R2 with SigV4, including presigning.</td></tr>
+          <tr><td class="mono nw">build/registry.ts</td><td>Is a published image <em>durably</em> in the registry — both halves, not just the blob.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h4>Talking to the vendors</h4>
+    <div class="tw">
+      <table>
+        <tbody>
+          <tr><td class="mono nw">linode/client.ts</td><td><span class="chip c-compute">Linode</span> retry, backoff, capacity detection, pagination. Carried over from v1, which got this right.</td></tr>
+          <tr><td class="mono nw">edge/cloudflare.ts</td><td><span class="chip c-edge">Cloudflare</span> DNS records, custom hostnames, certificates.</td></tr>
+          <tr><td class="mono nw">k8s/client.ts</td><td><span class="chip c-orch">K8s</span> the API client. <code>k8s/manifests.ts</code> holds every object as typed JSON.</td></tr>
+          <tr><td class="mono nw">k8s/gvisor.ts · gateway.ts · activator.ts · sweeps.ts</td><td>Sandbox, Traefik, wake-on-request, and the CronJobs.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h4>Git providers — three of them</h4>
+    <div class="tw">
+      <table>
+        <tbody>
+          <tr><td class="mono nw">providers/source.ts</td><td>The seam. Default branch, file contents, directory listing and clone target — <b>per provider</b>. Public repositories need no token on any of them, which is what makes the whole path testable without an OAuth app.</td></tr>
+          <tr><td class="mono nw">providers/oauth.ts · credentials.ts · refresh.ts</td><td>GitLab and Bitbucket OAuth: signed state, encrypted token at rest, refresh before it strands a build.</td></tr>
+          <tr><td class="mono nw">github/app.ts · client.ts</td><td>GitHub authenticates as an App — tokens are minted per request and expire in an hour, so <b>we store no GitHub credential at all</b>. That asymmetry is deliberate.</td></tr>
+          <tr><td class="mono nw">repo-target.ts</td><td>Which project a push belongs to. Refuses rather than tie-breaks when two teams share a public repo.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h4>Watching it</h4>
+    <p>
+      <code>lib/paas/telemetry/</code> holds 25 modules, one question each — drift against Linode, R2, DNS
+      and workloads; usage and warm fraction; traffic shape; quota; the scan gate; the operator view. Each
+      sweep in §6 is a thin script over one of them.
+    </p>
+
+    <h4>Where the API and UI live</h4>
+    <div class="tw">
+      <table>
+        <tbody>
+          <tr><td class="mono nw">app/api/v2/**</td><td>39 routes. <code>_lib/http.ts</code> has the error helpers; <code>_lib/auth.ts</code> the caller. Admin routes are under <code>admin/</code> behind their own guard.</td></tr>
+          <tr><td class="mono nw">app/dashboard/services/apps/**</td><td>The customer UI — list, create, and the per-app tabs.</td></tr>
+          <tr><td class="mono nw">components/v2/**</td><td>The pieces those pages are built from.</td></tr>
+          <tr><td class="mono nw">app/dashboard/services/apps-v1/**</td><td><span class="chip c-warn">v1</span> moved aside intact, not deleted. Do not edit it.</td></tr>
+          <tr><td class="mono nw">scripts/v2/**</td><td>39 operator scripts — see §7.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <section>
+    <h2>6 · The ten sweeps</h2>
+    <p class="sub">CronJobs in <code>ahura-system</code>, on staggered minutes so no two contend. Install or update them with <code>scripts/v2/install-sweeps.ts</code>.</p>
+
+    <div class="tw">
+      <table>
+        <thead><tr><th>Sweep</th><th class="nw">When</th><th>Question it answers</th><th class="nw">Acts?</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">usage-sample</td><td class="mono nw">*/15</td><td>Warm-seconds, pod-seconds and traffic shape, on one tick so they describe one window</td><td><span class="chip c-ok">read</span></td></tr>
+          <tr><td class="mono">meter-apps</td><td class="mono nw">:04</td><td>Charge the hour</td><td><span class="chip c-warn">writes</span></td></tr>
+          <tr><td class="mono">workload-drift</td><td class="mono nw">:08 :23 :38 :53</td><td>Deployments that exist but are not Ready</td><td><span class="chip c-ok">read</span></td></tr>
+          <tr><td class="mono">r2-drift</td><td class="mono nw">:12</td><td>Objects with no owner in the control plane</td><td><span class="chip c-ok">read</span></td></tr>
+          <tr><td class="mono">project-teardown</td><td class="mono nw">:18</td><td>Deleted projects whose namespaces still exist</td><td><span class="chip c-warn">writes</span></td></tr>
+          <tr><td class="mono">dns-drift</td><td class="mono nw">:26</td><td>DNS vs Ingress vs aliases — three places a hostname exists</td><td><span class="chip c-ok">read</span></td></tr>
+          <tr><td class="mono">domain-reconcile</td><td class="mono nw">:33</td><td>Cloudflare custom-hostname state vs ours</td><td><span class="chip c-ok">read</span></td></tr>
+          <tr><td class="mono">preview-reap</td><td class="mono nw">:36</td><td>Previews past 48h from last push</td><td><span class="chip c-ok">read</span></td></tr>
+          <tr><td class="mono">fleet-drift</td><td class="mono nw">:44</td><td>What Linode is charging for vs what we recorded, priced</td><td><span class="chip c-ok">read</span></td></tr>
+          <tr><td class="mono">netpolicy-drift</td><td class="mono nw">:51</td><td>Does each tenant's egress policy still deny what it was written to deny</td><td><span class="chip c-ok">read</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note why">
+      <p class="note-t">Why most of them only look</p>
+      <p>
+        A sweep that reports is safe to run wrong. A sweep that acts is not. Only two write —
+        <code>meter-apps</code> and <code>project-teardown</code> — and teardown was enabled first and
+        allowed to converge to zero <em>before</em> metering was switched on, because billing an app whose
+        pods were never removed is exactly v1's defect.
+      </p>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <section>
+    <h2>7 · Getting it running on your machine</h2>
+
+    <h4>1 — install and check it compiles</h4>
+    <pre class="sh">npm install
+npx tsc --noEmit
+npm run test:paas        <i># 1,092 tests, no network needed</i></pre>
+
+    <h4>2 — secrets, which live outside the repo</h4>
+    <p>
+      <code>.env.local</code> is gitignored and never committed. Ask for it — do not reconstruct it. Files
+      it points at live in <code>C:/ahura-secrets/</code>:
+    </p>
+    <pre class="sh">C:/ahura-secrets/kubeconfig-v2-dev.yaml   <i># cluster access</i>
+C:/ahura-secrets/origin-v2.crt           <i># Cloudflare Origin CA</i>
+C:/ahura-secrets/origin-v2.key</pre>
+
+    <h4>3 — the variables, grouped by who they are for</h4>
+    <div class="tw">
+      <table>
+        <thead><tr><th class="nw">Vendor</th><th>Variables</th></tr></thead>
+        <tbody>
+          <tr><td><span class="chip c-compute">Linode</span></td><td class="mono">V2_LINODE_TOKEN · V2_LINODE_REGION · V2_LINODE_API_URL</td></tr>
+          <tr><td><span class="chip c-edge">Cloudflare</span></td><td class="mono">V2_CF_API_TOKEN · V2_CF_ACCOUNT_ID · V2_CF_ZONE_ID · V2_CF_ZONE_NAME · V2_ACM_ENABLED</td></tr>
+          <tr><td><span class="chip c-store">R2</span></td><td class="mono">V2_R2_ACCOUNT_ID · V2_R2_BUCKET · V2_R2_ENDPOINT · V2_R2_ACCESS_KEY_ID · V2_R2_SECRET_ACCESS_KEY</td></tr>
+          <tr><td><span class="chip c-orch">Kubernetes</span></td><td class="mono">V2_KUBECONFIG · V2_PAAS_NAMESPACE · V2_ORIGIN_CERT · V2_ORIGIN_KEY</td></tr>
+          <tr><td>GitHub</td><td class="mono">V2_GITHUB_APP_ID · V2_GITHUB_APP_CLIENT_ID · V2_GITHUB_APP_CLIENT_SECRET · V2_GITHUB_APP_WEBHOOK_SECRET · V2_GITHUB_APP_PRIVATE_KEY_PATH</td></tr>
+          <tr><td>GitLab</td><td class="mono">V2_GITLAB_CLIENT_ID · V2_GITLAB_CLIENT_SECRET · V2_GITLAB_WEBHOOK_SECRET · V2_GITLAB_HOST</td></tr>
+          <tr><td>Bitbucket</td><td class="mono">V2_BITBUCKET_CLIENT_ID · V2_BITBUCKET_CLIENT_SECRET · V2_BITBUCKET_WEBHOOK_SECRET</td></tr>
+          <tr><td>Platform</td><td class="mono">V2_APP_DOMAIN · V2_PUBLIC_APP_URL · V2_ENV_MASTER_KEY · V2_ENV_MASTER_KEY_ID</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note gotcha">
+      <p class="note-t">The one that is not like the others</p>
+      <p>
+        <code>V2_ENV_MASTER_KEY</code> is the root of the key derivation for every customer's environment
+        variables and every stored OAuth token. <strong>Lose it and every secret in the database is
+        unreadable; leak it and every secret is readable.</strong> It is not in any repo, and it must not
+        be pasted into a chat, a ticket or a terminal you did not open yourself.
+      </p>
+    </div>
+
+    <h4>4 — run the dashboard</h4>
+    <pre class="sh">npm run dev:next         <i># http://localhost:3000</i></pre>
+
+    <h4>5 — deploy a real repository, end to end</h4>
+    <pre class="sh">node --experimental-strip-types --env-file-if-exists=.env.local \
+  scripts/v2/framework-probe.ts <b>pages/plain-html</b> --provider gitlab --root public</pre>
+    <p>
+      It builds, routes, reports the served HTTP status, and tears the app down again. Add
+      <code>--keep</code> to leave it running. <strong>This is the fastest way to convince yourself the
+      whole system works</strong>, and it is how every framework in the support matrix was proven.
+    </p>
+
+    <h4>The scripts you will reach for most</h4>
+    <div class="tw">
+      <table>
+        <tbody>
+          <tr><td class="mono nw">cluster-status.ts</td><td>Nodes, namespaces, RuntimeClasses, what is not ready</td></tr>
+          <tr><td class="mono nw">framework-probe.ts</td><td>One repository, end to end, then cleaned up</td></tr>
+          <tr><td class="mono nw">build-worker.ts</td><td>Claims queued deployments and builds them — the webhook path</td></tr>
+          <tr><td class="mono nw">reconcile.ts</td><td>Converge one project, or the fleet</td></tr>
+          <tr><td class="mono nw">build-log.ts</td><td>Read a build's log out of R2</td></tr>
+          <tr><td class="mono nw">teardown.ts</td><td>Remove a project and everything it owns, reporting the hourly cost released</td></tr>
+          <tr><td class="mono nw">origin-lockdown.ts</td><td>Probe the firewall posture; <code>-apply.ts</code> changes it, with auto-revert</td></tr>
+          <tr><td class="mono nw">install-sweeps.ts</td><td>Install or update the ten CronJobs</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <section>
+    <h2>8 · House rules</h2>
+    <p class="sub">Each of these exists because it was learned the hard way. They will save you the same day they cost somebody else.</p>
+
+    <div class="tw">
+      <table>
+        <tbody>
+          <tr><td class="nw"><b>Change a row, not the cluster</b></td><td>The reconciler is the only writer to Kubernetes. A hand-patched Deployment is undone on the next converge.</td></tr>
+          <tr><td class="nw"><b>Empty ≠ unknown</b></td><td>The most repeated bug in this project. A 404 means <em>absent</em>; a 429 or a 500 means <em>we could not ask</em>. Conflating them told customers to add a <code>package.json</code> they already had. Null is absent; unknown throws.</td></tr>
+          <tr><td class="nw"><b>Skip is not pass</b></td><td>Tests that need the live database <em>skip</em> when it is unreachable. Skip means "could not check". A suite that turns that into a pass is asserting nothing.</td></tr>
+          <tr><td class="nw"><b>Verify by running</b></td><td>Not by reading, and not through a pipe — a piped command reports the pipeline's exit code, not the script's. That has produced a clean-looking sweep that never ran a single repository.</td></tr>
+          <tr><td class="nw"><b>Prove a guard by breaking it</b></td><td>Remove it and the test must fail. Otherwise "no violations found" and "cannot detect violations" look identical.</td></tr>
+          <tr><td class="nw"><b>Customers never see our vendors</b></td><td>Only a <code>CustomerError</code> keeps its text; everything else becomes a generic message plus a reference, with the detail logged. An enforcement test scans for this — see <code>lib/paas/errors.ts</code>.</td></tr>
+          <tr><td class="nw"><b>Never break v1</b></td><td>It shares the database. v2 lives in the <code>paas</code> schema and touches nothing in <code>public</code> or <code>billing</code>.</td></tr>
+          <tr><td class="nw"><b>Do not leave apps running</b></td><td>Test apps are deleted after each run. An accumulating fleet bills, and it hides the next failure in noise.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note gotcha">
+      <p class="note-t">Two facts about this repo that will confuse you on day one</p>
+      <p>
+        <b>The test command is not <code>npm test</code>.</b> That is vitest, scoped to <code>tests/**</code>,
+        and it runs v1's integration suite — which fails without a live database. The v2 suite is
+        <code>npm run test:paas</code>, on Node's own runner, and it needs nothing.
+      </p>
+      <p>
+        <b>Scripts run under <code>node --experimental-strip-types</code>, not <code>tsx</code>.</b> tsx
+        cannot compile a top-level <code>await</code> to CommonJS and dies in the transform — which once
+        looked exactly like a clean run.
+      </p>
+    </div>
+  </section>
+
+  <footer>
+    Deploy v2 · compiled from the live cluster, the Linode and Supabase APIs, and lib/paas · 28 Aug 2026 ·
+    companion to the full engineering reference
+  </footer>
+
+</div>

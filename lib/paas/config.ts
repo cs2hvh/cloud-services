@@ -13,7 +13,7 @@ function required(name: string): string {
   const v = process.env[name];
   if (!v || v.trim() === "") {
     throw new Error(
-      `[paas/config] Missing required env var ${name}. See .env.local and docs/v2/03-credentials.md.`,
+      `[paas/config] Missing required env var ${name}. See .env.local and docs/v2/22-BUILD-SHEET.html.`,
     );
   }
   return v;
