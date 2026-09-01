@@ -68,22 +68,12 @@ export async function PUT(request: Request) {
       p_actor: admin.userId,
     };
 
-    // Forward-compatible with the DB-side blanket guard (p_blanket): pass the
-    // flag, and if the deployed function predates the parameter (PostgREST
-    // cannot match the signature), retry with the current one. Lets the
-    // billing lane apply the guard with no coordinated deploy window.
-    let { data: result, error: rpcError } = await supabase
+    // Hard dependency on the 8-arg guarded signature (p_blanket lives in the
+    // DATABASE since 355a3225) — a regression to the old function should fail
+    // loudly here, not degrade quietly.
+    const { data: result, error: rpcError } = await supabase
       .schema("billing")
       .rpc("set_gpu_markup", { ...baseArgs, p_blanket: blanket });
-    if (
-      rpcError &&
-      /PGRST202|could not find|does not exist/i.test(`${rpcError.code ?? ""} ${rpcError.message}`)
-    ) {
-      console.warn("[Admin GPU] set_gpu_markup has no p_blanket yet — calling current signature");
-      ({ data: result, error: rpcError } = await supabase
-        .schema("billing")
-        .rpc("set_gpu_markup", baseArgs));
-    }
 
     if (rpcError) {
       console.error("[Admin GPU] set_gpu_markup rpc failed:", rpcError.message);
@@ -93,6 +83,8 @@ export async function PUT(request: Request) {
       success?: boolean;
       error?: string;
       rowsUpdated?: number;
+      blanket?: boolean;
+      wouldAffect?: number;
       drift?: {
         chargeMarkup: number;
         quoteMarkupMin: number;
@@ -103,7 +95,11 @@ export async function PUT(request: Request) {
     } | null;
     if (!outcome?.success) {
       return NextResponse.json(
-        { success: false, error: outcome?.error ?? "Refused" },
+        {
+          success: false,
+          error: outcome?.error ?? "Refused",
+          wouldAffect: outcome?.wouldAffect,
+        },
         { status: 422 },
       );
     }
@@ -122,6 +118,9 @@ export async function PUT(request: Request) {
         markup_pct: markup,
         floor_per_hour_usd: floor,
         rows_updated: outcome.rowsUpdated,
+        // "changed 192" and "changed 192 deliberately" are different facts a
+        // year from now — record the function's own confirmation of scope.
+        blanket: outcome.blanket,
         drift: outcome.drift,
         note,
       },
