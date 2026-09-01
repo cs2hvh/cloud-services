@@ -18,13 +18,14 @@
 #
 # Override paths/services via env if yours differ:
 #   APP_DIR=/root/cloud-services WEB_SERVICE=ahura-web CRON_SERVICE=ahura-cron \
-#     PORT=3000  /root/deploy.sh dev
+#     WORKER_SERVICE=ahura-build-worker PORT=3000  /root/deploy.sh dev
 # ─────────────────────────────────────────────────────────────────────────────
 set -Eeuo pipefail
 
 APP_DIR="${APP_DIR:-/root/cloud-services}"
 WEB_SERVICE="${WEB_SERVICE:-ahura-web}"
 CRON_SERVICE="${CRON_SERVICE:-ahura-cron}"
+WORKER_SERVICE="${WORKER_SERVICE:-ahura-build-worker}"
 PORT="${PORT:-3000}"
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:${PORT}}"
 
@@ -80,6 +81,25 @@ systemctl restart "$WEB_SERVICE" || die "failed to restart $WEB_SERVICE"
 if [[ $RESTART_CRON == 1 ]]; then
   step "Restarting $CRON_SERVICE"
   systemctl restart "$CRON_SERVICE" || echo "  (warning: $CRON_SERVICE restart failed — check it manually)"
+fi
+
+# The build worker runs the code in THIS repo and is not part of the web app, so
+# a deploy that skips it ships build-path changes that never execute. That is
+# not hypothetical: detection, Dockerfile generation and error wording all sat
+# unrun for five days while the app deployed green, and it was a customer's
+# failed build that surfaced it.
+#
+# Tolerated rather than fatal, because the unit is newer than some hosts: a box
+# that has not installed it yet should still finish deploying the web app. The
+# warning is deliberately loud — a silent skip here is the original bug.
+step "Restarting $WORKER_SERVICE"
+if systemctl list-unit-files "$WORKER_SERVICE.service" >/dev/null 2>&1 &&
+   systemctl cat "$WORKER_SERVICE" >/dev/null 2>&1; then
+  systemctl restart "$WORKER_SERVICE" ||
+    echo "  (WARNING: $WORKER_SERVICE restart FAILED — builds are running OLD code until it does)"
+else
+  echo "  (WARNING: $WORKER_SERVICE is not installed — builds run whatever was started by hand."
+  echo "   Install: cp deploy/systemd/$WORKER_SERVICE.service /etc/systemd/system/ && systemctl daemon-reload && systemctl enable --now $WORKER_SERVICE)"
 fi
 
 # ── 5. health check

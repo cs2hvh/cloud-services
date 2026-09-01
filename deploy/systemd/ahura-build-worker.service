@@ -1,0 +1,49 @@
+[Unit]
+# The build worker — it claims queued deployments and builds them.
+#
+# WHY THIS UNIT EXISTS. Until now nothing defined this process. It ran on the
+# host as an unmanaged shell job: no restart policy, no journal, and nothing
+# that a deploy touched. deploy.sh restarts ahura-web and ahura-cron, so five
+# days of build-path fixes shipped to `dev`, deployed green, and never ran —
+# the worker went on executing the code it had been started with.
+#
+# It was found the way these always are, from a customer: a build on 2026-09-01
+# produced a Dockerfile with no `--mount=type=secret` (added 2026-08-27) and an
+# error message deleted from the tree on 2026-08-28. Both fixes were "live" and
+# neither was running.
+#
+# This is the same shape as the note in ahura-billing-sweep.service: a process
+# whose code and whose deploy had come apart, reporting healthy throughout. The
+# unit is not the interesting part — deploy.sh restarting it is.
+Description=AhuraCloud build worker (paas v2)
+Documentation=file:///root/cloud-services/docs/v2/20-ENGINEERING-REFERENCE.html
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# Type=simple, not oneshot: this polls forever by design, so that a push
+# received while it is down is still built when it comes back. See the header
+# of scripts/v2/build-worker.ts for why that is a queue and not a webhook.
+Type=simple
+User=root
+WorkingDirectory=/root/cloud-services
+
+ExecStart=/usr/bin/node --experimental-strip-types --env-file=/root/cloud-services/.env /root/cloud-services/scripts/v2/build-worker.ts
+
+# ALWAYS, not on-failure. A worker that exits cleanly for any reason still means
+# nothing is building, and "it stopped without erroring" is not a state anyone
+# checks for. Builds lease Linodes, so restart is deliberately unhurried:
+# a crash loop that re-enters a build every second would spend real money.
+Restart=always
+RestartSec=15
+
+# A build that has wedged holds a Linode. Ten minutes of no progress is not
+# slow, and systemd killing it releases the lease via the worker's own
+# expiry path rather than leaving an instance billing forever.
+TimeoutStopSec=120
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
