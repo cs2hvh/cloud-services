@@ -28,7 +28,21 @@ Type=simple
 User=root
 WorkingDirectory=/root/cloud-services
 
-ExecStart=/usr/bin/node --experimental-strip-types --env-file=/root/cloud-services/.env /root/cloud-services/scripts/v2/build-worker.ts
+# BOTH ENV FILES, and .env.local second so it wins — the same order Next.js
+# loads them, which is why the web app has these and a bare --env-file=.env
+# does not.
+#
+# Every V2_* var this worker requires (R2, Linode, Cloudflare, the GitHub App)
+# lives in .env.local, NOT .env. The first version of this unit copied the
+# billing sweep's single --env-file=.env; the sweep needs none of them, so it
+# worked there and crash-looped here on "Missing required env var
+# V2_R2_ENDPOINT" before the queue was ever read.
+#
+# --env-file-if-exists for the second: a host without .env.local should fail on
+# the worker's own named-variable error, which says which one is missing, not on
+# node refusing to start over a missing file. Requires node >= 22.9; this unit
+# already requires >= 22.6 for --experimental-strip-types.
+ExecStart=/usr/bin/node --experimental-strip-types --env-file=/root/cloud-services/.env --env-file-if-exists=/root/cloud-services/.env.local /root/cloud-services/scripts/v2/build-worker.ts
 
 # ALWAYS, not on-failure. A worker that exits cleanly for any reason still means
 # nothing is building, and "it stopped without erroring" is not a state anyone

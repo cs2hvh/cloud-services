@@ -80,7 +80,27 @@ jobs:
               pkill -f 'scripts/v2/build-worker.ts' || true
               sleep 2
             fi
-            systemctl enable --now ahura-build-worker
+            systemctl enable ahura-build-worker || true
+            systemctl restart ahura-build-worker || true
 
-            systemctl --no-pager --lines=0 status ahura-build-worker || true
-            journalctl -u ahura-build-worker -n 15 --no-pager || true
+            # PROVE IT CAME UP. `enable --now` returning is not evidence: with
+            # Restart=always a unit whose process dies immediately sits in
+            # auto-restart and can still look like a successful start. The first
+            # version of this block trusted that, and because the pkill above had
+            # already stopped the hand-started worker, the result was no worker at
+            # all — builds stopped entirely and the only signal was a red run with
+            # its reason inside logs that need auth to read.
+            #
+            # So: assert, and put the journal in the run output where whoever
+            # reads this can see the actual error without shell access.
+            sleep 5
+            if systemctl is-active --quiet ahura-build-worker; then
+              echo "build worker ACTIVE"
+              journalctl -u ahura-build-worker -n 10 --no-pager || true
+            else
+              echo "=============================================="
+              echo "BUILD WORKER FAILED TO START — NOTHING IS BUILDING"
+              echo "=============================================="
+              journalctl -u ahura-build-worker -n 40 --no-pager || true
+              exit 1
+            fi
