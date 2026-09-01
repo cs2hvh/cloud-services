@@ -6,13 +6,15 @@ import { AuditLogService } from "@/lib/audit/service";
 export const dynamic = "force-dynamic";
 
 /**
- * QUOTE-path GPU pricing: public.gpu_pricing, per (model, cloud,
- * interruptible), read by createPod() for the customer's quote. This is NOT
- * what the customer is billed — that is billing.service_pricing
- * ('gpu_pod','*'), edited only through the price book / set_price(). The
- * panel shows both and banners on drift; this route exists so quote-path
- * edits are audited like every other price write (the main app's PUT is
- * not). Same validations as the main app's route: markup >= 1, floor >= 0.
+ * QUOTE-path GPU pricing, written through billing.set_gpu_markup() — the
+ * guarded, SECURITY DEFINER path (refuses below-cost, unknown ids, and
+ * zero-row filter matches in the DATABASE; never raises). The function does
+ * not audit; this route does. Its response carries the drift block (charge
+ * markup vs quote markups) so the caller learns immediately whether the two
+ * price books still agree.
+ *
+ * Blanket updates (null filters → every matching row) require an explicit
+ * blanket:true flag — an accidental null must not repro a 192-row write.
  */
 export async function PUT(request: Request) {
   const admin = await requireAdmin();
@@ -30,48 +32,65 @@ export async function PUT(request: Request) {
     return NextResponse.json({ success: false, error: "Invalid JSON" }, { status: 400 });
   }
 
-  const gpuCatalogId = String(body.gpu_catalog_id ?? "");
-  const cloudType = String(body.cloud_type ?? "");
-  const interruptible = Boolean(body.interruptible);
+  const blanket = body.blanket === true;
+  const gpuCatalogId = body.gpu_catalog_id ? String(body.gpu_catalog_id) : null;
+  const cloudType = body.cloud_type ? String(body.cloud_type) : null;
+  const interruptible =
+    body.interruptible === undefined || body.interruptible === null
+      ? null
+      : Boolean(body.interruptible);
   const markup = Number(body.markup_pct);
   const floor = Number(body.floor_per_hour_usd ?? 0);
+  const note = body.note ? String(body.note).slice(0, 300) : null;
 
-  if (!gpuCatalogId || !cloudType) {
-    return NextResponse.json({ success: false, error: "Missing row key" }, { status: 400 });
-  }
-  if (!Number.isFinite(markup) || markup < 1) {
+  if (!blanket && !gpuCatalogId) {
     return NextResponse.json(
-      { success: false, error: "markup_pct must be ≥ 1.000 (never below cost)" },
+      { success: false, error: "gpu_catalog_id required (or pass blanket: true explicitly)" },
       { status: 400 },
     );
   }
-  if (!Number.isFinite(floor) || floor < 0) {
+  if (!Number.isFinite(markup)) {
     return NextResponse.json(
-      { success: false, error: "floor_per_hour_usd must be ≥ 0" },
+      { success: false, error: "markup_pct is required" },
       { status: 400 },
     );
   }
 
   try {
     const supabase = await createServiceClient();
-    const { data: before } = await supabase
-      .from("gpu_pricing")
-      .select("markup_pct, floor_per_hour_usd")
-      .eq("gpu_catalog_id", gpuCatalogId)
-      .eq("cloud_type", cloudType)
-      .eq("interruptible", interruptible)
-      .maybeSingle();
+    const { data: result, error: rpcError } = await supabase
+      .schema("billing")
+      .rpc("set_gpu_markup", {
+        p_gpu_catalog_id: gpuCatalogId,
+        p_cloud_type: cloudType,
+        p_interruptible: interruptible,
+        p_markup_pct: markup,
+        p_floor_per_hour: floor,
+        p_note: note,
+        p_actor: admin.userId,
+      });
 
-    const { error } = await supabase
-      .from("gpu_pricing")
-      .update({ markup_pct: markup, floor_per_hour_usd: floor })
-      .eq("gpu_catalog_id", gpuCatalogId)
-      .eq("cloud_type", cloudType)
-      .eq("interruptible", interruptible);
-
-    if (error) {
-      console.error("[Admin GPU] quote pricing update failed:", error.message);
+    if (rpcError) {
+      console.error("[Admin GPU] set_gpu_markup rpc failed:", rpcError.message);
       return NextResponse.json({ success: false, error: "Update failed" }, { status: 500 });
+    }
+    const outcome = result as {
+      success?: boolean;
+      error?: string;
+      rowsUpdated?: number;
+      drift?: {
+        chargeMarkup: number;
+        quoteMarkupMin: number;
+        quoteMarkupMax: number;
+        agrees: boolean;
+        quoteIsUniform: boolean;
+      };
+    } | null;
+    if (!outcome?.success) {
+      return NextResponse.json(
+        { success: false, error: outcome?.error ?? "Refused" },
+        { status: 422 },
+      );
     }
 
     await AuditLogService.create({
@@ -80,17 +99,25 @@ export async function PUT(request: Request) {
       user_email: admin.email,
       action: "update",
       service_type: "pricing",
-      service_id: `gpu_quote:${gpuCatalogId}:${cloudType}:${interruptible}`,
-      service_name: `GPU quote pricing ${gpuCatalogId}`,
-      before_state: before ?? undefined,
-      after_state: { markup_pct: markup, floor_per_hour_usd: floor },
+      service_id: blanket
+        ? `gpu_quote:blanket:${cloudType ?? "*"}:${interruptible ?? "*"}`
+        : `gpu_quote:${gpuCatalogId}:${cloudType ?? "*"}:${interruptible ?? "*"}`,
+      service_name: blanket ? "GPU quote pricing (blanket)" : `GPU quote pricing ${gpuCatalogId}`,
+      after_state: {
+        markup_pct: markup,
+        floor_per_hour_usd: floor,
+        rows_updated: outcome.rowsUpdated,
+        drift: outcome.drift,
+        note,
+      },
       metadata: {
         via: "admin-panel",
-        note: "QUOTE path (public.gpu_pricing) — charge path is billing.service_pricing gpu_pod/*",
+        path: "billing.set_gpu_markup",
+        note: "QUOTE path — charge path is billing.service_pricing gpu_pod/*",
       },
     });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ ...outcome, success: true });
   } catch (err) {
     console.error("[Admin GPU] quote pricing unexpected error:", err);
     return NextResponse.json(

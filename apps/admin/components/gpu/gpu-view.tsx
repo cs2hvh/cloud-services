@@ -570,6 +570,7 @@ function PricingTab({
   catalogName: Map<string, string>;
 }) {
   const [editing, setEditing] = useState<GpuQuotePricingRow | null>(null);
+  const [blanket, setBlanket] = useState(false);
   const drifted = chargeMarkup === null
     ? []
     : quotePricing.filter((r) => Number(r.markup_pct) !== chargeMarkup);
@@ -594,6 +595,12 @@ function PricingTab({
           <>All rows currently agree (×{chargeMarkup ?? "?"} — at cost is a deliberate 2026-08-26 decision). Any edit on either side can silently break that; the banner turns red when it happens.</>
         )}
       </Callout>
+
+      <div className="mb-3 flex justify-end">
+        <Button size="sm" variant="outline" onClick={() => setBlanket(true)}>
+          Set markup for ALL models…
+        </Button>
+      </div>
 
       <div className="rounded-xl border border-border bg-card p-4">
         <Table head={["model", "cloud", "type", "quote markup", "floor $/hr", "vs charge", ""]}>
@@ -621,7 +628,87 @@ function PricingTab({
       {editing && (
         <EditQuotePricingDialog row={editing} catalogName={catalogName} onClose={() => setEditing(null)} />
       )}
+      {blanket && (
+        <BlanketMarkupDialog
+          rowCount={quotePricing.length}
+          chargeMarkup={chargeMarkup}
+          onClose={() => setBlanket(false)}
+        />
+      )}
     </>
+  );
+}
+
+function BlanketMarkupDialog({
+  rowCount,
+  chargeMarkup,
+  onClose,
+}: {
+  rowCount: number;
+  chargeMarkup: number | null;
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const [markup, setMarkup] = useState("");
+  const [confirmText, setConfirmText] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const markupNum = Number(markup);
+  const valid = Number.isFinite(markupNum) && markupNum >= 1 && confirmText === "ALL";
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      const res = await fetch("/api/admin/gpu/quote-pricing", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ blanket: true, markup_pct: markupNum }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(
+          `${data.rowsUpdated} quote row(s) set to ×${markupNum}` +
+            (data.drift?.agrees ? " — books agree" : ` — charge book is ×${data.drift?.chargeMarkup}, books DISAGREE`),
+        );
+        router.refresh();
+        onClose();
+      } else toast.error(data.error ?? "Update failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Blanket quote markup — every model</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <p className="rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-300">
+            This rewrites the quote markup on all {rowCount} gpu_pricing rows
+            in one atomic call. It does NOT touch what customers are billed
+            (charge book: ×{chargeMarkup ?? "?"}) — change that in the price
+            book too, or the banner goes red.
+          </p>
+          <div className="space-y-1.5">
+            <Label>Markup (×, ≥ 1)</Label>
+            <Input type="number" min="1" step="0.001" value={markup} onChange={(e) => setMarkup(e.target.value)} placeholder="1.25" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Type ALL to confirm</Label>
+            <Input value={confirmText} onChange={(e) => setConfirmText(e.target.value)} placeholder="ALL" />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={onClose} disabled={busy}>Cancel</Button>
+            <Button onClick={save} disabled={!valid || busy}>
+              {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Apply to all models
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -659,7 +746,15 @@ function EditQuotePricingDialog({
       });
       const data = await res.json();
       if (data.success) {
-        toast.success("Quote pricing updated (quote path only — check the drift banner)");
+        if (data.drift?.agrees) {
+          toast.success("Quote pricing updated — quote and charge books agree");
+        } else {
+          toast.warning(
+            data.drift?.quoteIsUniform
+              ? `Updated, but quote (×${data.drift?.quoteMarkupMax}) and charge (×${data.drift?.chargeMarkup}) books now DISAGREE`
+              : "Updated — quote markups are no longer uniform across models",
+          );
+        }
         router.refresh();
         onClose();
       } else toast.error(data.error ?? "Update failed");

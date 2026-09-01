@@ -106,9 +106,9 @@ export default async function UserBillingPage({
           tone={balance !== undefined && Number(balance) < 0 ? "critical" : undefined}
         />
         <StatCard
-          label="Ledger rows"
+          label="Ledger entries"
           value={`${transactions.length}${transactions.length === 50 ? "+" : ""}`}
-          hint="most recent shown below"
+          hint="usage rolled up per day, not per charge"
           icon={ReceiptText}
         />
         <StatCard
@@ -122,7 +122,7 @@ export default async function UserBillingPage({
       <div className="mt-6 space-y-6">
         <Panel
           title="Account ledger"
-          subtitle="billing.account_ledger — top-ups AND usage charges (raw transactions hide hourly deductions); Stripe references omitted by design"
+          subtitle="billing.account_ledger — top-ups AND usage (rolled up per service per day, not per hour; hour-level rows live in service_charges); Stripe references omitted"
         >
           {transactions.length > 0 ? (
             <Table head={["when", "type", "status", "amount", "balance after", "description"]}>
