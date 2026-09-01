@@ -24,5 +24,5 @@
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "app/api/services/database/host/route.js", "components/serviceshome/section-2.jsx"],
-  "exclude": ["node_modules","project-demos","workers","tests"]
+  "exclude": ["node_modules","project-demos","workers","tests","apps"]
 }
