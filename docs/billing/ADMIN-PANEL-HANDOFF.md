@@ -10,6 +10,36 @@ ended before I could hand this over, so it is written down instead.
 
 ---
 
+## Status of this document
+
+**Updated 2026-09-01.** The panel is now a standing branch, not a merge.
+`feat/separate-admin-panel` is pushed to origin (`47e3edf7`) and deploys
+separately; it pulls `dev` in on a cadence and never pushes back. So nothing
+panel-side can reach the branch that auto-deploys ahurasense.com.
+
+There are consequently **two copies of this handoff**, and they will drift:
+
+| Copy | Canonical for |
+|---|---|
+| this one, on `dev` | the schema contract — `billing.service_pricing` and the rules below |
+| `docs/BILLING-HANDOFF.md` on `feat/separate-admin-panel` | panel-side status; the billing lane sends updates there |
+
+Read this one for what the panel may and may not do to the price book. Read
+the panel copy for what the panel has actually built.
+
+One item resolved that is worth recording here, because it was nearly a prod
+outage rather than a lint nit: root `tsconfig.json` globs `**/*.tsx` and
+excluded only `node_modules, project-demos, workers, tests`. With `apps/admin`
+checked out, the root TypeScript program picked up 118 files using an
+`@admin/*` path alias the root config does not define — **78 errors**, enough
+to fail the root `next build`. On a branch that auto-deploys with no test
+gate, that takes the site down rather than turning CI red. Fixed panel-side in
+`1d994e94` (adds `apps` to the root `exclude`). `dev` has no `apps/`
+directory, so it needs no fix today, and any future merge would carry that
+commit along with it.
+
+---
+
 ## URGENT — this invalidates the previous plan
 
 The prior session's plan was to leave Pricing unmigrated, so there was exactly
