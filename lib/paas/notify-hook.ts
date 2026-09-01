@@ -11,6 +11,9 @@
  * So the worker posts, and the Next app sends.
  */
 
+/** Once per process, so a misconfigured server says so without a build spamming it. */
+let warnedMissingConfig = false;
+
 /** Matches the schema in app/api/v2/internal/notify/route.ts. */
 export interface AppEventHook {
   projectRef: string;
@@ -32,10 +35,30 @@ export async function notifyAppEventRemote(hook: AppEventHook): Promise<void> {
   const token = process.env.BATCH_PROCESSOR_TOKEN || process.env.INTERNAL_CRON_TOKEN;
   const base = (process.env.V2_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/+$/, "");
 
-  // Absent configuration is a silent no-op ON PURPOSE. A developer running the
-  // worker locally should not have builds emit noise or log errors about a
-  // secret they have no reason to hold.
-  if (!token || !base) return;
+  /*
+    Absent configuration is a no-op, but NOT a silent one.
+
+    A developer running the worker locally should not have every build complain
+    about a secret they have no reason to hold — so this says its piece once per
+    process and then stops. On the server that one line is the difference between
+    "emails are configured and quiet" and "emails have never once been sent",
+    which otherwise look identical from the outside.
+
+    Absent config silently turning a step into a no-op is the failure this
+    codebase keeps rediscovering: it is how DNS records went uncreated, how the
+    kubeconfig fell through to a Windows path, and how a sweep reported success
+    while every write was refused.
+  */
+  if (!token || !base) {
+    if (!warnedMissingConfig) {
+      warnedMissingConfig = true;
+      const missing = [!base && "V2_PUBLIC_APP_URL", !token && "BATCH_PROCESSOR_TOKEN"]
+        .filter(Boolean)
+        .join(" and ");
+      console.log(`[paas/notify] NOT SENDING lifecycle emails — ${missing} is not set.`);
+    }
+    return;
+  }
 
   try {
     const res = await fetch(`${base}/api/v2/internal/notify`, {
