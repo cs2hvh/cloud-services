@@ -8,6 +8,7 @@
 // fire-and-forget a refund).
 
 import { after } from "next/server";
+import { GENERIC_SERVICE_ERROR } from "@/lib/api/error-sanitizer";
 
 import { createServiceClient } from "@/lib/supabase/server";
 import { Billing } from "@/lib/supabase/queries/billing";
@@ -332,12 +333,13 @@ export async function createGameServer(input: CreateInput): Promise<CreateGameSe
         }).catch(() => {});
         refundNote = "Charge refunded.";
       } catch (refundError) {
+        console.error("[Game:provision:refund] failed:", refundError);
         refundNote = "REFUND FAILED — flagged for manual review.";
         console.error("[game-provision] CRITICAL refund failure", {
           userId: input.userId,
           amount: monthlyPrice,
           serverId,
-          error: refundError instanceof Error ? refundError.message : String(refundError),
+          error: GENERIC_SERVICE_ERROR,
         });
       }
     }

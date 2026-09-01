@@ -15,6 +15,7 @@
  */
 
 import { Platform_Apps } from "@/lib/supabase/queries";
+import { GENERIC_SERVICE_ERROR } from "@/lib/api/error-sanitizer";
 import { KubernetesInfoService } from "./kubernetes-info";
 
 export type AppStatus = "pending" | "building" | "running" | "failed" | "stopped" | "deleting";
@@ -256,7 +257,7 @@ export class AppStatusService {
         previousStatus: currentDbStatus || "pending",
         currentStatus: currentDbStatus || "pending",
         changed: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: GENERIC_SERVICE_ERROR,
       };
     }
   }
@@ -394,8 +395,7 @@ export class AppStatusService {
       console.error(`[AppStatusService] Set status failed:`, error);
       return { 
         success: false, 
-        error: error instanceof Error ? error.message : "Unknown error" 
-      };
+        error: GENERIC_SERVICE_ERROR,      };
     }
   }
 

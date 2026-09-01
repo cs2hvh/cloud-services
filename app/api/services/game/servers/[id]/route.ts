@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { GENERIC_SERVICE_ERROR, logError } from "@/lib/api/error-sanitizer";
 
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { limitByUser } from "@/lib/cooldown/userbased";
@@ -110,7 +111,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   const service = await createServiceClient();
   const { error } = await service.from("game_servers").update(patch).eq("id", id);
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  if (error) {
+    // Postgres error text names tables, columns and constraints.
+    logError("PATCH /api/services/game/servers/[id]", error);
+    return NextResponse.json({ ok: false, error: GENERIC_SERVICE_ERROR }, { status: 500 });
+  }
 
   return NextResponse.json({ ok: true });
 }

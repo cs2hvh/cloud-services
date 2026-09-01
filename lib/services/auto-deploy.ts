@@ -10,6 +10,7 @@
  */
 
 import { JenkinsService } from './jenkins';
+import { GENERIC_SERVICE_ERROR } from "@/lib/api/error-sanitizer";
 import { BuildPollingService } from './build-polling';
 import { Platform_Apps } from '@/lib/supabase/queries';
 import { GitHubProvider } from '@/lib/providers/github';
@@ -164,14 +165,14 @@ export class AutoDeployService {
       if (resolvedOperation.kind === 'failed') {
         return {
           success: false,
-          error: resolvedOperation.message,
+          error: GENERIC_SERVICE_ERROR,
         };
       }
 
       if (resolvedOperation.kind === 'invalid') {
         return {
           success: false,
-          error: resolvedOperation.message,
+          error: GENERIC_SERVICE_ERROR,
         };
       }
 

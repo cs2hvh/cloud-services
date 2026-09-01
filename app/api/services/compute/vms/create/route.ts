@@ -832,9 +832,12 @@ async function createServer(
       console.error("[VM Create] On-demand vMAC failed:", errMsg);
       return fail({
         ok: false,
-        error:
-          `Could not allocate a vMAC for ${ipPrimary}: ${errMsg}. ` +
-          `If this persists, check that the BYOIP block is attached as additional IPs on the OVH server.`,
+          // Was: the raw upstream error, the internal IP, and an instruction
+          // to check the BYOIP block on the provider's server — operator
+          // guidance handed to a customer, naming the vendor. errMsg is
+          // logged above; the remedy belongs in the runbook, not here.
+          error:
+            "Network configuration error. Please try again, or contact support if this continues.",
       }, { status: 502 });
     }
   }

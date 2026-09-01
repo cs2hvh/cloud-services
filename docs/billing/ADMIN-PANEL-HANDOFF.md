@@ -146,8 +146,9 @@ mean usable. Reconcile before building a screen on it.
   Pricing routes do not do this today. The `deduction personally from db by
   admin` transaction of **-$680,140** against a live customer on 2026-04-17 is
   what an unaudited write path looks like after the fact.
-- **`ADMIN_EMAILS` is unset in prod**, so the `user_profiles.roles` fallback is
-  the live auth path. Needs setting before the panel can set prices.
+- ~~`ADMIN_EMAILS` is unset in prod~~ — **SET 2026-08-31** as part of the v2 env
+  deploy, so the allowlist is now the live auth path rather than the
+  `user_profiles.roles` fallback.
 - **Keep the monthly-equivalent preview** on hourly rates. It would have caught
   the $120/hr compute meter ($87,600/mo) at entry.
 - **Reject or confirm rates >10× the category median** — the prior session's
@@ -169,3 +170,54 @@ hour charged nothing; an unpriced hour returns `no-price` and **refuses** rather
 than billing zero.
 
 Full history and open items: `TASKS.md` in `C:\cloud-services`.
+
+---
+
+## UPDATE 2026-08-31 ~09:55 — the sweep is scheduled. Flip `SWEEP_SCHEDULED`.
+
+Deployed on the prod Linode, commit `e1d5bade`:
+
+```
+ahura-billing-sweep.timer    active, waiting — OnCalendar=*:10:00, Persistent=true
+ahura-billing-sweep.service  oneshot, --apply, SuccessExitStatus=0 1
+ahura-cron.service           DISABLED and stopped (95 restarts on the counter)
+```
+
+### Your seed was verified, not assumed
+
+81 prices live, every row with `created_by` set. Conversion is clean:
+
+```
+suspect 720-multiples: 0     above monthly bound: 0
+above hourly bound:    0     markup below cost:   0
+gpu_pod      1.00000000 multiplier   at cost — the 2026-08-26 decision, preserved
+objectspace  5.00 usd_per_month      this was the poisoned $60/hr meter
+kubernetes   max 150.00/mo           these were $43,200/mo
+```
+
+Compute matches `instance_plans` to the cent (0.857, 0.428, 0.214, 0.16, 0.107,
+0.054). Nothing hand-converted — the point of routing it through the function.
+
+### A hard floor worth putting in the UI copy
+
+The first systemd run fired at 09:51 and billed **nothing** — 5 × `no-price`.
+That is correct. Prices became effective at 09:00; the sweep bills the hour that
+has just **completed** (08:00 at that moment); 08:00 had no price in force, so it
+refused rather than inventing one.
+
+So: **no hour before 2026-08-31 09:00 can ever be billed**, unless someone
+deliberately backdates `effective_from` — which asserts those prices were in
+force then. If the panel ever shows "billing active since", 09:00 today is the
+honest answer, not the seed timestamp.
+
+### Not yet fully monitored — a third state worth drawing
+
+`.github/workflows/billing-deadman.yml` is committed but needs two repository
+secrets: `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`. Without them it exits 2
+("could not check") every run — a visible red rather than a silent pass, by
+design. That is with Harshit; no `gh` CLI on the billing lane's machine, and
+they are credentials besides.
+
+Until those land the sweep is **scheduled but unwatched**, which is precisely the
+condition that let six days pass unnoticed. If you want a state between
+"not scheduled" and "fully monitored", that is the distinction to draw.

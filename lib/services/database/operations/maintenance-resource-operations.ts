@@ -1,4 +1,5 @@
 import axios from "axios";
+import { GENERIC_SERVICE_ERROR } from "@/lib/api/error-sanitizer";
 
 import { NotificationService, createServiceNotification } from "@/lib/notifications";
 import { Database_Clusters } from "@/lib/supabase/queries/database_clusters";
@@ -101,7 +102,7 @@ export const maintenanceResourceOperations = {
       if (err instanceof Error) {
         return {
           success: false,
-          error: err.message,
+          error: GENERIC_SERVICE_ERROR,
           statusCode: 400,
         };
       }
@@ -152,9 +153,10 @@ export const maintenanceResourceOperations = {
         return { success: true, data: null };
       }
     } catch (err: unknown) {
+      console.error("[DB:maintenance] failed:", err);
       return {
         success: false,
-        error: err instanceof Error ? err.message : "Unknown error occurred",
+        error: GENERIC_SERVICE_ERROR,
       };
     }
   },

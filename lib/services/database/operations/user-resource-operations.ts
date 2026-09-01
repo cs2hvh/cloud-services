@@ -1,4 +1,5 @@
 import axios from "axios";
+import { GENERIC_SERVICE_ERROR } from "@/lib/api/error-sanitizer";
 import { NextRequest } from "next/server";
 
 import { ConnectionPasswordUpdater, Encryption } from "@/config/functions";
@@ -163,7 +164,7 @@ export const userResourceOperations = {
 
       return {
         success: false,
-        error: err instanceof Error ? err.message : "Unknown error occurred",
+        error: GENERIC_SERVICE_ERROR,
         statusCode: 500,
       };
     }
@@ -245,7 +246,7 @@ export const userResourceOperations = {
 
       return {
         success: false,
-        error: err instanceof Error ? err.message : "Unknown error occurred",
+        error: GENERIC_SERVICE_ERROR,
         statusCode: 500,
       };
     }
@@ -379,7 +380,7 @@ export const userResourceOperations = {
 
       return {
         success: false,
-        error: err instanceof Error ? err.message : "Unknown error occurred",
+        error: GENERIC_SERVICE_ERROR,
         statusCode: 500,
       };
     }
@@ -553,7 +554,7 @@ export const userResourceOperations = {
 
       return {
         success: false,
-        error: err instanceof Error ? err.message : "Unknown error occurred",
+        error: GENERIC_SERVICE_ERROR,
         statusCode: 500,
       };
     }

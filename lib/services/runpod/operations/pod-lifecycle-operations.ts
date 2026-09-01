@@ -16,7 +16,7 @@ import { utils as ssh2Utils } from "ssh2";
 import { Encryption } from "@/config/functions";
 import { BillingCredits } from "@/lib/billing/credits";
 import { openMeter, closeMeter } from "@/lib/billing/meters";
-import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
+import { customerSafeErrorMessage, GENERIC_SERVICE_ERROR } from "@/lib/inference/error-messages";
 import { createServiceClient } from "@/lib/supabase/server";
 
 import { RunPodClient } from "../client";
@@ -187,9 +187,10 @@ export const podLifecycleOperations = {
                 try {
                     template = await templateOperations.getActiveTemplate(req.templateId);
                 } catch (e) {
+                    console.error("[GPU:createPod:template] failed:", e);
                     return {
                         success: false,
-                        error: e instanceof Error ? e.message : "Could not validate template",
+                        error: "Could not validate the selected template. Please pick another, or contact support if this continues.",
                         errorCode: "SERVER",
                     };
                 }
@@ -659,7 +660,7 @@ export const podLifecycleOperations = {
             console.error("[GPU:createPod] failed:", e);
             return {
                 success: false,
-                error: e instanceof Error ? e.message : String(e),
+                error: GENERIC_SERVICE_ERROR,
                 errorCode: "SERVER",
             };
         } finally {
@@ -716,9 +717,17 @@ export const podLifecycleOperations = {
                     `/pods/${pod.runpod_pod_id}/${req.action}`
                 );
             } catch (e) {
+                // The upstream message is worth keeping SOME of — a capacity
+                // refusal tells the customer to retry, which a generic message
+                // does not. But it arrives naming the provider and sometimes
+                // carrying a URL or a schema dump, so it goes through the
+                // scrubber first and falls back to the generic message when
+                // nothing useful survives. The raw text is logged either way.
+                console.error(`[GPU:powerPod] ${req.action} failed:`, e);
+                const raw = isRunPodError(e) ? e.message : e instanceof Error ? e.message : "";
                 return {
                     success: false,
-                    error: isRunPodError(e) ? e.message : `Failed to ${req.action} pod`,
+                    error: customerSafeErrorMessage(raw) || GENERIC_SERVICE_ERROR,
                     errorCode: isRunPodError(e) ? e.code : "SERVER",
                 };
             }
@@ -768,7 +777,7 @@ export const podLifecycleOperations = {
             console.error(`[GPU:powerPod] failed:`, e);
             return {
                 success: false,
-                error: e instanceof Error ? e.message : String(e),
+                error: GENERIC_SERVICE_ERROR,
                 errorCode: "SERVER",
             };
         }
@@ -855,7 +864,7 @@ export const podLifecycleOperations = {
             console.error(`[GPU:destroyPod] failed:`, e);
             return {
                 success: false,
-                error: e instanceof Error ? e.message : String(e),
+                error: GENERIC_SERVICE_ERROR,
                 errorCode: "SERVER",
             };
         }

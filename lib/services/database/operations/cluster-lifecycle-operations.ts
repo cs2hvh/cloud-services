@@ -1,4 +1,5 @@
 import axios from "axios";
+import { GENERIC_SERVICE_ERROR } from "@/lib/api/error-sanitizer";
 import { NextRequest } from "next/server";
 
 import {
@@ -315,7 +316,7 @@ export const clusterLifecycleOperations = {
             action: "created",
             serviceType: "database",
             serviceName: "Database Cluster",
-            error: err instanceof Error ? err.message : "Unknown error",
+            error: GENERIC_SERVICE_ERROR,
           })
         );
       } catch (notifErr) {
@@ -344,7 +345,7 @@ export const clusterLifecycleOperations = {
 
       return {
         success: false,
-        error: err instanceof Error ? err.message : "Unknown error occurred",
+        error: GENERIC_SERVICE_ERROR,
         errorCode: "UNKNOWN_ERROR",
       };
     } finally {
@@ -458,7 +459,7 @@ export const clusterLifecycleOperations = {
       if (err instanceof Error) {
         return {
           success: false,
-          error: err.message,
+          error: GENERIC_SERVICE_ERROR,
           statusCode: 400,
         };
       }
@@ -608,7 +609,7 @@ export const clusterLifecycleOperations = {
             action: "deleted",
             serviceType: "database",
             serviceName: "Database Cluster",
-            error: err instanceof Error ? err.message : "Unknown error",
+            error: GENERIC_SERVICE_ERROR,
           })
         );
       } catch (notifErr) {
