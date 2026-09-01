@@ -48,4 +48,39 @@ jobs:
           port: ${{ secrets.DEPLOY_PORT || 22 }}
           command_timeout: 30m        # next build can take a few minutes
           script: |
+            set -u
             bash /root/deploy.sh "${{ github.event.inputs.branch || github.ref_name }}"
+
+            # ── keep the host's own copies in step with the repo ──────────────
+            #
+            # /root/deploy.sh lives OUTSIDE the repo on purpose, so `git reset`
+            # cannot touch it. The cost is that it drifts: a fix to
+            # deploy/deploy.sh never reaches the script that actually runs until
+            # somebody re-copies it by hand, and nobody does. Refreshing it here,
+            # after the pull above, closes that loop.
+            cp /root/cloud-services/deploy/deploy.sh /root/deploy.sh
+            chmod +x /root/deploy.sh
+
+            # ── the build worker must be a managed service ────────────────────
+            #
+            # It had no unit and ran as a hand-started process, so no deploy ever
+            # restarted it and five days of build-path fixes shipped without ever
+            # executing. Installing it here means the cutover happens once, from
+            # CI, and every deploy afterwards restarts it via deploy.sh.
+            cp /root/cloud-services/deploy/systemd/ahura-build-worker.service /etc/systemd/system/
+            systemctl daemon-reload
+
+            # ONLY while systemd is not yet the owner. Once the unit is active
+            # this is skipped, because pkill would match the managed process too
+            # and killing it mid-build orphans a deployment in `building` — the
+            # queue claim is not atomic and there is no resume. After cutover,
+            # deploy.sh restarts it properly, which is a graceful stop.
+            if ! systemctl is-active --quiet ahura-build-worker; then
+              echo "first cutover: stopping any hand-started worker"
+              pkill -f 'scripts/v2/build-worker.ts' || true
+              sleep 2
+            fi
+            systemctl enable --now ahura-build-worker
+
+            systemctl --no-pager --lines=0 status ahura-build-worker || true
+            journalctl -u ahura-build-worker -n 15 --no-pager || true
