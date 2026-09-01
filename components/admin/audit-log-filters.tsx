@@ -94,9 +94,16 @@ export function AuditLogFilters({
               <SelectItem value="auth">Authentication</SelectItem>
               <SelectItem value="database">Database</SelectItem>
               <SelectItem value="kubernetes">Kubernetes</SelectItem>
-              <SelectItem value="platform_app">Platform App</SelectItem>
+              <SelectItem value="compute">Compute</SelectItem>
+              <SelectItem value="platform_apps">Platform Apps</SelectItem>
               <SelectItem value="network_ddos">Network/DDoS</SelectItem>
               <SelectItem value="object_storage">Object Storage</SelectItem>
+              <SelectItem value="domain">Domains</SelectItem>
+              <SelectItem value="ai_agent">AI Agents</SelectItem>
+              <SelectItem value="pricing">Pricing</SelectItem>
+              <SelectItem value="discount">Discounts</SelectItem>
+              <SelectItem value="billing">Billing</SelectItem>
+              <SelectItem value="gpu">GPU</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -118,6 +125,7 @@ export function AuditLogFilters({
               <SelectItem value="create">Create</SelectItem>
               <SelectItem value="update">Update</SelectItem>
               <SelectItem value="delete">Delete</SelectItem>
+              <SelectItem value="access">Access (customer-data read)</SelectItem>
             </SelectContent>
           </Select>
         </div>

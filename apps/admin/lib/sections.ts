@@ -51,7 +51,7 @@ export const ADMIN_SECTIONS: AdminSection[] = [
 
   { title: "Users", slug: "users", icon: Users, migrated: true, description: "Accounts, roles, suspensions", group: "Platform" },
   { title: "Support", slug: "support", icon: LifeBuoy, migrated: true, description: "Tickets and replies", group: "Platform" },
-  { title: "Audit Logs", slug: "audit-logs", icon: ScrollText, migrated: false, description: "Admin activity trail", group: "Platform" },
+  { title: "Audit Logs", slug: "audit-logs", icon: ScrollText, migrated: true, description: "Admin actions & customer-data reads", group: "Platform" },
 
   { title: "Servers", slug: "servers", icon: Server, migrated: true, description: "Customer VMs — fleet, actions, revenue", group: "Compute" },
   { title: "Linode Console", slug: "servers/linode", icon: Cloud, migrated: true, description: "Catalog, pricing, kill-switch", group: "Compute" },
