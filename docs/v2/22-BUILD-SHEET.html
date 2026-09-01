@@ -665,6 +665,188 @@ node --env-file=.env --env-file=.env.local scripts/v2/origin-lockdown-apply.ts -
 
   <!-- ══════════════════════════════════════════════════════════ -->
   <section>
+    <h2>Running it</h2>
+    <p class="sub">Everything above describes the platform as code. This is the platform as a running system: what is alive on the host, what restarts it, and how to run the whole thing yourself.</p>
+
+    <h3>The three services</h3>
+    <p>
+      Three long-lived processes, all systemd units, all running from the same checkout at
+      <code>/root/cloud-services</code>. The third is the one nobody thinks about, and it is the one
+      that took five days to notice was wrong.
+    </p>
+    <div class="tw">
+      <table>
+        <thead><tr><th class="nw">Unit</th><th>What it is</th><th>If it stops</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="nw mono">ahura-web</td>
+            <td>The Next.js app — dashboard and every API route. <code>server.ts</code>, not <code>next start</code>.</td>
+            <td><strong>Loud.</strong> The site is down and everyone knows within a minute.</td>
+          </tr>
+          <tr>
+            <td class="nw mono">ahura-cron</td>
+            <td>The hourly billing sweep, on a <code>.timer</code>.</td>
+            <td><strong>Silent.</strong> Nothing is billed. See the note in its own unit file — this exact failure ran for six days.</td>
+          </tr>
+          <tr>
+            <td class="nw mono">ahura-build-worker</td>
+            <td>Polls <code>paas.deployments</code> for <code>queued</code> rows and builds them. Every webhook and every Deploy button ends here.</td>
+            <td><strong>Silent.</strong> Deploys sit in <code>queued</code> forever. No error, no timeout, no alert.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="warn">
+      <p class="warn-t">A green deploy is not evidence that the build path changed</p>
+      <p>
+        The build worker had no unit at all for its first weeks. It ran as a hand-started process, and
+        <code>deploy.sh</code> restarted only the web app and the cron — so it kept executing whatever
+        revision it had been launched with, indefinitely.
+      </p>
+      <p>
+        Five days of build-path fixes shipped to <code>dev</code>, deployed green, and never ran: the
+        build-time secret mount, the customer-facing error wording, and the Next.js
+        <code>output:'standalone'</code> layout. All three were "live". None executed. It surfaced from a
+        customer's failed build, not from anything being monitored.
+      </p>
+      <p>
+        <strong>To verify a build-path change, read a fresh build's generated Dockerfile</strong> — it is
+        printed at the top of every build log. <code>systemctl status</code> tells you a process is
+        running; it says nothing about which revision it is running.
+      </p>
+    </div>
+
+    <h3>Two env files, and the difference is not cosmetic</h3>
+    <div class="tw">
+      <table>
+        <thead><tr><th class="nw">File</th><th>Holds</th><th>Loaded by</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="nw mono">.env</td>
+            <td>Supabase, and everything v1 needs.</td>
+            <td>Next.js automatically · <code>node --env-file=.env</code></td>
+          </tr>
+          <tr>
+            <td class="nw mono">.env.local</td>
+            <td><strong>Every <code>V2_*</code> variable</strong> — R2, Linode, Cloudflare, the git apps, the master key.</td>
+            <td>Next.js automatically · <code>node</code> only if you name it</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="warn">
+      <p class="warn-t"><code>node --env-file=.env</code> does not imply <code>.env.local</code></p>
+      <p>
+        Next.js loads both, which is why the web app has these variables and why the split is easy to
+        forget. Plain <code>node</code> loads exactly what you name, in order, last one winning.
+      </p>
+      <p>
+        A systemd unit written with a single <code>--env-file=.env</code> starts cleanly, reads not one
+        <code>V2_*</code> variable, and dies on the first it needs — <code>V2_R2_ENDPOINT</code> — before it
+        ever reads the queue. That is not hypothetical; it is how the build worker's first unit was
+        written, by copying the billing sweep's, which needs none of them. Always both, and
+        <code>.env.local</code> second:
+      </p>
+      <pre class="sh">node --experimental-strip-types \
+  --env-file=/root/cloud-services/.env \
+  --env-file-if-exists=/root/cloud-services/.env.local \
+  /root/cloud-services/scripts/v2/build-worker.ts</pre>
+    </div>
+
+    <h3>How a deploy happens</h3>
+    <pre class="sh">push to dev
+  → .github/workflows/deploy.yml     <i># triggers on push to dev, or manual for any branch</i>
+  → SSH to the host                  <i># DEPLOY_HOST / DEPLOY_USER / DEPLOY_PASSWORD secrets</i>
+  → bash /root/deploy.sh dev
+        git fetch + reset --hard origin/dev
+        npm ci                       <i># only when package-lock.json changed, or --deps</i>
+        npm run build                <i># if this fails, NOTHING is restarted and the old build serves on</i>
+        systemctl restart ahura-web ahura-cron ahura-build-worker
+        health check on 127.0.0.1:3000
+  → refresh /root/deploy.sh from the repo
+  → assert the build worker is active, or fail the run with its journal</pre>
+    <p>
+      <strong><code>/root/deploy.sh</code> is a copy that lives outside the repo</strong>, deliberately, so
+      <code>git reset --hard</code> cannot touch it mid-deploy. The cost is that it drifts: a fix to
+      <code>deploy/deploy.sh</code> never reaches the script that actually runs. The workflow now re-copies
+      it after every pull, which closes that loop — but if you are debugging a deploy, check you are
+      reading the same file that ran.
+    </p>
+
+    <h3>One-time host setup</h3>
+    <pre class="sh">cp /root/cloud-services/deploy/deploy.sh /root/deploy.sh &amp;&amp; chmod +x /root/deploy.sh
+cp /root/cloud-services/deploy/systemd/ahura-*.service /etc/systemd/system/
+cp /root/cloud-services/deploy/systemd/ahura-billing-sweep.timer /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now ahura-build-worker
+systemctl enable --now ahura-billing-sweep.timer</pre>
+
+    <div class="warn">
+      <p class="warn-t">Never run two build workers</p>
+      <p>
+        <code>deployments.queued()</code> is a plain <code>select … where state = 'queued'</code>. There is
+        no atomic claim, no lease, no advisory lock. Two workers both see the same row and both build it —
+        which means <strong>two build VMs leased and paid for, for one deployment</strong>, racing to write
+        the same database row.
+      </p>
+      <p>
+        Kill any hand-started worker before enabling the unit, and never <code>pkill</code> a running one to
+        "restart" it: builds have no resume, so a worker killed mid-build leaves its deployment stuck in
+        <code>building</code> forever. Use <code>systemctl restart</code>, which stops it gracefully. If you
+        ever want more than one worker, the claim has to become atomic first.
+      </p>
+    </div>
+
+    <h3>Running it yourself</h3>
+    <p>
+      Node 22.9 or newer — <code>--experimental-strip-types</code> needs 22.6 and
+      <code>--env-file-if-exists</code> needs 22.9. Then:
+    </p>
+    <pre class="sh">git clone &lt;repo&gt; &amp;&amp; cd cloud-services
+npm ci
+<i># put .env and .env.local in the repo root — see "Wiring the application" above</i>
+npm run dev                          <i># tsx watch server.ts; PORT=3000 unless you set it</i></pre>
+    <p>
+      <code>npm run dev</code> runs the custom server in <code>server.ts</code>, not <code>next dev</code> —
+      the WebSocket routes for VNC and GPU terminals are attached there and do not exist under plain
+      <code>next dev</code>. Use <code>npm run dev:fast</code> only for UI work that touches neither.
+    </p>
+    <p>To run the build worker against the queue from your own machine:</p>
+    <pre class="sh">node --experimental-strip-types --env-file=.env --env-file-if-exists=.env.local \
+  scripts/v2/build-worker.ts --once            <i># one pass, then exit</i></pre>
+    <p>
+      <code>--once</code> is the safe form. Without it the worker polls forever and <strong>competes with
+      the one on the server</strong> for the same queue — see the warning above. Never leave a local worker
+      running against production.
+    </p>
+    <p>Tests need no cloud account:</p>
+    <pre class="sh">npm run test:paas                    <i># ~1,100 unit tests; env files optional</i></pre>
+    <p>
+      A handful of encryption tests need <code>V2_ENV_MASTER_KEY</code> and will fail without it. Everything
+      else — detection, Dockerfile generation, pricing, placement, the sweeps — runs offline.
+    </p>
+
+    <div class="warn">
+      <p class="warn-t">There is no offline mode, and that is a design decision</p>
+      <p>
+        You can run the <em>control plane</em> locally, but you cannot run the <em>platform</em> locally.
+        Creating and deploying an app leases a real Linode, pushes to a real registry, and applies to a real
+        cluster. There is no emulator and no dry-run substrate.
+      </p>
+      <p>
+        So "running it yourself" means pointing a local server at the same cloud resources — which is also
+        why a local instance shares the production database and queue by default. If you want isolation you
+        need a second Supabase project, a second cluster and a second R2 bucket, and at that point you are
+        provisioning a second environment rather than running one locally. Until then, treat a local server
+        as production with a different front end.
+      </p>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <section>
     <h2>If this moves</h2>
     <p class="sub">What a migration actually costs, by layer. The short answer is that the control plane is portable and the substrate assumptions are not.</p>
 
