@@ -14,6 +14,16 @@
  *  - Map known legacy patterns to friendly copy; else strip leaky
  *    terms from the original string.
  */
+/**
+ * Re-exported so this module is a one-stop import for error handling in the
+ * service layers, and so there is exactly ONE definition of the generic
+ * message. It first shipped here as a second constant beside
+ * SAFE_MESSAGES.server_error in lib/api/error-sanitizer.ts — two strings
+ * meaning the same thing, which is the same duplication this file exists to
+ * argue against. The definition now lives with the sanitiser.
+ */
+export { GENERIC_SERVICE_ERROR } from "@/lib/api/error-sanitizer";
+
 export function customerSafeErrorMessage(raw: string | null | undefined): string {
   if (!raw) return "";
 

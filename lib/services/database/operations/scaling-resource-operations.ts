@@ -1,4 +1,5 @@
 import axios from "axios";
+import { GENERIC_SERVICE_ERROR } from "@/lib/api/error-sanitizer";
 import { NextRequest } from "next/server";
 
 import { AuditLogService, getAuditContext } from "@/lib/audit";
@@ -184,7 +185,7 @@ export const scalingResourceOperations = {
 
       return {
         success: false,
-        error: err instanceof Error ? err.message : "Unknown error occurred",
+        error: GENERIC_SERVICE_ERROR,
         errorCode: "UNKNOWN_ERROR",
       };
     }
@@ -321,7 +322,7 @@ export const scalingResourceOperations = {
       if (err instanceof Error) {
         return {
           success: false,
-          error: err.message || "Failed to upgrade database storage tier",
+          error: GENERIC_SERVICE_ERROR,
           statusCode: 500,
         };
       }
@@ -462,7 +463,7 @@ export const scalingResourceOperations = {
 
       return {
         success: false,
-        error: err instanceof Error ? err.message : "Unknown error occurred",
+        error: GENERIC_SERVICE_ERROR,
         errorCode: "UNKNOWN_ERROR",
         statusCode: 500,
       };
@@ -757,7 +758,7 @@ export const scalingResourceOperations = {
       if (err instanceof Error) {
         return {
           success: false,
-          error: err.message,
+          error: GENERIC_SERVICE_ERROR,
           errorCode: "UNKNOWN_ERROR",
           statusCode: 500,
         };

@@ -1,4 +1,5 @@
 import { getRatesForPlatformApp } from "@/config/pricing";
+import { GENERIC_SERVICE_ERROR } from "@/lib/api/error-sanitizer";
 import { Platform_App_Deployments } from "@/lib/supabase/queries";
 import { Platform_Apps } from "@/lib/supabase/queries/platform_apps";
 import { Billing } from "@/lib/supabase/queries/billing";
@@ -122,12 +123,13 @@ export class PlatformAppBillingService {
         skipped: false,
       };
     } catch (error) {
+      console.error("[PlatformApp:billing] failed:", error);
       return {
         success: false,
         activated: false,
         alreadyActive: false,
         skipped: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: GENERIC_SERVICE_ERROR,
       };
     }
   }

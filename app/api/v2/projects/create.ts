@@ -69,14 +69,18 @@ const REPO_NESTED = /^[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)+$/;
  * cannot be deployed, and finding that out after the build has run is a worse
  * place to learn it.
  */
-export function slugFromRepo(repoFullName: string): string {
-  const name = repoFullName.split("/")[1] ?? repoFullName;
-  return name
+/** The shared rule. A slug is a DNS label or it is not a slug. */
+export function slugify(raw: string): string {
+  return raw
     .toLowerCase()
     .replace(/[^a-z0-9-]/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "")
     .slice(0, 38);
+}
+
+export function slugFromRepo(repoFullName: string): string {
+  return slugify(repoFullName.split("/")[1] ?? repoFullName);
 }
 
 export function validateCreateProject(input: CreateProjectInput): Validated {
@@ -140,7 +144,15 @@ export function validateCreateProject(input: CreateProjectInput): Validated {
     return { ok: false, message: "That branch name is not valid.", fields: { branch: "shape" } };
   }
 
-  const slug = slugFromRepo(repo);
+  // THE NAME DECIDES THE SLUG WHEN THERE IS ONE. Deriving it from the
+  // repository unconditionally meant two apps from one repository always
+  // collided on UNIQUE (team_id, slug), and the customer had no way to pick a
+  // different address — the `name` the API accepted changed nothing.
+  //
+  // Falling back to the repository keeps every caller that sends no name
+  // behaving exactly as it did.
+  const named = typeof input.name === "string" && input.name.trim() ? input.name.trim() : null;
+  const slug = named ? slugify(named) : slugFromRepo(repo);
   if (!slug) {
     return {
       ok: false,
@@ -149,7 +161,7 @@ export function validateCreateProject(input: CreateProjectInput): Validated {
     };
   }
 
-  const name = typeof input.name === "string" && input.name.trim() ? input.name.trim().slice(0, 200) : repo;
+  const name = named ? named.slice(0, 200) : repo;
 
   // Leading and trailing slashes stripped so `/src/` and `src` mean the same
   // directory rather than two different lookups that both half-work.

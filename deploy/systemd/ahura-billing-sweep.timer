@@ -1,0 +1,25 @@
+[Unit]
+Description=Run the AhuraCloud billing v2 sweep hourly
+Documentation=file:///root/cloud-services/TASKS.md
+
+[Timer]
+# Ten past the hour, not on the hour. The sweep bills the hour that has just
+# completed, and the ten-minute offset leaves room for any resource status
+# written late in that hour to settle before liveness is checked.
+OnCalendar=*:10:00
+
+# If the box was down at :10, run as soon as it is back. A missed hour is not
+# lost — charge_service_hour claims a named period idempotently, so a late run
+# bills the correct hour exactly once. The old delta-based worker could not
+# have tolerated this; it needed a 24h clamp to survive its own design.
+Persistent=true
+
+# Spread across a minute so this never lands at the same instant as anything
+# else scheduled on the hour.
+RandomizedDelaySec=60
+
+AccuracySec=1s
+Unit=ahura-billing-sweep.service
+
+[Install]
+WantedBy=timers.target

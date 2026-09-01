@@ -22,6 +22,7 @@
  * died. `?previous=false` overrides.
  */
 
+import { paasConfig } from "@/lib/paas/config";
 import { loadKubeconfig, kube } from "@/lib/paas/k8s/client";
 import {
   InvalidTargetError,
@@ -62,7 +63,7 @@ export async function GET(
   if (!isValidK8sName(namespace) || !isValidK8sName(pod)) return adminNotFound();
 
   try {
-    const k = kube(loadKubeconfig(process.env.V2_KUBECONFIG ?? "C:/ahura-secrets/kubeconfig-v2-dev.yaml"));
+    const k = kube(loadKubeconfig(paasConfig.kubeconfigPath()));
 
     // Read the pod: it decides whether the previous instance is the one worth
     // showing, and it holds the reason an empty log is empty.

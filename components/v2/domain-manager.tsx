@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { Notice, Empty } from "@/components/v2/notice";
 import { StateBadge } from "@/components/v2/state-badge";
 import { ColHead } from "@/components/v2/kit";
+import { V2_MONO } from "@/components/v2/kit";
+import { AutoRefresh } from "@/components/v2/auto-refresh";
 
 /**
  * Custom domain management.
@@ -96,6 +98,9 @@ export function DomainManager({
   const router = useRouter();
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
+
+  // active and failed are settled; pending and verifying are still moving.
+  const pending = domains.filter((d) => d.state === "pending" || d.state === "verifying").length;
   const [error, setError] = useState<string | null>(null);
 
   async function add() {
@@ -146,6 +151,28 @@ export function DomainManager({
           until the zone is configured.
         </Notice>
       )}
+
+      {/*
+        VERIFICATION IS A WAIT, AND THE PAGE DID NOT MOVE.
+
+        A domain sits in pending or verifying while Cloudflare checks the records
+        and issues the certificate — minutes, sometimes longer. Nothing polled,
+        so the only way to learn it had gone active was to reload by hand, and
+        nothing on the page said so. Somebody who added the records correctly sat
+        looking at pending with no way to tell whether they had got it wrong.
+
+        Slower than the build tick on purpose: DNS and certificate issuance move
+        on the order of minutes, and polling the edge every five seconds buys
+        nothing.
+      */}
+      {pending > 0 ? (
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <span className={`${V2_MONO} text-[11px] text-white/40`}>
+            {pending} domain{pending === 1 ? "" : "s"} verifying
+          </span>
+          <AutoRefresh active intervalMs={20000} label="" />
+        </div>
+      ) : null}
 
       {domains.length === 0 ? (
         <Empty title="No custom domains yet.">

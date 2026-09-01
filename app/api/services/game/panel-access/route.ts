@@ -39,8 +39,9 @@ export async function POST() {
     const access = await resetPanelPassword(user.id);
     return NextResponse.json({ ok: true, access });
   } catch (e) {
+    console.error("[game/panel-access] reset failed:", e);
     return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "Reset failed" },
+      { ok: false, error: "Could not reset panel access. Please try again, or contact support if this continues." },
       { status: 400 },
     );
   }

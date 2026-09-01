@@ -113,7 +113,7 @@ test("a stage marker nobody classified is dropped, and the reader is told", () =
   assert.equal(r.text.includes("secret-ish"), false);
   assert.match(r.text, /compiling/, "the classified stage before it is unaffected");
   assert.ok(r.droppedStages.some((s) => s.startsWith("unclassified:")));
-  assert.match(alterationNotice(r) as string, /unrecognised output hidden/);
+  assert.match(alterationNotice(r) as string, /only build output is shown/i);
 });
 
 test("a dropped stage does not silently re-enable the next one", () => {
@@ -264,8 +264,10 @@ test("the notice says what class of thing was removed, never what was found", ()
   const r = sanitizeBuildLog(log());
   const notice = alterationNotice(r) as string;
 
-  assert.match(notice, /clone/);
-  assert.match(notice, /upload/);
+  // The CLASS, in the reader's terms. It used to assert /clone/ and /upload/,
+  // which pinned our own stage names into customer-facing text — beyond what
+  // this test says it is for, and the reason that wording survived so long.
+  assert.match(notice, /only build output is shown/i);
   assert.equal(notice.includes(TOKEN), false);
   assert.equal(/ghs_|token|credential value/i.test(notice.replace(/credentials? redacted/, "")), false);
 });

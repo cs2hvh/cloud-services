@@ -126,7 +126,7 @@ export function healthVerdict(h: HealthSummary): {
       // sampler runs every 15 minutes, so a new app is blank for a few minutes
       // by design — without that, four dashes and "nothing has measured this"
       // reads like something is broken on the day somebody signs up.
-      reason: "Not measured yet. The sampler runs every 15 minutes, so a new app is blank for a few minutes.",
+      reason: "Not measured yet. Figures appear within about fifteen minutes of the first deploy.",
     };
   }
   if (h.uptimePct >= 99) {

@@ -1,4 +1,5 @@
 import axios from "axios";
+import { GENERIC_SERVICE_ERROR } from "@/lib/api/error-sanitizer";
 
 import { Encryption } from "@/config/functions";
 import { resolveCached } from "@/lib/cache/cached-dns-resolver";
@@ -224,9 +225,10 @@ async function getClusterInternalImpl(
       data: decryptedLatest,
     };
   } catch (err: unknown) {
+    console.error("[DB:clusterRead] failed:", err);
     return {
       success: false,
-      error: err instanceof Error ? err.message : "Unknown error occurred",
+      error: GENERIC_SERVICE_ERROR,
       errorCode: "UNKNOWN_ERROR",
     };
   }
@@ -269,9 +271,10 @@ export const clusterReadOperations = {
         ),
       };
     } catch (err: unknown) {
+      console.error("[DB:clusterRead] failed:", err);
       return {
         success: false,
-        error: err instanceof Error ? err.message : "Unknown error occurred",
+        error: GENERIC_SERVICE_ERROR,
       };
     }
   },
@@ -294,9 +297,10 @@ export const clusterReadOperations = {
         ),
       };
     } catch (err: unknown) {
+      console.error("[DB:clusterRead] failed:", err);
       return {
         success: false,
-        error: err instanceof Error ? err.message : "Unknown error occurred",
+        error: GENERIC_SERVICE_ERROR,
       };
     }
   },

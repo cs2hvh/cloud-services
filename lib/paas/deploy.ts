@@ -35,16 +35,18 @@ import { imageIsDurable } from "./build/registry.ts";
 import { kube } from "./k8s/client.ts";
 import { PAAS_NAMESPACE, REGISTRY_PUSH, publisherJob } from "./k8s/manifests.ts";
 import { reconcileProject, kubeContextFromEnv } from "./reconciler.ts";
-import { buildFailureMessage, customerError, toCustomerFacing, GENERIC } from "./errors.ts";
+import { buildFailureMessage, customerError, GENERIC } from "./errors.ts";
 import { db, teams, projects, environments, deployments, aliases, envVars, type DeploymentRow, type ProjectRow, type AliasRow } from "./db.ts";
 import { decryptEnvValue, pgHexToBytes } from "./secrets.ts";
 import { appHostname } from "./config.ts";
-import { getFileContents, getDefaultBranch, buildCloneUrl, listInstallationRepos } from "./github/client.ts";
+// getFileContents and getDefaultBranch moved to providers/source.ts when reads
+// became per-provider; only the clone credential and the visibility check are
+// still GitHub-specific.
+import { buildCloneUrl, listInstallationRepos } from "./github/client.ts";
 import { listInstallations } from "./github/app.ts";
 import { assertLabelAvailable, previewLabel } from "./hostnames.ts";
 import { upsertDnsRecord, listDnsRecords } from "./edge/cloudflare.ts";
 
-const UA = "ahuracloud-deploy-v2";
 
 const MARKER_FILES = [
   "Dockerfile", "package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock",

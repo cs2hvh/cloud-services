@@ -5,7 +5,12 @@ import { createServiceClient } from "@/lib/supabase/server";
 import { PageHeader } from "@admin/components/page-header";
 import { Callout } from "@admin/components/deploy/bits";
 import { PriceBook } from "@admin/components/pricing/price-book";
-import { SWEEP_SCHEDULED, type PriceRow, type ServicePlan } from "@admin/lib/pricing";
+import {
+  BILLING_ACTIVE_SINCE,
+  SWEEP_STATUS,
+  type PriceRow,
+  type ServicePlan,
+} from "@admin/lib/pricing";
 
 export const dynamic = "force-dynamic";
 
@@ -90,14 +95,27 @@ export default async function PricingPage() {
         </Callout>
       ) : (
         <>
-          {!SWEEP_SCHEDULED && (
-            <Callout tone="warning">
+          {SWEEP_STATUS === "unscheduled" && (
+            <Callout tone="critical">
               <strong className="font-semibold">
-                Prices exist but the billing sweep is not scheduled yet
+                Prices exist but the billing sweep is not scheduled
               </strong>{" "}
               — nothing is being billed. A fully-priced book that is not being
               swept reads as &quot;billing is live&quot;, and that misreading
               is what let six days of unbilled usage pass unnoticed.
+            </Callout>
+          )}
+          {SWEEP_STATUS === "scheduled_unwatched" && (
+            <Callout tone="warning">
+              <strong className="font-semibold">
+                The sweep runs hourly, but nothing is watching the sweep
+              </strong>{" "}
+              — the deadman check needs two repository secrets before it can
+              alert. Scheduled-but-unwatched is exactly the state that let six
+              days of unbilled usage pass unnoticed. Billing is active since{" "}
+              {new Date(BILLING_ACTIVE_SINCE).toUTCString().slice(0, 22)} UTC;
+              no earlier hour can ever be billed unless a price is
+              deliberately backdated.
             </Callout>
           )}
           {unpricedCount > 0 && (

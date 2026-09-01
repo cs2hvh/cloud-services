@@ -43,7 +43,7 @@ const line = () => console.log("─".repeat(96));
 
 interface Action {
   project: string;
-  kind: "scale-down" | "remove-ingress" | "remove-dns" | "release-name" | "noop";
+  kind: "scale-down" | "remove-ingress" | "remove-dns" | "keep-dns" | "release-name" | "noop";
   target: string;
   detail: string;
 }
@@ -139,6 +139,30 @@ async function main(): Promise<void> {
     try {
       const rows = await aliases.forProject(p.id);
       for (const a of rows) {
+        // THE NAME MAY HAVE BEEN REUSED, and if it has, the record is not
+        // ours to delete any more.
+        //
+        // A slug is derived from the repository name, so deleting an app and
+        // deploying the same repo again produces the SAME hostname. This loop
+        // matched the Cloudflare record by name and deleted it — killing DNS
+        // for a live app because a dead project once held the same address.
+        // Observed on v2-typescript-starter.ahurasense.com, which had three
+        // dead alias rows and one live one: pod Running, Ingress present,
+        // alias unreleased, hostname not resolving.
+        //
+        // byHostname filters released_at is null, so this asks the only
+        // question that matters: does a LIVE alias claim this name now.
+        const claimant = await aliases.byHostname(a.hostname);
+        if (claimant && claimant.project_id !== p.id) {
+          actions.push({
+            project: p.ref,
+            kind: "keep-dns",
+            target: a.hostname,
+            detail: `reused by ${claimant.ref} — not ours to delete`,
+          });
+          continue;
+        }
+
         const recs = (await listDnsRecords(a.hostname)).filter((r) => r.name === a.hostname);
         for (const r of recs) {
           actions.push({ project: p.ref, kind: "remove-dns", target: a.hostname, detail: r.content });

@@ -1,5 +1,6 @@
 import { Billing } from "@/lib/supabase/queries/billing";
 import { serviceLabel } from "@/lib/billing/service-label";
+import { openMeter, closeMeter, type MeteredService } from "@/lib/billing/meters";
 
 export interface PostProvisionBillingArgs {
   userId: string;
@@ -7,6 +8,14 @@ export interface PostProvisionBillingArgs {
   hourlyRate: number;
   serviceId: string;
   serviceType: "database" | "kubernetes" | "objectspace" | "spectrum" | "platform_apps" | "gpu_pod" | "inference_vector" | "compute" | "custom_image";
+  /**
+   * Selects the v2 price row — an instance_plans slug, a platform-app size.
+   * Omit where the service has a single flat price. A caller that knows its
+   * plan MUST pass it, or the v2 sweep resolves no price and bills nothing.
+   */
+  planKey?: string;
+  /** Node count / GPU count — a multiplier on the rate, not storage GB. */
+  units?: number;
   addActive: (args: { userId: string; serviceId: string; hourlyRate: number }) => Promise<void>;
 }
 
@@ -30,6 +39,8 @@ export async function postProvisionBilling({
   hourlyRate,
   serviceId,
   serviceType,
+  planKey,
+  units,
   addActive,
 }: PostProvisionBillingArgs)
 {
@@ -55,6 +66,21 @@ export async function postProvisionBilling({
   }
   try {
     await addActive({ userId, serviceId, hourlyRate });
+    // Billing v2 shadow meter. This is the SECOND provisioning entry point —
+    // spectrum, kubernetes and the Proxmox compute path come through here
+    // rather than settleProvision, so wiring only that one would have left
+    // four services silently unmetered under v2.
+    try {
+      await openMeter({
+        serviceType: serviceType as MeteredService,
+        serviceId,
+        userId,
+        planKey,
+        units,
+      });
+    } catch (meterErr) {
+      console.error("[postProvisionBilling] v2 meter open failed:", meterErr);
+    }
   } catch (insertError) {
     try {
       if (initialCost > 0) {
@@ -106,6 +132,21 @@ export async function closeActiveBilling({
   closeActive: () => Promise<number>;
 }): Promise<void> {
   const finalCharge = await closeActive();
+
+  // Close the v2 meter in the same call that closes the v1 one, for the same
+  // reason it is opened centrally: every teardown path already goes through
+  // here. A meter that outlives its resource is what charged one customer
+  // $4,629.91 for a bucket that had already been deleted, and what left five
+  // compute meters billing servers that no longer existed.
+  //
+  // Deliberately BEFORE the final-charge block below, which is best-effort and
+  // swallows its own errors — closing the meter must not depend on the last
+  // charge succeeding.
+  try {
+    await closeMeter(serviceType as MeteredService, serviceId);
+  } catch (meterErr) {
+    console.error("[closeActiveBilling] v2 meter close failed:", meterErr);
+  }
 
   if (finalCharge > 0) {
     try {
@@ -198,6 +239,14 @@ export async function settleProvision(params: {
   hourlyRate: number;
   serviceId: string;
   serviceType: ServiceType;
+  /**
+   * Selects the v2 price row — an instance_plans slug, a platform-app size.
+   * Omit where the service has a single price. Callers that know their plan
+   * MUST pass it, or the v2 sweep resolves no price and silently bills nothing.
+   */
+  planKey?: string;
+  /** Node count, GPU count. A multiplier on the hourly rate, not storage GB. */
+  units?: number;
   addActive: (args: { userId: string; serviceId: string; hourlyRate: number }) => Promise<void>;
 }): Promise<void> {
   const { reservation } = params;
@@ -210,6 +259,29 @@ export async function settleProvision(params: {
     serviceId: params.serviceId,
     hourlyRate: params.hourlyRate,
   });
+
+  // Billing v2 shadow meter, opened HERE rather than at each of the twelve
+  // call sites that provision something. Wiring this per-service was the first
+  // attempt and it covered two of ten — every service already funnels through
+  // this function, so doing it once is both complete and impossible to forget
+  // when the eleventh service is added.
+  //
+  // v2 charges nothing until scripts/billing/sweep.ts is run with --apply, so
+  // running both meters in parallel cannot double-bill. That overlap is the
+  // point: it is what makes the pre-cutover comparison possible.
+  try {
+    await openMeter({
+      serviceType: params.serviceType as MeteredService,
+      serviceId: params.serviceId,
+      userId: reservation.userId,
+      planKey: params.planKey,
+      units: params.units,
+    });
+  } catch (meterErr) {
+    // Never fail a provision for the shadow meter. v1 is still the system of
+    // record until cutover; the v2 sweep reports anything that went missing.
+    console.error("[settleProvision] v2 meter open failed:", meterErr);
+  }
 
   // Meter is live — from here we must NOT throw. Release the transient hour-hold.
   const hourHold = roundCurrency(Math.max(params.hourlyRate, 0) * RESERVE_HOURS);

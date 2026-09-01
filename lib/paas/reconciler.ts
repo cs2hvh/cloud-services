@@ -27,6 +27,7 @@
  *    routes nowhere is a lie the control plane is telling.
  */
 
+import { paasConfig } from "./config.ts";
 import { kube, loadKubeconfig, type KubeContext } from "./k8s/client.ts";
 import {
   appDeployment,
@@ -809,7 +810,7 @@ export async function promote(projectId: string, deploymentRef: string): Promise
 
 /** Kube context from the environment, so callers need not know the file path. */
 export function kubeContextFromEnv(): KubeContext {
-  const path = process.env.V2_KUBECONFIG ?? "C:/ahura-secrets/kubeconfig-v2-dev.yaml";
+  const path = paasConfig.kubeconfigPath();
   return loadKubeconfig(path);
 }
 

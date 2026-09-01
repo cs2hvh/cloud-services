@@ -10,7 +10,8 @@
  * button either works or explains itself, which is the difference between "this
  * platform is broken" and "this platform does not have GitLab turned on".
  *
- * NO SECRET VALUE IS RETURNED, only whether one is present. The check is a
+ * REQUIRES A SIGNED-IN CALLER. No secret value is returned, only whether one is
+ * present — The check is a
  * try/catch around the same accessors the authorize routes use, so this cannot
  * drift from what they require — a new required variable makes this report
  * unconfigured on its own, without anybody remembering to update a list.
@@ -18,7 +19,8 @@
 
 import { providerConfig } from "@/lib/paas/providers/config";
 import { paasConfig } from "@/lib/paas/config";
-import { json } from "../../_lib/http";
+import { getCaller } from "../../_lib/auth";
+import { json, unauthenticated } from "../../_lib/http";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -46,6 +48,14 @@ function probe(check: () => void): boolean {
 }
 
 export async function GET() {
+  // SIGNED IN ONLY. This route names which providers are configured and which
+  // environment variables are unset — a map of our configuration state, and no
+  // use whatsoever to somebody who is not about to connect an account. Every
+  // sibling under app/api/v2/git checks the caller; this one shipped without
+  // the check and answered anonymously on production until it was caught.
+  const caller = await getCaller();
+  if (!caller) return unauthenticated();
+
   // GitHub authenticates as an App, not through OAuth client credentials, so
   // it is configured when the App itself is. Probed through the SAME accessors
   // the App client uses rather than by naming environment variables here — a

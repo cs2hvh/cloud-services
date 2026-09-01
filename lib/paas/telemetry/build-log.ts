@@ -385,15 +385,18 @@ export function alterationNotice(log: SanitizedLog): string | null {
 
   const parts: string[] = [];
   const stages = log.droppedStages.filter((s) => !s.startsWith("unclassified:"));
-  if (stages.length) {
-    parts.push(`${[...new Set(stages)].join(", ")} ${stages.length === 1 ? "stage" : "stages"} hidden`);
-  }
-  if (log.droppedStages.some((s) => s.startsWith("unclassified:"))) {
-    parts.push("unrecognised output hidden");
+  // NAMES THE CLASS, NOT OUR PIPELINE. This used to list the stages by their
+    // internal names — "clone, checkout, upload, finish stages hidden" — which
+    // is our vocabulary for our machinery. The customer needs to know their view
+    // is partial and that credentials were removed; which of our stages produced
+    // the removed lines is not theirs to care about.
+  if (stages.length || log.droppedStages.some((s) => s.startsWith("unclassified:"))) {
+    parts.push("only build output is shown");
   }
   const n = Object.values(log.redactions).reduce((a, b) => a + b, 0);
   if (n) parts.push(`${n} credential${n === 1 ? "" : "s"} redacted`);
 
   if (!parts.length) return null;
-  return `Some output is not shown (${parts.join("; ")}).`;
+  const joined = parts.join("; ");
+  return `${joined.charAt(0).toUpperCase()}${joined.slice(1)}.`;
 }

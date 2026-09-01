@@ -19,6 +19,7 @@ import { ChevronDown } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import { ProviderMark, PROVIDER_ACCENT, type Provider } from "@/components/v2/provider-mark";
+import { V2_MONO } from "@/components/v2/kit";
 
 interface Repo {
   fullName: string;
@@ -38,7 +39,26 @@ interface Tier {
   memoryMib: number;
   vcpu: number;
   priceUsd: number;
+  transferGb: number;
 }
+
+/**
+ * One field style for the whole form.
+ *
+ * A native control with a border and no background inherits the BROWSER's
+ * colours, not the page's — white ground, black text. On a dark page an open
+ * <select> then renders as a white slab. `bg` and `text` are not decoration
+ * here; without them the control is unreadable.
+ */
+const FIELD =
+  "mt-1 rounded-[6px] border border-white/[0.12] bg-black/40 px-3 py-2 text-[13px] text-white " +
+  "outline-none transition-colors placeholder:text-white/25 focus:border-[#0095FF]/60";
+
+/**
+ * <option> needs its own colours in Firefox and on Windows, where the popup
+ * is drawn by the OS and does not inherit the select's background.
+ */
+const OPTION = "bg-[#111216] text-white";
 
 export function Picker({ tiers }: { tiers: Tier[] }) {
   const router = useRouter();
@@ -88,6 +108,30 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
   const [branch, setBranch] = useState<string>("");
   const [rootDirectory, setRootDirectory] = useState("");
   const [instances, setInstances] = useState(1);
+
+  /**
+   * The app's name, which SETS ITS ADDRESS.
+   *
+   * Empty means "follow the repository", which is what the API does with no
+   * name. Once somebody types, it is theirs — including typing it back to the
+   * repository's own name, which is why this is not derived state.
+   */
+  const [appName, setAppName] = useState("");
+
+  // Derived, never stored: a total held in state goes stale the moment the
+  // plan or the count changes and nobody remembers to recompute it.
+  // Same rule the server applies, so what is previewed is what is created.
+  // Duplicated deliberately rather than imported: create.ts is server code
+  // and pulling it in would drag the tier table into the client bundle.
+  const slugPreview = (appName || chosen?.fullName.split("/").pop() || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 38);
+
+  const selectedTier = tiers.find((t) => t.id === tier) ?? null;
+  const monthlyUsd = selectedTier ? selectedTier.priceUsd * instances : 0;
 
   /**
    * Environment variables set at CREATION.
@@ -220,6 +264,9 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           repo: chosen.fullName,
+          // Omitted when blank so the server falls back to the repository name,
+          // which is exactly what it did before this field existed.
+          ...(appName.trim() ? { name: appName.trim() } : {}),
           // Both, because the API accepts either: connectionId is the
           // provider-agnostic identity and installationId is the GitHub
           // spelling kept for callers that predate multi-provider.
@@ -254,6 +301,28 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
         } catch {
           // Swallowed deliberately, and only here: the project succeeded.
         }
+      }
+
+      // AND START BUILDING IT. Create used to stop at the row, leaving the
+      // customer on a project page hunting for a Deploy button — after
+      // completing a form headed "Deploy application".
+      //
+      // After the env write, never before: a build that starts without the
+      // variables the customer just typed fails for want of config they have
+      // already given us, which is the failure those rows exist to prevent.
+      //
+      // Best effort. The project is real by now, and reporting a failed build
+      // start as a failed creation would throw away their form. If it does not
+      // take, they land on the project page with Deploy still available —
+      // exactly where they used to land anyway.
+      try {
+        await fetch(`/api/v2/projects/${body.project.ref}/deployments/trigger`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        });
+      } catch (e) {
+        console.error("[create] could not start the first build", e);
       }
 
       router.push(`/dashboard/services/apps/${body.project.ref}`);
@@ -503,7 +572,7 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
                   value={branch}
                   onChange={(e) => setBranch(e.target.value)}
                   placeholder="main"
-                  className="mt-1 w-full rounded border border-white/[0.09] px-3 py-1.5 text-sm border-white/[0.09]"
+                  className={`${FIELD} w-full`}
                 />
                 <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
                   Could not list branches ({branchError}) — type one. It is checked when you deploy.
@@ -516,10 +585,10 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
                 id="branch"
                 value={branch}
                 onChange={(e) => setBranch(e.target.value)}
-                className="mt-1 w-full rounded border border-white/[0.09] px-3 py-1.5 text-sm border-white/[0.09]"
+                className={`${FIELD} w-full`}
               >
                 {branches.map((b) => (
-                  <option key={b} value={b}>
+                  <option key={b} value={b} className={OPTION}>
                     {b}
                     {b === chosen.defaultBranch ? " (default)" : ""}
                   </option>
@@ -540,10 +609,35 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
               value={rootDirectory}
               onChange={(e) => setRootDirectory(e.target.value)}
               placeholder="apps/web"
-              className="mt-1 w-full rounded border border-white/[0.09] px-3 py-1.5 font-mono text-sm border-white/[0.09]"
+              className={`${FIELD} w-full font-mono`}
             />
             <p className="mt-1 text-xs text-white/40">
               For a monorepo. Leave blank if the app is at the repository root.
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="appName" className="block text-xs font-medium text-white/60">
+              App name <span className="font-normal text-white/30">optional</span>
+            </label>
+            <input
+              id="appName"
+              type="text"
+              value={appName}
+              onChange={(e) => setAppName(e.target.value)}
+              placeholder={chosen?.fullName.split("/").pop() ?? "my-app"}
+              className={`${FIELD} w-full font-mono`}
+            />
+            <p className="mt-1 text-xs text-white/40">
+              Sets the address. Change it to deploy the same repository more than once —
+              {slugPreview ? (
+                <>
+                  {" "}this one will answer on{" "}
+                  <span className="font-mono text-white/60">{slugPreview}.ahurasense.com</span>.
+                </>
+              ) : (
+                " each app needs its own."
+              )}
             </p>
           </div>
 
@@ -555,11 +649,12 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
               id="tier"
               value={tier}
               onChange={(e) => setTier(e.target.value)}
-              className="mt-1 w-full rounded border border-white/[0.09] px-3 py-1.5 text-sm border-white/[0.09]"
+              className={`${FIELD} w-full`}
             >
               {tiers.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.label} — {t.memoryMib >= 1024 ? `${t.memoryMib / 1024} GB` : `${t.memoryMib} MB`} RAM, {t.vcpu} vCPU · ${t.priceUsd}/mo
+                <option key={t.id} value={t.id} className={OPTION}>
+                  {t.label} — {t.memoryMib >= 1024 ? `${t.memoryMib / 1024} GB` : `${t.memoryMib} MB`} RAM,{" "}
+                  {t.vcpu} vCPU · ${t.priceUsd}/mo
                 </option>
               ))}
             </select>
@@ -576,11 +671,52 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
               max={10}
               value={instances}
               onChange={(e) => setInstances(Math.max(1, Math.min(10, Number(e.target.value) || 1)))}
-              className="mt-1 w-24 rounded border border-white/[0.09] px-3 py-1.5 text-sm border-white/[0.09]"
+              className={`${FIELD} w-24 tabular-nums`}
             />
             <p className="mt-1 text-xs text-white/40">
               Copies behind one address. They do not add or remove themselves. Billed per instance.
             </p>
+
+            {/*
+              THE TOTAL, which this page never showed. The plan option says
+              $7/mo and the instance box says 3, and nothing multiplied them —
+              so the one number the customer is deciding on was wrong by the
+              instance count. Same block as the Settings tab, so the figure a
+              customer agrees to here is the figure they see later.
+            */}
+            {selectedTier ? (
+              <div className="mt-3 overflow-hidden rounded-[6px] border border-white/[0.09]">
+                <div className="border-b border-white/[0.06] bg-black/30 px-4 py-3">
+                  <div className="mb-1.5 flex items-baseline justify-between gap-3">
+                    <span
+                      className={`${V2_MONO} text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40`}
+                    >
+                      Monthly cost
+                    </span>
+                    <span className={`${V2_MONO} text-[10.5px] text-white/45`}>
+                      ${(monthlyUsd / 730).toFixed(4)} / hr
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-[17px] font-medium leading-none text-white/50">$</span>
+                    <span className="text-[34px] font-bold leading-none tracking-[-0.03em] tabular-nums text-white">
+                      {monthlyUsd}
+                    </span>
+                    <span className={`${V2_MONO} ml-1 text-[11px] text-white/40`}>/mo</span>
+                  </div>
+                  <p className={`${V2_MONO} mt-1.5 text-[11px] text-white/35`}>
+                    {selectedTier.label} × {instances}
+                    {instances > 1 ? ` · ${selectedTier.priceUsd} each` : ""}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-baseline justify-between gap-2 px-4 py-2.5">
+                  <span className={`${V2_MONO} text-[11px] text-white/45`}>
+                    {selectedTier.transferGb} GB transfer included
+                  </span>
+                  <span className={`${V2_MONO} text-[11px] text-white/25`}>per app, not per instance</span>
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div>
@@ -595,7 +731,7 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
                     setEnvRows((rows) => rows.map((r, j) => (j === i ? { ...r, key: e.target.value } : r)))
                   }
                   placeholder="NAME"
-                  className="w-44 rounded border border-white/[0.09] px-2 py-1 font-mono text-sm border-white/[0.09]"
+                  className={`${FIELD} mt-0 w-44 py-1.5 font-mono`}
                 />
                 <input
                   type="password"
@@ -604,7 +740,7 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
                     setEnvRows((rows) => rows.map((r, j) => (j === i ? { ...r, value: e.target.value } : r)))
                   }
                   placeholder="value"
-                  className="min-w-0 flex-1 rounded border border-white/[0.09] px-2 py-1 text-sm border-white/[0.09]"
+                  className={`${FIELD} mt-0 min-w-0 flex-1 py-1.5`}
                 />
                 <button
                   type="button"
@@ -642,7 +778,7 @@ export function Picker({ tiers }: { tiers: Tier[] }) {
         disabled={!chosen || submitting}
         className="rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-40"
       >
-        {submitting ? "Creating…" : chosen ? `Create ${chosen.fullName.split("/")[1]}` : "Choose a repository"}
+        {submitting ? "Creating and deploying…" : chosen ? "Create and deploy" : "Choose a repository"}
       </button>
     </div>
   );

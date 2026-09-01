@@ -9,6 +9,7 @@
 //   - Volumes cannot be detached without destroying the pod.
 
 import { createServiceClient } from "@/lib/supabase/server";
+import { GENERIC_SERVICE_ERROR } from "@/lib/inference/error-messages";
 
 import { RunPodClient } from "../client";
 import type {
@@ -95,9 +96,10 @@ export const volumeOperations = {
                 data: ((data || []) as VolumeRowDb[]).map(rowToSummary),
             };
         } catch (e) {
+            console.error("[GPU:volume] failed:", e);
             return {
                 success: false,
-                error: e instanceof Error ? e.message : String(e),
+                error: GENERIC_SERVICE_ERROR,
                 errorCode: "SERVER",
             };
         }
@@ -211,9 +213,10 @@ export const volumeOperations = {
                 ),
             };
         } catch (e) {
+            console.error("[GPU:volume] failed:", e);
             return {
                 success: false,
-                error: e instanceof Error ? e.message : String(e),
+                error: GENERIC_SERVICE_ERROR,
                 errorCode: "SERVER",
             };
         }
@@ -276,9 +279,10 @@ export const volumeOperations = {
 
             return { success: true, data: { volumeId: args.volumeId } };
         } catch (e) {
+            console.error("[GPU:volume] failed:", e);
             return {
                 success: false,
-                error: e instanceof Error ? e.message : String(e),
+                error: GENERIC_SERVICE_ERROR,
                 errorCode: "SERVER",
             };
         }

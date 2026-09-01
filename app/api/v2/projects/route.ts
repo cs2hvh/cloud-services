@@ -54,7 +54,10 @@ export async function GET() {
   // Three reads, joined in memory. A join per project would be N+1 against
   // PostgREST, and this list is the first thing a dashboard loads.
   const [projects, aliases, environments] = await Promise.all([
-    db.from("projects").select("ref,name,slug,repo_full_name,production_branch,tier,instance_count,id").order("created_at"),
+    // Same filter as the dashboard list and the detail page. An API that
+    // returns deleted projects is the same bug one layer down, and it is the
+    // layer another client would trust.
+    db.from("projects").select("ref,name,slug,repo_full_name,production_branch,tier,instance_count,id").is("deleted_at", null).order("created_at"),
     db.from("aliases").select("project_id,hostname,kind,deployment_id"),
     db.from("environments").select("project_id,kind"),
   ]);

@@ -72,7 +72,7 @@ const PLATFORM_NS = new Set([
 ]);
 
 function cluster() {
-  const path = process.env.V2_KUBECONFIG ?? "C:/ahura-secrets/kubeconfig-v2-dev.yaml";
+  const path = paasConfig.kubeconfigPath();
   return kube(loadKubeconfig(path));
 }
 

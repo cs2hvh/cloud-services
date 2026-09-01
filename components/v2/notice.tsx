@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { Spinner } from "@/components/v2/auto-refresh";
 
 /**
  * A capability the platform does not have yet, stated plainly.
@@ -11,12 +12,15 @@ import { cn } from "@/lib/utils";
  */
 export function Notice({
   tone = "info",
+  busy = false,
   title,
   children,
   action,
   className,
 }: {
   tone?: "info" | "blocked";
+  /** Swaps the leading dot for a spinner. For a state that is still moving. */
+  busy?: boolean;
   title: string;
   children?: React.ReactNode;
   action?: string;
@@ -32,13 +36,22 @@ export function Notice({
         className
       )}
     >
-      <span
-        aria-hidden="true"
-        className={cn(
-          "mt-[7px] h-[6px] w-[6px] shrink-0 rounded-full",
-          tone === "blocked" ? "bg-amber-400" : "bg-white/35"
-        )}
-      />
+      {/*
+        The marker carries the state. A still notice gets a dot; one describing
+        something in progress gets a spinner, so "this is working" is visible
+        without a sentence saying so.
+      */}
+      {busy ? (
+        <Spinner className="mt-[4px] h-3 w-3 text-white/40" />
+      ) : (
+        <span
+          aria-hidden="true"
+          className={cn(
+            "mt-[7px] h-[6px] w-[6px] shrink-0 rounded-full",
+            tone === "blocked" ? "bg-amber-400" : "bg-white/35"
+          )}
+        />
+      )}
       <div className="min-w-0">
         <p className="m-0 text-[13px] font-medium text-white">{title}</p>
         {children && (

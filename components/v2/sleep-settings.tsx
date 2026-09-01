@@ -132,7 +132,7 @@ export function SleepSettings({
         <Notice
           tone="blocked"
           title="Nothing puts apps to sleep automatically yet."
-          action="The idle sweep runs when someone runs it, not on a timer."
+          action="Sleeping is checked periodically, not the instant an app goes quiet."
           className="mt-4"
         >
           This setting is recorded and will be honoured once the sweep is

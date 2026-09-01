@@ -15,6 +15,7 @@
 
 // Import directly from files to avoid circular dependency issues
 import { ObjectStorage_Integrations } from "@/lib/supabase/queries/object_storage_integrations";
+import { GENERIC_SERVICE_ERROR } from "@/lib/api/error-sanitizer";
 import { Platform_Apps } from "@/lib/supabase/queries/platform_apps";
 import { ObjectSpaces } from "@/lib/supabase/queries/object_spaces";
 import { Projects } from "@/lib/supabase/queries/projects";
@@ -417,7 +418,7 @@ export class ObjectStorageIntegrationService {
       console.error("[ObjectStorageIntegrationService] Link error:", error);
       return { 
         success: false, 
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: GENERIC_SERVICE_ERROR,
         code: "INTERNAL_ERROR" 
       };
     }
@@ -531,7 +532,7 @@ export class ObjectStorageIntegrationService {
       console.error("[ObjectStorageIntegrationService] Unlink error:", error);
       return { 
         success: false, 
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: GENERIC_SERVICE_ERROR,
         code: "INTERNAL_ERROR" 
       };
     }
@@ -798,7 +799,7 @@ export class ObjectStorageIntegrationService {
       console.error("[ObjectStorageIntegrationService] Update error:", error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: GENERIC_SERVICE_ERROR,
         code: "INTERNAL_ERROR",
       };
     }

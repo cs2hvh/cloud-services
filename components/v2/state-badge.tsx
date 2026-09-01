@@ -135,9 +135,9 @@ export function ReplicaBadge({
         status === "asleep"
           ? "Idle and scaled to zero on purpose. The next request wakes it, which takes a few seconds."
           : status === "running-unrouted"
-          ? "Ready replicas that no hostname reaches — costs money, serves nothing."
+          ? "Running, but no address points at it."
           : status === "unknown"
-            ? "The cluster could not be read. This is not the same as zero."
+            ? "We could not read this app status just now."
             : undefined
       }
     >

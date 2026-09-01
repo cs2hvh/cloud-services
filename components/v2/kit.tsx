@@ -279,7 +279,7 @@ export function Failed({ what, detail }: { what: string; detail?: string }) {
         Could not load {what}.
       </p>
       <p className="mt-1 text-xs text-red-300/70">
-        {detail ?? "This is a read failure, not an empty result — nothing has been lost."}
+        {detail ?? "We could not load this. Nothing has been lost — please try again shortly."}
       </p>
     </div>
   );

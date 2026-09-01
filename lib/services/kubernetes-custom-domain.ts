@@ -3,6 +3,7 @@
  * Handles adding/removing custom domains to Ingress resources via Jenkins
  */
 import jenkins from "@/lib/jenkins";
+import { GENERIC_SERVICE_ERROR } from "@/lib/api/error-sanitizer";
 import { APP_DOMAIN } from "@/config/domain";
 import { createHash } from "crypto";
 
@@ -141,11 +142,12 @@ export class KubernetesCustomDomainService {
       try {
         await this.ensureClusterDnsBootstrapped();
       } catch (bootstrapError) {
+        console.error("[K8s:customDomain:bootstrap] failed:", bootstrapError);
         console.warn(
           "[K8sCustomDomain] CoreDNS bootstrap failed (continuing with activation)",
           {
             ...context,
-            error: bootstrapError instanceof Error ? bootstrapError.message : "Unknown error",
+            error: GENERIC_SERVICE_ERROR,
           }
         );
       }

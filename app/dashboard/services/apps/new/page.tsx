@@ -73,6 +73,9 @@ export default async function NewProjectPage() {
               memoryMib: t.memoryMib,
               vcpu: t.vcpu,
               priceUsd: t.priceUsd,
+              // Public pricing. costUsd is deliberately NOT passed — it is our
+              // margin and must never reach a client bundle.
+              transferGb: t.transferGb,
             }))}
           />
         </Card>

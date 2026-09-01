@@ -862,6 +862,39 @@ Two rules:
 
 ### A comment asserting a guarantee is not the guarantee
 
+**The sharpest instance yet, found 2026-08-31 by the billing lane, in money.**
+`paas.charge_project_hour` carried the comment *"The claim rolls back with this
+block, so no ledger row survives for money that was never taken."* It did not.
+
+PL/pgSQL opens its implicit savepoint at the START of a block with an EXCEPTION
+clause, and a caught exception rewinds only to there. The INSERT sat BEFORE the
+block, so it was never in scope — the handler rolled back the deduction and the
+claim row survived.
+
+**The row IS the idempotency key**, which is what turned a stray row into a
+money bug: a customer who was short got a charge row saying the hour was paid,
+no money taken, no possibility of retry (the next sweep sees the conflict and
+returns `already-charged`), and `arrears_since` set — a free hour, permanently
+recorded as paid, on an account being suspended for non-payment. Revenue
+overstated by exactly what failed to collect.
+
+Never fired: no project has ever carried arrears. Fixed in
+`20260831063808`, verified both directions on the live database — an INSERT
+before the block leaves 1 row after a caught exception, inside leaves 0; and the
+real function now returns `insufficient` with `claim_rows_left = 0` and an
+unmoved balance.
+
+Two lessons, and the second is the general one:
+
+- **A savepoint is where you open it, not where you meant it.** Anything that
+  must roll back together must be inside the same `begin ... exception` block.
+- **`when others then return <a clean negative>` is the same bug as the empty/
+  unknown confusion**, wearing SQL. It turned a deadlock, a type error and a
+  missing grant into "this customer is broke". `billing.deduct_user_credit_atomic`
+  raises all three of its errors as bare P0001, so text is the only
+  discriminator — match it, and `raise` anything you cannot classify.
+
+
 `GET /api/v2/github/callback` took `installation_id` from the query string,
 checked it with `listInstallations()`, and bound it to
 `bootstrap_personal_team()` — the CALLER'S team. Its header said:

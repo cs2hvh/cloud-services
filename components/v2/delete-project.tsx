@@ -33,6 +33,8 @@ export function DeleteProject({
   const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Deleted, but the workload outlives it until the sweep. Informational.
+  const [sweepPending, setSweepPending] = useState(false);
 
   const armed = typed.trim() === projectName && !busy;
 
@@ -50,17 +52,17 @@ export function DeleteProject({
       return;
     }
 
-    // The API distinguishes a project whose workload is gone from one whose
-    // row is deleted but whose cluster footprint could not be torn down. That
-    // difference matters to whoever has to clean up, so it is not flattened
-    // into "done".
+    // THREE OUTCOMES, NOT TWO. A delete whose workload could not be torn down
+    // is still A DELETE — the row is gone, the names are released, and the
+    // sweep finishes the rest within the hour.
+    //
+    // This used to route that case into setError, which rendered it under a
+    // heading reading "Not deleted" directly above a sentence beginning "The
+    // project is deleted". It also stayed on the page, so the customer was
+    // looking at a project that no longer existed and being told, wrongly, that
+    // nothing had happened.
     if (body?.status !== "deleted") {
-      setError(
-        body?.note ??
-          "The project was deleted, but its running infrastructure could not be removed. It will need a sweep.",
-      );
-      setBusy(false);
-      return;
+      setSweepPending(true);
     }
 
     router.push("/dashboard/services/apps");
@@ -118,6 +120,15 @@ export function DeleteProject({
         <div className="mt-3">
           <Notice tone="blocked" title="Not deleted">
             {error}
+          </Notice>
+        </div>
+      )}
+
+      {sweepPending && (
+        <div className="mt-3">
+          <Notice title="Deleted — the running copy is still shutting down">
+            The project is gone and its addresses are released. Its containers are being removed
+            in the background and will be within the hour. Nothing else is needed from you.
           </Notice>
         </div>
       )}

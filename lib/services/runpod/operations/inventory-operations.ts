@@ -2,6 +2,7 @@
 // and read the latest snapshot for the public inventory API.
 
 import { createServiceClient } from "@/lib/supabase/server";
+import { GENERIC_SERVICE_ERROR } from "@/lib/inference/error-messages";
 
 import { RunPodClient } from "../client";
 import {
@@ -22,6 +23,26 @@ import type {
     StockStatus,
     SyncInventoryResult,
 } from "../types";
+
+/**
+ * How long a snapshot is kept.
+ *
+ * This sweep runs every minute and writes ~94 rows each time — one per
+ * (gpu, cloud, datacentre) — regardless of whether anything moved. That is
+ * ~135,000 rows a day. Nothing reaped them, so the table reached 1,022,889
+ * rows and 258 MB, and /dashboard/services/gpu/deploy started failing
+ * intermittently with a statement timeout as the read grew slower each day.
+ *
+ * A day is generous. The deepest reader is lib/catalog/gpu.ts, which takes the
+ * newest 4,000 rows — about 42 minutes at this write rate. Everything else
+ * reads gpu_inventory_latest, which is the newest row per key. 24h leaves
+ * ~34x headroom over the deepest need, so recent stock movement is still
+ * inspectable without the table becoming a liability again.
+ *
+ * Prices are re-fetched from RunPod every minute, so nothing here is a source
+ * of truth worth preserving — it is a cache with a log's shape.
+ */
+const SNAPSHOT_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 // Best stock signal across probes: the most-available probe wins, since the
 // `none` probes just mean RunPod can't satisfy that particular pod size.
@@ -313,12 +334,41 @@ export const inventoryOperations = {
                 }
             }
 
+            // 4. Prune. This sweep runs EVERY MINUTE and writes one row per
+            // (gpu, cloud, dc) — ~94 rows a minute, ~135,000 a day — whether or
+            // not anything changed. Nothing was reaping them, so the table
+            // reached 1,022,889 rows and 258 MB, and the deploy page began
+            // timing out intermittently as the read got slower every day.
+            //
+            // Nothing needs deep history. The deepest reader is
+            // lib/catalog/gpu.ts, which takes the newest 4,000 rows (~42
+            // minutes at this write rate); everything else reads
+            // gpu_inventory_latest, which is the newest row per key. A day is
+            // ~34x the deepest need, which leaves room to look at recent stock
+            // movement without the table becoming a liability again.
+            //
+            // Deliberately runs after the insert and never fails the sync: a
+            // prune that could not run is a housekeeping problem, not a reason
+            // to lose this minute's prices.
+            try {
+                const cutoff = new Date(Date.now() - SNAPSHOT_RETENTION_MS).toISOString();
+                const { error: pruneErr } = await supabase
+                    .from("gpu_inventory_snapshots")
+                    .delete()
+                    .lt("observed_at", cutoff);
+                if (pruneErr) {
+                    console.warn(`[GPU:inventory] prune failed (non-fatal):`, pruneErr.message);
+                }
+            } catch (pruneErr) {
+                console.warn(`[GPU:inventory] prune threw (non-fatal):`, pruneErr);
+            }
+
             return { success: true, data: counter };
         } catch (e) {
             console.error(`[GPU:inventory] syncSnapshots failed:`, e);
             return {
                 success: false,
-                error: e instanceof Error ? e.message : String(e),
+                error: GENERIC_SERVICE_ERROR,
                 errorCode: "SERVER",
             };
         }
@@ -385,9 +435,10 @@ export const inventoryOperations = {
 
             return { success: true, data: rows };
         } catch (e) {
+            console.error("[GPU:inventory] failed:", e);
             return {
                 success: false,
-                error: e instanceof Error ? e.message : String(e),
+                error: GENERIC_SERVICE_ERROR,
                 errorCode: "SERVER",
             };
         }

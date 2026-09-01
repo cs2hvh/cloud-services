@@ -1,0 +1,49 @@
+[Unit]
+# Billing v2 hourly sweep.
+#
+# Replaces ahura-cron.service, which ran credit-system-cron/cron-worker.js.
+# That worker's source was deleted from `dev` in ef946da1; because the deploy
+# pulls `dev`, a restart on 2026-08-24 wiped the file off this host and systemd
+# then restarted it every ten seconds for six days, reporting "activating" the
+# whole time while nothing on the platform was billed.
+#
+# This unit runs a script that lives IN the repo (scripts/billing/sweep.ts), so
+# a deploy carries it rather than removing it. That is the actual fix; the unit
+# file is incidental.
+#
+# Type=oneshot with a .timer rather than a long-lived daemon: a sweep is a
+# discrete hourly job, and a process that is supposed to exit cannot silently
+# hang around doing nothing.
+Description=AhuraCloud billing v2 hourly sweep
+Documentation=file:///root/cloud-services/TASKS.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/root/cloud-services
+
+# --apply is what makes this charge. Without it the sweep is a dry run, which
+# is the default precisely so that running it by hand cannot move money by
+# accident.
+#
+# No --period: the sweep bills the hour that has just COMPLETED. Billing the
+# hour in progress would overcharge by up to an hour, every hour.
+ExecStart=/usr/bin/node --experimental-strip-types --env-file=/root/cloud-services/.env /root/cloud-services/scripts/billing/sweep.ts --apply
+
+# The sweep exits 1 when it finds problems it did not bill (a dead resource, a
+# missing price, an insufficient balance). Those are real findings that belong
+# in the journal, not failures that should stop the timer — the next hour must
+# still run. SuccessExitStatus keeps systemd from marking the unit failed and
+# and leaving an operator to think billing has stopped when it has not.
+SuccessExitStatus=0 1
+
+# A sweep that cannot finish in ten minutes is wedged, not slow.
+TimeoutStartSec=600
+
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

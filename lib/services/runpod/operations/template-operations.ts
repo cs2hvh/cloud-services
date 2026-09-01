@@ -7,6 +7,7 @@
 // pod-create time, so a non-custom deploy can't smuggle in an arbitrary image.
 
 import { createServiceClient } from "@/lib/supabase/server";
+import { GENERIC_SERVICE_ERROR } from "@/lib/inference/error-messages";
 
 import type { GpuTemplate, ServiceResult, TemplateCategory } from "../types";
 
@@ -54,7 +55,7 @@ export const templateOperations = {
             console.error("[GPU:listTemplates] failed:", e);
             return {
                 success: false,
-                error: e instanceof Error ? e.message : String(e),
+                error: GENERIC_SERVICE_ERROR,
                 errorCode: "SERVER",
             };
         }

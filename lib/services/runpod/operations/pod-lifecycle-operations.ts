@@ -15,7 +15,8 @@ import { utils as ssh2Utils } from "ssh2";
 
 import { Encryption } from "@/config/functions";
 import { BillingCredits } from "@/lib/billing/credits";
-import { customerSafeErrorMessage } from "@/lib/inference/error-messages";
+import { openMeter, closeMeter } from "@/lib/billing/meters";
+import { customerSafeErrorMessage, GENERIC_SERVICE_ERROR } from "@/lib/inference/error-messages";
 import { createServiceClient } from "@/lib/supabase/server";
 
 import { RunPodClient } from "../client";
@@ -186,9 +187,10 @@ export const podLifecycleOperations = {
                 try {
                     template = await templateOperations.getActiveTemplate(req.templateId);
                 } catch (e) {
+                    console.error("[GPU:createPod:template] failed:", e);
                     return {
                         success: false,
-                        error: e instanceof Error ? e.message : "Could not validate template",
+                        error: "Could not validate the selected template. Please pick another, or contact support if this continues.",
                         errorCode: "SERVER",
                     };
                 }
@@ -573,12 +575,31 @@ export const podLifecycleOperations = {
                     hourlyRate: hourlyCostUsd,
                     serviceId: billingServiceId,
                     serviceType: "gpu_pod",
+                    // settleProvision opens the `gpu_pod` meter itself; units
+                    // is the GPU count, which multiplies the per-GPU rate.
+                    units: req.gpuCount ?? 1,
                     addActive: async ({ userId, serviceId, hourlyRate }) => {
                         await BillingCredits.addActiveGpuPod({
                             userId,
                             serviceId, // gpu_pods.billing_service_id (UUID)
                             hourlyRate,
                         });
+                        // A pod needs a SECOND meter that no other service has:
+                        // its local disk. The GPU is released upstream the moment
+                        // a pod stops, but the disk is not and RunPod keeps
+                        // charging us for it — so storage bills through a stop
+                        // and only ends at terminate. Splitting them is also what
+                        // puts GPU and storage on an invoice as separate lines.
+                        try {
+                            await openMeter({
+                                serviceType: "gpu_pod_storage",
+                                serviceId,
+                                userId,
+                            });
+                        } catch (meterErr) {
+                            // Never fail a provision for the shadow meter.
+                            console.error("[GPU:createPod] storage meter open failed:", meterErr);
+                        }
                     },
                 });
                 settled = true;
@@ -639,7 +660,7 @@ export const podLifecycleOperations = {
             console.error("[GPU:createPod] failed:", e);
             return {
                 success: false,
-                error: e instanceof Error ? e.message : String(e),
+                error: GENERIC_SERVICE_ERROR,
                 errorCode: "SERVER",
             };
         } finally {
@@ -696,9 +717,17 @@ export const podLifecycleOperations = {
                     `/pods/${pod.runpod_pod_id}/${req.action}`
                 );
             } catch (e) {
+                // The upstream message is worth keeping SOME of — a capacity
+                // refusal tells the customer to retry, which a generic message
+                // does not. But it arrives naming the provider and sometimes
+                // carrying a URL or a schema dump, so it goes through the
+                // scrubber first and falls back to the generic message when
+                // nothing useful survives. The raw text is logged either way.
+                console.error(`[GPU:powerPod] ${req.action} failed:`, e);
+                const raw = isRunPodError(e) ? e.message : e instanceof Error ? e.message : "";
                 return {
                     success: false,
-                    error: isRunPodError(e) ? e.message : `Failed to ${req.action} pod`,
+                    error: customerSafeErrorMessage(raw) || GENERIC_SERVICE_ERROR,
                     errorCode: isRunPodError(e) ? e.code : "SERVER",
                 };
             }
@@ -748,7 +777,7 @@ export const podLifecycleOperations = {
             console.error(`[GPU:powerPod] failed:`, e);
             return {
                 success: false,
-                error: e instanceof Error ? e.message : String(e),
+                error: GENERIC_SERVICE_ERROR,
                 errorCode: "SERVER",
             };
         }
@@ -804,6 +833,16 @@ export const podLifecycleOperations = {
                 console.warn("[GPU:destroyPod] Billing close failed:", billingErr);
             }
 
+            // closeActiveBilling closes the `gpu_pod` meter. The storage meter
+            // is this service's alone, so it is closed here — and only on
+            // terminate: storage deliberately keeps billing through a stop,
+            // because the disk survives and RunPod keeps charging for it.
+            try {
+                await closeMeter("gpu_pod_storage", pod.billing_service_id);
+            } catch (meterErr) {
+                console.error("[GPU:destroyPod] storage meter close failed:", meterErr);
+            }
+
             // 3. Update pod row to terminal state
             await supabase
                 .from("gpu_pods")
@@ -825,7 +864,7 @@ export const podLifecycleOperations = {
             console.error(`[GPU:destroyPod] failed:`, e);
             return {
                 success: false,
-                error: e instanceof Error ? e.message : String(e),
+                error: GENERIC_SERVICE_ERROR,
                 errorCode: "SERVER",
             };
         }

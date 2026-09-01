@@ -3,6 +3,7 @@
  */
 
 import { Clusters } from "@/lib/supabase/queries/clusters";
+import { GENERIC_SERVICE_ERROR } from "@/lib/api/error-sanitizer";
 import type {
   GetKubernetesClusterRequest,
   GetKubernetesClusterResult,
@@ -53,9 +54,10 @@ export const clusterReadOperations = {
         data: redactedCluster,
       };
     } catch (error) {
+      console.error("[K8s:clusterRead] failed:", error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Failed to get cluster",
+        error: GENERIC_SERVICE_ERROR,
         errorCode: "INTERNAL_ERROR",
       };
     }
@@ -86,9 +88,10 @@ export const clusterReadOperations = {
         data: redactedClusters,
       };
     } catch (error) {
+      console.error("[K8s:clusterRead] failed:", error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Failed to list clusters",
+        error: GENERIC_SERVICE_ERROR,
         errorCode: "INTERNAL_ERROR",
       };
     }

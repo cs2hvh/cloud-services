@@ -80,7 +80,14 @@ const REGIONS = 15;
 export function ComputeSection() {
     return (
         <section
-            className="px-6 pb-20 pt-10 sm:px-10 lg:px-12 lg:pb-28 lg:pt-12"
+            // The top padding carries this seam on its own. The models section
+            // above ends on a deliberately tight pb-6/lg:pb-8, so pt-10/lg:pt-12
+            // left only 64px (mobile) and 80px (desktop) between the two — under
+            // half of every other section boundary on the page, which run
+            // 144px and 192-208px. Raised to land on that same rhythm rather
+            // than to a round number. Only the homepage renders this section,
+            // so nothing else shifts.
+            className="px-6 pb-20 pt-28 sm:px-10 lg:px-12 lg:pb-28 lg:pt-40"
             style={{ background: "var(--ah-bg)" }}
             aria-labelledby="compute-heading"
         >

@@ -53,6 +53,11 @@ import { DeleteProject } from "@/components/v2/delete-project";
 import { SourceSettings } from "@/components/v2/source-settings";
 import { PromoteControl } from "@/components/v2/promote-control";
 import { DomainManager } from "@/components/v2/domain-manager";
+import { Notice } from "@/components/v2/notice";
+// Same modules the deployment detail page uses, so the log is scrubbed by one
+// set of rules rather than two that can drift.
+import { getObject, r2Keys } from "@/lib/paas/build/r2.ts";
+import { sanitizeBuildLog, tail, alterationNotice } from "@/lib/paas/telemetry/build-log.ts";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -238,24 +243,25 @@ export default async function ProjectPage({
     (d) => d.state === "queued" || d.state === "building" || d.state === "publishing",
   );
 
+  // WHAT STATE, AND WHAT TO DO. Nothing about images, routing or pods —
+  // those describe how the platform works, not what has happened to the
+  // customer's app, and a person reading an empty log needs the second.
   const emptyExplanation =
     logsTarget?.state === "error"
       ? {
-          what: "The last deployment failed, so nothing was ever started.",
-          action:
-            "Open it under Deployments — the build log says where it stopped. Runtime logs only exist once a container runs.",
+          what: "The last deployment failed.",
+          action: "Check the build log under Deployments to see where it stopped.",
         }
       : !production
         ? {
-            what: "This project has no hostname yet, so its build was never routed.",
-            action:
-              "The image is built and waiting. Use Deploy to publish it — that creates the hostname and starts a pod.",
+            what: "Not deployed yet.",
+            action: "Use Deploy to publish this app and give it an address.",
           }
         : project.scale_to_zero
           ? {
-              what: "This project is asleep. Scale to zero is on, so it runs no pods until a request arrives.",
+              what: "This app is asleep.",
               action:
-                "Open the site and it will wake, then output appears here. Turn this off under Settings if you want it always warm.",
+                "Open the site and it will wake. Turn sleeping off under Settings to keep it always on.",
             }
           : null;
 
@@ -305,6 +311,39 @@ export default async function ProjectPage({
     console.error("[dashboard/v2] replica read failed:", err);
   }
 
+  /*
+    THE LATEST BUILD'S LOG, read here so the Deployments tab can show it
+    without a click. Only on that tab — R2 is a network call and the other
+    tabs have no use for it.
+
+    Only the most recent deployment. Older builds keep their own page:
+    rendering every log inline would turn a list into a wall and make the
+    one that matters harder to find, not easier.
+  */
+  let latestLog: string | null = null;
+  let latestLogNotice: string | null = null;
+  let latestLogFailed = false;
+  // `latest` is already resolved above — the newest deployment is the newest
+  // deployment, and two names for it is how they drift apart.
+  const latestInFlight =
+    latest?.state === "queued" || latest?.state === "building" || latest?.state === "publishing";
+
+  if (tab === "deployments" && latest) {
+    try {
+      const bytes = await getObject(r2Keys.buildLog(latest.ref));
+      if (bytes) {
+        // Whole log sanitised BEFORE the tail is taken. The reverse order
+        // can split a credential across the cut and hide it in both halves.
+        const clean = sanitizeBuildLog(bytes.toString("utf8"));
+        latestLog = tail(clean, 200).lines.join("\n");
+        latestLogNotice = alterationNotice(clean);
+      }
+    } catch (err) {
+      console.error("[dashboard/v2] inline build log read failed:", err);
+      latestLogFailed = true;
+    }
+  }
+
   return (
     <ServiceShell>
       <PageHeader
@@ -338,7 +377,7 @@ export default async function ProjectPage({
         moment nothing is in flight.
       */}
       <div className="-mt-2 mb-4">
-        <AutoRefresh active={anyInFlight} label="Deploying — this page is updating itself." />
+        <AutoRefresh active={anyInFlight} label="Deploying" />
       </div>
 
       {tab === "overview" ? (
@@ -386,7 +425,7 @@ export default async function ProjectPage({
 
                 <p className="mt-3 text-xs text-white/50">
                   {verdict.reason}{" "}
-                  <span className="text-white/30">Last 7 days, sampled every 15 minutes.</span>
+                  <span className="text-white/30">Last 7 days.</span>
                 </p>
 
                 {/*
@@ -436,6 +475,34 @@ export default async function ProjectPage({
           <Empty title="No hostname yet">
             A hostname is created by the first successful deploy. Nothing is broken.
           </Empty>
+        )}
+
+        {/*
+          CUSTOM DOMAINS ANSWER TOO, and this card never said so — it showed the
+          platform hostname alone, so somebody who had pointed their own domain
+          and seen it work found no trace of it under Serving.
+
+          Only the ones actually serving. A domain still waiting on DNS belongs
+          on the Domains tab with its records, not in a list of what answers.
+        */}
+        {domainDtos.filter((d) => d.serving).length > 0 && (
+          <div className="mt-3 space-y-2 border-t border-white/[0.06] pt-3">
+            {domainDtos
+              .filter((d) => d.serving)
+              .map((d) => (
+                <div key={d.ref} className="flex flex-wrap items-center justify-between gap-3">
+                  <a
+                    href={d.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sm text-sky-300 transition-colors hover:text-sky-200"
+                  >
+                    {d.domain}
+                  </a>
+                  <StateBadge state="active" />
+                </div>
+              ))}
+          </div>
         )}
 
         {/*
@@ -608,6 +675,48 @@ export default async function ProjectPage({
           </ul>
         )}
       </Card>
+
+      {/*
+        The newest build's output, in place. The row above is still a link
+        for anything older — this is the one somebody is actually waiting on.
+      */}
+      {latest ? (
+        <Card
+          title="Build log"
+          subtitle={`${isPlaceholderSha(latest.git_sha) ? latest.ref : latest.git_sha!.slice(0, 7)} · newest build`}
+          actions={<AutoRefresh active={Boolean(latestInFlight)} />}
+        >
+          {latestLogFailed ? (
+            <Notice tone="blocked" title="Could not read the build log.">
+              The deployment exists; the log store did not respond.
+            </Notice>
+          ) : latestLog === null ? (
+            <Notice
+              busy={Boolean(latestInFlight)}
+              title={
+                latest.state === "queued"
+                  ? "Preparing environment"
+                  : latestInFlight
+                    ? "Starting build"
+                    : "No build log was stored for this deployment."
+              }
+            >
+              {latestInFlight
+                ? "Output appears once the build machine reports in."
+                : null}
+            </Notice>
+          ) : (
+            <>
+              {latestLogNotice ? (
+                <p className="m-0 mb-2 text-[12px] text-white/40">{latestLogNotice}</p>
+              ) : null}
+              <pre className="m-0 max-h-[460px] overflow-auto rounded-[6px] border border-white/[0.09] bg-black/40 p-4 font-mono text-[12px] leading-[1.65] text-white/75">
+                {latestLog}
+              </pre>
+            </>
+          )}
+        </Card>
+      ) : null}
 
       <Card
         title="Previews"

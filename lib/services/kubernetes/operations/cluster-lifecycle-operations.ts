@@ -3,6 +3,7 @@
  */
 
 import axios from "axios";
+import { GENERIC_SERVICE_ERROR } from "@/lib/api/error-sanitizer";
 import { NextRequest } from "next/server";
 
 import {
@@ -586,9 +587,10 @@ export const clusterLifecycleOperations = {
         data: updatedCluster,
       };
     } catch (error) {
+      console.error("[K8s:clusterLifecycle] failed:", error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Failed to update cluster",
+        error: GENERIC_SERVICE_ERROR,
         errorCode: "UPDATE_FAILED",
       };
     }
@@ -930,9 +932,10 @@ export const clusterLifecycleOperations = {
 
       return { success: true, clusterId };
     } catch (error) {
+      console.error("[K8s:clusterLifecycle] failed:", error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Failed to initialize cluster",
+        error: GENERIC_SERVICE_ERROR,
         errorCode: "INIT_FAILED",
       };
     }

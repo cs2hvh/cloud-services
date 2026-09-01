@@ -1,4 +1,5 @@
 import { Platform_Apps } from "@/lib/supabase/queries";
+import { GENERIC_SERVICE_ERROR } from "@/lib/api/error-sanitizer";
 import { PlatformAppService } from "@/lib/services/platform-app-service";
 
 export type AppEnvVar = {
@@ -46,7 +47,7 @@ export class PlatformAppEnvService {
       }
       return {
         success: false,
-        error: appError.message || "Failed to fetch app",
+        error: GENERIC_SERVICE_ERROR,
         errorCode: "DB_ERROR",
       };
     }
@@ -101,9 +102,10 @@ export class PlatformAppEnvService {
       }
       return { success: true, data: existing };
     } catch (error) {
+      console.error("[PlatformApp:env] failed:", error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Upsert failed",
+        error: GENERIC_SERVICE_ERROR,
         errorCode: "DB_ERROR",
       };
     }
@@ -130,9 +132,10 @@ export class PlatformAppEnvService {
 
       return { success: true, data: { removed, remaining: filtered } };
     } catch (error) {
+      console.error("[PlatformApp:env] failed:", error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Remove failed",
+        error: GENERIC_SERVICE_ERROR,
         errorCode: "DB_ERROR",
       };
     }
@@ -161,9 +164,10 @@ export class PlatformAppEnvService {
       }
       return { success: true, data: merged };
     } catch (error) {
+      console.error("[PlatformApp:env] failed:", error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Bulk upsert failed",
+        error: GENERIC_SERVICE_ERROR,
         errorCode: "DB_ERROR",
       };
     }

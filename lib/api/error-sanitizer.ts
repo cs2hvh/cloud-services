@@ -34,8 +34,28 @@ const SAFE_MESSAGES = {
   not_found: "Resource not found",
   forbidden: "Access denied",
   validation_error: "Invalid request data",
-  server_error: "An unexpected error occurred. Please try again.",
+  server_error: "Something went wrong. Please try again, or contact support if this continues.",
 } as const;
+
+/**
+ * The message a customer sees when something failed in a way we did not
+ * anticipate. THE canonical generic error — import this rather than writing
+ * another one.
+ *
+ * It says nothing on purpose. An unexpected `catch` has, by definition, an
+ * error nobody reasoned about, so scrubbing it is guesswork: a deny-list only
+ * removes the vendor names and paths somebody thought to add, and the first
+ * unlisted one leaks. A half-scrubbed technical string is also useless to the
+ * reader while still disclosing that an upstream exists — the worst of both.
+ *
+ * The raw error must still be logged server-side at the throw site; this
+ * replaces what the CUSTOMER sees, never what an operator can debug from.
+ *
+ * Where a message is genuinely actionable — a capacity refusal, an
+ * out-of-memory, a gated model — use customerSafeErrorMessage() in
+ * lib/inference/error-messages.ts instead. That rewrites rather than hides.
+ */
+export const GENERIC_SERVICE_ERROR = SAFE_MESSAGES.server_error;
 
 type SafeMessageKey = keyof typeof SAFE_MESSAGES;
 

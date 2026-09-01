@@ -13,8 +13,9 @@
  * @module lib/services/database-integration
  */
 
-import { 
-  Database_Integrations, 
+import { GENERIC_SERVICE_ERROR } from "@/lib/api/error-sanitizer";
+import {
+  Database_Integrations,
   Platform_Apps, 
   Database_Clusters, 
   Projects 
@@ -564,7 +565,7 @@ export class DatabaseIntegrationService {
       console.error("[DatabaseIntegrationService] Link error:", error);
       return { 
         success: false, 
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: GENERIC_SERVICE_ERROR,
         code: "INTERNAL_ERROR" 
       };
     }
@@ -679,7 +680,7 @@ export class DatabaseIntegrationService {
       console.error("[DatabaseIntegrationService] Unlink error:", error);
       return { 
         success: false, 
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: GENERIC_SERVICE_ERROR,
         code: "INTERNAL_ERROR" 
       };
     }
@@ -804,7 +805,7 @@ export class DatabaseIntegrationService {
       console.error("[DatabaseIntegrationService] Update error:", error);
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: GENERIC_SERVICE_ERROR,
         code: "INTERNAL_ERROR",
       };
     }

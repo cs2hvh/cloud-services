@@ -33,6 +33,12 @@ import { ServerStackIcon } from '@/components/dashboard/compute/vps/section-icon
 import { OsImg } from '@/components/dashboard/compute/vps/os-icons';
 import { RegionFlag } from '@/components/ui/region-flag';
 import { useConfirm } from '@/components/ui/confirm';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { formatPlanSlug } from '@/lib/pricing/plan-display';
 
 // ─── Design tokens ─────────────────────────────────────────────────
@@ -789,12 +795,9 @@ function ServerRow({
         STATUS_META[server.status] ??
         { dot: 'rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.45)', label: server.status };
 
-    useEffect(() => {
-        if (!menuOpen) return;
-        const onDoc = () => setMenuOpen(false);
-        document.addEventListener('click', onDoc);
-        return () => document.removeEventListener('click', onDoc);
-    }, [menuOpen]);
+    // No document-level click listener here: Radix owns dismissal for this
+    // menu now. Keeping one would race the trigger's own open — the same click
+    // that opened the menu would bubble to document and close it again.
 
     const copyIp = async (e: React.MouseEvent) => {
         e.preventDefault();
@@ -1070,32 +1073,45 @@ function ActionMenu({
     onConsole: (e: React.MouseEvent) => void;
 }) {
     return (
-        <div className="relative inline-block" onClick={(e) => e.stopPropagation()}>
-            <button
-                type="button"
-                onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setOpen(!open);
-                }}
-                disabled={!!busy}
-                // The list renders as divs, not a table, so there is no row
-                // element to target. Expose a stable hook so tests can open a
-                // specific server's action menu instead of guessing geometry.
-                data-server-menu
-                className="h-7 w-7 text-white/45 hover:bg-white/[0.06] hover:text-white inline-flex items-center justify-center transition-colors disabled:opacity-40 rounded-[4px]"
-                title="Actions"
-            >
-                {busy ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                    <MoreHorizontal className="h-4 w-4" />
-                )}
-            </button>
-            {open && (
-                <div
-                    className="absolute right-0 top-9 z-20 w-44 border border-white/[0.1] bg-[#111216] rounded-[5px] shadow-[0_12px_28px_-8px_rgba(0,0,0,0.7)] py-1"
-                    role="menu"
+        // The menu is rendered through a portal rather than positioned inside
+        // this row. The rows sit in a container with `overflow-hidden` (it
+        // clips them to the table's rounded corners), and an absolutely
+        // positioned menu is clipped by that same rule — so with few servers
+        // in the list the lower items were cut off at the table's edge. A
+        // portal escapes every ancestor's overflow, and Radix flips the menu
+        // above the button when the viewport bottom is nearer than its height,
+        // which the hand-rolled `top-9` could not do.
+        <div className="inline-block" onClick={(e) => e.stopPropagation()}>
+            <DropdownMenu open={open} onOpenChange={setOpen}>
+                <DropdownMenuTrigger asChild>
+                    <button
+                        type="button"
+                        // Radix opens on pointerdown, so preventing the click
+                        // default stops the enclosing row <Link> navigating
+                        // without also suppressing the menu.
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                        }}
+                        disabled={!!busy}
+                        // The list renders as divs, not a table, so there is no row
+                        // element to target. Expose a stable hook so tests can open a
+                        // specific server's action menu instead of guessing geometry.
+                        data-server-menu
+                        className="h-7 w-7 text-white/45 hover:bg-white/[0.06] hover:text-white inline-flex items-center justify-center transition-colors disabled:opacity-40 rounded-[4px]"
+                        title="Actions"
+                    >
+                        {busy ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                            <MoreHorizontal className="h-4 w-4" />
+                        )}
+                    </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                    align="end"
+                    sideOffset={6}
+                    className="w-44 border border-white/[0.1] bg-[#111216] rounded-[5px] shadow-[0_12px_28px_-8px_rgba(0,0,0,0.7)] py-1 px-0"
                 >
                     {canPowerOps && isStopped && (
                         <MenuItem
@@ -1162,8 +1178,8 @@ function ActionMenu({
                     >
                         Delete
                     </MenuItem>
-                </div>
-            )}
+                </DropdownMenuContent>
+            </DropdownMenu>
         </div>
     );
 }
@@ -1180,18 +1196,21 @@ function MenuItem({
     danger?: boolean;
 }) {
     return (
-        <button
-            type="button"
+        // A DropdownMenuItem rather than a bare <button>: inside a Radix menu
+        // a plain button gets no roving focus and no dismiss-on-select, so the
+        // menu would stay open after an action fired. Radix drives its
+        // highlight off focus, hence focus: rather than hover: here.
+        <DropdownMenuItem
             onClick={onClick}
-            className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-left transition-colors ${
+            className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-[12px] text-left rounded-none cursor-pointer transition-colors ${
                 danger
-                    ? 'text-red-300/85 hover:bg-red-500/10 hover:text-red-200'
-                    : 'text-white/75 hover:bg-white/[0.05] hover:text-white'
+                    ? 'text-red-300/85 focus:bg-red-500/10 focus:text-red-200'
+                    : 'text-white/75 focus:bg-white/[0.05] focus:text-white'
             }`}
         >
             {icon}
             {children}
-        </button>
+        </DropdownMenuItem>
     );
 }
 

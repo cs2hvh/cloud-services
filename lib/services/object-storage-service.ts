@@ -6,6 +6,7 @@
  * @module lib/services/object-storage-service
  */
 import { ObjectStorageFunctions } from "@/config/object-storage-functions";
+import { GENERIC_SERVICE_ERROR } from "@/lib/api/error-sanitizer";
 import { ObjectSpaces } from "@/lib/supabase/queries/object_spaces";
 import { Billing } from "@/lib/supabase/queries/billing";
 import { NotificationService, createServiceNotification } from "@/lib/notifications/service";
@@ -305,8 +306,7 @@ export class ObjectStorageService {
             action: 'created',
             serviceType: 'object_storage',
             serviceName: name,
-            error: error instanceof Error ? error.message : 'Unknown error',
-          })
+            error: GENERIC_SERVICE_ERROR,          })
         );
       } catch (notifErr) {
         console.error(`[ObjectStorageService.createBucket] Error notification failed:`, notifErr);
@@ -448,8 +448,7 @@ export class ObjectStorageService {
             action: 'deleted',
             serviceType: 'object_storage',
             serviceName: bucket_id,
-            error: error instanceof Error ? error.message : 'Unknown error',
-          })
+            error: GENERIC_SERVICE_ERROR,          })
         );
       } catch (notifErr) {
         console.error(`[ObjectStorageService.deleteBucket] Error notification failed:`, notifErr);
@@ -701,8 +700,7 @@ export class ObjectStorageService {
             action: 'updated',
             serviceType: 'object_storage',
             serviceName: bucket_id,
-            error: error instanceof Error ? error.message : 'Unknown error',
-          })
+            error: GENERIC_SERVICE_ERROR,          })
         );
       } catch (notifErr) {
         console.error(`[ObjectStorageService.updateBucketSettings] Error notification failed:`, notifErr);

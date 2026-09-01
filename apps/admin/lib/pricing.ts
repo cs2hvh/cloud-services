@@ -11,12 +11,24 @@
 export const HOURS_IN_MONTH = 720;
 
 /**
- * Flipped by hand when the billing lane deploys the sweep timer (they ping
- * this lane — agreed mechanism). While false and prices exist, /pricing warns
- * that a fully-priced book is NOT being billed; that misreading is what let
- * six days of unbilled usage pass unnoticed.
+ * Maintained by hand from billing-lane pings (agreed mechanism; see
+ * docs/BILLING-HANDOFF.md updates). Three states, deliberately — "scheduled
+ * but unwatched" is precisely the condition that let six days of unbilled
+ * usage pass, so it must not render the same as either neighbour.
+ *
+ * 2026-08-31: ahura-billing-sweep.timer deployed (hourly at :10, --apply);
+ * the deadman workflow exists but needs two repository secrets, so the sweep
+ * is scheduled_unwatched until those land.
  */
-export const SWEEP_SCHEDULED = false;
+export type SweepStatus = "unscheduled" | "scheduled_unwatched" | "watched";
+export const SWEEP_STATUS: SweepStatus = "scheduled_unwatched";
+
+/**
+ * Prices became effective 2026-08-31 09:00 UTC and the sweep bills only
+ * completed hours at the price live THEN — no earlier hour can ever be
+ * billed unless someone deliberately backdates effective_from.
+ */
+export const BILLING_ACTIVE_SINCE = "2026-08-31T09:00:00Z";
 
 /** One row from billing.price_seed_candidates() — archive-derived, unconverted. */
 export interface SeedCandidate {

@@ -3,6 +3,7 @@
  * Handles registration and deletion of webhooks with Git providers
  */
 import crypto from 'crypto';
+import { GENERIC_SERVICE_ERROR } from "@/lib/api/error-sanitizer";
 import { GitHubProvider } from '@/lib/providers/github';
 import { Platform_App_Webhooks, Platform_Apps } from '@/lib/supabase/queries';
 import type { WebhookRegistrationResult, GitProvider } from '@/lib/webhooks/types';
@@ -190,7 +191,7 @@ export class WebhookManager {
         
         return {
           success: false,
-          error: errorData.message || `GitHub API error: ${response.status}`,
+          error: GENERIC_SERVICE_ERROR,
         };
       }
 

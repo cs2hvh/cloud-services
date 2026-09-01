@@ -4,6 +4,7 @@
 //   with RunPod (catches spot interruptions, manual deletions, etc.)
 
 import { closeActiveBilling } from "@/config/billing-flow";
+import { GENERIC_SERVICE_ERROR } from "@/lib/inference/error-messages";
 import { BillingCredits } from "@/lib/billing/credits";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { createServiceClient } from "@/lib/supabase/server";
@@ -165,9 +166,10 @@ export const podReadOperations = {
                 data: ((data || []) as PodRowDb[]).map(rowToSummary),
             };
         } catch (e) {
+            console.error("[GPU:podRead] failed:", e);
             return {
                 success: false,
-                error: e instanceof Error ? e.message : String(e),
+                error: GENERIC_SERVICE_ERROR,
                 errorCode: "SERVER",
             };
         }
@@ -204,9 +206,10 @@ export const podReadOperations = {
             }
             return { success: true, data: rowToDetail(row) };
         } catch (e) {
+            console.error("[GPU:podRead] failed:", e);
             return {
                 success: false,
-                error: e instanceof Error ? e.message : String(e),
+                error: GENERIC_SERVICE_ERROR,
                 errorCode: "SERVER",
             };
         }
@@ -456,7 +459,7 @@ export const podReadOperations = {
             console.error("[GPU:reconcile] failed:", e);
             return {
                 success: false,
-                error: e instanceof Error ? e.message : String(e),
+                error: GENERIC_SERVICE_ERROR,
                 errorCode: "SERVER",
             };
         }

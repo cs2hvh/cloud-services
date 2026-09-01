@@ -1,4 +1,5 @@
 import axios from "axios";
+import { GENERIC_SERVICE_ERROR } from "@/lib/api/error-sanitizer";
 import { NextRequest } from "next/server";
 
 import { AuditLogService, getAuditContext } from "@/lib/audit";
@@ -270,7 +271,7 @@ export const databaseResourceOperations = {
 
       return {
         success: false,
-        error: err instanceof Error ? err.message : "Unknown error occurred",
+        error: GENERIC_SERVICE_ERROR,
       };
     }
   },
@@ -508,7 +509,7 @@ export const databaseResourceOperations = {
 
       return {
         success: false,
-        error: err instanceof Error ? err.message : "Unknown error occurred",
+        error: GENERIC_SERVICE_ERROR,
         statusCode: 500,
       };
     }
