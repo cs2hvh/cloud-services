@@ -33,21 +33,46 @@ export default async function PricingSeedPage() {
       .is("effective_to", null),
   ]);
 
+  const pricedKeys = (liveRes.data ?? []).map(
+    (r) => `${r.service_type}:${r.plan_key}`,
+  );
+
   if (candRes.error) {
+    // price_seed_candidates() is a one-time aid welded to the dated archive
+    // schema; the billing lane retires it (and eventually the archive) once
+    // seeding is signed off. With a populated price book, its absence is the
+    // expected end state — not a fault.
+    if (pricedKeys.length > 0) {
+      return (
+        <div>
+          <PageHeader
+            title="Seed the price book"
+            description="This screen has done its job"
+          />
+          <p className="rounded-xl border border-border bg-card p-6 text-xs text-muted-foreground">
+            The price book carries {pricedKeys.length} live price(s) and the
+            archive-candidates function is no longer available — expected once
+            seeding is signed off, since it depended on the dated archive
+            schema. Ongoing price changes happen on the price book itself.
+          </p>
+        </div>
+      );
+    }
     return (
       <div>
         <PageHeader title="Seed the price book" />
         <Callout tone="critical">
-          Could not read seed candidates: {candRes.error.message}
+          Could not read seed candidates and the price book is empty:{" "}
+          {candRes.error.message}
         </Callout>
       </div>
     );
   }
 
   const candidates = (candRes.data ?? []) as SeedCandidate[];
-  const pricedKeys = (liveRes.data ?? []).map(
-    (r) => `${r.service_type}:${r.plan_key}`,
-  );
+  const remaining = candidates.filter(
+    (c) => !pricedKeys.includes(`${c.service_type}:${c.plan_key}`),
+  ).length;
 
   return (
     <div>
@@ -61,13 +86,21 @@ export default async function PricingSeedPage() {
         }
       />
 
-      <Callout tone="warning">
-        Every amount below is shown in the unit it was archived in — no value
-        has been converted anywhere between the archive and this screen.
-        Applying a group writes real production prices. The GPU at-cost rate
-        (markup 1.000) is a deliberate product decision from 2026-08-26, not a
-        mistake to fix here.
-      </Callout>
+      {remaining === 0 ? (
+        <p className="mb-4 rounded-xl border border-border bg-card p-4 text-xs text-muted-foreground">
+          All {candidates.length} candidates carry a live price — seeding is
+          complete and this screen is historical. Ongoing changes happen on
+          the price book.
+        </p>
+      ) : (
+        <Callout tone="warning">
+          Every amount below is shown in the unit it was archived in — no
+          value has been converted anywhere between the archive and this
+          screen. Applying a group writes real production prices. The GPU
+          at-cost rate (markup 1.000) is a deliberate product decision from
+          2026-08-26, not a mistake to fix here.
+        </Callout>
+      )}
 
       <SeedReview candidates={candidates} pricedKeys={pricedKeys} />
     </div>

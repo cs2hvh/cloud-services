@@ -221,3 +221,20 @@ they are credentials besides.
 Until those land the sweep is **scheduled but unwatched**, which is precisely the
 condition that let six days pass unnoticed. If you want a state between
 "not scheduled" and "fully monitored", that is the distinction to draw.
+
+---
+
+## PANEL NOTE 2026-09-01 — two facts future billing views must honor
+
+1. **`charge_service_hour` has SEVEN outcomes, not six.** `charged-free` is an
+   hour covered by a free-hours allowance: claimed and recorded, no money
+   moved. Distinct from `zero-cost` (nothing to bill) and `charged` (money
+   moved). Any panel view that switches on charge outcomes must treat
+   `charged-free` as success — rendering it as an error reports a working
+   free tier as a fault. (Billing lane, from the migration recovery.)
+
+2. **`billing.price_seed_candidates()` is welded to `pricing_archive_20260831`**
+   and will be dropped once seeding is signed off; the archive is not
+   permanent either. /pricing/seed degrades to a "screen retired" notice when
+   the function is gone and prices exist — that state is expected, not a
+   fault.
