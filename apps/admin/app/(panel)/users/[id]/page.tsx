@@ -134,7 +134,14 @@ export default async function UserBillingPage({
                   <td className="py-1.5 pr-4">{t.type}</td>
                   <td className="py-1.5 pr-4"><StatusChip status={t.status} /></td>
                   <td className={`py-1.5 pr-4 ${Number(t.amount) < 0 ? "text-red-300" : ""}`}>
-                    {money(Number(t.amount))}
+                    {/* Sub-cent usage rolls up here ($0.018/hr × 1h) — at 2dp
+                        that renders $0.02, and under half a cent it renders
+                        $0.00, which reads as "not billed". Show 4dp whenever
+                        cents alone can't say the true amount. */}
+                    {money(
+                      Number(t.amount),
+                      Math.round(Number(t.amount) * 10000) % 100 === 0 ? 2 : 4,
+                    )}
                   </td>
                   <td className="py-1.5 pr-4 text-muted-foreground">
                     {t.balance_after === null ? "—" : money(Number(t.balance_after))}
