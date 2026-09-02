@@ -9,14 +9,10 @@
 # the live panel keeps serving.
 #
 # FIRST RUN bootstraps everything: clones the repo, copies .env from the main
-# checkout, installs the systemd unit. So setup on the VM is:
-#     cp /root/cloud-admin-panel/deploy/deploy-admin.sh /root/deploy-admin.sh 2>/dev/null \
-#       || curl -fsSL <raw url> -o /root/deploy-admin.sh   # or scp it once
-#     chmod +x /root/deploy-admin.sh && /root/deploy-admin.sh
-#
-# Copy it OUTSIDE the repo so `git reset` can't touch it (the ahura-cron
-# lesson: a service whose script a deploy can delete restarts forever doing
-# nothing).
+# checkout, installs the systemd unit, and (nginx add-only, test-gated) writes
+# the control.ahurasense.com origin vhost. The GitHub workflow scp's this
+# script to /root/deploy-admin.sh on EVERY deploy, so the VM copy can never
+# go stale — and no human ever needs a terminal on the box to deploy.
 #
 # Env overrides:
 #   APP_DIR=/root/cloud-admin-panel  SERVICE=ahura-admin  PORT=3001
@@ -79,12 +75,83 @@ step "Restarting $SERVICE"
 systemctl restart "$SERVICE" || die "restart failed"
 
 step "Health check: $HEALTH_URL"
+HEALTHY=0
 for i in $(seq 1 30); do
   if curl -fsS -o /dev/null "$HEALTH_URL"; then
-    ok "panel is serving"
-    exit 0
+    ok "panel is serving on :$PORT"
+    HEALTHY=1
+    break
   fi
   sleep 2
 done
-systemctl status "$SERVICE" --no-pager -l | tail -20 || true
-die "health check failed after 60s"
+if [[ $HEALTHY != 1 ]]; then
+  systemctl status "$SERVICE" --no-pager -l | tail -20 || true
+  die "health check failed after 60s"
+fi
+
+# ── origin vhost for control.ahurasense.com ─────────────────────────────────
+# Cloudflare 526 taught us this layer exists: DNS + a running service still
+# 526s until whatever terminates :443 has a server block for the hostname.
+# Add-only (never edits existing sites), nginx -t gated, non-fatal — the
+# service being healthy matters more than the vhost, and failures print
+# loudly in the Actions log instead of being discovered at the end.
+HOSTNAME_FQDN="${HOSTNAME_FQDN:-control.ahurasense.com}"
+step "Origin vhost: $HOSTNAME_FQDN → 127.0.0.1:$PORT"
+if command -v nginx >/dev/null 2>&1; then
+  VHOST="/etc/nginx/conf.d/control-admin.conf"
+  if [[ -f "$VHOST" ]]; then
+    ok "vhost already installed ($VHOST)"
+  else
+    # Reuse the certificate the existing site serves. If it doesn't cover
+    # $HOSTNAME_FQDN, Cloudflare keeps answering 526 and the durable fix is a
+    # cert that does (a Cloudflare Origin CA cert for *.ahurasense.com).
+    CERT="$(nginx -T 2>/dev/null | grep -m1 -E '^\s*ssl_certificate\s' | awk '{print $2}' | tr -d ';')"
+    KEY="$(nginx -T 2>/dev/null | grep -m1 -E '^\s*ssl_certificate_key\s' | awk '{print $2}' | tr -d ';')"
+    if [[ -n "$CERT" && -n "$KEY" && -f "$CERT" && -f "$KEY" ]]; then
+      cat > "$VHOST" <<VHOSTEOF
+# control.ahurasense.com → admin panel (:$PORT). Written by deploy-admin.sh;
+# add-only and safe to delete — the next deploy recreates it.
+server {
+    listen 443 ssl;
+    server_name $HOSTNAME_FQDN;
+    ssl_certificate     $CERT;
+    ssl_certificate_key $KEY;
+    location / {
+        proxy_pass http://127.0.0.1:$PORT;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+server {
+    listen 80;
+    server_name $HOSTNAME_FQDN;
+    location / {
+        proxy_pass http://127.0.0.1:$PORT;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+}
+VHOSTEOF
+      if nginx -t 2>&1; then
+        systemctl reload nginx && ok "vhost installed, nginx reloaded — cert: $CERT"
+        echo "NOTE: if https://$HOSTNAME_FQDN still returns 526, that cert does not cover $HOSTNAME_FQDN — install a Cloudflare Origin CA cert for *.ahurasense.com and update $VHOST."
+      else
+        rm -f "$VHOST"
+        echo "WARN: nginx -t rejected the new vhost — removed it, existing sites untouched. Output above."
+      fi
+    else
+      echo "WARN: could not discover cert paths from nginx -T. :443 listeners:"
+      ss -tlnp | grep -E ':443\s' || true
+    fi
+  fi
+else
+  echo "WARN: nginx not found — whatever terminates :443 needs a $HOSTNAME_FQDN server block proxying to 127.0.0.1:$PORT. Listeners:"
+  ss -tlnp | grep -E ':(443|80)\s' || true
+fi
+exit 0

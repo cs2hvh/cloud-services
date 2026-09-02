@@ -5,9 +5,10 @@
 # take the admin panel down or vice versa.
 #
 # Env comes from the checkout's .env (apps/admin/next.config.ts loads the
-# repo root .env at boot). Port 3001; put admin.ahurasense.com in front via
-# Cloudflare (proxied, with an origin rule to :3001) and, recommended,
-# Cloudflare Access — the app's own auth still applies behind it.
+# repo root .env at boot). Port 3001; control.ahurasense.com fronts it via
+# Cloudflare → origin nginx vhost (written by deploy-admin.sh) → :3001.
+# Cloudflare Access in front is recommended — the app's own auth still
+# applies behind it.
 Description=AhuraSense admin panel (apps/admin)
 Documentation=file:///root/cloud-admin-panel/apps/admin/README.md
 After=network-online.target
