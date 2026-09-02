@@ -8,25 +8,20 @@
 // surfaces. A curated showcase of single- and dual-socket Intel Xeon / Core
 // and AMD EPYC / Ryzen builds across six datacenters.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
     ArrowUpRight,
     Check,
     ChevronDown,
     Cpu,
-    Gauge,
-    HardDrive,
     Layers,
-    MemoryStick,
     Network,
     Power,
     Search,
     Server,
     ShieldCheck,
-    SlidersHorizontal,
     Terminal,
-    Wifi,
     X,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -183,7 +178,6 @@ export default function BareMetalPage() {
     const [price, setPrice] = useState('any');
     const [query, setQuery] = useState('');
     const [sort, setSort] = useState<SortKey>('price-asc');
-    const [mobileFilters, setMobileFilters] = useState(false);
     const [requested, setRequested] = useState<BareMetalSku | null>(null);
 
     const allRegions = useMemo(() => {
@@ -327,42 +321,25 @@ export default function BareMetalPage() {
                     </div>
                 </header>
 
-                {/* Summary line */}
-                <div className={`${MONO} mb-7 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10.5px] uppercase tracking-[0.12em] text-white/40`}>
-                    <span className="text-white/70">{SERVERS.length} configurations</span>
-                    <Dot />
-                    <span>{allRegions.length} datacenters · 3 continents</span>
-                    <Dot />
-                    <span>Intel &amp; AMD</span>
-                    <Dot />
-                    <span>up to 384 threads · 1.5 TB RAM</span>
-                </div>
 
-                {/* Body: sidebar + list */}
-                <div className="flex flex-col lg:flex-row lg:gap-7">
-                    {/* Sidebar (desktop) */}
-                    <aside className="hidden lg:block w-[244px] shrink-0">
-                        <div className="sticky top-6">{panel}</div>
-                    </aside>
+
+                {/* Body */}
+                <div className="flex flex-col">
+                    {/* Filters run along the TOP, not down a rail.
+                        A 244px column of nine stacked groups cost a quarter of
+                        the page width permanently, on a page whose content is a
+                        wide six-column table that wanted the room. Along the top
+                        each filter is a labelled dropdown that opens only when
+                        asked, so the closed state is one line instead of two
+                        screens. */}
+                    {panel}
 
                     {/* Main */}
                     <div className="min-w-0 flex-1">
                         {/* Controls */}
                         <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                             <div className="flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => setMobileFilters((v) => !v)}
-                                    className={`${MONO} lg:hidden inline-flex h-9 items-center gap-2 px-3 rounded-[5px] border border-white/[0.08] bg-[#111216] text-[11px] uppercase tracking-[0.12em] text-white/70`}
-                                >
-                                    <SlidersHorizontal className="h-3.5 w-3.5" />
-                                    Filters
-                                    {activeFilters > 0 && (
-                                        <span className="rounded-full px-1.5 text-[10px]" style={{ background: ACCENT, color: '#fff' }}>
-                                            {activeFilters}
-                                        </span>
-                                    )}
-                                </button>
+
                                 <div className="flex w-full sm:w-72 items-center gap-2 border border-white/[0.08] bg-[#0d0e11] px-3 h-9 rounded-[5px]">
                                     <Search className="h-3.5 w-3.5 text-white/40 shrink-0" />
                                     <input
@@ -399,8 +376,6 @@ export default function BareMetalPage() {
                             </div>
                         </div>
 
-                        {/* Mobile filter sheet */}
-                        {mobileFilters && <div className="lg:hidden mb-4">{panel}</div>}
 
                         {/* Rows, grouped by range.
                             A flat price-sorted list made a $69 Zen 2 box and a
@@ -468,33 +443,23 @@ function SeriesGroup({
 }) {
     const meta = BARE_METAL_SERIES[seriesKey];
     const from = Math.min(...servers.map((s) => s.priceMonthly));
-    const cores = servers.map((s) => s.cpu.cores);
-    const ram = servers.map((s) => s.ramGb);
-    const span = (lo: number, hi: number, f: (n: number) => string) =>
-        lo === hi ? f(lo) : `${f(lo)} – ${f(hi)}`;
 
     return (
         <section>
-            <header className="mb-4 border-l-2 pl-4" style={{ borderColor: meta.accent }}>
+            {/* Name, one line of what it is, and the entry price. The core and
+                memory spans that were here duplicated the columns directly
+                below them, and the coloured rule made five ranges into a
+                legend the reader had to learn. */}
+            <header className="mb-4 border-b border-white/[0.07] pb-3">
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                    <h2 className="text-[17px] font-semibold tracking-[-0.015em] text-white">
+                    <h2 className="text-[16px] font-semibold tracking-[-0.015em] text-white">
                         {meta.label}
                     </h2>
-                    <span className={`${MONO} text-[10px] uppercase tracking-[0.12em]`} style={{ color: meta.accent }}>
-                        {meta.tagline}
-                    </span>
-                    <span className={`${MONO} ml-auto text-[10.5px] text-white/40 tabular-nums`}>
-                        {servers.length} {servers.length === 1 ? 'config' : 'configs'} · from ${fmt(from)}/mo
+                    <span className={`${MONO} text-[11px] text-white/45`}>{meta.blurb}</span>
+                    <span className={`${MONO} ml-auto shrink-0 text-[10.5px] text-white/40 tabular-nums`}>
+                        from ${fmt(from)}/mo
                     </span>
                 </div>
-                <p className={`${MONO} mt-1.5 max-w-[760px] text-[11px] leading-relaxed text-white/45`}>
-                    {meta.blurb}
-                </p>
-                <p className={`${MONO} mt-1.5 text-[10px] uppercase tracking-[0.1em] text-white/30 tabular-nums`}>
-                    {span(Math.min(...cores), Math.max(...cores), (n) => `${n}`)} cores
-                    {' · '}
-                    {span(Math.min(...ram), Math.max(...ram), ramLabel)} memory
-                </p>
             </header>
 
             {/* Column headers repeat per range so they stay on screen while
@@ -518,10 +483,6 @@ function SeriesGroup({
 }
 
 // ─── List primitives ───────────────────────────────────────────────
-
-function Dot() {
-    return <span className="h-1 w-1 rounded-full bg-white/20" />;
-}
 
 function ColHead({ children, align = 'left' }: { children: React.ReactNode; align?: 'left' | 'right' }) {
     return (
@@ -629,18 +590,7 @@ function ServerRow({ sku, onConfigure }: { sku: BareMetalSku; onConfigure: () =>
 
                 {/* Meta line: options · regions · stock */}
                 <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-white/[0.05] pt-3">
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                        {sku.features.map((f) => {
-                            const meta = FEATURES[f];
-                            const Icon = meta.icon;
-                            return (
-                                <span key={f} className={`${MONO} inline-flex items-center gap-1 text-[9.5px] uppercase tracking-[0.06em] text-white/50`} title={meta.label}>
-                                    <Icon className="h-3 w-3 text-white/40" />
-                                    {meta.label}
-                                </span>
-                            );
-                        })}
-                    </div>
+
                     <div className="ml-auto flex items-center gap-3">
                         <span className="flex items-center gap-1">
                             {sku.regions.map((r) => (
@@ -688,6 +638,20 @@ interface PanelProps {
     clearAll: () => void;
 }
 
+/**
+ * Filters as a horizontal bar.
+ *
+ * This was a 244px left rail holding nine stacked groups. It cost a quarter of
+ * the page width on every screen, permanently, so a six-column server table
+ * could never use the room — and the groups people actually use sat below the
+ * ones they never touch.
+ *
+ * Along the top, each filter is one labelled button that opens a small panel
+ * when asked. Closed, the whole control surface is a single line. Each button
+ * shows the count of what is selected inside it, so a filter can never be
+ * applied out of sight — the failure mode that makes a hidden filter worse
+ * than a visible one.
+ */
 function FilterPanel(p: PanelProps) {
     const vCount = (v: Vendor) => SERVERS.filter((s) => s.vendor === v).length;
     const cCount = (c: CategoryKey) => SERVERS.filter((s) => s.category === c).length;
@@ -695,49 +659,30 @@ function FilterPanel(p: PanelProps) {
     const rCount = (r: string) => SERVERS.filter((s) => s.regions.includes(r)).length;
 
     return (
-        <div className="border border-white/[0.07] bg-[#0d0e11] rounded-[8px] p-4">
-            <div className="mb-3 flex items-center justify-between">
-                <span className={`${MONO} flex items-center gap-2 text-[10px] uppercase tracking-[0.14em] text-white/55`}>
-                    <SlidersHorizontal className="h-3.5 w-3.5" />
-                    Filters
-                </span>
-                {p.activeFilters > 0 && (
-                    <button
-                        type="button"
-                        onClick={p.clearAll}
-                        className={`${MONO} text-[9.5px] uppercase tracking-[0.1em] text-[#33adff] hover:text-white`}
-                    >
-                        Clear ({p.activeFilters})
-                    </button>
-                )}
-            </div>
-
-            {/* Range first: it is the question a buyer answers before any
-                other, and it maps to how the list below is grouped. */}
-            <FilterGroup label="Range" activeCount={p.series.size}>
+        <div className="mb-5 flex flex-wrap items-center gap-2 border-b border-white/[0.07] pb-4">
+            <FilterDrop label="Range" count={p.series.size}>
                 {SERIES_ORDER.map((k) => (
                     <CheckRow
                         key={k}
                         active={p.series.has(k)}
                         onClick={() => p.setSeries(toggle(p.series, k))}
                         count={sCount(k)}
-                        dot={BARE_METAL_SERIES[k].accent}
                     >
                         {BARE_METAL_SERIES[k].label}
                     </CheckRow>
                 ))}
-            </FilterGroup>
+            </FilterDrop>
 
-            <FilterGroup label="Price / month" activeCount={p.price !== 'any' ? 1 : 0}>
+            <FilterDrop label="Price" count={p.price !== 'any' ? 1 : 0}>
                 <SegRow
                     options={PRICE_BUCKETS.map((b) => ({ v: b.key, label: b.label }))}
                     value={p.price}
                     onChange={(v) => p.setPrice(String(v))}
                     stack
                 />
-            </FilterGroup>
+            </FilterDrop>
 
-            <FilterGroup label="CPU make" activeCount={p.vendors.size}>
+            <FilterDrop label="CPU" count={p.vendors.size}>
                 {(Object.keys(VENDORS) as Vendor[]).map((v) => (
                     <CheckRow
                         key={v}
@@ -748,22 +693,9 @@ function FilterPanel(p: PanelProps) {
                         {VENDORS[v].label}
                     </CheckRow>
                 ))}
-            </FilterGroup>
+            </FilterDrop>
 
-            <FilterGroup label="Workload" defaultOpen={false} activeCount={p.cats.size}>
-                {(Object.keys(CATEGORIES) as CategoryKey[]).map((c) => (
-                    <CheckRow
-                        key={c}
-                        active={p.cats.has(c)}
-                        onClick={() => p.setCats(toggle(p.cats, c))}
-                        count={cCount(c)}
-                    >
-                        {CATEGORIES[c].label}
-                    </CheckRow>
-                ))}
-            </FilterGroup>
-
-            <FilterGroup label="Region" activeCount={p.regions.size}>
+            <FilterDrop label="Region" count={p.regions.size}>
                 {p.allRegions.map((r) => (
                     <CheckRow
                         key={r}
@@ -775,100 +707,159 @@ function FilterPanel(p: PanelProps) {
                         {REGION_LABEL[r] ?? r}
                     </CheckRow>
                 ))}
-            </FilterGroup>
+            </FilterDrop>
 
-            <FilterGroup label="CPU cores" defaultOpen={false} activeCount={p.minCores ? 1 : 0}>
-                <SegRow options={CORE_STEPS} value={p.minCores} onChange={p.setMinCores} />
-            </FilterGroup>
+            <FilterDrop label="Cores" count={p.minCores ? 1 : 0}>
+                <SegRow options={CORE_STEPS} value={p.minCores} onChange={p.setMinCores} stack />
+            </FilterDrop>
 
-            <FilterGroup label="Memory" defaultOpen={false} activeCount={p.minRam ? 1 : 0}>
-                <SegRow options={RAM_STEPS} value={p.minRam} onChange={p.setMinRam} />
-            </FilterGroup>
+            <FilterDrop label="Memory" count={p.minRam ? 1 : 0}>
+                <SegRow options={RAM_STEPS} value={p.minRam} onChange={p.setMinRam} stack />
+            </FilterDrop>
 
-            <FilterGroup label="Network" defaultOpen={false} activeCount={p.minNet ? 1 : 0}>
-                <SegRow options={NET_STEPS} value={p.minNet} onChange={p.setMinNet} />
-            </FilterGroup>
-
-            <FilterGroup label="Storage" defaultOpen={false} activeCount={p.storage !== 'any' ? 1 : 0}>
-                <SegRow
-                    options={STORAGE_OPTS.map((o) => ({ v: o.v, label: o.label }))}
-                    value={p.storage}
-                    onChange={(v) => p.setStorage(v as StorageOpt)}
-                />
-            </FilterGroup>
-
-            <FilterGroup label="Features" last defaultOpen={false} activeCount={p.feats.size}>
-                {(Object.keys(FEATURES) as FeatureKey[]).map((f) => {
-                    const Icon = FEATURES[f].icon;
-                    return (
+            <FilterDrop
+                label="More"
+                count={p.cats.size + p.feats.size + (p.minNet ? 1 : 0) + (p.storage !== 'any' ? 1 : 0)}
+                wide
+            >
+                <DropSection label="Workload">
+                    {(Object.keys(CATEGORIES) as CategoryKey[]).map((c) => (
+                        <CheckRow
+                            key={c}
+                            active={p.cats.has(c)}
+                            onClick={() => p.setCats(toggle(p.cats, c))}
+                            count={cCount(c)}
+                        >
+                            {CATEGORIES[c].label}
+                        </CheckRow>
+                    ))}
+                </DropSection>
+                <DropSection label="Storage">
+                    <SegRow
+                        options={STORAGE_OPTS.map((o) => ({ v: o.v, label: o.label }))}
+                        value={p.storage}
+                        onChange={(v) => p.setStorage(v as StorageOpt)}
+                        stack
+                    />
+                </DropSection>
+                <DropSection label="Network">
+                    <SegRow options={NET_STEPS} value={p.minNet} onChange={p.setMinNet} stack />
+                </DropSection>
+                <DropSection label="Features" last>
+                    {(Object.keys(FEATURES) as FeatureKey[]).map((f) => (
                         <CheckRow
                             key={f}
                             active={p.feats.has(f)}
                             onClick={() => p.setFeats(toggle(p.feats, f))}
-                            icon={<Icon className="h-3 w-3 text-white/40" />}
                         >
                             {FEATURES[f].label}
                         </CheckRow>
-                    );
-                })}
-            </FilterGroup>
+                    ))}
+                </DropSection>
+            </FilterDrop>
+
+            {p.activeFilters > 0 && (
+                <button
+                    type="button"
+                    onClick={p.clearAll}
+                    className={`${MONO} inline-flex h-8 items-center gap-1.5 rounded-[5px] px-2.5 text-[10.5px] uppercase tracking-[0.1em] text-white/50 hover:text-white`}
+                >
+                    <X className="h-3 w-3" />
+                    Clear {p.activeFilters}
+                </button>
+            )}
         </div>
     );
 }
 
-/**
- * A collapsible filter section.
- *
- * The rail had nine groups, all permanently open, in a 244px column — roughly
- * two screens of controls with no hierarchy, so the ones people actually use
- * (range, price, region) sat below the fold next to ones they rarely touch.
- *
- * Sections now collapse, and `defaultOpen` decides what greets you: the three
- * that answer "which server am I looking for", with the rest one click away.
- * The count of what's active inside a collapsed section shows on its header,
- * so a filter can never be silently applied out of sight — the reason a
- * collapsed rail is usually worse than an open one.
- */
-function FilterGroup({
+/** One filter: a labelled button that opens a small panel below it. */
+function FilterDrop({
     label,
+    count = 0,
+    wide,
     children,
-    last,
-    defaultOpen = true,
-    activeCount = 0,
 }: {
     label: string;
+    count?: number;
+    wide?: boolean;
     children: React.ReactNode;
-    last?: boolean;
-    defaultOpen?: boolean;
-    activeCount?: number;
 }) {
-    const [open, setOpen] = useState(defaultOpen);
+    const [open, setOpen] = useState(false);
+    const ref = useRef<HTMLDivElement | null>(null);
+
+    // Close on outside click and on Escape. Without both, an open panel sits
+    // over the list and the only way out is finding the button again.
+    useEffect(() => {
+        if (!open) return;
+        const onDown = (e: MouseEvent) => {
+            if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+        };
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') setOpen(false);
+        };
+        document.addEventListener('mousedown', onDown);
+        document.addEventListener('keydown', onKey);
+        return () => {
+            document.removeEventListener('mousedown', onDown);
+            document.removeEventListener('keydown', onKey);
+        };
+    }, [open]);
 
     return (
-        <div className={`${last ? '' : 'border-b border-white/[0.05]'}`}>
+        <div ref={ref} className="relative">
             <button
                 type="button"
                 onClick={() => setOpen((v) => !v)}
                 aria-expanded={open}
-                className="flex w-full items-center gap-2 py-3 text-left"
+                className={`${MONO} inline-flex h-8 items-center gap-1.5 rounded-[5px] border px-3 text-[10.5px] uppercase tracking-[0.1em] transition-colors ${
+                    count > 0 || open
+                        ? 'border-white/[0.18] bg-white/[0.05] text-white'
+                        : 'border-white/[0.08] bg-[#0d0e11] text-white/60 hover:text-white'
+                }`}
             >
-                <span className={`${MONO} text-[9.5px] uppercase tracking-[0.16em] text-white/40`}>{label}</span>
-                {activeCount > 0 && (
+                {label}
+                {count > 0 && (
                     <span
-                        className={`${MONO} rounded-full px-1.5 text-[9px] leading-[15px] tabular-nums`}
+                        className="rounded-full px-1.5 text-[9px] leading-[15px] tabular-nums"
                         style={{ background: ACCENT_DIM, color: ACCENT_BRIGHT }}
                     >
-                        {activeCount}
+                        {count}
                     </span>
                 )}
-                <ChevronDown
-                    className={`ml-auto h-3.5 w-3.5 shrink-0 text-white/30 transition-transform ${open ? '' : '-rotate-90'}`}
-                />
+                <ChevronDown className={`h-3 w-3 text-white/35 transition-transform ${open ? 'rotate-180' : ''}`} />
             </button>
-            {open && <div className="space-y-1 pb-3.5">{children}</div>}
+
+            {open && (
+                <div
+                    className={`absolute left-0 top-[calc(100%+6px)] z-30 rounded-[6px] border border-white/[0.1] bg-[#111216] p-3 shadow-xl ${
+                        wide ? 'w-[300px]' : 'w-[212px]'
+                    }`}
+                >
+                    <div className="space-y-1">{children}</div>
+                </div>
+            )}
         </div>
     );
 }
+
+/** A labelled group inside the "More" panel. */
+function DropSection({
+    label,
+    children,
+    last,
+}: {
+    label: string;
+    children: React.ReactNode;
+    last?: boolean;
+}) {
+    return (
+        <div className={last ? '' : 'mb-3 border-b border-white/[0.06] pb-3'}>
+            <div className={`${MONO} mb-2 text-[9.5px] uppercase tracking-[0.16em] text-white/40`}>{label}</div>
+            <div className="space-y-1">{children}</div>
+        </div>
+    );
+}
+
 
 function CheckRow({
     active,

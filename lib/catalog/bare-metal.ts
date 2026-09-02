@@ -38,51 +38,48 @@ export type FeatureKey = 'ddos' | 'ipmi' | 'raid' | 'privatenet' | 'redundantpsu
  * The ranges, in the order a storefront should present them: cheapest and
  * oldest first, so the price ladder reads top to bottom.
  */
+/**
+ * The ranges, cheapest first.
+ *
+ * Named for what the machine IS, not for a brand word. The first cut used
+ * 'Velocity' and 'Density', which say nothing to somebody who has not read
+ * the blurb — and the blurb is the thing you are trying not to have to read.
+ * A range name has one job: let a buyer skip four of the five sections.
+ *
+ * No per-range colour either. Five accent colours on one page is a legend the
+ * reader has to learn, for a distinction the heading already makes in words.
+ */
 export const BARE_METAL_SERIES: Record<
     SeriesKey,
-    { label: string; tagline: string; blurb: string; accent: string; order: number }
+    { label: string; blurb: string; order: number }
 > = {
     legacy: {
-        label: 'Essential',
-        tagline: 'Previous generation · best value',
-        blurb:
-            'Proven silicon a generation or two back, at the lowest price per core we offer. Web front-ends, staging environments, build agents and anything where the newest chip earns nothing.',
-        accent: 'rgba(255,255,255,0.55)',
+        label: 'Previous generation',
+        blurb: 'Older silicon, lowest price per core.',
         order: 1,
     },
     velocity: {
-        label: 'Velocity',
-        tagline: 'Ryzen & Core · highest clock speed',
-        blurb:
-            'Desktop-class chips picked for single-thread speed rather than core count — the thing that actually decides frame times, checkout latency and how fast one long request finishes. Game servers, ecommerce, CI runners.',
-        accent: '#a78bfa',
+        label: 'High frequency',
+        blurb: 'Fastest single-core speed. Game servers, ecommerce, CI.',
         order: 2,
     },
     scale: {
-        label: 'Scale',
-        tagline: 'EPYC & Xeon Scalable · production infrastructure',
-        blurb:
-            'Server silicon with ECC memory, more cores and more PCIe lanes. The default range for databases, application tiers and container hosts that have to stay up rather than merely go fast.',
-        accent: '#0095FF',
+        label: 'Server grade',
+        blurb: 'ECC memory and more cores. Databases and application tiers.',
         order: 3,
     },
     storage: {
         label: 'Storage',
-        tagline: 'Dense disk · capacity first',
-        blurb:
-            'Chassis built around drive bays instead of cores. Backups, media libraries, object stores and data lakes, where the CPU exists to keep the disks busy.',
-        accent: '#34d399',
+        blurb: 'Dense disk for backups, media and data lakes.',
         order: 4,
     },
     density: {
-        label: 'Density',
-        tagline: 'Dual-socket & high-memory · virtualization and HPC',
-        blurb:
-            'The largest machines we rack: two sockets, or one very large one, with memory measured in hundreds of gigabytes. Hypervisors carving out many VMs, in-memory analytics and HPC nodes.',
-        accent: '#f472b6',
+        label: 'Virtualization',
+        blurb: 'Dual-socket and high-memory machines. Many VMs, or HPC.',
         order: 5,
     },
 };
+
 
 export interface BareMetalSku {
     id: string;
@@ -329,6 +326,78 @@ export const BARE_METAL_SKUS: BareMetalSku[] = [
         regions: ['fra', 'nyc'],
         priceMonthly: 3990,
         stock: 'ready-48h',
+        features: ['ddos', 'ipmi', 'raid', 'privatenet', 'redundantpsu', 'gpuready'],
+    },
+    {
+        id: 'bm-ryzen-7700',
+        name: 'Ryzen 7700',
+        vendor: 'amd',
+        category: 'compute',
+        series: 'velocity',
+        cpu: { model: 'AMD Ryzen 7 7700', sockets: 1, cores: 8, threads: 16, baseGhz: 3.8, boostGhz: 5.3, gen: 'Zen 4' },
+        ramGb: 64,
+        ramType: 'DDR5 ECC',
+        storage: '2 × 1 TB NVMe',
+        hasHdd: false,
+        uplinkGbps: 1,
+        bandwidth: 'Unmetered',
+        regions: ['fra', 'ams', 'lon'],
+        priceMonthly: 119,
+        stock: 'in-stock',
+        features: ['ddos', 'ipmi'],
+    },
+    {
+        id: 'bm-epyc-7543',
+        name: 'EPYC 7543',
+        vendor: 'amd',
+        category: 'general',
+        series: 'scale',
+        cpu: { model: 'AMD EPYC 7543', sockets: 1, cores: 32, threads: 64, baseGhz: 2.8, boostGhz: 3.7, gen: 'Milan' },
+        ramGb: 256,
+        ramType: 'DDR4 ECC',
+        storage: '2 × 3.84 TB NVMe',
+        hasHdd: false,
+        uplinkGbps: 10,
+        bandwidth: '50 TB',
+        regions: ['fra', 'ams', 'sgp', 'nyc'],
+        priceMonthly: 749,
+        stock: 'in-stock',
+        features: ['ddos', 'ipmi', 'raid', 'privatenet', 'redundantpsu'],
+    },
+    {
+        id: 'bm-epyc-7313p-storage',
+        name: 'EPYC Storage-144',
+        vendor: 'amd',
+        category: 'storage',
+        series: 'storage',
+        cpu: { model: 'AMD EPYC 7313P', sockets: 1, cores: 16, threads: 32, baseGhz: 3.0, boostGhz: 3.7, gen: 'Milan' },
+        ramGb: 128,
+        ramType: 'DDR4 ECC',
+        storage: '12 × 12 TB HDD + 2 × 960 GB NVMe',
+        hasHdd: true,
+        uplinkGbps: 10,
+        bandwidth: '100 TB',
+        regions: ['fra', 'nyc'],
+        priceMonthly: 799,
+        stock: 'ready-24h',
+        features: ['ddos', 'ipmi', 'raid', 'redundantpsu'],
+    },
+    {
+        id: 'bm-epyc-9454',
+        name: 'EPYC 9454',
+        vendor: 'amd',
+        category: 'hpc',
+        series: 'density',
+        cpu: { model: 'AMD EPYC 9454', sockets: 1, cores: 48, threads: 96, baseGhz: 2.75, boostGhz: 3.8, gen: 'Genoa' },
+        ramGb: 768,
+        ramType: 'DDR5 ECC',
+        storage: '4 × 3.84 TB NVMe',
+        hasHdd: false,
+        uplinkGbps: 25,
+        bandwidth: '100 TB',
+        regions: ['fra', 'ams'],
+        priceMonthly: 1690,
+        stock: 'ready-24h',
         features: ['ddos', 'ipmi', 'raid', 'privatenet', 'redundantpsu', 'gpuready'],
     },
 ];
