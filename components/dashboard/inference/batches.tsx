@@ -382,7 +382,6 @@ export function Batches({
       </StatsStrip>
 
       <SectionHead
-        eyebrow="Inventory"
         title="Your"
         accent="batches"
         rightMeta={

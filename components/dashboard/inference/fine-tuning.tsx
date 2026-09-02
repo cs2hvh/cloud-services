@@ -422,7 +422,6 @@ export function FineTuning({
 
 
       <SectionHead
-        eyebrow="Inventory"
         title="Your"
         accent="training jobs"
         rightMeta={jobs.length > 0 ? `${jobs.length} total · org: ${orgName}` : `org: ${orgName}`}
@@ -625,19 +624,16 @@ export function FineTuning({
       <section className="mt-14 grid grid-cols-1 md:grid-cols-3 gap-3">
         <ReferenceCard
           icon={Layers}
-          eyebrow="Dataset format"
           title="JSONL chat format"
           body='Each line: {"messages":[{"role":"user","content":"…"},{"role":"assistant","content":"…"}]}. Upload to S3, R2, or a public HTTPS URL.'
         />
         <ReferenceCard
           icon={Cpu}
-          eyebrow="GPU choice"
           title="Match GPU to base size"
           body="Llama-4-Scout / 8B / qLoRA: L40S or A40. 70B LoRA: A100 80GB. Llama-4-Maverick or 235B: H100 80GB. Smaller jobs = lower cost."
         />
         <ReferenceCard
           icon={Activity}
-          eyebrow="Auto-deploy"
           title="Output becomes a model"
           body="On completion the LoRA is registered as ahura/<base>:ft-<job-id> in your private catalog. Call it from /v1/chat/completions like any model."
         />

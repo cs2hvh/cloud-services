@@ -188,7 +188,6 @@ export function ModelCatalog({
       {/* Search + featured toggle */}
       <section className="mb-6">
         <SectionHead
-          eyebrow="Browse"
           title="Filter the"
           accent="catalog"
           rightMeta={`${filtered.length} of ${models.length} shown · org: ${orgName}`}

@@ -117,7 +117,6 @@ export function ServiceHealth({
       </StatsStrip>
 
       <SectionHead
-        eyebrow="Status"
         title="By"
         accent="subsystem"
         rightMeta={`org: ${orgName}`}

@@ -241,7 +241,6 @@ export default function ApiKeysPage() {
       </StatsStrip>
 
       <SectionHead
-        eyebrow="Inventory"
         title="Your"
         accent="keys"
         rightMeta={keys.length > 0 ? `${keys.length} active` : undefined}

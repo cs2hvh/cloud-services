@@ -112,13 +112,6 @@ const NetworkDDoSMain = ({ spectrumApps, userId }: NetworkDDoSMainProps) => {
                 protection for critical traffic
               </span>
             </h1>
-            <p
-              className={`${MONO} mt-4 max-w-md text-[11.5px] text-white/45 leading-relaxed`}
-            >
-              Protect TCP and UDP workloads with Cloudflare Spectrum.
-              Anycast routing, per-app firewalls, and end-to-end PROXY
-              protocol support.
-            </p>
             <div className="mt-6 flex items-center gap-2">
               <Link
                 href="/dashboard/services/network-ddos/new"
@@ -179,7 +172,6 @@ const NetworkDDoSMain = ({ spectrumApps, userId }: NetworkDDoSMainProps) => {
         {/* Inventory (front and centre) */}
         <div id="inventory" className="mb-16">
           <SectionHead
-            eyebrow="Protection inventory"
             title="Your"
             accent="applications"
             rightMeta={
@@ -193,7 +185,6 @@ const NetworkDDoSMain = ({ spectrumApps, userId }: NetworkDDoSMainProps) => {
 
         {/* Platform features */}
         <SectionHead
-          eyebrow="Why managed DDoS"
           title="Engineered"
           accent="for the edge"
           link={{ label: "Read the docs", href: "#" }}
@@ -215,13 +206,11 @@ export default NetworkDDoSMain;
 // ─── Subcomponents ─────────────────────────────────────────────────
 
 function SectionHead({
-  eyebrow,
   title,
   accent,
   link,
   rightMeta,
 }: {
-  eyebrow: string;
   title: string;
   accent: string;
   link?: { label: string; href: string };
@@ -230,16 +219,8 @@ function SectionHead({
   return (
     <div className="mb-5 flex items-end justify-between gap-3 flex-wrap">
       <div>
-        <p
-          className={`${MONO} text-[10.5px] uppercase tracking-[0.14em] text-white/45 mb-1.5`}
-        >
-          {eyebrow}
-        </p>
         <h2 className="text-[22px] font-semibold tracking-[-0.02em] text-white">
-          {title}{" "}
-          <span style={{ ...SERIF_STYLE, color: ACCENT }} className="font-normal">
-            {accent}
-          </span>
+          {title} {accent}
         </h2>
       </div>
       <div className="flex items-center gap-4">

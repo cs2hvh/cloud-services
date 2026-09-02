@@ -285,7 +285,7 @@ export default function SettingsPage() {
 
       {/* Identifiers (read-only) */}
       <section className="mb-14">
-        <SectionHead eyebrow="Identifiers" title="Org" accent="metadata" />
+        <SectionHead title="Org" accent="metadata" />
         <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-5 space-y-4">
           <ReadOnlyField label="Org ID" value={data?.org.id ?? '—'} mono />
           <ReadOnlyField label="Slug" value={data?.org.slug ?? '—'} mono />
@@ -310,7 +310,7 @@ export default function SettingsPage() {
 
       {/* Profile (editable) */}
       <section className="mb-14">
-        <SectionHead eyebrow="Profile" title="Display" accent="name" />
+        <SectionHead title="Display" accent="name" />
         <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-5 space-y-4">
           <div>
             <Label className={`${MONO} block mb-1.5 text-[10.5px] uppercase tracking-[0.14em] text-white/55`}>
@@ -332,7 +332,7 @@ export default function SettingsPage() {
 
       {/* Privacy + region */}
       <section className="mb-14">
-        <SectionHead eyebrow="Privacy" title="Default" accent="data posture" />
+        <SectionHead title="Default" accent="data posture" />
         <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-5 space-y-5">
           <div className="flex items-start justify-between gap-6">
             <div className="max-w-md">
@@ -381,7 +381,7 @@ export default function SettingsPage() {
 
       {/* Spend caps */}
       <section className="mb-14">
-        <SectionHead eyebrow="Spend" title="Org-level" accent="caps" />
+        <SectionHead title="Org-level" accent="caps" />
         <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-5 space-y-5">
           {/* Live current-month spend banner — anchors the inputs in
               reality so a customer setting "500" can immediately see
@@ -449,7 +449,7 @@ export default function SettingsPage() {
 
       {/* Semantic cache tuning */}
       <section className="mb-14">
-        <SectionHead eyebrow="Semantic cache" title="Match" accent="threshold" />
+        <SectionHead title="Match" accent="threshold" />
         <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-5 space-y-4">
           <p className={`${MONO} text-[11px] text-white/55 leading-relaxed max-w-2xl`}>
             Cosine similarity required for a cached response to be served on a near-duplicate
@@ -522,7 +522,7 @@ export default function SettingsPage() {
 
       {/* Danger zone */}
       <section>
-        <SectionHead eyebrow="Danger zone" title="Irreversible" accent="actions" />
+        <SectionHead title="Irreversible" accent="actions" />
         <div className="border border-red-400/15 bg-red-400/[0.02] rounded-[6px] p-5">
           <div className="flex items-start justify-between gap-6">
             <div className="max-w-md">

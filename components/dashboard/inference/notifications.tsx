@@ -295,7 +295,7 @@ export function NotificationsSettings({
         />
       </StatsStrip>
 
-      <SectionHead eyebrow="Channels" title="Where to" accent="notify" rightMeta={`org: ${orgName}`} />
+      <SectionHead title="Where to" accent="notify" rightMeta={`org: ${orgName}`} />
 
       <div className="space-y-3 mb-12">
         {/* In-app */}
@@ -439,7 +439,7 @@ export function NotificationsSettings({
       </div>
 
       {/* ─── Events ─────────────────────────────────────────────── */}
-      <SectionHead eyebrow="Filter" title="Which" accent="events" />
+      <SectionHead title="Which" accent="events" />
 
       {/* Spend alerts are operational and always fire on enabled channels —
           surface that here so customers don't go looking for a toggle. */}
@@ -486,7 +486,6 @@ export function NotificationsSettings({
 
       {/* ─── Webhook delivery log ────────────────────────────────── */}
       <SectionHead
-        eyebrow="Audit"
         title="Recent webhook"
         accent="deliveries"
         rightMeta={`${deliveries.length} shown`}

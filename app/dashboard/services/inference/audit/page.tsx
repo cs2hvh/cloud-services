@@ -135,7 +135,6 @@ export default function AuditPage() {
       </StatsStrip>
 
       <SectionHead
-        eyebrow="Stream"
         title="Recent"
         accent="events"
         rightMeta={visible.length > 0 ? `${visible.length} of ${data?.summary.shown ?? 0}` : undefined}

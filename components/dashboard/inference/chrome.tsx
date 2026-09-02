@@ -238,13 +238,11 @@ export function RowActionButton({
 // ─── Section head ──────────────────────────────────────────────────
 
 export function SectionHead({
-  eyebrow,
   title,
   accent,
   link,
   rightMeta,
 }: {
-  eyebrow: string;
   title: string;
   accent?: string;
   link?: { label: string; href: string };
@@ -253,11 +251,6 @@ export function SectionHead({
   return (
     <div className="mb-5 flex items-end justify-between gap-3 flex-wrap">
       <div>
-        <p
-          className={`${MONO} text-[10.5px] uppercase tracking-[0.14em] text-white/45 mb-1.5`}
-        >
-          {eyebrow}
-        </p>
         <h2 className="text-[22px] font-semibold tracking-[-0.02em] text-white">
           {title}
           {accent && (

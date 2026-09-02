@@ -254,7 +254,6 @@ export default function PresetsPage() {
       </StatsStrip>
 
       <SectionHead
-        eyebrow="Inventory"
         title="Saved"
         accent="presets"
         rightMeta={presets.length > 0 ? `${presets.length} configured` : undefined}

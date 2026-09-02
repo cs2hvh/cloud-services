@@ -240,7 +240,6 @@ export function VectorCollectionDetail({
 
       {/* ─── Query test box ─────────────────────────────────────── */}
       <SectionHead
-        eyebrow="Search"
         title="Query"
         accent="by similarity"
         rightMeta={queryMs !== null ? `last query ${queryMs}ms` : undefined}
@@ -335,7 +334,6 @@ export function VectorCollectionDetail({
 
       {/* ─── Rows table ────────────────────────────────────────── */}
       <SectionHead
-        eyebrow="Inventory"
         title="Rows"
         accent="in this collection"
         rightMeta={`${pageInfo} · org: ${orgName}`}

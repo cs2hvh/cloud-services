@@ -301,13 +301,11 @@ const Dashboard = ({ data }: { data: PageProps }) => {
 
             {/* Feature spotlight */}
             <SectionHead
-                eyebrow="Get started"
                 title="Spin up"
                 accent="something new"
             />
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 mb-12">
                 <SpotlightCard
-                    eyebrow="App Platform"
                     iconSrc={SERVICE_ICONS.appDeployment.src}
                     title="Deploy from Git"
                     desc="Push to deploy. Connect GitHub, GitLab, or Bitbucket and ship with zero config."
@@ -315,7 +313,6 @@ const Dashboard = ({ data }: { data: PageProps }) => {
                     href="/dashboard/services/apps/new"
                 />
                 <SpotlightCard
-                    eyebrow="GPU Cloud"
                     iconSrc={SERVICE_ICONS.gpu.src}
                     title="GPU instances"
                     desc="B200, H200, H100, and L40S on demand. Pay by the second."
@@ -323,7 +320,6 @@ const Dashboard = ({ data }: { data: PageProps }) => {
                     href="/dashboard/services/gpu"
                 />
                 <SpotlightCard
-                    eyebrow="Domains"
                     iconSrc={SERVICE_ICONS.domain.src}
                     title="Domain marketplace"
                     desc="Search availability, submit managed purchase requests, and connect to apps."
@@ -333,10 +329,9 @@ const Dashboard = ({ data }: { data: PageProps }) => {
             </div>
 
             {/* A.I. Labs — surface the AI platform on the overview */}
-            <SectionHead eyebrow="A.I. Labs" title="Build with" accent="AI" />
+            <SectionHead title="Build with" accent="AI" />
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-12">
                 <SpotlightCard
-                    eyebrow="Inference"
                     iconSrc={SERVICE_ICONS.inference.src}
                     title="Inference gateway"
                     desc="OpenAI-compatible API across frontier and open models. One key, one bill."
@@ -344,7 +339,6 @@ const Dashboard = ({ data }: { data: PageProps }) => {
                     href="/dashboard/services/inference"
                 />
                 <SpotlightCard
-                    eyebrow="Fine-Tuning"
                     iconSrc={SERVICE_ICONS.fineTuning.src}
                     title="Fine-tune a model"
                     desc="LoRA fine-tunes on managed GPUs. Bring a dataset, get a served model."
@@ -352,7 +346,6 @@ const Dashboard = ({ data }: { data: PageProps }) => {
                     href="/dashboard/services/inference/fine-tuning"
                 />
                 <SpotlightCard
-                    eyebrow="Embeddings"
                     iconSrc={SERVICE_ICONS.embeddings.src}
                     title="Embeddings & vector"
                     desc="Managed vector collections with auto-embed and similarity search."
@@ -360,7 +353,6 @@ const Dashboard = ({ data }: { data: PageProps }) => {
                     href="/dashboard/services/inference/vectors"
                 />
                 <SpotlightCard
-                    eyebrow="Model Hosting"
                     iconSrc={SERVICE_ICONS.modelHosting.src}
                     title="Deploy your model"
                     desc="Bring your own container or HuggingFace model and serve it on a GPU."
@@ -608,7 +600,6 @@ const Dashboard = ({ data }: { data: PageProps }) => {
 
             {/* Discover banner */}
             <SectionHead
-                eyebrow="Discover more"
                 title="What else"
                 accent="we offer"
             />
@@ -684,40 +675,32 @@ function StatLink({
 }
 
 function SectionHead({
-    eyebrow,
     title,
     accent,
 }: {
-    eyebrow: string;
     title: string;
     accent: string;
 }) {
     return (
         <div className="mb-5">
-            <p
-                className={`${MONO} text-[10.5px] uppercase tracking-[0.14em] text-white/45 mb-1.5`}
-            >
-                {eyebrow}
-            </p>
             <h2 className="text-[22px] font-semibold tracking-[-0.02em] text-white">
-                {title}{" "}
-                <span style={SERIF_STYLE} className="text-[#0095FF] font-normal">
-                    {accent}
-                </span>
+                {/* One colour, one font. The blue-accented second half is the
+                    PAGE title's treatment; repeating it on every section
+                    heading made six things on a page look equally like the
+                    thing the page is about. */}
+                {title} {accent}
             </h2>
         </div>
     );
 }
 
 function SpotlightCard({
-    eyebrow,
     iconSrc,
     title,
     desc,
     cta,
     href,
 }: {
-    eyebrow: string;
     iconSrc: string;
     title: string;
     desc: string;
@@ -738,12 +721,6 @@ function SpotlightCard({
                         height={28}
                         className="object-contain"
                     />
-                    <span
-                        className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold`}
-                        style={{ color: ACCENT }}
-                    >
-                        {eyebrow}
-                    </span>
                 </span>
                 <ArrowUpRight className="h-3.5 w-3.5 text-white/25 group-hover:text-[#0095FF] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all" />
             </div>

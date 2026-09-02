@@ -236,7 +236,6 @@ export function VectorCollections({
       </StatsStrip>
 
       <SectionHead
-        eyebrow="Inventory"
         title="Your"
         accent="collections"
         rightMeta={
@@ -330,12 +329,10 @@ export function VectorCollections({
       {/* How to use */}
       <section className="mt-14 grid grid-cols-1 md:grid-cols-2 gap-3">
         <UsageCard
-          eyebrow="Upsert"
           title="Push vectors via the API"
           body="POST /api/inference/vector/collections/{id}/upsert with rows containing external_id + content (server auto-embeds) or external_id + embedding (pre-computed). Up to 100 rows per batch."
         />
         <UsageCard
-          eyebrow="Query"
           title="Search by similarity"
           body="POST /api/inference/vector/collections/{id}/query with text or embedding + top_k + min_similarity. Returns ranked matches with content + metadata."
         />
@@ -474,19 +471,14 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function UsageCard({
-  eyebrow,
   title,
   body,
 }: {
-  eyebrow: string;
   title: string;
   body: string;
 }) {
   return (
     <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-5">
-      <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/45 mb-2`}>
-        {eyebrow}
-      </p>
       <h4 className="text-[14.5px] font-semibold tracking-[-0.01em] text-white mb-1.5">{title}</h4>
       <p className={`${MONO} text-[11px] text-white/55 leading-relaxed`}>{body}</p>
     </div>

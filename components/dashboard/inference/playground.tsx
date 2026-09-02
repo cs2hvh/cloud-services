@@ -1023,7 +1023,6 @@ ${streamOn
       {/* Copy as code */}
       <section className="mb-8">
         <SectionHead
-          eyebrow="Integration"
           title="Copy as"
           accent="code"
           rightMeta={`org: ${orgName}`}

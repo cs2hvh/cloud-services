@@ -432,7 +432,6 @@ export function Deployments({
       </section>
 
       <SectionHead
-        eyebrow="Inventory"
         title="Your"
         accent="deployments"
         rightMeta={items.length > 0 ? `${items.length} total · org: ${orgName}` : `org: ${orgName}`}

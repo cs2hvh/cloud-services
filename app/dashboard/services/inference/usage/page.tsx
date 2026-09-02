@@ -247,7 +247,6 @@ export default function UsagePage() {
       {/* Daily spend chart */}
       <section className="mb-14">
         <SectionHead
-          eyebrow="Spend"
           title="Daily"
           accent="cost curve"
           rightMeta="UTC days · USD"
@@ -328,7 +327,6 @@ export default function UsagePage() {
       {/* Top models */}
       <section className="mb-14">
         <SectionHead
-          eyebrow="Models"
           title="Top by"
           accent="spend"
           rightMeta={data ? `${data.top_models.length} models active` : undefined}
@@ -366,7 +364,6 @@ export default function UsagePage() {
       {/* Top API keys */}
       <section className="mb-14">
         <SectionHead
-          eyebrow="API keys"
           title="Top by"
           accent="spend"
           rightMeta={
@@ -429,7 +426,6 @@ export default function UsagePage() {
       {/* Recent requests */}
       <section>
         <SectionHead
-          eyebrow="Tail"
           title="Recent"
           accent="requests"
           rightMeta={data?.recent ? `${data.recent.length} most recent` : undefined}

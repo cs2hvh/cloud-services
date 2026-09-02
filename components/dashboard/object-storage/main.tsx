@@ -113,12 +113,6 @@ const ObjectStorageMain = ({ buckets }: ObjectStorageMainProps) => {
                 for files, assets, and data
               </span>
             </h1>
-            <p
-              className={`${MONO} mt-4 max-w-md text-[11.5px] text-white/45 leading-relaxed`}
-            >
-              S3-compatible buckets with versioning, lifecycle policies, and a
-              global CDN — backed by 11 nines of durability.
-            </p>
             <div className="mt-6 flex items-center gap-2">
               <Link
                 href="/dashboard/services/object-storage/new"
@@ -177,7 +171,6 @@ const ObjectStorageMain = ({ buckets }: ObjectStorageMainProps) => {
         {/* Inventory (front and centre) */}
         <div id="inventory" className="mb-16">
           <SectionHead
-            eyebrow="Bucket inventory"
             title="Your"
             accent="buckets"
             rightMeta={
@@ -191,7 +184,6 @@ const ObjectStorageMain = ({ buckets }: ObjectStorageMainProps) => {
 
         {/* Platform features */}
         <SectionHead
-          eyebrow="Why object storage"
           title="Engineered"
           accent="for scale"
           link={{ label: "Read the docs", href: "/docs" }}
@@ -213,13 +205,11 @@ export default ObjectStorageMain;
 // ─── Subcomponents ─────────────────────────────────────────────────
 
 function SectionHead({
-  eyebrow,
   title,
   accent,
   link,
   rightMeta,
 }: {
-  eyebrow: string;
   title: string;
   accent: string;
   link?: { label: string; href: string };
@@ -228,16 +218,8 @@ function SectionHead({
   return (
     <div className="mb-5 flex items-end justify-between gap-3 flex-wrap">
       <div>
-        <p
-          className={`${MONO} text-[10.5px] uppercase tracking-[0.14em] text-white/45 mb-1.5`}
-        >
-          {eyebrow}
-        </p>
         <h2 className="text-[22px] font-semibold tracking-[-0.02em] text-white">
-          {title}{" "}
-          <span style={{ ...SERIF_STYLE, color: ACCENT }} className="font-normal">
-            {accent}
-          </span>
+          {title} {accent}
         </h2>
       </div>
       <div className="flex items-center gap-4">

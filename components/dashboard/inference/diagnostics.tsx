@@ -156,7 +156,6 @@ export function Diagnostics({
       </StatsStrip>
 
       <SectionHead
-        eyebrow="Checks"
         title="Platform"
         accent="health"
         rightMeta={`org: ${orgName}`}

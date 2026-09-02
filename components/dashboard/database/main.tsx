@@ -299,13 +299,6 @@ const DatabasePage = ({ engines }: DatabasePageProps) => {
                 for production workloads
               </span>
             </h1>
-            <p
-              className={`${MONO} mt-4 max-w-md text-[11.5px] text-white/45 leading-relaxed`}
-            >
-              Provision relational, document, and streaming engines with
-              predictable capacity, point-in-time recovery, and direct
-              connection strings.
-            </p>
             <div className="mt-6 flex items-center gap-2">
               <Link
                 href="/dashboard/services/database/new"
@@ -367,7 +360,6 @@ const DatabasePage = ({ engines }: DatabasePageProps) => {
         {/* ── Inventory (front and centre — your actual clusters) ─ */}
         <div id="inventory" className="mb-16">
           <SectionHead
-            eyebrow="Cluster inventory"
             title="Your"
             accent="clusters"
             rightMeta={
@@ -385,7 +377,6 @@ const DatabasePage = ({ engines }: DatabasePageProps) => {
 
         {/* ── Engine catalog ──────────────────────────── */}
         <SectionHead
-          eyebrow="Choose your engine"
           title="Pick the right"
           accent="data store"
           link={{
@@ -433,7 +424,6 @@ const DatabasePage = ({ engines }: DatabasePageProps) => {
 
         {/* ── Platform features ─ */}
         <SectionHead
-          eyebrow="Why managed databases"
           title="Engineered"
           accent="for production"
           link={{ label: "Read the docs", href: "#" }}
@@ -455,13 +445,11 @@ export default DatabasePage;
 // ─── Subcomponents ────────────────────────────────────────────────
 
 function SectionHead({
-  eyebrow,
   title,
   accent,
   link,
   rightMeta,
 }: {
-  eyebrow: string;
   title: string;
   accent: string;
   link?: { label: string; href: string };
@@ -470,16 +458,8 @@ function SectionHead({
   return (
     <div className="mb-5 flex items-end justify-between gap-3 flex-wrap">
       <div>
-        <p
-          className={`${MONO} text-[10.5px] uppercase tracking-[0.14em] text-white/45 mb-1.5`}
-        >
-          {eyebrow}
-        </p>
         <h2 className="text-[22px] font-semibold tracking-[-0.02em] text-white">
-          {title}{" "}
-          <span style={{ ...SERIF_STYLE, color: ACCENT }} className="font-normal">
-            {accent}
-          </span>
+          {title} {accent}
         </h2>
       </div>
       <div className="flex items-center gap-4">

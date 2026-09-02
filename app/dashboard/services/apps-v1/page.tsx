@@ -227,12 +227,6 @@ export default function ApplicationDeploymentPage() {
               </span>
               .
             </h1>
-            <p
-              className={`${MONO} mt-4 max-w-md text-[11.5px] text-white/45 leading-relaxed`}
-            >
-              Repository-backed deployments with live build status, runtime
-              metrics, and one-click rollbacks.
-            </p>
             <div className="mt-6 flex items-center gap-2">
               <Link
                 href="/dashboard/services/apps-v1/new"
@@ -320,7 +314,6 @@ export default function ApplicationDeploymentPage() {
         {/* ── Platform features ───────────────────────────── */}
         <div className="mt-16">
           <SectionHead
-            eyebrow="Why platform apps"
             title="Engineered"
             accent="for production"
           />

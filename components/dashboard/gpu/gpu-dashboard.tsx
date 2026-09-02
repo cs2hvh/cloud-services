@@ -390,10 +390,8 @@ export default function GpuDashboard() {
                 {/* ── Active pods (surfaced first) ─────────────────── */}
                 <section>
                     <SectionHead
-                        eyebrow="Cluster inventory"
                         title="Your"
                         accent="pods"
-                        accentBlue
                         rightMeta={
                             pods.length > 0
                                 ? `${runningCount} running · ${pods.length} total`
@@ -411,7 +409,6 @@ export default function GpuDashboard() {
                 {/* ── Featured GPUs ────────────────────────────────── */}
                 <section>
                     <SectionHead
-                        eyebrow="Available now"
                         title="Featured"
                         accent="GPUs"
                         link={{
@@ -494,33 +491,23 @@ function StatCell({
 }
 
 function SectionHead({
-    eyebrow,
     title,
     accent,
     link,
     rightMeta,
-    accentBlue,
 }: {
-    eyebrow: string;
     title: string;
     accent: string;
     link?: { label: string; href: string };
     rightMeta?: string;
-    accentBlue?: boolean;
 }) {
-    const accentClass = accentBlue ? "text-[#0095FF]" : "text-white/55";
     return (
         <div className="mb-5 flex items-end justify-between gap-3 flex-wrap">
             <div>
-                <p className={`${MONO} text-[10.5px] uppercase tracking-[0.14em] text-white/45 mb-1.5`}>
-                    {eyebrow}
-                </p>
                 <h2 className="text-[22px] font-semibold tracking-[-0.02em] text-white">
-                    {title}{" "}
-                    <span style={SERIF_STYLE} className={`font-normal ${accentClass}`}>
-                        {accent}
-                    </span>
-                    <span className={`font-normal ${accentClass}`}>.</span>
+                    {/* One colour, one font — the blue-accented split belongs
+                        to the page title, not to every section heading. */}
+                    {title} {accent}.
                 </h2>
             </div>
             {link && (

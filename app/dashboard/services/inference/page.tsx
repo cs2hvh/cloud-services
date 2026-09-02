@@ -196,7 +196,6 @@ export default async function InferenceOverview() {
       {/* Endpoint info row */}
       <section className="mb-14">
         <SectionHead
-          eyebrow="Endpoint"
           title="One"
           accent="base URL"
           rightMeta={`org_${org.org_slug}`}
@@ -222,7 +221,7 @@ export default async function InferenceOverview() {
 
       {/* Manage */}
       <section className="mb-14">
-        <SectionHead eyebrow="Manage" title="Keys, billing, and" accent="observability" />
+        <SectionHead title="Keys, billing, and" accent="observability" />
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <NavCard
             href="/dashboard/services/inference/api-keys"
@@ -253,7 +252,6 @@ export default async function InferenceOverview() {
       ) : (
         <section id="activity">
           <SectionHead
-            eyebrow="Recent activity"
             title="Top"
             accent="models"
             rightMeta={`${stats.windowRequests.toLocaleString()} requests · 7d window`}
@@ -325,7 +323,6 @@ function FirstRunGuide({ hasKey }: { hasKey: boolean }) {
   return (
     <section id="first-run">
       <SectionHead
-        eyebrow={hasKey ? "Almost there" : "Get started"}
         title="Three steps to your"
         accent="first call"
       />

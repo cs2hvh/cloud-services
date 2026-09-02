@@ -208,7 +208,6 @@ export default function ByokKeysPage() {
       </StatsStrip>
 
       <SectionHead
-        eyebrow="Inventory"
         title="Stored"
         accent="keys"
         rightMeta={keys.length > 0 ? `${validCount} verified · ${keys.length} total` : undefined}
@@ -296,12 +295,10 @@ export default function ByokKeysPage() {
       {/* Notes / how-to */}
       <section className="mt-14 grid grid-cols-1 md:grid-cols-2 gap-3">
         <NoteCard
-          eyebrow="Usage"
           title="Switch billing per request"
           body="Add the X-Ahura-Billing: byok header to any /v1 request. The gateway looks up your stored key for the matching provider and proxies through it."
         />
         <NoteCard
-          eyebrow="Verification"
           title="Validated at create"
           body="Wokey keys are verified with a 1-token completion before storage, since the provider exposes no key-introspection endpoint. Failed verifications surface in the status column and block BYOK billing until resolved."
         />
@@ -410,19 +407,14 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function NoteCard({
-  eyebrow,
   title,
   body,
 }: {
-  eyebrow: string;
   title: string;
   body: string;
 }) {
   return (
     <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-5">
-      <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/45 mb-2`}>
-        {eyebrow}
-      </p>
       <h4 className="text-[14.5px] font-semibold tracking-[-0.01em] text-white mb-1.5">{title}</h4>
       <p className={`${MONO} text-[11px] text-white/55 leading-relaxed`}>{body}</p>
     </div>

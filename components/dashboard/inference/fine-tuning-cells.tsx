@@ -162,12 +162,10 @@ export function Field({
 
 export function ReferenceCard({
   icon: Icon,
-  eyebrow,
   title,
   body,
 }: {
   icon: React.ElementType;
-  eyebrow: string;
   title: string;
   body: string;
 }) {
@@ -175,9 +173,6 @@ export function ReferenceCard({
     <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] p-5">
       <div className="flex items-center gap-2 mb-2">
         <Icon className="h-3.5 w-3.5 text-[#0095FF]/70" />
-        <p className={`${MONO} text-[10px] uppercase tracking-[0.14em] font-semibold text-white/45`}>
-          {eyebrow}
-        </p>
       </div>
       <h4 className="text-[14.5px] font-semibold tracking-[-0.01em] text-white mb-1.5">{title}</h4>
       <p className={`${MONO} text-[11px] text-white/55 leading-relaxed`}>{body}</p>
