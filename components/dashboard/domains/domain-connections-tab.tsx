@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { DOMAIN_VERIFY_PREFIX } from "@/config/domain";
 import { useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle,
@@ -222,7 +223,7 @@ export function DomainConnectionsTab({
   const guideLabels = domainName.split('.');
   const guideIsApex = guideLabels.length <= 2;
   const guideSubLabel = guideIsApex ? '@' : guideLabels[0];
-  const guideVerifyCode = `Type: TXT\nHost: ahuracloud-verify.${domainName}\nValue: (shown after connecting)`;
+  const guideVerifyCode = `Type: TXT\nHost: ${DOMAIN_VERIFY_PREFIX}.${domainName}\nValue: (shown after connecting)`;
   const guideRouteCode = guideIsApex
     ? `Type: A\nHost: @  (${domainName})\nValue: 139.59.1.6`
     : `Type: CNAME\nHost: ${guideSubLabel}  (${domainName})\nValue: app.galaxyhvh.com`;
@@ -573,8 +574,8 @@ export function DomainConnectionsTab({
                                   <span className="inline-flex items-center rounded border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold font-mono text-amber-300">TXT</span>
                                 </td>
                                 <td className="px-3 py-1.5 font-mono break-all">
-                                  ahuracloud-verify.{connection.domain}
-                                  <CopyBtn value={`ahuracloud-verify.${connection.domain}`} label="Host" />
+                                  {DOMAIN_VERIFY_PREFIX}.{connection.domain}
+                                  <CopyBtn value={`${DOMAIN_VERIFY_PREFIX}.${connection.domain}`} label="Host" />
                                 </td>
                                 <td className="px-3 py-1.5 font-mono break-all max-w-[180px]">
                                   <span className="block truncate">{connection.verificationToken}</span>

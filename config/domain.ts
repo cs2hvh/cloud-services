@@ -11,7 +11,15 @@ export const APP_DOMAIN = process.env.APP_DOMAIN || 'galaxyhvh.com';
  * prove ownership. Single source of truth — the verifier and the dashboard
  * instructions must use the SAME value or verification breaks.
  */
-export const DOMAIN_VERIFY_PREFIX = 'ahuracloud-verify';
+//
+// Renamed off `ahuracloud-verify` on 2026-09-02. Safe only because nothing
+// live depends on the old label: platform_app_domains (the table this path
+// writes) is EMPTY, and the ten rows in paas.domains carry Cloudflare-issued
+// verification_txt values, none containing "ahuracloud". Had a single customer
+// already published `ahuracloud-verify.<their-domain>`, changing this would
+// have invalidated their DNS record and un-verified a working domain — which
+// is why the check came before the rename rather than after.
+export const DOMAIN_VERIFY_PREFIX = 'ahurasense-verify';
 
 /**
  * Get the full domain for an app

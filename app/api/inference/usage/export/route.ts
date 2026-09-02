@@ -199,7 +199,7 @@ export async function GET(request: NextRequest) {
     lines.push(`# truncated at ${MAX_ROWS} rows — narrow the window or filter by api_key_id for the full set`);
   }
 
-  const filename = `ahuracloud-inference-usage-${org.org_slug}-${days}d-${new Date()
+  const filename = `ahurasense-inference-usage-${org.org_slug}-${days}d-${new Date()
     .toISOString()
     .slice(0, 10)}.csv`;
 

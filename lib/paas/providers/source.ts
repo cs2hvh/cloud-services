@@ -29,7 +29,7 @@ import { providerConfig } from "./config.ts";
 
 export type GitProvider = "github" | "gitlab" | "bitbucket";
 
-const UA = "ahuracloud-paas-v2";
+const UA = "ahurasense-paas-v2";
 
 /**
  * Fetch a raw file, keeping ABSENT and COULD-NOT-READ apart.

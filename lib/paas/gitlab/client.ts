@@ -17,7 +17,7 @@
 import type { ProviderRepo } from "../providers/types.ts";
 
 export const GITLAB_CLOUD = "https://gitlab.com";
-const UA = "ahuracloud-deploy-v2";
+const UA = "ahurasense-deploy-v2";
 
 /** Pagination ceiling. See listRepos. */
 const MAX_PAGES = 20;

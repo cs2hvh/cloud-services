@@ -8,7 +8,7 @@
 import { mintInstallationToken } from "./app.ts";
 
 const GH_API = "https://api.github.com";
-const UA = "ahuracloud-deploy-v2";
+const UA = "ahurasense-deploy-v2";
 
 async function ghRequest<T>(token: string, path: string): Promise<T> {
   const res = await fetch(`${GH_API}${path}`, {

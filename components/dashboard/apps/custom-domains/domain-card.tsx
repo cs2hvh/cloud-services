@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { DOMAIN_VERIFY_PREFIX } from "@/config/domain";
 import {
   AlertCircle,
   Check,
@@ -422,11 +423,11 @@ export function DomainCard({
                 <button
                   type="button"
                   onClick={() =>
-                    onCopy(`ahuracloud-verify.${domain.domain}`, `pending-name-${domain.id}`)
+                    onCopy(`${DOMAIN_VERIFY_PREFIX}.${domain.domain}`, `pending-name-${domain.id}`)
                   }
                   className="flex items-center gap-1 text-white hover:text-yellow-100"
                 >
-                  <span className="truncate max-w-[190px]">{`ahuracloud-verify.${domain.domain}`}</span>
+                  <span className="truncate max-w-[190px]">{`${DOMAIN_VERIFY_PREFIX}.${domain.domain}`}</span>
                   {copiedField === `pending-name-${domain.id}` ? (
                     <Check className="h-3 w-3" />
                   ) : (

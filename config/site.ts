@@ -1,6 +1,20 @@
+// The fallback is the LIVE domain, and that matters more than it looks.
+//
+// NEXT_PUBLIC_SITE_URL is not set in production and VERCEL_URL never will be
+// (this deploys to a Linode), so the fallback is not a fallback — it is the
+// value, on every page. It used to read "https://ahuracloud.com", a domain
+// that does not resolve, which put this in the HTML of the live site:
+//
+//   <link rel="canonical" href="https://ahuracloud.com"/>
+//   <meta property="og:image" content="https://ahuracloud.com/images/..."/>
+//
+// A canonical tag pointing at a dead host tells search engines the real home
+// of every page is somewhere unreachable, and every social preview asked a
+// dead host for its image. Nothing about that is visible in the product — it
+// only shows up in a crawler's index and in link previews.
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ||
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://ahuracloud.com");
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "https://ahurasense.com");
 
 export const siteConfig = {
   name: "AhuraSense Cloud",

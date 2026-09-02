@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { DOMAIN_VERIFY_PREFIX } from "@/config/domain";
 import { Check, ClipboardCopy, Globe, HelpCircle, Info, Loader2, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -190,8 +191,8 @@ export function DomainDnsTab({
                           <tr key={`verify-${c.id}`} className="border-t border-white/[0.04] text-white/70">
                             <td className="px-3 py-2"><RecordTypeBadge type="TXT" /></td>
                             <td className="px-3 py-2 font-mono break-all">
-                              ahuracloud-verify.{c.domain}
-                              <CopyBtn value={`ahuracloud-verify.${c.domain}`} label="Host" />
+                              {DOMAIN_VERIFY_PREFIX}.{c.domain}
+                              <CopyBtn value={`${DOMAIN_VERIFY_PREFIX}.${c.domain}`} label="Host" />
                             </td>
                             <td className="px-3 py-2 font-mono break-all max-w-[200px]">
                               <span className="truncate block">{c.verificationToken}</span>

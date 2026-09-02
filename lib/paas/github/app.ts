@@ -19,7 +19,7 @@ import { createSign } from "node:crypto";
 import { paasConfig } from "../config.ts";
 
 const GH_API = "https://api.github.com";
-const UA = "ahuracloud-deploy-v2";
+const UA = "ahurasense-deploy-v2";
 
 function base64url(input: Buffer | string): string {
   return Buffer.from(input)

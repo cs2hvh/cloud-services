@@ -16,7 +16,7 @@
 import type { ProviderRepo } from "../providers/types.ts";
 
 const BB_API = "https://api.bitbucket.org/2.0";
-const UA = "ahuracloud-deploy-v2";
+const UA = "ahurasense-deploy-v2";
 
 const MAX_PAGES = 20;
 const PAGE_LEN = 100;

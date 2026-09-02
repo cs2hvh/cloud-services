@@ -384,7 +384,7 @@ export function NotificationsSettings({
               <Input
                 value={config.webhook_url ?? ""}
                 onChange={(e) => canMutate && setConfig((c) => ({ ...c, webhook_url: e.target.value || null }))}
-                placeholder="https://example.com/webhooks/ahuracloud"
+                placeholder="https://example.com/webhooks/ahurasense"
                 disabled={!canMutate}
                 className="bg-white/[0.02] border-white/[0.08]"
               />

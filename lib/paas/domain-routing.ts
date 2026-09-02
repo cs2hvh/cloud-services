@@ -111,7 +111,7 @@ const httpProbe: RoutingProbe = {
       const res = await fetch(`https://${hostname}${CHALLENGE_PATH}`, {
         redirect: "manual",
         signal: AbortSignal.timeout(10_000),
-        headers: { "user-agent": "ahuracloud-domain-verify" },
+        headers: { "user-agent": "ahurasense-domain-verify" },
       });
       if (!res.ok) return null;
       return (await res.text()).trim();

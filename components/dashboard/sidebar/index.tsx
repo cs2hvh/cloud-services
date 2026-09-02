@@ -663,7 +663,10 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
 
             {/* System status pill */}
             <a
-                href="https://status.ahuracloud.com"
+                // status.ahuracloud.com does not resolve. There is a real
+                // status page at /status in this app, so the pill links there
+                // rather than at another host that has to be kept alive.
+                href="/status"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="mx-2 mb-1 flex items-center gap-2 px-2.5 py-1.5 rounded-[5px] hover:bg-white/[0.03] transition-colors group"
