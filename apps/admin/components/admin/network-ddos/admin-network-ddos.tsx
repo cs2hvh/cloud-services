@@ -6,7 +6,7 @@ import { Shield, Settings } from "lucide-react";
 import { Admin_SpectrumApp } from "@/lib/supabase/types";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import DDoSUsersTab from "@admin/components/admin/network-ddos/ddos-users-tab";
-import DDoSSettingsTab from "@admin/components/admin/network-ddos/ddos-settings-tab";
+import { PlansReadonly } from "@admin/components/plans-readonly";
 
 interface PageProps {
   all_apps: Admin_SpectrumApp[];
@@ -63,7 +63,7 @@ export default function AdminNetworkDDoS({ all_apps }: PageProps) {
           </TabsContent>
 
           <TabsContent value="ddos-settings" className="mt-0">
-            <DDoSSettingsTab />
+            <PlansReadonly serviceType="network-ddos" />
           </TabsContent>
         </Tabs>
       </motion.div>

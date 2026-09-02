@@ -6,7 +6,7 @@ import { Database as DatabaseIcon, Package } from "lucide-react";
 import { Admin_Database, Tables } from "@/lib/supabase/types";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import DbUsersTab from "./db-users-tab";
-import DbPlansTab from "./db-plans-tab";
+import { PlansReadonly } from "@admin/components/plans-readonly";
 
 interface PageProps {
   all_databases: Admin_Database[];
@@ -66,7 +66,7 @@ export default function AdminDatabases({ all_databases, all_products, basePath =
           </TabsContent>
 
           <TabsContent value="db-plans" className="mt-0">
-            <DbPlansTab all_products={all_products} />
+            <PlansReadonly serviceType="database" initialPlans={all_products} />
           </TabsContent>
         </Tabs>
       </motion.div>

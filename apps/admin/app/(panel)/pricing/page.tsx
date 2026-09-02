@@ -23,11 +23,16 @@ export const dynamic = "force-dynamic";
  * billing.set_price() via /api/admin/pricing/set-price, which audits with
  * actor and old → new. Contract and history: docs/BILLING-HANDOFF.md.
  */
-export default async function PricingPage() {
+export default async function PricingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ service?: string }>;
+}) {
   const checkAdmin = await requireAdmin();
   if (!checkAdmin.ok) {
     notFound();
   }
+  const { service } = await searchParams;
 
   const supabase = await createServiceClient();
   const [plansRes, pricesRes] = await Promise.all([
@@ -142,7 +147,7 @@ export default async function PricingPage() {
         </>
       )}
 
-      <PriceBook plans={plans} prices={prices} />
+      <PriceBook plans={plans} prices={prices} initialService={service} />
 
       <p className="mt-6 text-xs text-muted-foreground">
         Prices are append-only: a change closes the current row and inserts a

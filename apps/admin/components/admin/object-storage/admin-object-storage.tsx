@@ -6,7 +6,7 @@ import { Archive, Package } from "lucide-react";
 import { Admin_Bucket} from "@/lib/supabase/types";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import StorageUsersTab from "@admin/components/admin/object-storage/storage-users-tab";
-import StoragePlansTab from "@admin/components/admin/object-storage/storage-plans-tab";
+import { PlansReadonly } from "@admin/components/plans-readonly";
 
 interface PageProps {
   all_buckets: Admin_Bucket[];
@@ -64,7 +64,7 @@ export default function AdminObjectStorage({ all_buckets }: PageProps) {
           </TabsContent>
 
           <TabsContent value="storage-plans" className="mt-0">
-            <StoragePlansTab  />
+            <PlansReadonly serviceType="object-storage" />
           </TabsContent>
         </Tabs>
       </motion.div>

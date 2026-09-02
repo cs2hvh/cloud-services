@@ -37,12 +37,14 @@ import {
 interface Props {
   plans: ServicePlan[];
   prices: PriceRow[];
+  /** Pre-filter to one service (deep links from the service sections). */
+  initialService?: string;
 }
 
 const money = (n: number, places = 2) =>
   `$${n.toLocaleString("en-US", { minimumFractionDigits: places, maximumFractionDigits: places })}`;
 
-export function PriceBook({ plans, prices }: Props) {
+export function PriceBook({ plans, prices, initialService }: Props) {
   const router = useRouter();
   const [editing, setEditing] = useState<ServicePlan | null>(null);
 
@@ -52,7 +54,7 @@ export function PriceBook({ plans, prices }: Props) {
     return m;
   }, [prices]);
 
-  const groups = useMemo(() => {
+  const allGroups = useMemo(() => {
     const byType = new Map<string, ServicePlan[]>();
     for (const plan of plans) {
       const list = byType.get(plan.service_type) ?? [];
@@ -62,8 +64,32 @@ export function PriceBook({ plans, prices }: Props) {
     return [...byType.entries()].sort(([a], [b]) => a.localeCompare(b));
   }, [plans]);
 
+  const serviceTypes = useMemo(() => allGroups.map(([t]) => t), [allGroups]);
+  const [service, setService] = useState<string>(
+    initialService && serviceTypes.includes(initialService) ? initialService : "all",
+  );
+  const groups =
+    service === "all" ? allGroups : allGroups.filter(([t]) => t === service);
+
   return (
     <div className="space-y-6">
+      {/* One service at a time beats a wall of stacked tables. */}
+      <div className="flex flex-wrap gap-1.5">
+        {["all", ...serviceTypes].map((t) => (
+          <button
+            key={t}
+            onClick={() => setService(t)}
+            className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+              service === t
+                ? "border-[#3987e5]/60 bg-[#3987e5]/15 text-foreground"
+                : "border-border text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {t === "all" ? `All services (${plans.length})` : t}
+          </button>
+        ))}
+      </div>
+
       {groups.map(([serviceType, groupPlans]) => (
         <section
           key={serviceType}

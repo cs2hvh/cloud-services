@@ -6,7 +6,7 @@ import { Server, Package, Layers } from "lucide-react";
 import { Admin_KubernetesCluster, Tables } from "@/lib/supabase/types";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import KubernetesUsersTab from "./kubernetes-users-tab";
-import KubernetesPlansTab from "./kubernetes-plans-tab";
+import { PlansReadonly } from "@admin/components/plans-readonly";
 import InternalClustersTab from "./internal-clusters-tab";
 
 interface PageProps {
@@ -81,7 +81,7 @@ export default function AdminKubernetes({ all_clusters, all_products, basePath =
           </TabsContent>
 
           <TabsContent value="k8s-plans" className="mt-0">
-            <KubernetesPlansTab all_products={all_products} />
+            <PlansReadonly serviceType="kubernetes" initialPlans={all_products} />
           </TabsContent>
 
           <TabsContent value="k8s-internal" className="mt-0">
