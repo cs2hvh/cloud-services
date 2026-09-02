@@ -132,8 +132,15 @@ export function CouponsView({
                   <td className="py-1.5 pr-4">{p.code}</td>
                   <td className="py-1.5 pr-4">${Number(p.amount).toFixed(2)}</td>
                   <td className="py-1.5 pr-4 text-muted-foreground">
-                    {p.coupon_type === "one-time" ? "once per user" : (p.coupon_type ?? "—")}
+                    {/* Every coupon_type redeems once per user — the redeem
+                        function reads the type in exactly one branch: 'limited'
+                        auto-deactivates at the cap. 'one-time' vs 'multi-use'
+                        is a distinction the database does not implement, so
+                        naming the raw type here would imply semantics that
+                        don't exist. */}
+                    once per user
                     {p.max_redemptions !== null && `, cap ${p.max_redemptions} total`}
+                    {p.coupon_type === "limited" && " (auto-off at cap)"}
                   </td>
                   <td className="py-1.5 pr-4">
                     {redemptions}
