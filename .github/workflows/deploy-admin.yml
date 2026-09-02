@@ -1,0 +1,44 @@
+# Auto-deploy the ADMIN PANEL to the Linode VM.
+#
+# Mirrors deploy.yml but for the standing branch feat/separate-admin-panel and
+# its own checkout + service on the VM (/root/cloud-admin-panel, ahura-admin,
+# port 3001) — the main app's checkout and ahura-web are never touched.
+#
+# Uses the SAME secrets as the main deploy (same VM): DEPLOY_HOST,
+# DEPLOY_USER, DEPLOY_PASSWORD, DEPLOY_PORT in the "DEPLOY_HOST" environment.
+#
+# One-time VM setup (deploy-admin.sh bootstraps the checkout itself):
+#   scp deploy/deploy-admin.sh root@<vm>:/root/deploy-admin.sh
+#   ssh root@<vm> 'chmod +x /root/deploy-admin.sh && /root/deploy-admin.sh'
+
+name: Deploy admin panel
+
+on:
+  push:
+    branches: [feat/separate-admin-panel]
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: Branch to deploy
+        required: true
+        default: feat/separate-admin-panel
+
+concurrency:
+  group: deploy-admin
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: DEPLOY_HOST
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          password: ${{ secrets.DEPLOY_PASSWORD }}
+          port: ${{ secrets.DEPLOY_PORT || 22 }}
+          command_timeout: 30m
+          script: |
+            bash /root/deploy-admin.sh "${{ github.event.inputs.branch || github.ref_name }}"

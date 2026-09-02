@@ -1,0 +1,26 @@
+[Unit]
+# The separate admin panel (apps/admin), served from its own checkout at
+# /root/cloud-admin-panel on the standing branch feat/separate-admin-panel —
+# deliberately NOT the main app's checkout, so a main-app deploy can never
+# take the admin panel down or vice versa.
+#
+# Env comes from the checkout's .env (apps/admin/next.config.ts loads the
+# repo root .env at boot). Port 3001; put admin.ahurasense.com in front via
+# Cloudflare (proxied, with an origin rule to :3001) and, recommended,
+# Cloudflare Access — the app's own auth still applies behind it.
+Description=AhuraSense admin panel (apps/admin)
+Documentation=file:///root/cloud-admin-panel/apps/admin/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/cloud-admin-panel
+ExecStart=/usr/bin/npm run admin:start
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
