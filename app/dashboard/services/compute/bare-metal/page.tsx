@@ -33,7 +33,21 @@ import { toast } from 'sonner';
 
 import { RegionFlag } from '@/components/ui/region-flag';
 import { createClient } from '@/lib/supabase/client';
-import { BARE_METAL_SKUS as SERVERS, type BareMetalSku, type Vendor, type CategoryKey, type StockKey, type FeatureKey } from "@/lib/catalog/bare-metal";
+import {
+    BARE_METAL_SKUS as SERVERS,
+    BARE_METAL_SERIES,
+    type BareMetalSku,
+    type Vendor,
+    type CategoryKey,
+    type SeriesKey,
+    type StockKey,
+    type FeatureKey,
+} from "@/lib/catalog/bare-metal";
+
+/** Ranges in price order — the order the list presents them in. */
+const SERIES_ORDER = (Object.keys(BARE_METAL_SERIES) as SeriesKey[]).sort(
+    (a, b) => BARE_METAL_SERIES[a].order - BARE_METAL_SERIES[b].order,
+);
 
 // ─── Design tokens (shared with the VPS surfaces) ──────────────────
 
@@ -158,6 +172,7 @@ const GRID = 'md:grid-cols-[minmax(168px,1.7fr)_1.05fr_0.9fr_1.5fr_0.95fr_auto]'
 
 export default function BareMetalPage() {
     const [vendors, setVendors] = useState<Set<Vendor>>(new Set());
+    const [series, setSeries] = useState<Set<SeriesKey>>(new Set());
     const [cats, setCats] = useState<Set<CategoryKey>>(new Set());
     const [regions, setRegions] = useState<Set<string>>(new Set());
     const [feats, setFeats] = useState<Set<FeatureKey>>(new Set());
@@ -186,6 +201,7 @@ export default function BareMetalPage() {
         const q = query.trim().toLowerCase();
         const list = SERVERS.filter((s) => {
             if (vendors.size && !vendors.has(s.vendor)) return false;
+            if (series.size && !series.has(s.series)) return false;
             if (cats.size && !cats.has(s.category)) return false;
             if (regions.size && !s.regions.some((r) => regions.has(r))) return false;
             if (feats.size && ![...feats].every((f) => s.features.includes(f))) return false;
@@ -213,10 +229,11 @@ export default function BareMetalPage() {
                     return a.priceMonthly - b.priceMonthly;
             }
         });
-    }, [vendors, cats, regions, feats, minCores, minRam, minNet, storage, priceTest, query, sort]);
+    }, [vendors, series, cats, regions, feats, minCores, minRam, minNet, storage, priceTest, query, sort]);
 
     const activeFilters =
         vendors.size +
+        series.size +
         cats.size +
         regions.size +
         feats.size +
@@ -228,6 +245,7 @@ export default function BareMetalPage() {
 
     const clearAll = () => {
         setVendors(new Set());
+        setSeries(new Set());
         setCats(new Set());
         setRegions(new Set());
         setFeats(new Set());
@@ -243,6 +261,8 @@ export default function BareMetalPage() {
         <FilterPanel
             vendors={vendors}
             setVendors={setVendors}
+            series={series}
+            setSeries={setSeries}
             cats={cats}
             setCats={setCats}
             regions={regions}
@@ -386,17 +406,14 @@ export default function BareMetalPage() {
                         {/* Mobile filter sheet */}
                         {mobileFilters && <div className="lg:hidden mb-4">{panel}</div>}
 
-                        {/* Column headers (desktop) */}
-                        <div className={`hidden md:grid ${GRID} items-center gap-4 px-4 pb-2`}>
-                            <ColHead>Server</ColHead>
-                            <ColHead>CPU</ColHead>
-                            <ColHead>Memory</ColHead>
-                            <ColHead>Storage</ColHead>
-                            <ColHead>Network</ColHead>
-                            <ColHead align="right">Price</ColHead>
-                        </div>
-
-                        {/* Rows */}
+                        {/* Rows, grouped by range.
+                            A flat price-sorted list made a $69 Zen 2 box and a
+                            1.5 TB dual-socket EPYC neighbours on the same
+                            ladder, which is not how anyone shops for a
+                            dedicated server — you pick a range first, then a
+                            size within it. Sorting still applies inside each
+                            range, so "most cores" reorders within Scale rather
+                            than shuffling the whole page. */}
                         {filtered.length === 0 ? (
                             <div className="border border-dashed border-white/[0.1] bg-[#111216] rounded-[6px] px-6 py-14 text-center">
                                 <p className="text-[14px] font-semibold text-white">No servers match these filters</p>
@@ -410,10 +427,19 @@ export default function BareMetalPage() {
                                 </button>
                             </div>
                         ) : (
-                            <div className="space-y-2.5">
-                                {filtered.map((s) => (
-                                    <ServerRow key={s.id} sku={s} onConfigure={() => setRequested(s)} />
-                                ))}
+                            <div className="space-y-10">
+                                {SERIES_ORDER.map((key) => {
+                                    const group = filtered.filter((s) => s.series === key);
+                                    if (group.length === 0) return null;
+                                    return (
+                                        <SeriesGroup
+                                            key={key}
+                                            seriesKey={key}
+                                            servers={group}
+                                            onConfigure={setRequested}
+                                        />
+                                    );
+                                })}
                             </div>
                         )}
                     </div>
@@ -422,6 +448,76 @@ export default function BareMetalPage() {
 
             {requested && <RequestModal sku={requested} onClose={() => setRequested(null)} />}
         </div>
+    );
+}
+
+// ─── Series group ──────────────────────────────────────────────────
+
+/**
+ * One product range: a header that says what the range is FOR, the span of
+ * what it contains, and then its servers.
+ *
+ * The header carries the from-price and the core/RAM span because the two
+ * questions a buyer asks of a range — "is this my tier?" and "does it go big
+ * enough?" — are otherwise only answerable by reading every row in it.
+ */
+function SeriesGroup({
+    seriesKey,
+    servers,
+    onConfigure,
+}: {
+    seriesKey: SeriesKey;
+    servers: BareMetalSku[];
+    onConfigure: (s: BareMetalSku) => void;
+}) {
+    const meta = BARE_METAL_SERIES[seriesKey];
+    const from = Math.min(...servers.map((s) => s.priceMonthly));
+    const cores = servers.map((s) => s.cpu.cores);
+    const ram = servers.map((s) => s.ramGb);
+    const span = (lo: number, hi: number, f: (n: number) => string) =>
+        lo === hi ? f(lo) : `${f(lo)} – ${f(hi)}`;
+
+    return (
+        <section>
+            <header className="mb-4 border-l-2 pl-4" style={{ borderColor: meta.accent }}>
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                    <h2 className="text-[17px] font-semibold tracking-[-0.015em] text-white">
+                        {meta.label}
+                    </h2>
+                    <span className={`${MONO} text-[10px] uppercase tracking-[0.12em]`} style={{ color: meta.accent }}>
+                        {meta.tagline}
+                    </span>
+                    <span className={`${MONO} ml-auto text-[10.5px] text-white/40 tabular-nums`}>
+                        {servers.length} {servers.length === 1 ? 'config' : 'configs'} · from ${fmt(from)}/mo
+                    </span>
+                </div>
+                <p className={`${MONO} mt-1.5 max-w-[760px] text-[11px] leading-relaxed text-white/45`}>
+                    {meta.blurb}
+                </p>
+                <p className={`${MONO} mt-1.5 text-[10px] uppercase tracking-[0.1em] text-white/30 tabular-nums`}>
+                    {span(Math.min(...cores), Math.max(...cores), (n) => `${n}`)} cores
+                    {' · '}
+                    {span(Math.min(...ram), Math.max(...ram), ramLabel)} memory
+                </p>
+            </header>
+
+            {/* Column headers repeat per range so they stay on screen while
+                scrolling a long page, instead of scrolling away once at the top. */}
+            <div className={`hidden md:grid ${GRID} items-center gap-4 px-4 pb-2`}>
+                <ColHead>Server</ColHead>
+                <ColHead>CPU</ColHead>
+                <ColHead>Memory</ColHead>
+                <ColHead>Storage</ColHead>
+                <ColHead>Network</ColHead>
+                <ColHead align="right">Price</ColHead>
+            </div>
+
+            <div className="space-y-2.5">
+                {servers.map((s) => (
+                    <ServerRow key={s.id} sku={s} onConfigure={() => onConfigure(s)} />
+                ))}
+            </div>
+        </section>
     );
 }
 
@@ -573,6 +669,8 @@ function ServerRow({ sku, onConfigure }: { sku: BareMetalSku; onConfigure: () =>
 interface PanelProps {
     vendors: Set<Vendor>;
     setVendors: (s: Set<Vendor>) => void;
+    series: Set<SeriesKey>;
+    setSeries: (s: Set<SeriesKey>) => void;
     cats: Set<CategoryKey>;
     setCats: (s: Set<CategoryKey>) => void;
     regions: Set<string>;
@@ -597,6 +695,7 @@ interface PanelProps {
 function FilterPanel(p: PanelProps) {
     const vCount = (v: Vendor) => SERVERS.filter((s) => s.vendor === v).length;
     const cCount = (c: CategoryKey) => SERVERS.filter((s) => s.category === c).length;
+    const sCount = (k: SeriesKey) => SERVERS.filter((s) => s.series === k).length;
     const rCount = (r: string) => SERVERS.filter((s) => s.regions.includes(r)).length;
 
     return (
@@ -617,7 +716,32 @@ function FilterPanel(p: PanelProps) {
                 )}
             </div>
 
-            <FilterGroup label="CPU make">
+            {/* Range first: it is the question a buyer answers before any
+                other, and it maps to how the list below is grouped. */}
+            <FilterGroup label="Range" activeCount={p.series.size}>
+                {SERIES_ORDER.map((k) => (
+                    <CheckRow
+                        key={k}
+                        active={p.series.has(k)}
+                        onClick={() => p.setSeries(toggle(p.series, k))}
+                        count={sCount(k)}
+                        dot={BARE_METAL_SERIES[k].accent}
+                    >
+                        {BARE_METAL_SERIES[k].label}
+                    </CheckRow>
+                ))}
+            </FilterGroup>
+
+            <FilterGroup label="Price / month" activeCount={p.price !== 'any' ? 1 : 0}>
+                <SegRow
+                    options={PRICE_BUCKETS.map((b) => ({ v: b.key, label: b.label }))}
+                    value={p.price}
+                    onChange={(v) => p.setPrice(String(v))}
+                    stack
+                />
+            </FilterGroup>
+
+            <FilterGroup label="CPU make" activeCount={p.vendors.size}>
                 {(Object.keys(VENDORS) as Vendor[]).map((v) => (
                     <CheckRow
                         key={v}
@@ -630,7 +754,7 @@ function FilterPanel(p: PanelProps) {
                 ))}
             </FilterGroup>
 
-            <FilterGroup label="Workload">
+            <FilterGroup label="Workload" defaultOpen={false} activeCount={p.cats.size}>
                 {(Object.keys(CATEGORIES) as CategoryKey[]).map((c) => (
                     <CheckRow
                         key={c}
@@ -643,7 +767,7 @@ function FilterPanel(p: PanelProps) {
                 ))}
             </FilterGroup>
 
-            <FilterGroup label="Region">
+            <FilterGroup label="Region" activeCount={p.regions.size}>
                 {p.allRegions.map((r) => (
                     <CheckRow
                         key={r}
@@ -657,19 +781,19 @@ function FilterPanel(p: PanelProps) {
                 ))}
             </FilterGroup>
 
-            <FilterGroup label="CPU cores">
+            <FilterGroup label="CPU cores" defaultOpen={false} activeCount={p.minCores ? 1 : 0}>
                 <SegRow options={CORE_STEPS} value={p.minCores} onChange={p.setMinCores} />
             </FilterGroup>
 
-            <FilterGroup label="Memory">
+            <FilterGroup label="Memory" defaultOpen={false} activeCount={p.minRam ? 1 : 0}>
                 <SegRow options={RAM_STEPS} value={p.minRam} onChange={p.setMinRam} />
             </FilterGroup>
 
-            <FilterGroup label="Network">
+            <FilterGroup label="Network" defaultOpen={false} activeCount={p.minNet ? 1 : 0}>
                 <SegRow options={NET_STEPS} value={p.minNet} onChange={p.setMinNet} />
             </FilterGroup>
 
-            <FilterGroup label="Storage">
+            <FilterGroup label="Storage" defaultOpen={false} activeCount={p.storage !== 'any' ? 1 : 0}>
                 <SegRow
                     options={STORAGE_OPTS.map((o) => ({ v: o.v, label: o.label }))}
                     value={p.storage}
@@ -677,16 +801,7 @@ function FilterPanel(p: PanelProps) {
                 />
             </FilterGroup>
 
-            <FilterGroup label="Price / month">
-                <SegRow
-                    options={PRICE_BUCKETS.map((b) => ({ v: b.key, label: b.label }))}
-                    value={p.price}
-                    onChange={(v) => p.setPrice(String(v))}
-                    stack
-                />
-            </FilterGroup>
-
-            <FilterGroup label="Features" last>
+            <FilterGroup label="Features" last defaultOpen={false} activeCount={p.feats.size}>
                 {(Object.keys(FEATURES) as FeatureKey[]).map((f) => {
                     const Icon = FEATURES[f].icon;
                     return (
@@ -705,11 +820,56 @@ function FilterPanel(p: PanelProps) {
     );
 }
 
-function FilterGroup({ label, children, last }: { label: string; children: React.ReactNode; last?: boolean }) {
+/**
+ * A collapsible filter section.
+ *
+ * The rail had nine groups, all permanently open, in a 244px column — roughly
+ * two screens of controls with no hierarchy, so the ones people actually use
+ * (range, price, region) sat below the fold next to ones they rarely touch.
+ *
+ * Sections now collapse, and `defaultOpen` decides what greets you: the three
+ * that answer "which server am I looking for", with the rest one click away.
+ * The count of what's active inside a collapsed section shows on its header,
+ * so a filter can never be silently applied out of sight — the reason a
+ * collapsed rail is usually worse than an open one.
+ */
+function FilterGroup({
+    label,
+    children,
+    last,
+    defaultOpen = true,
+    activeCount = 0,
+}: {
+    label: string;
+    children: React.ReactNode;
+    last?: boolean;
+    defaultOpen?: boolean;
+    activeCount?: number;
+}) {
+    const [open, setOpen] = useState(defaultOpen);
+
     return (
-        <div className={`py-3.5 ${last ? '' : 'border-b border-white/[0.05]'}`}>
-            <div className={`${MONO} mb-2.5 text-[9.5px] uppercase tracking-[0.16em] text-white/40`}>{label}</div>
-            <div className="space-y-1">{children}</div>
+        <div className={`${last ? '' : 'border-b border-white/[0.05]'}`}>
+            <button
+                type="button"
+                onClick={() => setOpen((v) => !v)}
+                aria-expanded={open}
+                className="flex w-full items-center gap-2 py-3 text-left"
+            >
+                <span className={`${MONO} text-[9.5px] uppercase tracking-[0.16em] text-white/40`}>{label}</span>
+                {activeCount > 0 && (
+                    <span
+                        className={`${MONO} rounded-full px-1.5 text-[9px] leading-[15px] tabular-nums`}
+                        style={{ background: ACCENT_DIM, color: ACCENT_BRIGHT }}
+                    >
+                        {activeCount}
+                    </span>
+                )}
+                <ChevronDown
+                    className={`ml-auto h-3.5 w-3.5 shrink-0 text-white/30 transition-transform ${open ? '' : '-rotate-90'}`}
+                />
+            </button>
+            {open && <div className="space-y-1 pb-3.5">{children}</div>}
         </div>
     );
 }
