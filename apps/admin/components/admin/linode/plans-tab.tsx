@@ -223,16 +223,38 @@ export default function PlansTab() {
                         r.book &&
                         Math.abs(round(resaleHourly(r) * HOURS_PER_MONTH, 2) - r.book.monthly) > 0.01,
                 );
-                return drifted.length > 0 ? (
-                    <div className="flex items-start gap-2 border border-red-500/25 bg-red-500/[0.07] px-4 py-3">
-                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
-                        <p className="text-[12.5px] leading-relaxed text-red-200/90">
-                            {drifted.length} plan(s) quote a different price than the charge book
-                            bills — customers would be quoted one number and charged another. Align
-                            the markup here or the book on /pricing.
-                        </p>
-                    </div>
-                ) : null;
+                const unpriced = rows.filter(
+                    (r) => !r.book && r.pricing_is_active && r.type_is_active,
+                );
+                return (
+                    <>
+                        {unpriced.length > 0 && (
+                            <div className="flex items-start gap-2 border border-red-500/40 bg-red-500/[0.1] px-4 py-3">
+                                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+                                <p className="text-[12.5px] leading-relaxed text-red-200/90">
+                                    <span className="font-semibold">
+                                        {unpriced.length} sellable plan(s) have no charge-book row —
+                                        a VM provisioned on one is quoted at markup and billed
+                                        nothing, forever
+                                    </span>{" "}
+                                    (charge resolution returns no-price for keys the book doesn&apos;t
+                                    hold). The billing lane is making compute charging
+                                    markup-primary; until that lands, these plans bill $0.
+                                </p>
+                            </div>
+                        )}
+                        {drifted.length > 0 && (
+                            <div className="flex items-start gap-2 border border-red-500/25 bg-red-500/[0.07] px-4 py-3">
+                                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+                                <p className="text-[12.5px] leading-relaxed text-red-200/90">
+                                    {drifted.length} plan(s) quote a different price than the charge
+                                    book bills — customers would be quoted one number and charged
+                                    another. Align the markup here or the book on /pricing.
+                                </p>
+                            </div>
+                        )}
+                    </>
+                );
             })()}
 
             {/* Class sub-tabs */}
@@ -362,6 +384,15 @@ export default function PlansTab() {
                                                         ${row.book.monthly.toFixed(2)}/mo
                                                     </span>
                                                 )
+                                            ) : row.pricing_is_active && row.type_is_active ? (
+                                                // Absent is NOT neutral here: charge resolution
+                                                // returns no-price for a key with no book row, so
+                                                // a sellable-but-unpriced plan is quoted at markup
+                                                // and BILLED NOTHING, forever — the loudest state
+                                                // in this table until charging goes markup-primary.
+                                                <span className="inline-flex items-center border border-red-500/40 bg-red-500/15 px-2 py-0.5 text-[11px] font-semibold text-red-300">
+                                                    sellable · bills $0
+                                                </span>
                                             ) : (
                                                 <span className="text-white/30">not in book</span>
                                             )}
