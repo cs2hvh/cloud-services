@@ -205,7 +205,7 @@ export default function AddPlanDialog({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+        className="fixed inset-0 bg-card/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
         onClick={handleClose}
       >
         <motion.div
@@ -213,19 +213,19 @@ export default function AddPlanDialog({
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
           onClick={(e) => e.stopPropagation()}
-          className="bg-neutral-900 rounded-2xl border border-neutral-800 shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"
+          className="bg-card rounded-2xl border border-border shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto"
         >
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-neutral-800 sticky top-0 bg-neutral-900 z-10">
+          <div className="flex items-center justify-between p-6 border-b border-border sticky top-0 bg-card z-10">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-green-500/20 rounded-lg">
                 <Plus className="h-5 w-5 text-green-400" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-white">
+                <h2 className="text-xl font-bold text-foreground">
                   Create New Plan
                 </h2>
-                <p className="text-sm text-neutral-400">
+                <p className="text-sm text-muted-foreground">
                   Add a new database plan
                 </p>
               </div>
@@ -233,9 +233,9 @@ export default function AddPlanDialog({
             <button
               onClick={handleClose}
               disabled={isLoading}
-              className="p-2 hover:bg-neutral-800 rounded-lg transition-colors disabled:opacity-50"
+              className="p-2 hover:bg-white/[0.06] rounded-lg transition-colors disabled:opacity-50"
             >
-              <X className="h-5 w-5 text-neutral-400" />
+              <X className="h-5 w-5 text-muted-foreground" />
             </button>
           </div>
 
@@ -243,7 +243,7 @@ export default function AddPlanDialog({
           <form onSubmit={handleSubmit} className="p-6 space-y-6">
             {/* Plan Name */}
             <div className="space-y-2">
-              <Label htmlFor="name" className="text-sm font-medium text-neutral-300">
+              <Label htmlFor="name" className="text-sm font-medium text-foreground/80">
                 Plan Name *
               </Label>
               <Input
@@ -254,13 +254,13 @@ export default function AddPlanDialog({
                 }
                 placeholder="e.g., Professional"
                 disabled={isLoading}
-                className="bg-neutral-800 border-neutral-700 text-white placeholder:text-neutral-500 focus:border-green-500 focus:ring-green-500"
+                className="bg-white/[0.06] border-border text-foreground placeholder:text-muted-foreground/70 focus:border-green-500 focus:ring-green-500"
               />
             </div>
 
             {/* Description */}
             <div className="space-y-2">
-              <Label htmlFor="description" className="text-sm font-medium text-neutral-300">
+              <Label htmlFor="description" className="text-sm font-medium text-foreground/80">
                 Description
               </Label>
               <textarea
@@ -272,13 +272,13 @@ export default function AddPlanDialog({
                 placeholder="Brief description of the plan"
                 rows={3}
                 disabled={isLoading}
-                className="w-full px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:opacity-50 resize-none"
+                className="w-full px-4 py-3 bg-white/[0.06] border border-border rounded-lg text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:opacity-50 resize-none"
               />
             </div>
 
             {/* Database Type */}
             <div className="space-y-2">
-              <Label className="text-sm font-medium text-neutral-300">
+              <Label className="text-sm font-medium text-foreground/80">
                 Database Type *
               </Label>
               <Select
@@ -288,15 +288,15 @@ export default function AddPlanDialog({
                 }}
                 disabled={isLoading}
               >
-                <SelectTrigger className="bg-neutral-800 border-neutral-700 text-white focus:ring-green-500">
+                <SelectTrigger className="bg-white/[0.06] border-border text-foreground focus:ring-green-500">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-neutral-900 border-neutral-800">
+                <SelectContent className="bg-card border-border">
                   {DB_TYPES.map((type) => (
                     <SelectItem
                       key={type.value}
                       value={type.value}
-                      className="text-white focus:bg-neutral-800 focus:text-white"
+                      className="text-foreground focus:bg-white/[0.06] focus:text-foreground"
                     >
                       {type.label}
                     </SelectItem>
@@ -307,12 +307,12 @@ export default function AddPlanDialog({
 
             {/* Database Size Selection */}
             <div className="space-y-4">
-              <h3 className="text-sm font-semibold text-white">Database Size (from DigitalOcean) *</h3>
+              <h3 className="text-sm font-semibold text-foreground">Database Size (from DigitalOcean) *</h3>
               
               {loadingSizes ? (
                 <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-neutral-400" />
-                  <span className="ml-2 text-neutral-400">Loading sizes...</span>
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  <span className="ml-2 text-muted-foreground">Loading sizes...</span>
                 </div>
               ) : (
                 <Tabs 
@@ -320,22 +320,22 @@ export default function AddPlanDialog({
                   onValueChange={(value) => setSelectedCpuType(value as typeof selectedCpuType)}
                   className="w-full"
                 >
-                  <TabsList className="grid w-full grid-cols-3 bg-neutral-800">
+                  <TabsList className="grid w-full grid-cols-3 bg-white/[0.06]">
                     <TabsTrigger 
                       value="basic" 
-                      className="data-[state=active]:bg-green-600 data-[state=active]:text-white"
+                      className="data-[state=active]:bg-green-600 data-[state=active]:text-foreground"
                     >
                       Basic
                     </TabsTrigger>
                     <TabsTrigger 
                       value="general_purpose"
-                      className="data-[state=active]:bg-green-600 data-[state=active]:text-white"
+                      className="data-[state=active]:bg-green-600 data-[state=active]:text-foreground"
                     >
                       General Purpose
                     </TabsTrigger>
                     <TabsTrigger 
                       value="storage_optimized"
-                      className="data-[state=active]:bg-green-600 data-[state=active]:text-white"
+                      className="data-[state=active]:bg-green-600 data-[state=active]:text-foreground"
                     >
                       Storage Optimized
                     </TabsTrigger>
@@ -345,7 +345,7 @@ export default function AddPlanDialog({
                     <TabsContent key={cpuType} value={cpuType} className="mt-4">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-48 overflow-y-auto pr-2">
                         {(doSizes[formData.sub]?.[cpuType] || []).length === 0 ? (
-                          <p className="text-neutral-500 text-sm col-span-2 py-4 text-center">
+                          <p className="text-muted-foreground/70 text-sm col-span-2 py-4 text-center">
                             No sizes available for this CPU type
                           </p>
                         ) : (
@@ -356,16 +356,16 @@ export default function AddPlanDialog({
                               className={`p-3 rounded-lg border cursor-pointer transition-all ${
                                 formData.slug === size.slug
                                   ? "border-green-500 bg-green-500/10"
-                                  : "border-neutral-700 bg-neutral-800 hover:border-neutral-600"
+                                  : "border-border bg-white/[0.06] hover:border-border"
                               }`}
                             >
                               <div className="flex items-center gap-2">
-                                <Server className="h-4 w-4 text-neutral-400" />
-                                <span className="text-sm font-medium text-white">
+                                <Server className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-sm font-medium text-foreground">
                                   {size.cpu} vCPU / {size.ram} GB RAM
                                 </span>
                               </div>
-                              <p className="text-xs text-neutral-500 mt-1 truncate">
+                              <p className="text-xs text-muted-foreground/70 mt-1 truncate">
                                 {size.slug}
                               </p>
                             </div>
@@ -378,10 +378,10 @@ export default function AddPlanDialog({
               )}
 
               {formData.slug && (
-                <div className="p-3 bg-neutral-800 rounded-lg border border-neutral-700">
-                  <p className="text-xs text-neutral-400">Selected Size:</p>
-                  <p className="text-sm text-white font-medium">{formData.slug}</p>
-                  <p className="text-xs text-neutral-500 mt-1">
+                <div className="p-3 bg-white/[0.06] rounded-lg border border-border">
+                  <p className="text-xs text-muted-foreground">Selected Size:</p>
+                  <p className="text-sm text-foreground font-medium">{formData.slug}</p>
+                  <p className="text-xs text-muted-foreground/70 mt-1">
                     {formData.cpu} vCPU, {formData.ram} GB RAM, {cpuTypeLabels[formData.cpu_type]}
                   </p>
                 </div>
@@ -390,7 +390,7 @@ export default function AddPlanDialog({
 
             {/* Storage (user can customize) */}
             <div className="space-y-2">
-              <Label htmlFor="storage" className="text-sm font-medium text-neutral-300">
+              <Label htmlFor="storage" className="text-sm font-medium text-foreground/80">
                 Storage (GB) *
               </Label>
               <Input
@@ -406,19 +406,19 @@ export default function AddPlanDialog({
                   })
                 }
                 disabled={isLoading}
-                className="bg-neutral-800 border-neutral-700 text-white focus:border-green-500 focus:ring-green-500"
+                className="bg-white/[0.06] border-border text-foreground focus:border-green-500 focus:ring-green-500"
               />
-              <p className="text-xs text-neutral-500">
+              <p className="text-xs text-muted-foreground/70">
                 Set the storage allocation for this plan
               </p>
             </div>
 
             {/* Pricing */}
             <div className="space-y-4">
-              <h3 className="text-sm font-semibold text-white">Pricing</h3>
+              <h3 className="text-sm font-semibold text-foreground">Pricing</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="price" className="text-sm font-medium text-neutral-300">
+                  <Label htmlFor="price" className="text-sm font-medium text-foreground/80">
                     Price (USD/month) *
                   </Label>
                   <Input
@@ -431,11 +431,11 @@ export default function AddPlanDialog({
                       setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })
                     }
                     disabled={isLoading}
-                    className="bg-neutral-800 border-neutral-700 text-white focus:border-green-500 focus:ring-green-500"
+                    className="bg-white/[0.06] border-border text-foreground focus:border-green-500 focus:ring-green-500"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="fixed_price" className="text-sm font-medium text-neutral-300">
+                  <Label htmlFor="fixed_price" className="text-sm font-medium text-foreground/80">
                     Fixed Price (USD)
                   </Label>
                   <Input
@@ -448,12 +448,12 @@ export default function AddPlanDialog({
                       setFormData({ ...formData, fixed_price: parseFloat(e.target.value) || 0 })
                     }
                     disabled={isLoading}
-                    className="bg-neutral-800 border-neutral-700 text-white focus:border-green-500 focus:ring-green-500"
+                    className="bg-white/[0.06] border-border text-foreground focus:border-green-500 focus:ring-green-500"
                   />
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="discount" className="text-sm font-medium text-neutral-300">
+                <Label htmlFor="discount" className="text-sm font-medium text-foreground/80">
                   Discount (%)
                 </Label>
                 <Input
@@ -467,19 +467,19 @@ export default function AddPlanDialog({
                     setFormData({ ...formData, discount: parseInt(e.target.value) || 0 })
                   }
                   disabled={isLoading}
-                  className="bg-neutral-800 border-neutral-700 text-white focus:border-green-500 focus:ring-green-500"
+                  className="bg-white/[0.06] border-border text-foreground focus:border-green-500 focus:ring-green-500"
                 />
               </div>
             </div>
 
             {/* Action Buttons */}
-            <div className="flex gap-3 pt-4 border-t border-neutral-800">
+            <div className="flex gap-3 pt-4 border-t border-border">
               <Button
                 type="button"
                 onClick={handleClose}
                 disabled={isLoading}
                 variant="outline"
-                className="cursor-pointer flex-1 bg-neutral-800 hover:bg-neutral-700 text-white border-neutral-700"
+                className="cursor-pointer flex-1 bg-white/[0.06] hover:bg-white/[0.08] text-foreground border-border"
               >
                 <X className="h-4 w-4 mr-2" />
                 Cancel
@@ -487,7 +487,7 @@ export default function AddPlanDialog({
               <Button
                 type="submit"
                 disabled={isLoading || !formData.slug}
-                className="cursor-pointer flex-1 bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
+                className="cursor-pointer flex-1 bg-green-600 hover:bg-green-700 text-foreground disabled:opacity-50"
               >
                 {isLoading ? (
                   <>

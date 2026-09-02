@@ -19,7 +19,7 @@ export default function AdminDatabases({ all_databases, all_products, basePath =
   const [activeTab, setActiveTab] = useState("db-users");
 
   return (
-    <div className="flex-1 bg-[#0a0a0a] min-h-screen p-4 sm:p-6 lg:p-8">
+    <div className="">
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -28,14 +28,14 @@ export default function AdminDatabases({ all_databases, all_products, basePath =
         {/* Header */}
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 bg-neutral-800 rounded-lg">
-              <DatabaseIcon className="h-6 w-6 text-neutral-300" />
+            <div className="p-2 bg-white/[0.06] rounded-lg">
+              <DatabaseIcon className="h-6 w-6 text-foreground/80" />
             </div>
             <div>
-              <h1 className="text-2xl font-semibold text-white">
+              <h1 className="font-heading text-xl font-semibold tracking-tight">
                 Database Management
               </h1>
-              <p className="text-sm text-neutral-400 mt-0.5">
+              <p className="text-sm text-muted-foreground mt-0.5">
                 {all_databases.length} databases · {all_products.length} plans
               </p>
             </div>
@@ -47,14 +47,14 @@ export default function AdminDatabases({ all_databases, all_products, basePath =
           <TabsList className="w-full grid grid-cols-2 gap-2 bg-transparent p-0 h-auto mb-6">
             <TabsTrigger
               value="db-users"
-              className="cursor-pointer text-sm sm:text-base font-semibold py-3 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-neutral-900 text-white hover:bg-neutral-800 transition-all border border-neutral-800"
+              className="cursor-pointer text-sm font-medium py-2.5 px-4 rounded-lg data-[state=active]:bg-[#3987e5] data-[state=active]:text-foreground data-[state=active]:shadow-md bg-card text-foreground hover:bg-white/[0.06] transition-all border border-border"
             >
               <DatabaseIcon className="h-4 w-4 mr-2" />
               Database Users
             </TabsTrigger>
             <TabsTrigger
               value="db-plans"
-              className="cursor-pointer text-sm sm:text-base font-semibold py-3 px-4 rounded-lg data-[state=active]:bg-white data-[state=active]:text-black data-[state=active]:shadow-md bg-neutral-900 text-white hover:bg-neutral-800 transition-all border border-neutral-800"
+              className="cursor-pointer text-sm font-medium py-2.5 px-4 rounded-lg data-[state=active]:bg-[#3987e5] data-[state=active]:text-foreground data-[state=active]:shadow-md bg-card text-foreground hover:bg-white/[0.06] transition-all border border-border"
             >
               <Package className="h-4 w-4 mr-2" />
               Database Plans

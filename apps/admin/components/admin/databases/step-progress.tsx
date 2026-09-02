@@ -17,10 +17,10 @@ export const StepProgress = ({ currentStep, steps }: StepProgressProps) => {
                 className={`shrink-0 rounded-full flex items-center justify-center transition-colors duration-300
                   w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 ${
                     currentStep > step.id
-                      ? "bg-blue-600 text-white"
+                      ? "bg-blue-600 text-foreground"
                       : currentStep === step.id
-                        ? "bg-blue-500 text-white"
-                        : "bg-white/10 text-white/50"
+                        ? "bg-blue-500 text-foreground"
+                        : "bg-white/10 text-foreground/50"
                   }`}
               >
                 {currentStep > step.id ? (
@@ -34,7 +34,7 @@ export const StepProgress = ({ currentStep, steps }: StepProgressProps) => {
               <p
                 className={`mt-2 text-center truncate max-w-[72px] sm:max-w-[112px] md:max-w-[140px]
                   text-[10px] sm:text-xs md:text-sm ${
-                    currentStep >= step.id ? "text-white" : "text-white/50"
+                    currentStep >= step.id ? "text-foreground" : "text-foreground/50"
                   }`}
                 title={step.name}
               >

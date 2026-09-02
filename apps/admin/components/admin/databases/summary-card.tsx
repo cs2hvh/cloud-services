@@ -32,7 +32,7 @@ export const SummaryCard = ({
   return (
     <Card className="sticky top-8 bg-white/5 border-white/10">
       <CardHeader>
-        <CardTitle className="text-white">Assignment Summary</CardTitle>
+        <CardTitle className="text-foreground">Assignment Summary</CardTitle>
         {selectedDbTypeInfo && (
           <div className="mt-4 p-4 bg-white/5 rounded-lg flex justify-center">
             <Image
@@ -48,21 +48,21 @@ export const SummaryCard = ({
       <CardContent className="space-y-4">
         {selectedUserData && (
           <div className="flex justify-between items-center">
-            <span className="text-sm text-white/60">User:</span>
-            <span className="font-medium text-white text-right">
+            <span className="text-sm text-foreground/60">User:</span>
+            <span className="font-medium text-foreground text-right">
               {selectedUserData.email}
             </span>
           </div>
         )}
         {state.selectedName && (
           <div className="flex justify-between items-center">
-            <span className="text-sm text-white/60">Name:</span>
-            <span className="font-medium text-white">{state.selectedName}</span>
+            <span className="text-sm text-foreground/60">Name:</span>
+            <span className="font-medium text-foreground">{state.selectedName}</span>
           </div>
         )}
         {selectedDbTypeInfo && (
           <div className="flex justify-between items-center">
-            <span className="text-sm text-white/60">Type:</span>
+            <span className="text-sm text-foreground/60">Type:</span>
             <div className="flex items-center gap-2">
               <Image
                 src={selectedDbTypeInfo.icon_url}
@@ -71,7 +71,7 @@ export const SummaryCard = ({
                 height={20}
                 className="object-contain"
               />
-              <span className="font-medium text-white">
+              <span className="font-medium text-foreground">
                 {selectedDbTypeInfo.name}
               </span>
             </div>
@@ -79,23 +79,23 @@ export const SummaryCard = ({
         )}
         {selectedDatabase && (
           <div className="flex justify-between items-center">
-            <span className="text-sm text-white/60">Plan:</span>
-            <span className="font-medium text-white">
+            <span className="text-sm text-foreground/60">Plan:</span>
+            <span className="font-medium text-foreground">
               {selectedDatabase.name}
             </span>
           </div>
         )}
         {state.selectedVersion && (
           <div className="flex justify-between items-center">
-            <span className="text-sm text-white/60">Version:</span>
-            <span className="font-medium text-white">
+            <span className="text-sm text-foreground/60">Version:</span>
+            <span className="font-medium text-foreground">
               v{state.selectedVersion}
             </span>
           </div>
         )}
         {selectedLocationData && (
           <div className="flex justify-between items-center">
-            <span className="text-sm text-white/60">Location:</span>
+            <span className="text-sm text-foreground/60">Location:</span>
             <div className="flex items-center gap-2">
               <Image
                 src={`https://flagsapi.com/${selectedLocationData.country_code}/flat/64.png`}
@@ -105,7 +105,7 @@ export const SummaryCard = ({
                 className="rounded-sm"
                 unoptimized
               />
-              <span className="font-medium text-white">
+              <span className="font-medium text-foreground">
                 {selectedLocationData.city}
               </span>
             </div>
@@ -113,14 +113,14 @@ export const SummaryCard = ({
         )}
         {selectedProject && (
           <div className="flex justify-between items-center">
-            <span className="text-sm text-white/60">Project:</span>
-            <span className="font-medium text-white text-right">
+            <span className="text-sm text-foreground/60">Project:</span>
+            <span className="font-medium text-foreground text-right">
               {selectedProject.name}
             </span>
           </div>
         )}
         <Separator className="bg-white/10" />
-        <div className="flex justify-between items-center font-bold text-lg text-white">
+        <div className="flex justify-between items-center font-bold text-lg text-foreground">
           <span>Total</span>
           <span>
             {selectedDatabase

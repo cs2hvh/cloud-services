@@ -195,7 +195,7 @@ export default function EditPlanDialog({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+        className="fixed inset-0 bg-card/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
         onClick={onClose}
       >
         <motion.div
@@ -203,7 +203,7 @@ export default function EditPlanDialog({
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
           onClick={(e) => e.stopPropagation()}
-          className="bg-neutral-900 rounded-2xl border border-neutral-800 shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+          className="bg-card rounded-2xl border border-border shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
         >
           {/* Header */}
           {/* Fixed Price */}
@@ -213,7 +213,7 @@ export default function EditPlanDialog({
             <div className="space-y-2">
               <Label
                 htmlFor="name"
-                className="text-sm font-medium text-neutral-300"
+                className="text-sm font-medium text-foreground/80"
               >
                 Plan Name *
               </Label>
@@ -225,7 +225,7 @@ export default function EditPlanDialog({
                 }
                 placeholder="e.g., Professional"
                 disabled={isLoading}
-                className="bg-neutral-800 border-neutral-700 text-white placeholder:text-neutral-500 focus:border-blue-500 focus:ring-blue-500"
+                className="bg-white/[0.06] border-border text-foreground placeholder:text-muted-foreground/70 focus:border-blue-500 focus:ring-blue-500"
               />
             </div>
 
@@ -233,7 +233,7 @@ export default function EditPlanDialog({
             <div className="space-y-2">
               <Label
                 htmlFor="description"
-                className="text-sm font-medium text-neutral-300"
+                className="text-sm font-medium text-foreground/80"
               >
                 Description
               </Label>
@@ -246,19 +246,19 @@ export default function EditPlanDialog({
                 placeholder="Brief description of the plan"
                 rows={3}
                 disabled={isLoading}
-                className="w-full px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 resize-none"
+                className="w-full px-4 py-3 bg-white/[0.06] border border-border rounded-lg text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 resize-none"
               />
             </div>
 
             {/* Database Type (Read-only) */}
             <div className="space-y-2">
-              <Label className="text-sm font-medium text-neutral-300">
+              <Label className="text-sm font-medium text-foreground/80">
                 Database Type
               </Label>
-              <div className="px-4 py-3 bg-neutral-800/50 border border-neutral-700 rounded-lg text-neutral-400 text-sm">
+              <div className="px-4 py-3 bg-white/[0.04] border border-border rounded-lg text-muted-foreground text-sm">
                 {DB_TYPES.find((t) => t.value === formData.sub)?.label ||
                   formData.sub}
-                <span className="ml-2 text-xs text-neutral-500">
+                <span className="ml-2 text-xs text-muted-foreground/70">
                   (Cannot be changed)
                 </span>
               </div>
@@ -267,13 +267,13 @@ export default function EditPlanDialog({
             {/* Current Size Display / Size Selector */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-white">Database Size</h3>
+                <h3 className="text-sm font-semibold text-foreground">Database Size</h3>
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   onClick={() => setShowSizeSelector(!showSizeSelector)}
-                  className="text-xs bg-neutral-800 border-neutral-700 hover:bg-neutral-700"
+                  className="text-xs bg-white/[0.06] border-border hover:bg-white/[0.08]"
                 >
                   {showSizeSelector ? 'Cancel' : 'Change Size'}
                 </Button>
@@ -281,10 +281,10 @@ export default function EditPlanDialog({
 
               {/* Current Size Info */}
               {formData.slug && !showSizeSelector && (
-                <div className="p-3 bg-neutral-800 rounded-lg border border-neutral-700">
-                  <p className="text-xs text-neutral-400">Current Size:</p>
-                  <p className="text-sm text-white font-medium">{formData.slug}</p>
-                  <p className="text-xs text-neutral-500 mt-1">
+                <div className="p-3 bg-white/[0.06] rounded-lg border border-border">
+                  <p className="text-xs text-muted-foreground">Current Size:</p>
+                  <p className="text-sm text-foreground font-medium">{formData.slug}</p>
+                  <p className="text-xs text-muted-foreground/70 mt-1">
                     {formData.cpu} vCPU, {formData.ram} GB RAM, {cpuTypeLabels[formData.cpu_type]}
                   </p>
                 </div>
@@ -294,8 +294,8 @@ export default function EditPlanDialog({
               {showSizeSelector && (
                 loadingSizes ? (
                   <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-6 w-6 animate-spin text-neutral-400" />
-                    <span className="ml-2 text-neutral-400">Loading sizes...</span>
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    <span className="ml-2 text-muted-foreground">Loading sizes...</span>
                   </div>
                 ) : (
                   <Tabs 
@@ -303,22 +303,22 @@ export default function EditPlanDialog({
                     onValueChange={(value) => setSelectedCpuType(value as typeof selectedCpuType)}
                     className="w-full"
                   >
-                    <TabsList className="grid w-full grid-cols-3 bg-neutral-800">
+                    <TabsList className="grid w-full grid-cols-3 bg-white/[0.06]">
                       <TabsTrigger 
                         value="basic" 
-                        className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+                        className="data-[state=active]:bg-blue-600 data-[state=active]:text-foreground"
                       >
                         Basic
                       </TabsTrigger>
                       <TabsTrigger 
                         value="general_purpose"
-                        className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+                        className="data-[state=active]:bg-blue-600 data-[state=active]:text-foreground"
                       >
                         General Purpose
                       </TabsTrigger>
                       <TabsTrigger 
                         value="storage_optimized"
-                        className="data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+                        className="data-[state=active]:bg-blue-600 data-[state=active]:text-foreground"
                       >
                         Storage Optimized
                       </TabsTrigger>
@@ -328,7 +328,7 @@ export default function EditPlanDialog({
                       <TabsContent key={cpuType} value={cpuType} className="mt-4">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-48 overflow-y-auto pr-2">
                           {(doSizes[formData.sub]?.[cpuType] || []).length === 0 ? (
-                            <p className="text-neutral-500 text-sm col-span-2 py-4 text-center">
+                            <p className="text-muted-foreground/70 text-sm col-span-2 py-4 text-center">
                               No sizes available for this CPU type
                             </p>
                           ) : (
@@ -339,16 +339,16 @@ export default function EditPlanDialog({
                                 className={`p-3 rounded-lg border cursor-pointer transition-all ${
                                   formData.slug === size.slug
                                     ? "border-blue-500 bg-blue-500/10"
-                                    : "border-neutral-700 bg-neutral-800 hover:border-neutral-600"
+                                    : "border-border bg-white/[0.06] hover:border-border"
                                 }`}
                               >
                                 <div className="flex items-center gap-2">
-                                  <Server className="h-4 w-4 text-neutral-400" />
-                                  <span className="text-sm font-medium text-white">
+                                  <Server className="h-4 w-4 text-muted-foreground" />
+                                  <span className="text-sm font-medium text-foreground">
                                     {size.cpu} vCPU / {size.ram} GB RAM
                                   </span>
                                 </div>
-                                <p className="text-xs text-neutral-500 mt-1 truncate">
+                                <p className="text-xs text-muted-foreground/70 mt-1 truncate">
                                   {size.slug}
                                 </p>
                               </div>
@@ -364,7 +364,7 @@ export default function EditPlanDialog({
 
             {/* Storage (editable) */}
             <div className="space-y-2">
-              <Label htmlFor="storage" className="text-sm font-medium text-neutral-300">
+              <Label htmlFor="storage" className="text-sm font-medium text-foreground/80">
                 Storage (GB) *
               </Label>
               <Input
@@ -380,20 +380,20 @@ export default function EditPlanDialog({
                   })
                 }
                 disabled={isLoading}
-                className="bg-neutral-800 border-neutral-700 text-white focus:border-blue-500 focus:ring-blue-500"
+                className="bg-white/[0.06] border-border text-foreground focus:border-blue-500 focus:ring-blue-500"
               />
             </div>
 
             {/* Pricing */}
             <div className="space-y-4">
-              <h3 className="text-sm font-semibold text-white">Pricing</h3>
+              <h3 className="text-sm font-semibold text-foreground">Pricing</h3>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Price */}
                 <div className="space-y-2">
                   <Label
                     htmlFor="price"
-                    className="text-sm font-medium text-neutral-300"
+                    className="text-sm font-medium text-foreground/80"
                   >
                     Price ($) *
                   </Label>
@@ -410,7 +410,7 @@ export default function EditPlanDialog({
                       })
                     }
                     disabled={isLoading}
-                    className="bg-neutral-800 border-neutral-700 text-white focus:border-blue-500 focus:ring-blue-500"
+                    className="bg-white/[0.06] border-border text-foreground focus:border-blue-500 focus:ring-blue-500"
                   />
                 </div>
 
@@ -418,7 +418,7 @@ export default function EditPlanDialog({
                 <div className="space-y-2">
                   <Label
                     htmlFor="discount"
-                    className="text-sm font-medium text-neutral-300"
+                    className="text-sm font-medium text-foreground/80"
                   >
                     Discount (%)
                   </Label>
@@ -436,7 +436,7 @@ export default function EditPlanDialog({
                       })
                     }
                     disabled={isLoading}
-                    className="bg-neutral-800 border-neutral-700 text-white focus:border-blue-500 focus:ring-blue-500"
+                    className="bg-white/[0.06] border-border text-foreground focus:border-blue-500 focus:ring-blue-500"
                   />
                 </div>
               </div>
@@ -445,7 +445,7 @@ export default function EditPlanDialog({
             <div className="space-y-2">
               <Label
                 htmlFor="fixed_price"
-                className="text-sm font-medium text-neutral-300"
+                className="text-sm font-medium text-foreground/80"
               >
                 Fixed Price (USD)
               </Label>
@@ -462,18 +462,18 @@ export default function EditPlanDialog({
                   })
                 }
                 disabled={isLoading}
-                className="bg-neutral-800 border-neutral-700 text-white focus:border-blue-500 focus:ring-blue-500"
+                className="bg-white/[0.06] border-border text-foreground focus:border-blue-500 focus:ring-blue-500"
               />
             </div>
 
             {/* Action Buttons */}
-            <div className="flex gap-3 pt-4 border-t border-neutral-800">
+            <div className="flex gap-3 pt-4 border-t border-border">
               <Button
                 type="button"
                 onClick={onClose}
                 disabled={isLoading}
                 variant="outline"
-                className="cursor-pointer flex-1 bg-neutral-800 hover:bg-neutral-700 text-white border-neutral-700"
+                className="cursor-pointer flex-1 bg-white/[0.06] hover:bg-white/[0.08] text-foreground border-border"
               >
                 <X className="h-4 w-4 mr-2" />
                 Cancel
@@ -481,7 +481,7 @@ export default function EditPlanDialog({
               <Button
                 type="submit"
                 disabled={isLoading}
-                className="cursor-pointer flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+                className="cursor-pointer flex-1 bg-blue-600 hover:bg-blue-700 text-foreground"
               >
                 {isLoading ? (
                   <>

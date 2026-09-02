@@ -91,10 +91,10 @@ export default function DDoSSettingsTab() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
       >
-        <div className="bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden">
+        <div className="bg-card border border-border rounded-lg overflow-hidden">
           <div className="px-6 py-12 text-center">
-            <Loader2 className="h-8 w-8 text-neutral-600 mx-auto mb-3 animate-spin" />
-            <p className="text-neutral-400 text-sm">
+            <Loader2 className="h-8 w-8 text-muted-foreground/50 mx-auto mb-3 animate-spin" />
+            <p className="text-muted-foreground text-sm">
               Loading DDoS protection pricing...
             </p>
           </div>
@@ -109,17 +109,17 @@ export default function DDoSSettingsTab() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.1 }}
     >
-      <div className="bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden">
+      <div className="bg-card border border-border rounded-lg overflow-hidden">
         <div className="px-6 py-6">
           <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-neutral-800 rounded-lg">
-              <DollarSign className="h-5 w-5 text-neutral-300" />
+            <div className="p-2 bg-white/[0.06] rounded-lg">
+              <DollarSign className="h-5 w-5 text-foreground/80" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-white">
+              <h3 className="text-lg font-semibold text-foreground">
                 DDoS Protection Pricing
               </h3>
-              <p className="text-neutral-400 text-sm">
+              <p className="text-muted-foreground text-sm">
                 Set the price for network DDoS protection service
               </p>
             </div>
@@ -127,7 +127,7 @@ export default function DDoSSettingsTab() {
 
           <div className="space-y-4 max-w-md">
             <div className="space-y-2">
-              <Label htmlFor="ddos-price" className="text-white text-sm">
+              <Label htmlFor="ddos-price" className="text-foreground text-sm">
                 Price (USD)
               </Label>
               <div className="flex gap-2">
@@ -139,17 +139,17 @@ export default function DDoSSettingsTab() {
                   value={price}
                   onChange={(e) => setPrice(e.target.value)}
                   placeholder="0.00"
-                  className="bg-white/10 border-white/20 text-white h-9 text-sm"
+                  className="bg-white/10 border-white/20 text-foreground h-9 text-sm"
                   disabled={loading}
                 />
               </div>
-              <p className="text-neutral-500 text-xs">
+              <p className="text-muted-foreground/70 text-xs">
                 This price will be shown to users when creating new DDoS
                 protection apps
               </p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="ddos-fixed-price" className="text-white text-sm">
+              <Label htmlFor="ddos-fixed-price" className="text-foreground text-sm">
                 Fixed Price (USD)
               </Label>
               <div className="flex gap-2">
@@ -161,7 +161,7 @@ export default function DDoSSettingsTab() {
                   value={fixedPrice}
                   onChange={(e) => setFixedPrice(e.target.value)}
                   placeholder="0.00"
-                  className="bg-white/10 border-white/20 text-white h-9 text-sm"
+                  className="bg-white/10 border-white/20 text-foreground h-9 text-sm"
                   disabled={loading}
                 />
               </div>

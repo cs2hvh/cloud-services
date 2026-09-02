@@ -135,7 +135,7 @@ export default function InternalClustersTab({ all_clusters }: Props) {
       <div className="flex flex-col sm:flex-row gap-3 justify-between">
         <div className="flex gap-2 flex-1">
           <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-500" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
             <Input
               placeholder="Search by name, ID, version, status…"
               value={searchQuery}
@@ -143,14 +143,14 @@ export default function InternalClustersTab({ all_clusters }: Props) {
                 setSearchQuery(e.target.value);
                 setCurrentPage(1);
               }}
-              className="pl-10 bg-neutral-900 border-neutral-800 text-white placeholder:text-neutral-500 focus:border-neutral-700 focus:ring-0"
+              className="pl-10 bg-card border-border text-foreground placeholder:text-muted-foreground/70 focus:border-border focus:ring-0"
             />
           </div>
           <Button
             variant="ghost"
             size="icon"
             onClick={() => router.refresh()}
-            className="text-neutral-400 hover:text-white hover:bg-neutral-800 h-10 w-10 shrink-0"
+            className="text-muted-foreground hover:text-foreground hover:bg-white/[0.06] h-10 w-10 shrink-0"
             title="Refresh"
           >
             <RefreshCw className="h-4 w-4" />
@@ -178,10 +178,10 @@ export default function InternalClustersTab({ all_clusters }: Props) {
         ).map(({ label, value }) => (
           <div
             key={label}
-            className="rounded-lg border border-neutral-800 bg-neutral-900 px-4 py-3"
+            className="rounded-lg border border-border bg-card px-4 py-3"
           >
-            <p className="text-xs text-neutral-500 mb-1">{label}</p>
-            <p className="text-xl font-semibold text-white">{value}</p>
+            <p className="text-xs text-muted-foreground/70 mb-1">{label}</p>
+            <p className="text-xl font-semibold text-foreground">{value}</p>
           </div>
         ))}
       </div>
@@ -189,19 +189,19 @@ export default function InternalClustersTab({ all_clusters }: Props) {
       {/* Table */}
       {isDeleting ? (
         <div className="flex justify-center items-center h-48">
-          <Loader2 className="h-8 w-8 text-white animate-spin" />
+          <Loader2 className="h-8 w-8 text-foreground animate-spin" />
         </div>
       ) : pageClusters.length === 0 ? (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="rounded-xl border border-neutral-800 bg-neutral-900 p-12 flex flex-col items-center gap-3"
+          className="rounded-xl border border-border bg-card p-12 flex flex-col items-center gap-3"
         >
-          <div className="p-3 bg-neutral-800 rounded-lg">
-            <Layers className="h-6 w-6 text-neutral-400" />
+          <div className="p-3 bg-white/[0.06] rounded-lg">
+            <Layers className="h-6 w-6 text-muted-foreground" />
           </div>
-          <p className="text-neutral-400 font-medium">No internal clusters yet</p>
-          <p className="text-neutral-600 text-sm text-center max-w-xs">
+          <p className="text-muted-foreground font-medium">No internal clusters yet</p>
+          <p className="text-muted-foreground/50 text-sm text-center max-w-xs">
             {searchQuery
               ? "No clusters match your search."
               : "Create your first internal cluster to host platform workloads."}
@@ -209,22 +209,22 @@ export default function InternalClustersTab({ all_clusters }: Props) {
           {!searchQuery && <CreateInternalClusterDialog onCreated={() => router.refresh()} />}
         </motion.div>
       ) : (
-        <div className="rounded-xl border border-neutral-800 overflow-hidden">
+        <div className="rounded-xl border border-border overflow-hidden">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-neutral-800 bg-neutral-900/60">
-                <th className="text-left px-4 py-3 text-neutral-400 font-medium">Cluster</th>
-                <th className="text-left px-4 py-3 text-neutral-400 font-medium">Status</th>
-                <th className="text-left px-4 py-3 text-neutral-400 font-medium hidden sm:table-cell">
+              <tr className="border-b border-border bg-card/60">
+                <th className="text-left px-4 py-3 text-muted-foreground font-medium">Cluster</th>
+                <th className="text-left px-4 py-3 text-muted-foreground font-medium">Status</th>
+                <th className="text-left px-4 py-3 text-muted-foreground font-medium hidden sm:table-cell">
                   Nodes
                 </th>
-                <th className="text-left px-4 py-3 text-neutral-400 font-medium hidden md:table-cell">
+                <th className="text-left px-4 py-3 text-muted-foreground font-medium hidden md:table-cell">
                   K8s Version
                 </th>
-                <th className="text-left px-4 py-3 text-neutral-400 font-medium hidden lg:table-cell">
+                <th className="text-left px-4 py-3 text-muted-foreground font-medium hidden lg:table-cell">
                   Created
                 </th>
-                <th className="text-left px-4 py-3 text-neutral-400 font-medium">Actions</th>
+                <th className="text-left px-4 py-3 text-muted-foreground font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -234,21 +234,21 @@ export default function InternalClustersTab({ all_clusters }: Props) {
                   initial={{ opacity: 0, y: 4 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.03 }}
-                  className="border-b border-neutral-800 last:border-0 bg-neutral-950 hover:bg-neutral-900/60 transition-colors"
+                  className="border-b border-border last:border-0 bg-neutral-950 hover:bg-card/60 transition-colors"
                 >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <div className="p-1.5 bg-neutral-800 rounded">
-                        <Server className="h-3.5 w-3.5 text-neutral-400" />
+                      <div className="p-1.5 bg-white/[0.06] rounded">
+                        <Server className="h-3.5 w-3.5 text-muted-foreground" />
                       </div>
                       <div>
                         <div className="flex items-center gap-1.5">
-                          <p className="font-medium text-white">{cluster.cluster_name}</p>
+                          <p className="font-medium text-foreground">{cluster.cluster_name}</p>
                           <Badge variant="outline" className="text-[10px] border-violet-800/60 text-violet-400 bg-violet-950/30 px-1.5 py-0 leading-4">
                             Internal
                           </Badge>
                         </div>
-                        <p className="text-xs text-neutral-500 font-mono">
+                        <p className="text-xs text-muted-foreground/70 font-mono">
                           {cluster.cluster_id.slice(0, 8)}…
                         </p>
                       </div>
@@ -262,13 +262,13 @@ export default function InternalClustersTab({ all_clusters }: Props) {
                       {cluster.status}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3 text-neutral-300 hidden sm:table-cell">
+                  <td className="px-4 py-3 text-foreground/80 hidden sm:table-cell">
                     {getNodeCount(cluster)}
                   </td>
-                  <td className="px-4 py-3 text-neutral-300 font-mono text-xs hidden md:table-cell">
+                  <td className="px-4 py-3 text-foreground/80 font-mono text-xs hidden md:table-cell">
                     {cluster.k8s_version ?? "—"}
                   </td>
-                  <td className="px-4 py-3 text-neutral-500 text-xs hidden lg:table-cell">
+                  <td className="px-4 py-3 text-muted-foreground/70 text-xs hidden lg:table-cell">
                     {cluster.created_at
                       ? format(new Date(cluster.created_at), "MMM d, yyyy")
                       : "—"}
@@ -299,7 +299,7 @@ export default function InternalClustersTab({ all_clusters }: Props) {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between pt-2">
-          <p className="text-xs text-neutral-500">
+          <p className="text-xs text-muted-foreground/70">
             Page {currentPage} of {totalPages} · {filtered.length} cluster
             {filtered.length !== 1 ? "s" : ""}
           </p>
@@ -309,7 +309,7 @@ export default function InternalClustersTab({ all_clusters }: Props) {
               size="sm"
               onClick={() => handlePageChange(currentPage - 1)}
               disabled={currentPage === 1}
-              className="text-neutral-400 hover:text-white hover:bg-neutral-800 disabled:opacity-40"
+              className="text-muted-foreground hover:text-foreground hover:bg-white/[0.06] disabled:opacity-40"
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
@@ -318,7 +318,7 @@ export default function InternalClustersTab({ all_clusters }: Props) {
               size="sm"
               onClick={() => handlePageChange(currentPage + 1)}
               disabled={currentPage === totalPages}
-              className="text-neutral-400 hover:text-white hover:bg-neutral-800 disabled:opacity-40"
+              className="text-muted-foreground hover:text-foreground hover:bg-white/[0.06] disabled:opacity-40"
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
@@ -329,18 +329,18 @@ export default function InternalClustersTab({ all_clusters }: Props) {
 
     {/* Delete Confirmation Dialog */}
     <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-      <AlertDialogContent className="bg-neutral-900 border-neutral-800">
+      <AlertDialogContent className="bg-card border-border">
         <AlertDialogHeader>
-          <AlertDialogTitle className="text-white flex items-center gap-2">
+          <AlertDialogTitle className="text-foreground flex items-center gap-2">
             <Trash2 className="h-5 w-5 text-red-400" />
             Delete Internal Cluster
           </AlertDialogTitle>
-          <AlertDialogDescription className="text-neutral-300">
+          <AlertDialogDescription className="text-foreground/80">
             Are you sure you want to permanently delete this cluster? Any associated
             DigitalOcean droplets will also be deleted.
-            <span className="mt-3 p-3 bg-neutral-800 rounded-md border border-neutral-700 block">
-              <span className="text-sm text-neutral-400 block">Cluster name</span>
-              <span className="text-base font-semibold text-white">{selectedClusterName}</span>
+            <span className="mt-3 p-3 bg-white/[0.06] rounded-md border border-border block">
+              <span className="text-sm text-muted-foreground block">Cluster name</span>
+              <span className="text-base font-semibold text-foreground">{selectedClusterName}</span>
             </span>
             <span className="mt-2 block text-xs text-red-400/80">
               This action cannot be undone even if the cluster is still being provisioned.
@@ -348,12 +348,12 @@ export default function InternalClustersTab({ all_clusters }: Props) {
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel className="bg-neutral-800 border-neutral-700 text-white hover:bg-neutral-700">
+          <AlertDialogCancel className="bg-white/[0.06] border-border text-foreground hover:bg-white/[0.08]">
             Cancel
           </AlertDialogCancel>
           <AlertDialogAction
             onClick={confirmDelete}
-            className="bg-red-600 hover:bg-red-700 text-white border-0"
+            className="bg-red-600 hover:bg-red-700 text-foreground border-0"
           >
             Delete Cluster
           </AlertDialogAction>

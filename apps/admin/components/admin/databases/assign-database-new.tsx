@@ -279,14 +279,14 @@ const AdminDatabaseAssign = ({ products, locations, allUsers, allProjects, baseP
           {currentStep === 4 && (
             <Card className="bg-gradient-to-b from-white/10 to-white/5 border border-white/10 rounded-2xl shadow-lg backdrop-blur-md transition-all duration-300">
               <CardHeader className="pb-2">
-                <CardTitle className="text-lg font-semibold text-white tracking-wide">
+                <CardTitle className="text-lg font-semibold text-foreground tracking-wide">
                   Database Type
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {loadingTypes ? (
                   <div className="flex items-center justify-center py-12">
-                    <Loader2 className="w-8 h-8 animate-spin text-white/80" />
+                    <Loader2 className="w-8 h-8 animate-spin text-foreground/80" />
                   </div>
                 ) : (
                   <>
@@ -332,10 +332,10 @@ const AdminDatabaseAssign = ({ products, locations, allUsers, allProjects, baseP
 
                                 {/* Text */}
                                 <div className="flex-1">
-                                  <p className="font-semibold text-white text-sm sm:text-base">
+                                  <p className="font-semibold text-foreground text-sm sm:text-base">
                                     {dbType.name}
                                   </p>
-                                  <p className="text-xs text-white/60 mt-1 leading-snug">
+                                  <p className="text-xs text-foreground/60 mt-1 leading-snug">
                                     {dbType.description}
                                   </p>
                                 </div>
@@ -344,7 +344,7 @@ const AdminDatabaseAssign = ({ products, locations, allUsers, allProjects, baseP
                                 {planCount > 0 && (
                                   <Badge
                                     variant="outline"
-                                    className="ml-auto text-white/80 border-white/20 bg-white/5 px-2 py-0.5 text-xs rounded-md"
+                                    className="ml-auto text-foreground/80 border-white/20 bg-white/5 px-2 py-0.5 text-xs rounded-md"
                                   >
                                     {planCount} plans
                                   </Badge>
@@ -369,7 +369,7 @@ const AdminDatabaseAssign = ({ products, locations, allUsers, allProjects, baseP
                 <Button
                   variant="outline"
                   onClick={handlePrevStep}
-                  className="rounded-lg border-white/20 text-white hover:bg-white/10 hover:text-white transition-all"
+                  className="rounded-lg border-white/20 text-foreground hover:bg-white/10 hover:text-foreground transition-all"
                 >
                   <ChevronLeft size={16} className="mr-2" /> Back
                 </Button>
@@ -388,11 +388,11 @@ const AdminDatabaseAssign = ({ products, locations, allUsers, allProjects, baseP
           {currentStep === 5 && (
             <Card className="bg-white/5 border-white/10">
               <CardHeader>
-                <CardTitle className="text-white">Database Plan & Version</CardTitle>
+                <CardTitle className="text-foreground">Database Plan & Version</CardTitle>
               </CardHeader>
               <CardContent>
                 {availablePlans.length === 0 ? (
-                  <div className="text-center py-8 text-white/60">
+                  <div className="text-center py-8 text-foreground/60">
                     No plans available for this database type
                   </div>
                 ) : (
@@ -409,7 +409,7 @@ const AdminDatabaseAssign = ({ products, locations, allUsers, allProjects, baseP
                         >
                           <div className="flex justify-between items-start mb-4">
                             <div>
-                              <p className="font-bold text-lg text-white">
+                              <p className="font-bold text-lg text-foreground">
                                 {database.name}
                               </p>
                               {database.discount &&
@@ -425,30 +425,30 @@ const AdminDatabaseAssign = ({ products, locations, allUsers, allProjects, baseP
                             <div className="text-right">
                               {database.price === 0 || database.price === null ? (
                                 <div>
-                                  <span className="text-2xl font-bold text-white">
+                                  <span className="text-2xl font-bold text-foreground">
                                     Free
                                   </span>
                                 </div>
                               ) : database.discount ? (
                                 <div>
-                                  <span className="line-through text-sm text-white/40">
+                                  <span className="line-through text-sm text-foreground/40">
                                     ${database.price}
                                   </span>
-                                  <div className="text-2xl font-bold text-white">
+                                  <div className="text-2xl font-bold text-foreground">
                                     $
                                     {(
                                       database.price! *
                                       (1 - Number(database.discount) / 100)
                                     ).toFixed(0)}
-                                    <span className="text-sm font-normal text-white/60">
+                                    <span className="text-sm font-normal text-foreground/60">
                                       /mo
                                     </span>
                                   </div>
                                 </div>
                               ) : (
-                                <div className="text-2xl font-bold text-white">
+                                <div className="text-2xl font-bold text-foreground">
                                   ${database.price}
-                                  <span className="text-sm font-normal text-white/60">
+                                  <span className="text-sm font-normal text-foreground/60">
                                     /mo
                                   </span>
                                 </div>
@@ -460,11 +460,11 @@ const AdminDatabaseAssign = ({ products, locations, allUsers, allProjects, baseP
                               <div>
                                 <div className="flex items-center gap-2 mb-1">
                                   <Cpu className="w-4 h-4 text-blue-400" />
-                                  <span className="text-xs text-white/60">
+                                  <span className="text-xs text-foreground/60">
                                     CPU
                                   </span>
                                 </div>
-                                <p className="font-semibold text-white">
+                                <p className="font-semibold text-foreground">
                                   {
                                     (
                                       database.resources as {
@@ -480,11 +480,11 @@ const AdminDatabaseAssign = ({ products, locations, allUsers, allProjects, baseP
                               <div>
                                 <div className="flex items-center gap-2 mb-1">
                                   <Server className="w-4 h-4 text-green-400" />
-                                  <span className="text-xs text-white/60">
+                                  <span className="text-xs text-foreground/60">
                                     RAM
                                   </span>
                                 </div>
-                                <p className="font-semibold text-white">
+                                <p className="font-semibold text-foreground">
                                   {
                                     (
                                       database.resources as {
@@ -500,11 +500,11 @@ const AdminDatabaseAssign = ({ products, locations, allUsers, allProjects, baseP
                               <div>
                                 <div className="flex items-center gap-2 mb-1">
                                   <HardDrive className="w-4 h-4 text-purple-400" />
-                                  <span className="text-xs text-white/60">
+                                  <span className="text-xs text-foreground/60">
                                     Storage
                                   </span>
                                 </div>
-                                <p className="font-semibold text-white">
+                                <p className="font-semibold text-foreground">
                                   {
                                     (
                                       database.resources as {
@@ -523,7 +523,7 @@ const AdminDatabaseAssign = ({ products, locations, allUsers, allProjects, baseP
                           {/* Version Selection - Show only when this plan is selected */}
                           {state.selectedDb === database.id && state.versions.length > 0 && (
                             <div className="mt-4 pt-4 border-t border-white/10">
-                              <Label htmlFor="version" className="mb-2 block text-white text-sm">
+                              <Label htmlFor="version" className="mb-2 block text-foreground text-sm">
                                 Select Version
                               </Label>
                               <Select
@@ -538,14 +538,14 @@ const AdminDatabaseAssign = ({ products, locations, allUsers, allProjects, baseP
                               >
                                 <SelectTrigger
                                   id="version"
-                                  className={`w-full bg-white/10 border-white/20 rounded-md text-white ${
+                                  className={`w-full bg-white/10 border-white/20 rounded-md text-foreground ${
                                     errors.version ? "border-red-500" : ""
                                   }`}
                                   onClick={(e) => e.stopPropagation()}
                                 >
                                   <SelectValue placeholder="Select version" />
                                 </SelectTrigger>
-                                <SelectContent className="bg-black border-white/20 text-white">
+                                <SelectContent className="bg-card border-white/20 text-foreground">
                                   {state.versions.map((version) => (
                                     <SelectItem key={version} value={version}>
                                       v{version}
@@ -595,17 +595,17 @@ const AdminDatabaseAssign = ({ products, locations, allUsers, allProjects, baseP
           {currentStep === 6 && (
             <Card className="bg-white/5 border-white/10">
               <CardHeader>
-                <CardTitle className="text-white">Project</CardTitle>
+                <CardTitle className="text-foreground">Project</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div>
-                  <Label htmlFor="project" className="mb-2 block text-white">
+                  <Label htmlFor="project" className="mb-2 block text-foreground">
                     Select Project
                   </Label>
                   {userProjects.length === 0 ? (
                     <div className="text-center py-8 bg-white/5 rounded-lg border border-white/10">
-                      <p className="text-white/60">This user has no projects available.</p>
-                      <p className="text-white/40 text-sm mt-2">
+                      <p className="text-foreground/60">This user has no projects available.</p>
+                      <p className="text-foreground/40 text-sm mt-2">
                         The user needs to create a project first.
                       </p>
                     </div>
@@ -623,13 +623,13 @@ const AdminDatabaseAssign = ({ products, locations, allUsers, allProjects, baseP
                       >
                         <SelectTrigger
                           id="project"
-                          className={`w-full bg-white/10 border-white/20 rounded-md text-white ${
+                          className={`w-full bg-white/10 border-white/20 rounded-md text-foreground ${
                             errors.project ? "border-red-500" : ""
                           }`}
                         >
                           <SelectValue placeholder="Select project" />
                         </SelectTrigger>
-                        <SelectContent className="bg-black border-white/20 text-white">
+                        <SelectContent className="bg-card border-white/20 text-foreground">
                           {userProjects.map((project) => (
                             <SelectItem key={project.id} value={project.id}>
                               {project.name}
@@ -670,7 +670,7 @@ const AdminDatabaseAssign = ({ products, locations, allUsers, allProjects, baseP
           {currentStep === 7 && (
            <Card className="bg-white/5 border-white/10">
               <CardHeader>
-                <CardTitle className="text-white">Review & Payment</CardTitle>
+                <CardTitle className="text-foreground">Review & Payment</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center space-x-2">
@@ -684,7 +684,7 @@ const AdminDatabaseAssign = ({ products, locations, allUsers, allProjects, baseP
                   />
                   <label
                     htmlFor="terms"
-                    className="text-sm leading-none text-white"
+                    className="text-sm leading-none text-foreground"
                   >
                     I accept the{" "}
                     <Link

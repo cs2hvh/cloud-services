@@ -224,14 +224,14 @@ export default function CreateInternalClusterDialog({ onCreated }: Props) {
         <div key={s} className={`flex items-center gap-2 ${s < 2 ? "flex-1" : ""}`}>
           <div
             className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-semibold border transition-colors
-              ${step === s ? "bg-white text-black border-white" : step > s ? "bg-neutral-700 text-neutral-300 border-neutral-700" : "bg-neutral-900 text-neutral-500 border-neutral-700"}`}
+              ${step === s ? "bg-white text-black border-white" : step > s ? "bg-white/[0.08] text-foreground/80 border-border" : "bg-card text-muted-foreground/70 border-border"}`}
           >
             {step > s ? <CheckCircle2 className="h-4 w-4" /> : s}
           </div>
-          <span className={`text-xs hidden sm:inline ${step === s ? "text-white font-medium" : "text-neutral-500"}`}>
+          <span className={`text-xs hidden sm:inline ${step === s ? "text-foreground font-medium" : "text-muted-foreground/70"}`}>
             {STEP_LABELS[s]}
           </span>
-          {s < 2 && <div className="flex-1 h-px bg-neutral-800 ml-1" />}
+          {s < 2 && <div className="flex-1 h-px bg-white/[0.06] ml-1" />}
         </div>
       ))}
     </div>
@@ -242,28 +242,28 @@ export default function CreateInternalClusterDialog({ onCreated }: Props) {
     node: NodeEntry,
     onChange: (f: keyof NodeEntry, v: string) => void,
   ) => (
-    <div key={node.id} className="rounded-lg border border-neutral-800 bg-neutral-950 p-3 space-y-2">
-      <Badge variant="outline" className="text-xs border-neutral-700 text-neutral-400 capitalize">
+    <div key={node.id} className="rounded-lg border border-border bg-neutral-950 p-3 space-y-2">
+      <Badge variant="outline" className="text-xs border-border text-muted-foreground capitalize">
         {node.role}
       </Badge>
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1">
-          <Label className="text-xs text-neutral-400">Public IP</Label>
+          <Label className="text-xs text-muted-foreground">Public IP</Label>
           <Input
             value={node.host}
             onChange={(e) => onChange("host", e.target.value)}
             placeholder="203.0.113.10"
-            className="bg-neutral-900 border-neutral-700 text-white placeholder:text-neutral-600 h-8 text-sm"
+            className="bg-card border-border text-foreground placeholder:text-muted-foreground/50 h-8 text-sm"
           />
           {node.host && !isValidIp(node.host) && <p className="text-xs text-red-400">Invalid IP</p>}
         </div>
         <div className="space-y-1">
-          <Label className="text-xs text-neutral-400">Private IP</Label>
+          <Label className="text-xs text-muted-foreground">Private IP</Label>
           <Input
             value={node.private_ip}
             onChange={(e) => onChange("private_ip", e.target.value)}
             placeholder="10.0.0.10"
-            className="bg-neutral-900 border-neutral-700 text-white placeholder:text-neutral-600 h-8 text-sm"
+            className="bg-card border-border text-foreground placeholder:text-muted-foreground/50 h-8 text-sm"
           />
           {node.private_ip && !isValidIp(node.private_ip) && (
             <p className="text-xs text-red-400">Invalid IP</p>
@@ -284,20 +284,20 @@ export default function CreateInternalClusterDialog({ onCreated }: Props) {
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="bg-neutral-950 border-neutral-800 text-white max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="bg-neutral-950 border-border text-foreground max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-white">
-            <Server className="h-5 w-5 text-neutral-400" />
+          <DialogTitle className="flex items-center gap-2 text-foreground">
+            <Server className="h-5 w-5 text-muted-foreground" />
             New Internal Cluster
           </DialogTitle>
           <div className="flex flex-wrap gap-1.5 pt-1">
             <Badge variant="outline" className="text-[10px] border-violet-800/60 text-violet-400 bg-violet-950/30">
               Admin console
             </Badge>
-            <Badge variant="outline" className="text-[10px] border-neutral-700 text-neutral-400">
+            <Badge variant="outline" className="text-[10px] border-border text-muted-foreground">
               No billing
             </Badge>
-            <Badge variant="outline" className="text-[10px] border-neutral-700 text-neutral-400">
+            <Badge variant="outline" className="text-[10px] border-border text-muted-foreground">
               {isManualMode ? "Existing servers" : "Auto-provisioned"}
             </Badge>
           </div>
@@ -311,19 +311,19 @@ export default function CreateInternalClusterDialog({ onCreated }: Props) {
 
             {/* Cluster Name */}
             <div className="space-y-1.5">
-              <Label className="text-sm text-neutral-300">Cluster Name</Label>
+              <Label className="text-sm text-foreground/80">Cluster Name</Label>
               <Input
                 value={name}
                 onChange={(e) => setName(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
                 placeholder="prod-internal-1"
-                className="bg-neutral-900 border-neutral-700 text-white placeholder:text-neutral-600"
+                className="bg-card border-border text-foreground placeholder:text-muted-foreground/50"
               />
-              <p className="text-xs text-neutral-500">Lowercase letters, numbers, hyphens</p>
+              <p className="text-xs text-muted-foreground/70">Lowercase letters, numbers, hyphens</p>
             </div>
 
             {/* Location — flag cards */}
             <div className="space-y-1.5">
-              <Label className="text-sm text-neutral-300">Location</Label>
+              <Label className="text-sm text-foreground/80">Location</Label>
               <RadioGroup value={location} onValueChange={setLocation} className="grid grid-cols-2 gap-2">
                 {vmLocations.map((loc) => (
                   <div key={loc.id}>
@@ -337,8 +337,8 @@ export default function CreateInternalClusterDialog({ onCreated }: Props) {
                       htmlFor={`loc-${loc.short}`}
                       className={`flex items-center gap-2.5 rounded-md border cursor-pointer p-2.5 transition-all text-sm ${
                         !loc.available
-                          ? "opacity-40 cursor-not-allowed border-neutral-800 bg-neutral-900"
-                          : "border-neutral-700 bg-neutral-900 hover:border-neutral-500 hover:bg-neutral-800 peer-data-[state=checked]:border-violet-500 peer-data-[state=checked]:bg-violet-950/30"
+                          ? "opacity-40 cursor-not-allowed border-border bg-card"
+                          : "border-border bg-card hover:border-neutral-500 hover:bg-white/[0.06] peer-data-[state=checked]:border-violet-500 peer-data-[state=checked]:bg-violet-950/30"
                       }`}
                     >
                       <Image
@@ -350,11 +350,11 @@ export default function CreateInternalClusterDialog({ onCreated }: Props) {
                         unoptimized
                       />
                       <div className="min-w-0">
-                        <div className="font-medium text-white truncate">{loc.city}</div>
-                        <div className="text-xs text-neutral-500 font-mono">{loc.short}</div>
+                        <div className="font-medium text-foreground truncate">{loc.city}</div>
+                        <div className="text-xs text-muted-foreground/70 font-mono">{loc.short}</div>
                       </div>
                       {!loc.available && (
-                        <Badge variant="outline" className="text-[10px] ml-auto shrink-0 border-neutral-700 text-neutral-500">
+                        <Badge variant="outline" className="text-[10px] ml-auto shrink-0 border-border text-muted-foreground/70">
                           Soon
                         </Badge>
                       )}
@@ -366,7 +366,7 @@ export default function CreateInternalClusterDialog({ onCreated }: Props) {
 
             {/* Node Count */}
             <div className="space-y-1.5">
-              <Label className="text-sm text-neutral-300">Number of Nodes</Label>
+              <Label className="text-sm text-foreground/80">Number of Nodes</Label>
               <div className="flex items-center gap-3">
                 <Button
                   type="button"
@@ -374,22 +374,22 @@ export default function CreateInternalClusterDialog({ onCreated }: Props) {
                   size="icon"
                   onClick={() => setNodeCount((c) => Math.max(1, c - 1))}
                   disabled={nodeCount <= 1}
-                  className="h-9 w-9 border-neutral-700 bg-neutral-900 text-white hover:bg-neutral-800 disabled:opacity-40"
+                  className="h-9 w-9 border-border bg-card text-foreground hover:bg-white/[0.06] disabled:opacity-40"
                 >
                   <Minus className="h-4 w-4" />
                 </Button>
-                <span className="w-8 text-center text-white font-semibold text-lg">{nodeCount}</span>
+                <span className="w-8 text-center text-foreground font-semibold text-lg">{nodeCount}</span>
                 <Button
                   type="button"
                   variant="outline"
                   size="icon"
                   onClick={() => setNodeCount((c) => Math.min(10, c + 1))}
                   disabled={nodeCount >= 10}
-                  className="h-9 w-9 border-neutral-700 bg-neutral-900 text-white hover:bg-neutral-800 disabled:opacity-40"
+                  className="h-9 w-9 border-border bg-card text-foreground hover:bg-white/[0.06] disabled:opacity-40"
                 >
                   <Plus className="h-4 w-4" />
                 </Button>
-                <span className="text-xs text-neutral-500">
+                <span className="text-xs text-muted-foreground/70">
                   1 control plane + {Math.max(nodeCount - 1, 0)} worker{nodeCount - 1 !== 1 ? "s" : ""}
                 </span>
               </div>
@@ -397,16 +397,16 @@ export default function CreateInternalClusterDialog({ onCreated }: Props) {
 
             {/* Node Size */}
             <div className="space-y-1.5">
-              <Label className="text-sm text-neutral-300">Node Size</Label>
+              <Label className="text-sm text-foreground/80">Node Size</Label>
               <Select value={nodeSize} onValueChange={setNodeSize}>
-                <SelectTrigger className="bg-neutral-900 border-neutral-700 text-white">
+                <SelectTrigger className="bg-card border-border text-foreground">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-neutral-900 border-neutral-700">
+                <SelectContent className="bg-card border-border">
                   {NODE_SIZES.map((s) => (
-                    <SelectItem key={s.slug} value={s.slug} className="text-white hover:bg-neutral-800">
+                    <SelectItem key={s.slug} value={s.slug} className="text-foreground hover:bg-white/[0.06]">
                       {s.label}
-                      <span className="ml-2 text-neutral-500 text-xs">{s.tier}</span>
+                      <span className="ml-2 text-muted-foreground/70 text-xs">{s.tier}</span>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -415,14 +415,14 @@ export default function CreateInternalClusterDialog({ onCreated }: Props) {
 
             {/* K8s Version */}
             <div className="space-y-1.5">
-              <Label className="text-sm text-neutral-300">Kubernetes Version</Label>
+              <Label className="text-sm text-foreground/80">Kubernetes Version</Label>
               <Select value={k8sMinor} onValueChange={setK8sMinor}>
-                <SelectTrigger className="bg-neutral-900 border-neutral-700 text-white">
+                <SelectTrigger className="bg-card border-border text-foreground">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-neutral-900 border-neutral-700">
+                <SelectContent className="bg-card border-border">
                   {K8S_VERSIONS.map((v) => (
-                    <SelectItem key={v} value={v} className="text-white hover:bg-neutral-800">
+                    <SelectItem key={v} value={v} className="text-foreground hover:bg-white/[0.06]">
                       v{v}
                     </SelectItem>
                   ))}
@@ -434,7 +434,7 @@ export default function CreateInternalClusterDialog({ onCreated }: Props) {
             <button
               type="button"
               onClick={() => setShowAdvanced((v) => !v)}
-              className="text-xs text-neutral-500 hover:text-neutral-300 transition-colors flex items-center gap-1.5"
+              className="text-xs text-muted-foreground/70 hover:text-foreground/80 transition-colors flex items-center gap-1.5"
             >
               <Settings2 className="h-3 w-3" />
               Advanced options
@@ -442,24 +442,24 @@ export default function CreateInternalClusterDialog({ onCreated }: Props) {
             </button>
 
             {showAdvanced && (
-              <div className="space-y-4 pl-3 border-l border-neutral-800">
+              <div className="space-y-4 pl-3 border-l border-border">
 
                 {/* SSH Username + Password */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label className="text-sm text-neutral-300">SSH Username</Label>
+                    <Label className="text-sm text-foreground/80">SSH Username</Label>
                     <Input
                       value={sshUser}
                       onChange={(e) => setSshUser(e.target.value)}
                       placeholder="ubuntu"
-                      className="bg-neutral-900 border-neutral-700 text-white placeholder:text-neutral-600"
+                      className="bg-card border-border text-foreground placeholder:text-muted-foreground/50"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-sm text-neutral-300">
+                    <Label className="text-sm text-foreground/80">
                       SSH Password{" "}
                       {!isManualMode && (
-                        <span className="text-neutral-500 font-normal text-xs">(optional)</span>
+                        <span className="text-muted-foreground/70 font-normal text-xs">(optional)</span>
                       )}
                     </Label>
                     <div className="relative">
@@ -468,12 +468,12 @@ export default function CreateInternalClusterDialog({ onCreated }: Props) {
                         value={sshPassword}
                         onChange={(e) => setSshPassword(e.target.value)}
                         placeholder={isManualMode ? "required" : "auto-generated"}
-                        className="bg-neutral-900 border-neutral-700 text-white placeholder:text-neutral-600 pr-14"
+                        className="bg-card border-border text-foreground placeholder:text-muted-foreground/50 pr-14"
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword((p) => !p)}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-neutral-500 hover:text-neutral-300"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground/70 hover:text-foreground/80"
                       >
                         {showPassword ? "Hide" : "Show"}
                       </button>
@@ -483,12 +483,12 @@ export default function CreateInternalClusterDialog({ onCreated }: Props) {
 
                 {/* Pod CIDR */}
                 <div className="space-y-1.5">
-                  <Label className="text-sm text-neutral-300">Pod CIDR</Label>
+                  <Label className="text-sm text-foreground/80">Pod CIDR</Label>
                   <Input
                     value={podCidr}
                     onChange={(e) => setPodCidr(e.target.value)}
                     placeholder="10.244.0.0/16"
-                    className="bg-neutral-900 border-neutral-700 text-white placeholder:text-neutral-600"
+                    className="bg-card border-border text-foreground placeholder:text-muted-foreground/50"
                   />
                   {podCidr && !isValidCidr(podCidr) && (
                     <p className="text-xs text-red-400">Invalid CIDR — expected: 10.244.0.0/16</p>
@@ -498,8 +498,8 @@ export default function CreateInternalClusterDialog({ onCreated }: Props) {
                 {/* Use existing servers toggle */}
                 <div className="flex items-center justify-between py-1">
                   <div>
-                    <p className="text-sm text-neutral-300">Use existing servers</p>
-                    <p className="text-xs text-neutral-500">
+                    <p className="text-sm text-foreground/80">Use existing servers</p>
+                    <p className="text-xs text-muted-foreground/70">
                       Manually enter node IPs instead of auto-provisioning via DigitalOcean
                     </p>
                   </div>
@@ -513,14 +513,14 @@ export default function CreateInternalClusterDialog({ onCreated }: Props) {
                       <Lock className="h-3.5 w-3.5 mt-0.5 shrink-0" />
                       <span>SSH password is required and will be encrypted server-side.</span>
                     </div>
-                    <div className="flex items-center gap-1.5 text-xs text-neutral-400">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                       <Network className="h-3.5 w-3.5" />
                       <span>Control Plane</span>
                     </div>
                     {renderNodeIpRow(controlPlane, patchControlPlane)}
                     {workers.length > 0 && (
                       <>
-                        <div className="flex items-center gap-1.5 text-xs text-neutral-400">
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                           <Server className="h-3.5 w-3.5" />
                           <span>Workers ({workers.length})</span>
                         </div>
@@ -539,13 +539,13 @@ export default function CreateInternalClusterDialog({ onCreated }: Props) {
         {/* ─── Step 2: Review ─── */}
         {step === 2 && (
           <div className="space-y-4 text-sm">
-            <div className="rounded-lg border border-neutral-800 bg-neutral-900 divide-y divide-neutral-800">
+            <div className="rounded-lg border border-border bg-card divide-y divide-border/60">
               <div className="px-4 py-3 flex justify-between">
-                <span className="text-neutral-400">Name</span>
-                <span className="text-white font-mono">{name}</span>
+                <span className="text-muted-foreground">Name</span>
+                <span className="text-foreground font-mono">{name}</span>
               </div>
               <div className="px-4 py-3 flex justify-between items-center">
-                <span className="text-neutral-400">Location</span>
+                <span className="text-muted-foreground">Location</span>
                 <div className="flex items-center gap-2">
                   {selectedLoc ? (
                     <>
@@ -557,30 +557,30 @@ export default function CreateInternalClusterDialog({ onCreated }: Props) {
                         className="rounded-sm"
                         unoptimized
                       />
-                      <span className="text-white">{selectedLoc.city}</span>
-                      <span className="text-neutral-500 font-mono text-xs">{location}</span>
+                      <span className="text-foreground">{selectedLoc.city}</span>
+                      <span className="text-muted-foreground/70 font-mono text-xs">{location}</span>
                     </>
                   ) : (
-                    <span className="text-white">{location}</span>
+                    <span className="text-foreground">{location}</span>
                   )}
                 </div>
               </div>
               <div className="px-4 py-3 flex justify-between">
-                <span className="text-neutral-400">Nodes</span>
-                <span className="text-white">
+                <span className="text-muted-foreground">Nodes</span>
+                <span className="text-foreground">
                   {nodeCount} × <span className="font-mono">{nodeSize}</span>
                 </span>
               </div>
               <div className="px-4 py-3 flex justify-between">
-                <span className="text-neutral-400">K8s Version</span>
-                <span className="text-white">v{k8sMinor}</span>
+                <span className="text-muted-foreground">K8s Version</span>
+                <span className="text-foreground">v{k8sMinor}</span>
               </div>
               <div className="px-4 py-3 flex justify-between">
-                <span className="text-neutral-400">Pod CIDR</span>
-                <span className="text-white font-mono">{podCidr}</span>
+                <span className="text-muted-foreground">Pod CIDR</span>
+                <span className="text-foreground font-mono">{podCidr}</span>
               </div>
               <div className="px-4 py-3 flex justify-between items-center">
-                <span className="text-neutral-400">Mode</span>
+                <span className="text-muted-foreground">Mode</span>
                 <Badge
                   variant="outline"
                   className={`text-xs ${
@@ -596,24 +596,24 @@ export default function CreateInternalClusterDialog({ onCreated }: Props) {
 
             {isManualMode && (
               <div className="space-y-2">
-                <p className="text-neutral-400 text-xs uppercase tracking-wide">
+                <p className="text-muted-foreground text-xs uppercase tracking-wide">
                   Nodes ({1 + workers.length})
                 </p>
                 {[controlPlane, ...workers].map((n, i) => (
                   <div
                     key={n.id}
-                    className="rounded-md border border-neutral-800 bg-neutral-900/60 px-3 py-2 flex items-center justify-between gap-2"
+                    className="rounded-md border border-border bg-card/60 px-3 py-2 flex items-center justify-between gap-2"
                   >
                     <div className="flex items-center gap-2">
                       <Badge
                         variant="outline"
-                        className={`text-xs shrink-0 border-neutral-700 ${n.role === "control-plane" ? "text-blue-400" : "text-green-400"}`}
+                        className={`text-xs shrink-0 border-border ${n.role === "control-plane" ? "text-blue-400" : "text-green-400"}`}
                       >
                         {n.role === "control-plane" ? "CP" : `W${i}`}
                       </Badge>
-                      <span className="font-mono text-xs text-white">{n.host}</span>
+                      <span className="font-mono text-xs text-foreground">{n.host}</span>
                     </div>
-                    <span className="font-mono text-xs text-neutral-500">{n.private_ip}</span>
+                    <span className="font-mono text-xs text-muted-foreground/70">{n.private_ip}</span>
                   </div>
                 ))}
               </div>
@@ -622,12 +622,12 @@ export default function CreateInternalClusterDialog({ onCreated }: Props) {
         )}
 
         {/* ─── Navigation ─── */}
-        <div className="flex justify-between mt-6 pt-4 border-t border-neutral-800">
+        <div className="flex justify-between mt-6 pt-4 border-t border-border">
           <Button
             variant="ghost"
             onClick={() => setStep((s) => (s > 1 ? ((s - 1) as Step) : s))}
             disabled={step === 1 || submitting}
-            className="text-neutral-400 hover:text-white hover:bg-neutral-800"
+            className="text-muted-foreground hover:text-foreground hover:bg-white/[0.06]"
           >
             <ChevronLeft className="h-4 w-4 mr-1" /> Back
           </Button>

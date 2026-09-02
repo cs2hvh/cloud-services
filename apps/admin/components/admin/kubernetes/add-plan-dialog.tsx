@@ -259,7 +259,7 @@ export default function AddPlanDialog({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+        className="fixed inset-0 bg-card/80 backdrop-blur-sm flex items-center justify-center z-50 p-4"
         onClick={handleClose}
       >
         <motion.div
@@ -267,19 +267,19 @@ export default function AddPlanDialog({
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
           onClick={(e) => e.stopPropagation()}
-          className="bg-neutral-900 rounded-2xl border border-neutral-800 shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+          className="bg-card rounded-2xl border border-border shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
         >
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b border-neutral-800 sticky top-0 bg-neutral-900 z-10">
+          <div className="flex items-center justify-between p-6 border-b border-border sticky top-0 bg-card z-10">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-green-500/20 rounded-lg">
                 <Plus className="h-5 w-5 text-green-400" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-white">
+                <h2 className="text-xl font-bold text-foreground">
                   Create New Plan
                 </h2>
-                <p className="text-sm text-neutral-400">
+                <p className="text-sm text-muted-foreground">
                   Add a new Kubernetes plan
                 </p>
               </div>
@@ -287,9 +287,9 @@ export default function AddPlanDialog({
             <button
               onClick={handleClose}
               disabled={isLoading}
-              className="p-2 hover:bg-neutral-800 rounded-lg transition-colors disabled:opacity-50"
+              className="p-2 hover:bg-white/[0.06] rounded-lg transition-colors disabled:opacity-50"
             >
-              <X className="h-5 w-5 text-neutral-400" />
+              <X className="h-5 w-5 text-muted-foreground" />
             </button>
           </div>
 
@@ -297,7 +297,7 @@ export default function AddPlanDialog({
           <form onSubmit={handleSubmit} className="p-6 space-y-6">
             {/* Plan Name */}
             <div className="space-y-2">
-              <Label htmlFor="name" className="text-sm font-medium text-neutral-300">
+              <Label htmlFor="name" className="text-sm font-medium text-foreground/80">
                 Plan Name *
               </Label>
               <Input
@@ -308,13 +308,13 @@ export default function AddPlanDialog({
                 }
                 placeholder="e.g., Standard Kubernetes"
                 disabled={isLoading}
-                className="bg-neutral-800 border-neutral-700 text-white placeholder:text-neutral-500 focus:border-green-500 focus:ring-green-500"
+                className="bg-white/[0.06] border-border text-foreground placeholder:text-muted-foreground/70 focus:border-green-500 focus:ring-green-500"
               />
             </div>
 
             {/* Description */}
             <div className="space-y-2">
-              <Label htmlFor="description" className="text-sm font-medium text-neutral-300">
+              <Label htmlFor="description" className="text-sm font-medium text-foreground/80">
                 Description
               </Label>
               <textarea
@@ -326,13 +326,13 @@ export default function AddPlanDialog({
                 placeholder="Brief description of the plan"
                 rows={3}
                 disabled={isLoading}
-                className="w-full px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:opacity-50 resize-none"
+                className="w-full px-4 py-3 bg-white/[0.06] border border-border rounded-lg text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:opacity-50 resize-none"
               />
             </div>
 
             {/* CPU Type Tabs */}
             <div className="space-y-2">
-              <Label className="text-sm font-medium text-neutral-300">
+              <Label className="text-sm font-medium text-foreground/80">
                 CPU Type *
               </Label>
               <Tabs
@@ -340,26 +340,26 @@ export default function AddPlanDialog({
                 onValueChange={(value) => setSelectedCpuType(value as K8sCpuType)}
                 className="w-full"
               >
-                <TabsList className="grid h-auto w-full grid-cols-3 bg-neutral-800 border border-neutral-700 p-1">
+                <TabsList className="grid h-auto w-full grid-cols-3 bg-white/[0.06] border border-border p-1">
                   {(Object.keys(K8S_CPU_META) as K8sCpuType[]).map((type) => (
                     <TabsTrigger
                       key={type}
                       value={type}
-                      className="px-3 py-2 text-xs data-[state=active]:bg-green-600 data-[state=active]:text-white text-neutral-400"
+                      className="px-3 py-2 text-xs data-[state=active]:bg-green-600 data-[state=active]:text-foreground text-muted-foreground"
                     >
                       {K8S_CPU_META[type].label}
                     </TabsTrigger>
                   ))}
                 </TabsList>
               </Tabs>
-              <p className="text-xs text-neutral-500">
+              <p className="text-xs text-muted-foreground/70">
                 {K8S_CPU_META[selectedCpuType].description}
               </p>
             </div>
 
             {/* Machine Type Selection */}
             <div className="space-y-2">
-              <Label className="text-sm font-medium text-neutral-300">
+              <Label className="text-sm font-medium text-foreground/80">
                 Machine Type *
               </Label>
               <Select
@@ -367,15 +367,15 @@ export default function AddPlanDialog({
                 onValueChange={setSelectedMachineType}
                 disabled={isLoading}
               >
-                <SelectTrigger className="bg-neutral-800 border-neutral-700 text-white focus:border-green-500 focus:ring-green-500">
+                <SelectTrigger className="bg-white/[0.06] border-border text-foreground focus:border-green-500 focus:ring-green-500">
                   <SelectValue placeholder="Select machine type" />
                 </SelectTrigger>
-                <SelectContent className="bg-neutral-800 border-neutral-700">
+                <SelectContent className="bg-white/[0.06] border-border">
                   {MACHINE_TYPES[selectedCpuType].map((mt) => (
                     <SelectItem
                       key={mt.value}
                       value={mt.value}
-                      className="text-white hover:bg-neutral-700 focus:bg-neutral-700"
+                      className="text-foreground hover:bg-white/[0.08] focus:bg-white/[0.08]"
                     >
                       {mt.label}
                     </SelectItem>
@@ -386,7 +386,7 @@ export default function AddPlanDialog({
 
             {/* Droplet Size Selection */}
             <div className="space-y-2">
-              <Label htmlFor="droplet" className="text-sm font-medium text-neutral-300">
+              <Label htmlFor="droplet" className="text-sm font-medium text-foreground/80">
                 Droplet Size *
               </Label>
               <Select
@@ -394,19 +394,19 @@ export default function AddPlanDialog({
                 onValueChange={handleDropletChange}
                 disabled={isLoading || isLoadingDroplets}
               >
-                <SelectTrigger className="bg-neutral-800 border-neutral-700 text-white focus:border-green-500 focus:ring-green-500">
+                <SelectTrigger className="bg-white/[0.06] border-border text-foreground focus:border-green-500 focus:ring-green-500">
                   <SelectValue placeholder={isLoadingDroplets ? "Loading droplets..." : filteredDroplets.length === 0 ? "No droplets for this category" : "Select a droplet size"} />
                 </SelectTrigger>
-                <SelectContent className="bg-neutral-800 border-neutral-700">
+                <SelectContent className="bg-white/[0.06] border-border">
                   {filteredDroplets.map((droplet) => (
                     <SelectItem
                       key={droplet.slug}
                       value={droplet.slug}
-                      className="text-white hover:bg-neutral-700 focus:bg-neutral-700"
+                      className="text-foreground hover:bg-white/[0.08] focus:bg-white/[0.08]"
                     >
                       <div className="flex items-center justify-between w-full gap-4">
                         <span className="font-medium">{droplet.slug}</span>
-                        <span className="text-xs text-neutral-400">
+                        <span className="text-xs text-muted-foreground">
                           {droplet.vcpus} vCPU • {Math.round(droplet.memory / 1024)}GB RAM • {droplet.disk}GB Disk
                         </span>
                         <span className="text-xs text-green-400 font-semibold">
@@ -426,41 +426,41 @@ export default function AddPlanDialog({
 
             {/* Droplet Details (if selected) */}
             {selectedDropletData && (
-              <div className="p-4 bg-neutral-800/50 rounded-lg border border-neutral-700 space-y-3">
-                <h4 className="text-sm font-semibold text-white flex items-center gap-2">
+              <div className="p-4 bg-white/[0.04] rounded-lg border border-border space-y-3">
+                <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
                   <Server className="h-4 w-4 text-green-400" />
                   Droplet Details
                 </h4>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div className="flex flex-col gap-1">
-                    <div className="flex items-center gap-1.5 text-neutral-400">
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
                       <Cpu className="h-3.5 w-3.5" />
                       <span className="text-xs">CPU</span>
                     </div>
-                    <span className="text-sm font-semibold text-white">
+                    <span className="text-sm font-semibold text-foreground">
                       {selectedDropletData.vcpus} vCPU
                     </span>
                   </div>
                   <div className="flex flex-col gap-1">
-                    <div className="flex items-center gap-1.5 text-neutral-400">
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
                       <Server className="h-3.5 w-3.5" />
                       <span className="text-xs">RAM</span>
                     </div>
-                    <span className="text-sm font-semibold text-white">
+                    <span className="text-sm font-semibold text-foreground">
                       {Math.round(selectedDropletData.memory / 1024)} GB
                     </span>
                   </div>
                   <div className="flex flex-col gap-1">
-                    <div className="flex items-center gap-1.5 text-neutral-400">
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
                       <HardDrive className="h-3.5 w-3.5" />
                       <span className="text-xs">Disk</span>
                     </div>
-                    <span className="text-sm font-semibold text-white">
+                    <span className="text-sm font-semibold text-foreground">
                       {selectedDropletData.disk} GB
                     </span>
                   </div>
                   <div className="flex flex-col gap-1">
-                    <div className="flex items-center gap-1.5 text-neutral-400">
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
                       <DollarSign className="h-3.5 w-3.5" />
                       <span className="text-xs">DO Price</span>
                     </div>
@@ -469,7 +469,7 @@ export default function AddPlanDialog({
                     </span>
                   </div>
                 </div>
-                <p className="text-xs text-neutral-400 italic">
+                <p className="text-xs text-muted-foreground italic">
                   {selectedDropletData.description}
                 </p>
               </div>
@@ -477,12 +477,12 @@ export default function AddPlanDialog({
 
             {/* Pricing */}
             <div className="space-y-4">
-              <h3 className="text-sm font-semibold text-white">Pricing</h3>
+              <h3 className="text-sm font-semibold text-foreground">Pricing</h3>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Price */}
                 <div className="space-y-2">
-                  <Label htmlFor="price" className="text-sm font-medium text-neutral-300">
+                  <Label htmlFor="price" className="text-sm font-medium text-foreground/80">
                     Price (USD/month) *
                   </Label>
                   <Input
@@ -498,16 +498,16 @@ export default function AddPlanDialog({
                       })
                     }
                     disabled={isLoading}
-                    className="bg-neutral-800 border-neutral-700 text-white focus:border-green-500 focus:ring-green-500"
+                    className="bg-white/[0.06] border-border text-foreground focus:border-green-500 focus:ring-green-500"
                   />
-                  <p className="text-xs text-neutral-500">
+                  <p className="text-xs text-muted-foreground/70">
                     You can customize the price (DigitalOcean base: ${selectedDropletData?.price_monthly || "N/A"})
                   </p>
                 </div>
 
                 {/* Fixed Price */}
                 <div className="space-y-2">
-                  <Label htmlFor="fixed_price" className="text-sm font-medium text-neutral-300">
+                  <Label htmlFor="fixed_price" className="text-sm font-medium text-foreground/80">
                     Fixed Price (USD)
                   </Label>
                   <Input
@@ -523,14 +523,14 @@ export default function AddPlanDialog({
                       })
                     }
                     disabled={isLoading}
-                    className="bg-neutral-800 border-neutral-700 text-white focus:border-green-500 focus:ring-green-500"
+                    className="bg-white/[0.06] border-border text-foreground focus:border-green-500 focus:ring-green-500"
                   />
                 </div>
               </div>
 
               {/* Discount */}
               <div className="space-y-2">
-                <Label htmlFor="discount" className="text-sm font-medium text-neutral-300">
+                <Label htmlFor="discount" className="text-sm font-medium text-foreground/80">
                   Discount (%)
                 </Label>
                 <Input
@@ -547,26 +547,26 @@ export default function AddPlanDialog({
                     })
                   }
                   disabled={isLoading}
-                  className="bg-neutral-800 border-neutral-700 text-white focus:border-green-500 focus:ring-green-500"
+                  className="bg-white/[0.06] border-border text-foreground focus:border-green-500 focus:ring-green-500"
                 />
               </div>
             </div>
 
             {/* Action Buttons */}
-            <div className="flex items-center justify-end gap-3 pt-4 border-t border-neutral-800">
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
               <Button
                 type="button"
                 onClick={handleClose}
                 disabled={isLoading}
                 variant="ghost"
-                className="cursor-pointer bg-neutral-800 hover:bg-neutral-700 text-white"
+                className="cursor-pointer bg-white/[0.06] hover:bg-white/[0.08] text-foreground"
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
                 disabled={isLoading || !selectedDroplet}
-                className="cursor-pointer bg-green-600 hover:bg-green-700 text-white disabled:opacity-50"
+                className="cursor-pointer bg-green-600 hover:bg-green-700 text-foreground disabled:opacity-50"
               >
                 {isLoading ? (
                   <>

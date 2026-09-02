@@ -36,7 +36,7 @@ export const LocationStep = ({
   return (
     <Card className="bg-white/5 border-white/10">
       <CardHeader>
-        <CardTitle className="text-white">Location</CardTitle>
+        <CardTitle className="text-foreground">Location</CardTitle>
       </CardHeader>
       <CardContent>
         <RadioGroup
@@ -71,17 +71,17 @@ export const LocationStep = ({
                   unoptimized
                 />
                 <div>
-                  <div className="font-medium text-white">
+                  <div className="font-medium text-foreground">
                     {region.city}
                   </div>
-                  <div className="text-xs text-white/60">
+                  <div className="text-xs text-foreground/60">
                     {region.country}
                   </div>
                 </div>
                 {!region.available && (
                   <Badge
                     variant="outline"
-                    className="text-xs ml-auto text-white/70 border-white/30"
+                    className="text-xs ml-auto text-foreground/70 border-white/30"
                   >
                     Coming soon
                   </Badge>
@@ -101,7 +101,7 @@ export const LocationStep = ({
         <Button
           variant="outline"
           onClick={onPrev}
-          className="cursor-pointer rounded-md border-white/20 text-white hover:bg-white/10"
+          className="cursor-pointer rounded-md border-white/20 text-foreground hover:bg-white/10"
         >
           <ChevronLeft size={16} className="mr-2" /> Back
         </Button>

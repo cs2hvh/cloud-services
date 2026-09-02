@@ -107,6 +107,18 @@ export function Sidebar() {
           );
         })}
       </nav>
+
+      <div className="border-t border-border px-4 py-3">
+        <a
+          href="https://ahurasense.com"
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center gap-1.5 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+        >
+          ahurasense.com
+          <ExternalLink className="h-3 w-3 opacity-50" />
+        </a>
+      </div>
     </aside>
   );
 }

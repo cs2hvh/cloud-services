@@ -192,18 +192,18 @@ export default function KubernetesPlansTab({ all_products }: KubernetesPlansTabP
       <div className="flex flex-col sm:flex-row gap-3 mb-6">
         <div className="flex-1 flex gap-2">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-neutral-500" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground/70" />
             <Input
               placeholder="Search by name or description..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-              className="pl-10 bg-neutral-900 border-neutral-800 text-white placeholder:text-neutral-500 focus:border-neutral-700 focus:ring-0"
+              className="pl-10 bg-card border-border text-foreground placeholder:text-muted-foreground/70 focus:border-border focus:ring-0"
             />
           </div>
           <Button
             onClick={handleSearch}
-            className="cursor-pointer bg-neutral-800 hover:bg-neutral-700 text-white border-0"
+            className="cursor-pointer bg-white/[0.06] hover:bg-white/[0.08] text-foreground border-0"
           >
             Search
           </Button>
@@ -212,7 +212,7 @@ export default function KubernetesPlansTab({ all_products }: KubernetesPlansTabP
         <div className="flex gap-2">
           <Button
             onClick={() => setAddDialogOpen(true)}
-            className="cursor-pointer bg-green-600 hover:bg-green-700 text-white border-0"
+            className="cursor-pointer bg-green-600 hover:bg-green-700 text-foreground border-0"
           >
             <Plus className="h-4 w-4 mr-2" />
             New Plan
@@ -226,34 +226,34 @@ export default function KubernetesPlansTab({ all_products }: KubernetesPlansTabP
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
       >
-        <div className="bg-neutral-900 border border-neutral-800 rounded-lg overflow-hidden">
+        <div className="bg-card border border-border rounded-lg overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-neutral-800/50 border-b border-neutral-800">
+              <thead className="bg-white/[0.04] border-b border-border">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Name
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     CPU / Machine Type
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Resources
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Price
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-neutral-400 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Actions
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-neutral-800">
+              <tbody className="divide-y divide-border/60">
                 {products.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="px-6 py-12 text-center">
-                      <Package className="h-12 w-12 text-neutral-600 mx-auto mb-3" />
-                      <p className="text-neutral-400 text-sm">
+                      <Package className="h-12 w-12 text-muted-foreground/50 mx-auto mb-3" />
+                      <p className="text-muted-foreground text-sm">
                         No Kubernetes plans found
                       </p>
                     </td>
@@ -262,17 +262,17 @@ export default function KubernetesPlansTab({ all_products }: KubernetesPlansTabP
                   products.map((product) => (
                     <tr
                       key={product.id}
-                      className="hover:bg-neutral-800/30 transition-colors"
+                      className="hover:bg-white/[0.06]/30 transition-colors"
                     >
                       <td className="px-6 py-4">
                         <div className="flex flex-col gap-2">
                           <div className="flex items-center gap-2">
-                            <Package className="h-4 w-4 text-neutral-500" />
+                            <Package className="h-4 w-4 text-muted-foreground/70" />
                             <div>
-                              <div className="font-medium text-white text-sm">
+                              <div className="font-medium text-foreground text-sm">
                                 {product.name}
                               </div>
-                              <div className="text-xs text-neutral-500 truncate max-w-[120px]">
+                              <div className="text-xs text-muted-foreground/70 truncate max-w-[120px]">
                                 {product.id}
                               </div>
                             </div>
@@ -298,22 +298,22 @@ export default function KubernetesPlansTab({ all_products }: KubernetesPlansTabP
                             </Badge>
                           )}
                           {!(product as { cpu_type?: string }).cpu_type && !(product as { machine_type?: string }).machine_type && (
-                            <span className="text-neutral-600 text-xs">Not set</span>
+                            <span className="text-muted-foreground/50 text-xs">Not set</span>
                           )}
                         </div>
                       </td>
 
                       <td className="px-6 py-4">
                         <div className="flex flex-col gap-1">
-                          <div className="flex items-center gap-1.5 text-xs text-neutral-400">
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                             <Cpu className="h-3 w-3" />
                             <span>{product.resources?.cpu || 0} vCPU</span>
                           </div>
-                          <div className="flex items-center gap-1.5 text-xs text-neutral-400">
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                             <HardDrive className="h-3 w-3" />
                             <span>{product.resources?.ram || 0} GB RAM</span>
                           </div>
-                          <div className="flex items-center gap-1.5 text-xs text-neutral-400">
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                             <HardDrive className="h-3 w-3" />
                             <span>
                               {product.resources?.storage || 0} GB Storage
@@ -323,10 +323,10 @@ export default function KubernetesPlansTab({ all_products }: KubernetesPlansTabP
                       </td>
 
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-1 text-sm font-semibold text-white">
+                        <div className="flex items-center gap-1 text-sm font-semibold text-foreground">
                           <DollarSign className="h-4 w-4 text-green-400" />
                           {product.price?.toFixed(2) || "0.00"}
-                          <span className="text-xs text-neutral-500">/mo</span>
+                          <span className="text-xs text-muted-foreground/70">/mo</span>
                         </div>
                         {product.discount && product.discount > 0 && (
                           <div className="text-xs text-orange-400 mt-1">
@@ -377,8 +377,8 @@ export default function KubernetesPlansTab({ all_products }: KubernetesPlansTabP
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="px-6 py-4 border-t border-neutral-800 flex items-center justify-between">
-              <div className="text-sm text-neutral-400">
+            <div className="px-6 py-4 border-t border-border flex items-center justify-between">
+              <div className="text-sm text-muted-foreground">
                 Page {currentPage} of {totalPages}
               </div>
               <div className="flex gap-2">
@@ -387,7 +387,7 @@ export default function KubernetesPlansTab({ all_products }: KubernetesPlansTabP
                   variant="ghost"
                   onClick={() => updatePagination(currentPage - 1)}
                   disabled={currentPage === 1}
-                  className="cursor-pointer h-8 px-3 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 disabled:opacity-50 disabled:cursor-not-allowed border-0"
+                  className="cursor-pointer h-8 px-3 bg-white/[0.06] hover:bg-white/[0.08] text-foreground/80 disabled:opacity-50 disabled:cursor-not-allowed border-0"
                 >
                   <ChevronLeft className="h-4 w-4 mr-1" />
                   Previous
@@ -397,7 +397,7 @@ export default function KubernetesPlansTab({ all_products }: KubernetesPlansTabP
                   variant="ghost"
                   onClick={() => updatePagination(currentPage + 1)}
                   disabled={currentPage === totalPages}
-                  className="cursor-pointer h-8 px-3 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 disabled:opacity-50 disabled:cursor-not-allowed border-0"
+                  className="cursor-pointer h-8 px-3 bg-white/[0.06] hover:bg-white/[0.08] text-foreground/80 disabled:opacity-50 disabled:cursor-not-allowed border-0"
                 >
                   Next
                   <ChevronRight className="h-4 w-4 ml-1" />
@@ -410,19 +410,19 @@ export default function KubernetesPlansTab({ all_products }: KubernetesPlansTabP
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent className="bg-neutral-900 border-neutral-800">
+        <AlertDialogContent className="bg-card border-border">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-white flex items-center gap-2">
+            <AlertDialogTitle className="text-foreground flex items-center gap-2">
               <Trash2 className="h-5 w-5 text-red-400" />
               Delete Kubernetes Plan
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-neutral-300">
+            <AlertDialogDescription className="text-foreground/80">
               Do you want to permanently delete this plan?
-              <span className="mt-3 p-3 bg-neutral-800 rounded-md border border-neutral-700 block">
-                <span className="text-sm text-neutral-400 block">
+              <span className="mt-3 p-3 bg-white/[0.06] rounded-md border border-border block">
+                <span className="text-sm text-muted-foreground block">
                   Plan Name:
                 </span>
-                <span className="text-base font-semibold text-white mt-1 block">
+                <span className="text-base font-semibold text-foreground mt-1 block">
                   {selectedProductName}
                 </span>
               </span>
@@ -434,14 +434,14 @@ export default function KubernetesPlansTab({ all_products }: KubernetesPlansTabP
           <AlertDialogFooter>
             <AlertDialogCancel
               disabled={isDeleting}
-              className="cursor-pointer bg-neutral-800 hover:bg-neutral-700 text-white border-neutral-700"
+              className="cursor-pointer bg-white/[0.06] hover:bg-white/[0.08] text-foreground border-border"
             >
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDelete}
               disabled={isDeleting}
-              className="cursor-pointer bg-red-600 hover:bg-red-700 text-white"
+              className="cursor-pointer bg-red-600 hover:bg-red-700 text-foreground"
             >
               {isDeleting ? (
                 <>

@@ -30,7 +30,7 @@ export const ClusterNameStep = ({
   return (
     <Card className="bg-white/5 border-white/10">
       <CardHeader>
-        <CardTitle className="text-white">Database Cluster Name</CardTitle>
+        <CardTitle className="text-foreground">Database Cluster Name</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
@@ -44,7 +44,7 @@ export const ClusterNameStep = ({
                 setErrors({ ...errors, name: "" });
               }
             }}
-            className="bg-neutral-900 border-neutral-800 text-white placeholder:text-neutral-500 focus:border-neutral-700 focus:ring-0"
+            className="bg-card border-border text-foreground placeholder:text-muted-foreground/70 focus:border-border focus:ring-0"
           />
           {errors.name && (
             <div className="flex items-center gap-2 text-red-500 text-sm">
@@ -52,7 +52,7 @@ export const ClusterNameStep = ({
               <span>{errors.name}</span>
             </div>
           )}
-          <p className="text-xs text-white/50">
+          <p className="text-xs text-foreground/50">
             Must be 3-63 characters, lowercase letters, numbers, and hyphens only. 
             Must start and end with alphanumeric.
           </p>
@@ -62,7 +62,7 @@ export const ClusterNameStep = ({
         <Button
           variant="outline"
           onClick={onPrev}
-          className="cursor-pointer rounded-md border-white/20 text-white hover:bg-white/10"
+          className="cursor-pointer rounded-md border-white/20 text-foreground hover:bg-white/10"
         >
           <ChevronLeft size={16} className="mr-2" /> Back
         </Button>
