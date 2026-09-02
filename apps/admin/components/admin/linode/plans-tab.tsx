@@ -37,6 +37,9 @@ interface PlanRow {
     pricing_is_active: boolean;
     available_regions: number;
     total_regions: number;
+    /** Charge-book answer for this type (billing.service_pricing via
+     *  service_plans.provider_size), null when the type isn't a resold plan. */
+    book: { planKey: string; monthly: number } | null;
 }
 
 type Draft = PlanRow & { _dirty?: boolean };
@@ -204,8 +207,33 @@ export default function PlansTab() {
             <p className="text-[13px] text-white/50">
                 Markup multiplies Linode&apos;s list price (1.25 = 25% markup); floor is the minimum
                 customer $/hr. Customer price = max(list × markup, floor). Prices freeze onto
-                servers at create time.
+                servers at create time.{" "}
+                <span className="text-white/70">
+                    This edits the QUOTE. What compute meters CHARGE is the price book —{" "}
+                    <a href="/pricing?service=compute" className="underline underline-offset-2">
+                        edit charge prices there
+                    </a>{" "}
+                    — and the Charge book column turns red when the two disagree.
+                </span>
             </p>
+
+            {(() => {
+                const drifted = rows.filter(
+                    (r) =>
+                        r.book &&
+                        Math.abs(round(resaleHourly(r) * HOURS_PER_MONTH, 2) - r.book.monthly) > 0.01,
+                );
+                return drifted.length > 0 ? (
+                    <div className="flex items-start gap-2 border border-red-500/25 bg-red-500/[0.07] px-4 py-3">
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+                        <p className="text-[12.5px] leading-relaxed text-red-200/90">
+                            {drifted.length} plan(s) quote a different price than the charge book
+                            bills — customers would be quoted one number and charged another. Align
+                            the markup here or the book on /pricing.
+                        </p>
+                    </div>
+                ) : null;
+            })()}
 
             {/* Class sub-tabs */}
             <div className="flex flex-wrap gap-1.5">
@@ -251,6 +279,7 @@ export default function PlansTab() {
                                 <th className="w-32 px-4 py-3 font-semibold">Markup (×)</th>
                                 <th className="w-32 px-4 py-3 font-semibold">Floor ($/hr)</th>
                                 <th className="px-4 py-3 font-semibold">Customer price</th>
+                                <th className="px-4 py-3 font-semibold">Charge book</th>
                                 <th className="px-4 py-3 font-semibold">Availability</th>
                                 <th className="px-4 py-3 font-semibold">Active</th>
                                 <th className="w-16 px-4 py-3 font-semibold"></th>
@@ -321,6 +350,21 @@ export default function PlansTab() {
                                             <p className="mt-0.5 text-white/40">
                                                 ${customerMonthly.toFixed(2)}/mo
                                             </p>
+                                        </td>
+                                        <td className={`${MONO} px-4 py-3 text-[12px]`}>
+                                            {row.book ? (
+                                                Math.abs(customerMonthly - row.book.monthly) > 0.01 ? (
+                                                    <span className="inline-flex items-center border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-[11px] text-red-300">
+                                                        ${row.book.monthly.toFixed(2)}/mo · drift
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex items-center border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-300">
+                                                        ${row.book.monthly.toFixed(2)}/mo
+                                                    </span>
+                                                )
+                                            ) : (
+                                                <span className="text-white/30">not in book</span>
+                                            )}
                                         </td>
                                         <td className="px-4 py-3">
                                             <span

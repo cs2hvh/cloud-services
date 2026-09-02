@@ -35,7 +35,7 @@ export async function GET() {
     }
 
     const supabase = await createServiceClient();
-    const [typesRes, pricingRes, availRes] = await Promise.all([
+    const [typesRes, pricingRes, availRes, bookPlansRes, bookPricesRes] = await Promise.all([
         supabase
             .from("linode_types")
             .select(
@@ -46,6 +46,21 @@ export async function GET() {
         supabase.from("linode_pricing").select("type_id, markup_pct, floor_per_hour_usd, is_active"),
         // Paginated read — the table exceeds PostgREST's ~1000-row cap.
         selectAllAvailabilityRows(supabase),
+        // The CHARGE book: what compute meters actually bill. This tab edits
+        // the QUOTE (markup on Linode's list); the two are different books —
+        // GPU's lesson — so each row also carries the book's answer and the
+        // UI chips drift between them.
+        supabase
+            .from("service_plans")
+            .select("plan_key, provider_size")
+            .eq("service_type", "compute")
+            .eq("is_active", true),
+        supabase
+            .schema("billing")
+            .from("service_pricing")
+            .select("plan_key, unit, amount")
+            .eq("service_type", "compute")
+            .is("effective_to", null),
     ]);
 
     if (typesRes.error) {
@@ -71,6 +86,28 @@ export async function GET() {
         entry.total += 1;
         if (row.available) entry.available += 1;
         counts.set(key, entry);
+    }
+
+    // linode type id → charge-book monthly, via service_plans.provider_size.
+    const bookPriceByPlanKey = new Map(
+        (bookPricesRes.data ?? []).map((p) => [
+            p.plan_key as string,
+            p.unit === "usd_per_hour"
+                ? Number(p.amount) * HOURS_PER_MONTH
+                : Number(p.amount),
+        ])
+    );
+    const bookByProviderSize = new Map<string, { planKey: string; monthly: number }>();
+    for (const sp of bookPlansRes.data ?? []) {
+        if (!sp.provider_size) continue;
+        const monthly =
+            bookPriceByPlanKey.get(sp.plan_key as string) ?? bookPriceByPlanKey.get("*");
+        if (monthly !== undefined) {
+            bookByProviderSize.set(sp.provider_size as string, {
+                planKey: sp.plan_key as string,
+                monthly: round(monthly, 2),
+            });
+        }
     }
 
     const plans = (typesRes.data ?? []).map((t) => {
@@ -105,6 +142,7 @@ export async function GET() {
             resale_monthly_usd: round(resaleHourly * HOURS_PER_MONTH, 2),
             available_regions: counts.get(t.id as string)?.available ?? 0,
             total_regions: counts.get(t.id as string)?.total ?? 0,
+            book: bookByProviderSize.get(t.id as string) ?? null,
         };
     });
 
