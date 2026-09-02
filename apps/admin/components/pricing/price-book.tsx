@@ -124,7 +124,13 @@ export function PriceBook({ plans, prices, initialService }: Props) {
               {serviceType}
             </h2>
             <span className="text-xs text-muted-foreground">
-              {groupPlans.filter((p) => priceOf.has(`${p.service_type}:${p.plan_key}`)).length}
+              {
+                groupPlans.filter(
+                  (p) =>
+                    priceOf.has(`${p.service_type}:${p.plan_key}`) ||
+                    priceOf.has(`${p.service_type}:*`),
+                ).length
+              }
               /{groupPlans.length} priced
             </span>
           </header>

@@ -85,8 +85,13 @@ export default async function PricingPage({
   const plans = (plansRes.data ?? []) as ServicePlan[];
   const prices = (pricesRes.data ?? []) as PriceRow[];
   const priced = new Set(prices.map((p) => `${p.service_type}:${p.plan_key}`));
+  // Charge resolution falls back to the service's '*' row, so a plan without
+  // its own price row is still billed when a flat row exists — only plans
+  // with NEITHER are the provisions-nothing-bills-nothing trap.
   const unpricedCount = plans.filter(
-    (p) => !priced.has(`${p.service_type}:${p.plan_key}`),
+    (p) =>
+      !priced.has(`${p.service_type}:${p.plan_key}`) &&
+      !priced.has(`${p.service_type}:*`),
   ).length;
 
   return (
