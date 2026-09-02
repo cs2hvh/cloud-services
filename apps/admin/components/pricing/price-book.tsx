@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { StatusChip, Table } from "@admin/components/deploy/bits";
+import LinodePlansTab from "@admin/components/admin/linode/plans-tab";
 import {
   RATE_MODELS,
   UNITS_BY_MODEL,
@@ -71,6 +72,14 @@ export function PriceBook({ plans, prices, initialService }: Props) {
   const groups =
     service === "all" ? allGroups : allGroups.filter(([t]) => t === service);
 
+  // Compute quotes are driven by the Linode markup console (per-type markup
+  // on Linode's list price, frozen onto servers at create) — the fixed rows
+  // below never moved the dashboard price, which read as broken. So the
+  // compute pill renders the REAL control, moved here from the Linode
+  // console, charge-book drift column included. The raw book rows for
+  // compute remain visible under "All services".
+  const computeConsole = service === "compute";
+
   return (
     <div className="space-y-6">
       {/* One service at a time beats a wall of stacked tables. */}
@@ -90,7 +99,9 @@ export function PriceBook({ plans, prices, initialService }: Props) {
         ))}
       </div>
 
-      {groups.map(([serviceType, groupPlans]) => (
+      {computeConsole && <LinodePlansTab />}
+
+      {!computeConsole && groups.map(([serviceType, groupPlans]) => (
         <section
           key={serviceType}
           className="rounded-xl border border-border bg-card"
