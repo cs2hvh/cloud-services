@@ -50,6 +50,22 @@ export interface SweepJob {
    * it is scheduled is the wrong shape for anything that deletes or bills.
    */
   apply?: boolean;
+  /**
+   * Extra argv for this script, for sweeps whose acting flag is not `--apply`.
+   *
+   * `apply: true` appends exactly `--apply`, which suited every sweep that
+   * deletes or bills. usage-sample persists with `--record` instead, so it had
+   * no way to be switched on: the CronJob ran it every fifteen minutes, sampled
+   * the fleet correctly, printed a table and threw it away. paas.usage_samples
+   * took its last row on 2026-08-26 — from somebody running the script by hand
+   * — and the Health panel showed "No data yet" on apps that had been serving
+   * for a week.
+   *
+   * Unknown flags are ignored by these scripts rather than rejected, so a typo
+   * here fails the same silent way. Keep the list short and check it against
+   * the script's own argv parsing.
+   */
+  args?: string[];
 }
 
 /**
@@ -64,6 +80,25 @@ export const SWEEP_JOBS: SweepJob[] = [
     script: "scripts/v3/usage-sample.ts",
     schedule: "*/15 * * * *",
     needs: ["db", "k8s"],
+    /*
+      --record is what makes this a history instead of a printout, and it was
+      never passed. The job ran on schedule, sampled correctly, reported
+      "5 app(s), 5 running pod(s)" and stored nothing.
+
+      --samples 5 rather than the default 2, on the script's own advice: two
+      samples yield one interval, which it refuses to classify traffic from.
+      Five gives four intervals over a 60s window, so each run measures a minute
+      of the fifteen rather than fifteen seconds of it.
+
+      NOTE what this does and does not fix. Uptime is a ratio — warm over
+      observed — so sampling estimates it correctly. Restarts and peak instances
+      are likewise sound. "Serving" is a SUM of sampled seconds, so it reports
+      the time we watched an app run, not the time it ran; at this cadence that
+      reads ~4 minutes per hour. Making that figure mean what its label implies
+      needs either continuous sampling or an explicit extrapolation, and that is
+      a decision about what we are willing to claim, not a bug fix.
+    */
+    args: ["--record", "--samples", "5"],
     why: "Warm-seconds and traffic on the same tick. Under flat pricing this is a margin and abuse signal rather than a price input, and it must be a history and not a snapshot.",
   },
   {
@@ -344,8 +379,10 @@ export function sweepCommand(
   scriptPath: string,
   contractPresent: boolean,
   apply = false,
+  args: readonly string[] = [],
 ): string[] {
-  const node = `node --experimental-strip-types /src/${scriptPath}${apply ? " --apply" : ""}`;
+  const extra = args.length ? ` ${args.join(" ")}` : "";
+  const node = `node --experimental-strip-types /src/${scriptPath}${apply ? " --apply" : ""}${extra}`;
   if (!contractPresent) {
     // No contract: exit 1 is ambiguous, so nothing is translated. Findings will
     // show as failed Jobs until the contract ships — visibly wrong beats
@@ -418,7 +455,7 @@ export function sweepCronJob(
                 {
                   name: "sweep",
                   image: "node:24-alpine",
-                  command: sweepCommand(job.script, contractPresent, job.apply === true),
+                  command: sweepCommand(job.script, contractPresent, job.apply === true, job.args),
                   workingDir: "/src",
                   envFrom: [{ secretRef: { name: `sweep-${job.name}` } }],
                   volumeMounts: [{ name: "src", mountPath: "/src", readOnly: true }],
