@@ -1,12 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ShieldCheck, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+
+const FORBIDDEN_MSG =
+  "This account is not on the panel's admin allowlist. Signing in succeeded, but access was refused — contact the platform owner to be added.";
 
 export function SignInForm({
   redirectTo,
@@ -20,10 +23,22 @@ export function SignInForm({
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(
-    error === "forbidden"
-      ? "This account does not have admin access."
-      : null,
+    error === "forbidden" ? FORBIDDEN_MSG : null,
   );
+
+  // A non-admin login succeeds at Supabase, then the middleware bounces the
+  // client-side navigation straight back here with ?error=forbidden — SAME
+  // route, so this component instance survives and useState initials never
+  // re-run. Without this effect the button spun forever and the refusal only
+  // existed in the URL. Also sign the refused session out, so retrying with
+  // a different account starts clean instead of looping on the old cookie.
+  useEffect(() => {
+    if (error === "forbidden") {
+      setSubmitting(false);
+      setFormError(FORBIDDEN_MSG);
+      void createClient().auth.signOut();
+    }
+  }, [error]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,8 +57,23 @@ export function SignInForm({
       return;
     }
 
-    // The middleware re-checks the admin role on the next request, so a
-    // non-admin login bounces straight back here with ?error=forbidden.
+    // Probe the gate BEFORE navigating: an admin gets 200 for "/", anyone
+    // else gets the middleware's redirect (opaque under redirect:"manual").
+    // Refusing here keeps the form responsive on every attempt instead of
+    // bouncing through ?error=forbidden with component state intact.
+    const probe = await fetch("/", { redirect: "manual" }).catch(() => null);
+    const refused =
+      !probe ||
+      probe.type === "opaqueredirect" ||
+      (probe.status >= 300 && probe.status < 400) ||
+      probe.status === 0;
+    if (refused) {
+      await supabase.auth.signOut();
+      setFormError(FORBIDDEN_MSG);
+      setSubmitting(false);
+      return;
+    }
+
     router.replace(redirectTo);
     router.refresh();
   };
