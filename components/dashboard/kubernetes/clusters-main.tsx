@@ -1,10 +1,10 @@
 "use client";
-import { assetUrl } from "@/lib/asset-url";
+import { ServiceFeatureGrid } from "@/components/services/feature-grid";
 
 // Kubernetes overview — editorial canvas with a large animated cluster
 // mesh visualization in the hero corner, magazine-style horizontal
 // stats strip (no boxes), feature illustration row with gently
-// floating PNG illustrations from /public/images/kubernetes-ui, and a
+// a text feature grid (see components/services/feature-grid), and a
 // clean cluster inventory table.
 
 import {
@@ -14,7 +14,6 @@ import {
   Plus,
   Terminal,
 } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import { toast } from "sonner";
 
@@ -41,32 +40,26 @@ const FEATURES = [
   {
     title: "Fully managed control plane",
     desc: "We run etcd, the API server, and scheduler. You focus on workloads.",
-    image: assetUrl("/images/kubernetes-ui/fully managed.png"),
   },
   {
     title: "Auto-scaling node pools",
     desc: "Pools scale up under load and back down idle — pay for what you use.",
-    image: assetUrl("/images/kubernetes-ui/auto scaling nodespng.png"),
   },
   {
     title: "Multi-region clusters",
     desc: "Spread node pools across regions for low-latency global delivery.",
-    image: assetUrl("/images/kubernetes-ui/Multi region clusters png.png"),
   },
   {
     title: "Built-in load balancing",
     desc: "Layer-4 and layer-7 LBs are first-class objects in the cluster.",
-    image: assetUrl("/images/kubernetes-ui/Built in load balancing png.png"),
   },
   {
     title: "GitOps-ready",
     desc: "Native ArgoCD and Flux compatibility — declarative deploys out of the box.",
-    image: assetUrl("/images/kubernetes-ui/gitops ready.png"),
   },
   {
     title: "99.99% uptime",
     desc: "HA control planes with three replicas, automatic failover, and rolling upgrades.",
-    image: assetUrl("/images/kubernetes-ui/11 nine.png"),
   },
 ] as const;
 
@@ -247,18 +240,12 @@ const KubernetesClustersMain = ({ clusters }: KubernetesClustersProps) => {
             href: "#",
           }}
         />
-        <div className="mb-16 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-8 gap-y-6">
-          {FEATURES.map((f, i) => (
-            <FeatureCell key={f.title} index={i} {...f} />
-          ))}
-        </div>
+        <ServiceFeatureGrid
+          features={FEATURES}
+          illustration="/images/kubernetes-ui/life cycle.png"
+          className="mb-16"
+        />
 
-        <style>{`
-          @keyframes floaty {
-            0%, 100% { transform: translateY(0px); }
-            50%      { transform: translateY(-6px); }
-          }
-        `}</style>
 
       </div>
     </div>
@@ -360,53 +347,6 @@ function StatCell({
         )}
       </div>
       <p className={`${MONO} text-[10.5px] text-white/40`}>{hint}</p>
-    </div>
-  );
-}
-
-function FeatureCell({
-  index,
-  title,
-  desc,
-  image,
-}: {
-  index: number;
-  title: string;
-  desc: string;
-  image: string;
-}) {
-  return (
-    <div className="flex items-start gap-4 py-2">
-      {/* Floating illustration */}
-      <div
-        className="relative h-20 w-20 shrink-0 flex items-center justify-center"
-        style={{
-          animation: `floaty 5s ease-in-out infinite ${(index % 6) * 0.5}s`,
-        }}
-      >
-        <div
-          className="absolute inset-0 blur-xl opacity-50"
-          style={{
-            background:
-              "radial-gradient(circle, rgba(0,149,255,0.18), transparent 60%)",
-          }}
-        />
-        <Image
-          src={image}
-          alt=""
-          width={80}
-          height={80}
-          className="relative object-contain"
-          unoptimized
-        />
-      </div>
-
-      <div className="min-w-0 pt-1.5">
-        <h3 className="text-[14.5px] font-semibold tracking-[-0.01em] text-white mb-1.5">
-          {title}
-        </h3>
-        <p className="text-[12px] text-white/55 leading-snug">{desc}</p>
-      </div>
     </div>
   );
 }

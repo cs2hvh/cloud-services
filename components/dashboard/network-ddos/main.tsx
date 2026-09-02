@@ -1,5 +1,5 @@
 "use client";
-import { assetUrl } from "@/lib/asset-url";
+import { ServiceFeatureGrid } from "@/components/services/feature-grid";
 
 // Network · DDoS protection overview — editorial canvas (aurora +
 // dotted grid), Nunito-accent title, horizontal stats strip,
@@ -8,7 +8,6 @@ import { assetUrl } from "@/lib/asset-url";
 
 import { useMemo } from "react";
 import { Plus } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 
 import { Tables } from "@/lib/supabase/types";
@@ -29,38 +28,32 @@ interface NetworkDDoSMainProps {
   userId: string;
 }
 
-// ─── Platform features (floating PNG illustrations) ───────────────
+// ─── Platform features (text grid + one section illustration) ────
 
 const FEATURES = [
   {
     title: "Layer-4 mitigation",
     desc: "TCP/UDP attack absorption at Cloudflare's edge — terabit-scale capacity, always-on.",
-    image: assetUrl("/images/kubernetes-ui/fully managed.png"),
   },
   {
     title: "Anycast routing",
     desc: "Single anycast IP fronts your service from 300+ data centres, soaking attack traffic globally.",
-    image: assetUrl("/images/kubernetes-ui/Global CDN Integration.png"),
   },
   {
     title: "IP allowlist & firewall",
     desc: "Per-app IP rules enforce who can reach your origin — block, allow, or challenge inline.",
-    image: assetUrl("/images/kubernetes-ui/Built in load balancing png.png"),
   },
   {
     title: "Proxy protocol support",
     desc: "Preserve client source IPs end-to-end via PROXY v1/v2 — no NAT hops, real audit trails.",
-    image: assetUrl("/images/kubernetes-ui/gitops ready.png"),
   },
   {
     title: "Multi-region failover",
     desc: "Route around regional outages automatically — origin pools live in any supported region.",
-    image: assetUrl("/images/kubernetes-ui/Multi region clusters png.png"),
   },
   {
     title: "99.99% uptime SLA",
     desc: "Always-on protection with audit logs, real-time alerting, and per-application metrics.",
-    image: assetUrl("/images/kubernetes-ui/11 nine.png"),
   },
 ] as const;
 
@@ -205,18 +198,12 @@ const NetworkDDoSMain = ({ spectrumApps, userId }: NetworkDDoSMainProps) => {
           accent="for the edge"
           link={{ label: "Read the docs", href: "#" }}
         />
-        <div className="mb-16 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-8 gap-y-6">
-          {FEATURES.map((f, i) => (
-            <FeatureCell key={f.title} index={i} {...f} />
-          ))}
-        </div>
+        <ServiceFeatureGrid
+          features={FEATURES}
+          illustration="/images/kubernetes-ui/Built in load balancing png.png"
+          className="mb-16"
+        />
 
-        <style>{`
-          @keyframes floaty {
-            0%, 100% { transform: translateY(0px); }
-            50%      { transform: translateY(-6px); }
-          }
-        `}</style>
 
       </div>
     </div>
@@ -327,47 +314,3 @@ function StatCell({
   );
 }
 
-function FeatureCell({
-  index,
-  title,
-  desc,
-  image,
-}: {
-  index: number;
-  title: string;
-  desc: string;
-  image: string;
-}) {
-  return (
-    <div className="flex items-start gap-4 py-2">
-      <div
-        className="relative h-20 w-20 shrink-0 flex items-center justify-center"
-        style={{
-          animation: `floaty 5s ease-in-out infinite ${(index % 6) * 0.5}s`,
-        }}
-      >
-        <div
-          className="absolute inset-0 blur-xl opacity-50"
-          style={{
-            background:
-              "radial-gradient(circle, rgba(0,149,255,0.18), transparent 60%)",
-          }}
-        />
-        <Image
-          src={image}
-          alt=""
-          width={80}
-          height={80}
-          className="relative object-contain"
-          unoptimized
-        />
-      </div>
-      <div className="min-w-0 pt-1.5">
-        <h3 className="text-[14.5px] font-semibold tracking-[-0.01em] text-white mb-1.5">
-          {title}
-        </h3>
-        <p className="text-[12px] text-white/55 leading-snug">{desc}</p>
-      </div>
-    </div>
-  );
-}

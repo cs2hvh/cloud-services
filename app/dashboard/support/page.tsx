@@ -58,7 +58,11 @@ export default function SupportPage() {
         />
       </div>
 
-      <div className="relative z-10 mx-auto w-full max-w-6xl px-6 py-8 sm:px-10 sm:py-10">
+      {/* Full-bleed, matching every other dashboard page. See the note in
+        app/dashboard/billing/page.tsx — these carried the same max-w-6xl cap
+        that boxed the page into a column while its neighbours ran edge to
+        edge. Blocks that need a narrower measure set it themselves. */}
+      <div className="relative z-10 px-6 py-7 sm:px-10 sm:py-9">
         <Suspense
           fallback={
             <div className="flex min-h-[60vh] items-center justify-center">

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -164,6 +164,44 @@ export default function SupportTicketDetailView({ ticket, initialResources }: Su
   const [replyText, setReplyText] = useState("");
   const [replySending, setReplySending] = useState(false);
   const [replyError, setReplyError] = useState("");
+
+  /**
+   * Pull in replies the other side has sent.
+   *
+   * Without this the page was a one-way street: sending a reply calls
+   * router.refresh() so you see your OWN message, but nothing fetched when
+   * SUPPORT answered. A customer sat on an open ticket saw silence until they
+   * thought to reload — on a page whose whole purpose is a conversation.
+   *
+   * Polling rather than a Realtime channel: tickets move on the order of
+   * minutes, and a websocket per open ticket is a lot of standing connection
+   * for a reply that is rarely seconds-sensitive. router.refresh() re-runs the
+   * server component, which is already how a sent reply appears, so there is
+   * one code path for "get the current thread" rather than two.
+   *
+   * Three things it deliberately does NOT do:
+   *  - poll a closed ticket; nothing will arrive, so the request is waste
+   *  - poll a hidden tab; a background tab does not need to be current
+   *  - refresh while a draft is unsent, in case a reconcile drops the textarea
+   *    — losing someone's half-written reply to save them one click is a bad
+   *    trade, and they will see the new message the moment they send
+   */
+  const replyDraftRef = useRef("");
+  replyDraftRef.current = replyText;
+
+  const ticketIsOpen = isSupportOpenStatus(ticket.status);
+
+  useEffect(() => {
+    if (!ticketIsOpen) return;
+
+    const interval = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      if (replyDraftRef.current.trim().length > 0) return;
+      router.refresh();
+    }, 20_000);
+
+    return () => clearInterval(interval);
+  }, [ticketIsOpen, ticket.id, router]);
 
   const selectedTopic = useMemo(
     () => SUPPORT_TOPICS.find((entry) => entry.id === topic) || null,

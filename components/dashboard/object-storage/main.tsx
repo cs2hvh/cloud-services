@@ -1,5 +1,6 @@
 "use client";
 import { assetUrl } from "@/lib/asset-url";
+import { ServiceFeatureGrid } from "@/components/services/feature-grid";
 
 // Object Storage overview — editorial canvas with horizontal stats
 // strip, floating PNG feature illustrations, and a clean bucket
@@ -8,7 +9,6 @@ import { assetUrl } from "@/lib/asset-url";
 
 import { useMemo } from "react";
 import { Plus } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 
 import { ObjectSpaceBucket, Tables } from "@/lib/supabase/types";
@@ -28,13 +28,12 @@ interface ObjectStorageMainProps {
   userId: string;
 }
 
-// ─── Platform features (floating PNG illustrations) ───────────────
+// ─── Platform features (text grid + one section illustration) ────
 
 const FEATURES = [
   {
     title: "S3-compatible API",
     desc: "Drop-in for the AWS S3 SDK. Bring your existing tooling — boto3, aws-cli, MinIO clients.",
-    image: assetUrl("/images/kubernetes-ui/s3 Compatible API.png"),
   },
   {
     title: "11 nines durability",
@@ -49,7 +48,6 @@ const FEATURES = [
   {
     title: "Object versioning",
     desc: "Per-object version history with point-in-time restore and soft-delete protection.",
-    image: assetUrl("/images/kubernetes-ui/versoning.png"),
   },
   {
     title: "Global CDN",
@@ -59,7 +57,6 @@ const FEATURES = [
   {
     title: "Multi-region replication",
     desc: "Replicate buckets across regions for low-latency reads and disaster recovery.",
-    image: assetUrl("/images/kubernetes-ui/Multi region clusters png.png"),
   },
 ] as const;
 
@@ -199,18 +196,12 @@ const ObjectStorageMain = ({ buckets }: ObjectStorageMainProps) => {
           accent="for scale"
           link={{ label: "Read the docs", href: "/docs" }}
         />
-        <div className="mb-16 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-8 gap-y-6">
-          {FEATURES.map((f, i) => (
-            <FeatureCell key={f.title} index={i} {...f} />
-          ))}
-        </div>
+        <ServiceFeatureGrid
+          features={FEATURES}
+          illustration="/images/kubernetes-ui/s3 Compatible API.png"
+          className="mb-16"
+        />
 
-        <style>{`
-          @keyframes floaty {
-            0%, 100% { transform: translateY(0px); }
-            50%      { transform: translateY(-6px); }
-          }
-        `}</style>
 
       </div>
     </div>
@@ -321,47 +312,3 @@ function StatCell({
   );
 }
 
-function FeatureCell({
-  index,
-  title,
-  desc,
-  image,
-}: {
-  index: number;
-  title: string;
-  desc: string;
-  image: string;
-}) {
-  return (
-    <div className="flex items-start gap-4 py-2">
-      <div
-        className="relative h-20 w-20 shrink-0 flex items-center justify-center"
-        style={{
-          animation: `floaty 5s ease-in-out infinite ${(index % 6) * 0.5}s`,
-        }}
-      >
-        <div
-          className="absolute inset-0 blur-xl opacity-50"
-          style={{
-            background:
-              "radial-gradient(circle, rgba(0,149,255,0.18), transparent 60%)",
-          }}
-        />
-        <Image
-          src={image}
-          alt=""
-          width={80}
-          height={80}
-          className="relative object-contain"
-          unoptimized
-        />
-      </div>
-      <div className="min-w-0 pt-1.5">
-        <h3 className="text-[14.5px] font-semibold tracking-[-0.01em] text-white mb-1.5">
-          {title}
-        </h3>
-        <p className="text-[12px] text-white/55 leading-snug">{desc}</p>
-      </div>
-    </div>
-  );
-}

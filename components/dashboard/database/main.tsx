@@ -1,5 +1,5 @@
 "use client";
-import { assetUrl } from "@/lib/asset-url";
+import { ServiceFeatureGrid } from "@/components/services/feature-grid";
 
 // Managed databases overview — editorial canvas (aurora + dotted grid),
 // Nunito accent title, mono labels, subtle rounded corners, brand-blue
@@ -145,38 +145,32 @@ function statusMeta(status: string): { dot: string; label: string } {
   return { dot: "bg-white/30", label: formatStatus(status) };
 }
 
-// ─── Platform features (floating PNG illustrations) ──────────────
+// ─── Platform features (text grid + one section illustration) ────
 
 const FEATURES = [
   {
     title: "Fully managed engines",
     desc: "Patches, minor upgrades, and replication topology — handled. You get a connection string.",
-    image: assetUrl("/images/kubernetes-ui/fully managed.png"),
   },
   {
     title: "Point-in-time recovery",
     desc: "Continuous WAL streaming with 7–35 day retention. Restore to any second in the window.",
-    image: assetUrl("/images/kubernetes-ui/life cycle.png"),
   },
   {
     title: "Auto-scaling storage",
     desc: "Disks grow with your data — no manual resizes, no downtime, no surprise outages.",
-    image: assetUrl("/images/kubernetes-ui/auto scaling nodespng.png"),
   },
   {
     title: "Connection pooling",
     desc: "Managed PgBouncer / ProxySQL with transactional and session modes baked in.",
-    image: assetUrl("/images/kubernetes-ui/Built in load balancing png.png"),
   },
   {
     title: "Multi-region replicas",
     desc: "Read replicas in any supported region, with cross-region streaming replication.",
-    image: assetUrl("/images/kubernetes-ui/Multi region clusters png.png"),
   },
   {
     title: "99.99% uptime SLA",
     desc: "Multi-AZ standby, automatic failover, and per-cluster lifecycle audit logs.",
-    image: assetUrl("/images/kubernetes-ui/11 nine.png"),
   },
 ] as const;
 
@@ -437,25 +431,19 @@ const DatabasePage = ({ engines }: DatabasePageProps) => {
           </div>
         )}
 
-        {/* ── Platform features (floating illustrations) ─ */}
+        {/* ── Platform features ─ */}
         <SectionHead
           eyebrow="Why managed databases"
           title="Engineered"
           accent="for production"
           link={{ label: "Read the docs", href: "#" }}
         />
-        <div className="mb-16 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-8 gap-y-6">
-          {FEATURES.map((f, i) => (
-            <FeatureCell key={f.title} index={i} {...f} />
-          ))}
-        </div>
+        <ServiceFeatureGrid
+          features={FEATURES}
+          illustration="/images/kubernetes-ui/fully managed.png"
+          className="mb-16"
+        />
 
-        <style>{`
-          @keyframes floaty {
-            0%, 100% { transform: translateY(0px); }
-            50%      { transform: translateY(-6px); }
-          }
-        `}</style>
 
       </div>
     </div>
@@ -559,51 +547,6 @@ function StatCell({
         )}
       </div>
       <p className={`${MONO} text-[10.5px] text-white/40`}>{hint}</p>
-    </div>
-  );
-}
-
-function FeatureCell({
-  index,
-  title,
-  desc,
-  image,
-}: {
-  index: number;
-  title: string;
-  desc: string;
-  image: string;
-}) {
-  return (
-    <div className="flex items-start gap-4 py-2">
-      <div
-        className="relative h-20 w-20 shrink-0 flex items-center justify-center"
-        style={{
-          animation: `floaty 5s ease-in-out infinite ${(index % 6) * 0.5}s`,
-        }}
-      >
-        <div
-          className="absolute inset-0 blur-xl opacity-50"
-          style={{
-            background:
-              "radial-gradient(circle, rgba(0,149,255,0.18), transparent 60%)",
-          }}
-        />
-        <Image
-          src={image}
-          alt=""
-          width={80}
-          height={80}
-          className="relative object-contain"
-          unoptimized
-        />
-      </div>
-      <div className="min-w-0 pt-1.5">
-        <h3 className="text-[14.5px] font-semibold tracking-[-0.01em] text-white mb-1.5">
-          {title}
-        </h3>
-        <p className="text-[12px] text-white/55 leading-snug">{desc}</p>
-      </div>
     </div>
   );
 }
