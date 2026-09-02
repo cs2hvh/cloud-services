@@ -99,16 +99,28 @@ HOSTNAME_FQDN="${HOSTNAME_FQDN:-control.ahurasense.com}"
 step "Origin vhost: $HOSTNAME_FQDN → 127.0.0.1:$PORT"
 if command -v nginx >/dev/null 2>&1; then
   VHOST="/etc/nginx/conf.d/control-admin.conf"
-  if [[ -f "$VHOST" ]]; then
-    ok "vhost already installed ($VHOST)"
-  else
-    # Reuse the certificate the existing site serves. If it doesn't cover
-    # $HOSTNAME_FQDN, Cloudflare keeps answering 526 and the durable fix is a
-    # cert that does (a Cloudflare Origin CA cert for *.ahurasense.com).
-    CERT="$(nginx -T 2>/dev/null | grep -m1 -E '^\s*ssl_certificate\s' | awk '{print $2}' | tr -d ';')"
-    KEY="$(nginx -T 2>/dev/null | grep -m1 -E '^\s*ssl_certificate_key\s' | awk '{print $2}' | tr -d ';')"
-    if [[ -n "$CERT" && -n "$KEY" && -f "$CERT" && -f "$KEY" ]]; then
-      cat > "$VHOST" <<VHOSTEOF
+    # Pick a certificate that PROVABLY covers the hostname, not the first one
+    # nginx serves — "a cert was found" and "a cert covering this name was
+    # found" look identical from outside, and the difference was a 526 that
+    # cost a diagnosis round trip. Walk every cert/key pair in nginx -T and
+    # check the SAN for the exact name or the parent wildcard.
+    PARENT_DOMAIN="${HOSTNAME_FQDN#*.}"
+    CERT=""; KEY=""
+    while IFS='|' read -r c k; do
+      [[ -f "$c" && -f "$k" ]] || continue
+      SAN="$(openssl x509 -in "$c" -noout -ext subjectAltName 2>/dev/null | tr -d ' ')"
+      if grep -qiE "DNS:\*\.${PARENT_DOMAIN//./\\.}|DNS:${HOSTNAME_FQDN//./\\.}" <<<"$SAN"; then
+        CERT="$c"; KEY="$k"
+        ok "cert covers $HOSTNAME_FQDN: $c ($(grep -oiE 'DNS:[^,]+' <<<"$SAN" | tr '\n' ' '))"
+        break
+      fi
+    done < <(nginx -T 2>/dev/null | awk '
+      /^[[:space:]]*ssl_certificate[[:space:]]/    { c=$2; sub(/;$/,"",c) }
+      /^[[:space:]]*ssl_certificate_key[[:space:]]/{ k=$2; sub(/;$/,"",k); if (c!="") { print c "|" k; c="" } }' | sort -u)
+
+    if [[ -n "$CERT" && -n "$KEY" ]]; then
+      TMP_VHOST="$(mktemp)"
+      cat > "$TMP_VHOST" <<VHOSTEOF
 # control.ahurasense.com → admin panel (:$PORT). Written by deploy-admin.sh;
 # add-only and safe to delete — the next deploy recreates it.
 server {
@@ -138,18 +150,29 @@ server {
     }
 }
 VHOSTEOF
-      if nginx -t 2>&1; then
-        systemctl reload nginx && ok "vhost installed, nginx reloaded — cert: $CERT"
-        echo "NOTE: if https://$HOSTNAME_FQDN still returns 526, that cert does not cover $HOSTNAME_FQDN — install a Cloudflare Origin CA cert for *.ahurasense.com and update $VHOST."
+      if cmp -s "$TMP_VHOST" "$VHOST" 2>/dev/null; then
+        ok "vhost already correct ($VHOST)"
+        rm -f "$TMP_VHOST"
       else
-        rm -f "$VHOST"
-        echo "WARN: nginx -t rejected the new vhost — removed it, existing sites untouched. Output above."
+        # Replace (this also heals a previously-installed vhost that carried a
+        # non-covering cert), test-gated with restore of the prior state.
+        [[ -f "$VHOST" ]] && cp "$VHOST" "$VHOST.bak"
+        mv "$TMP_VHOST" "$VHOST"
+        if nginx -t 2>&1; then
+          systemctl reload nginx && ok "vhost installed/updated, nginx reloaded — cert: $CERT"
+          rm -f "$VHOST.bak"
+        else
+          if [[ -f "$VHOST.bak" ]]; then mv "$VHOST.bak" "$VHOST"; else rm -f "$VHOST"; fi
+          echo "WARN: nginx -t rejected the new vhost — previous state restored, existing sites untouched. Output above."
+        fi
       fi
     else
-      echo "WARN: could not discover cert paths from nginx -T. :443 listeners:"
-      ss -tlnp | grep -E ':443\s' || true
+      echo "WARN: no certificate on this box covers $HOSTNAME_FQDN. Candidates and their SANs:"
+      nginx -T 2>/dev/null | awk '/^[[:space:]]*ssl_certificate[[:space:]]/ { c=$2; sub(/;$/,"",c); print c }' | sort -u | while read -r c; do
+        echo "  $c: $(openssl x509 -in "$c" -noout -ext subjectAltName 2>/dev/null | tail -1 | tr -d ' ')"
+      done
+      echo "Durable fix: a Cloudflare Origin CA certificate for *.${PARENT_DOMAIN}."
     fi
-  fi
 else
   echo "WARN: nginx not found — whatever terminates :443 needs a $HOSTNAME_FQDN server block proxying to 127.0.0.1:$PORT. Listeners:"
   ss -tlnp | grep -E ':(443|80)\s' || true
