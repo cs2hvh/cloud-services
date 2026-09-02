@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { requireAdmin } from "@/lib/supabase/auth";
-import AdminKubernetes from "@/components/admin/kubernetes/admin-kubernetes";
+import AdminKubernetes from "@admin/components/admin/kubernetes/admin-kubernetes";
 import { Clusters } from "@/lib/supabase/queries/clusters";
 import { getCachedProducts } from "@/lib/cache/query-cache";
 import { planCatalogOffline } from "@admin/lib/catalog-status";

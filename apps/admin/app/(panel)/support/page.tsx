@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { SupportTickets } from "@/lib/supabase/queries/support_tickets";
-import AdminSupportTickets from "@/components/admin/support/admin-support-tickets";
+import AdminSupportTickets from "@admin/components/admin/support/admin-support-tickets";
 
 export const dynamic = "force-dynamic";
 

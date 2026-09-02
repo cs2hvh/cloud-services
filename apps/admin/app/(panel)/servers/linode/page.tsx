@@ -1,6 +1,6 @@
 import { requireAdmin } from "@/lib/supabase/auth";
 import { notFound } from "next/navigation";
-import LinodeAdmin from "@/components/admin/linode/linode-admin";
+import LinodeAdmin from "@admin/components/admin/linode/linode-admin";
 
 export const dynamic = "force-dynamic";
 

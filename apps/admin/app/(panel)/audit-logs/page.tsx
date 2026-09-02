@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { requireAdmin } from "@/lib/supabase/auth";
-import AuditLogsClient from "@/components/admin/audit-logs-client";
+import AuditLogsClient from "@admin/components/admin/audit-logs-client";
 import { AuditLogs } from "@/lib/supabase/queries/audit_logs";
 import { PageHeader } from "@admin/components/page-header";
 import { Callout } from "@admin/components/deploy/bits";

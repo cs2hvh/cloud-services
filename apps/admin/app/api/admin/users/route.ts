@@ -2,11 +2,61 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { createServiceClient } from "@/lib/supabase/server";
 
-// Role/suspend updates keep the main app's implementation (self-demotion
-// guard included) — single implementation during migration.
-export { PATCH } from "@/app/api/admin/users/route";
-
 export const dynamic = "force-dynamic";
+
+// PATCH: update roles or suspend status. Inlined from the main app during
+// de-coupling; the self-demotion guard is the part that must not be lost.
+export async function PATCH(request: Request) {
+  const admin = await requireAdmin();
+  if (!admin.ok || !admin.userId) {
+    return NextResponse.json(
+      { error: "Unauthorized - Admin access required" },
+      { status: 403 },
+    );
+  }
+
+  try {
+    const body = await request.json();
+    const { userId, roles, suspend } = body as {
+      userId?: string;
+      roles?: string[];
+      suspend?: boolean;
+    };
+
+    if (!userId) {
+      return NextResponse.json({ error: "User ID is required" }, { status: 400 });
+    }
+    // Prevent self-demotion
+    if (userId === admin.userId && roles && !roles.includes("admin")) {
+      return NextResponse.json(
+        { error: "Cannot remove your own admin role" },
+        { status: 400 },
+      );
+    }
+
+    const supabase = await createServiceClient();
+    const updates: { roles?: string[]; suspend?: boolean } = {};
+    if (roles !== undefined) updates.roles = roles;
+    if (suspend !== undefined) updates.suspend = suspend;
+
+    const { data, error } = await supabase
+      .from("user_profiles")
+      .update(updates)
+      .eq("id", userId)
+      .select("id, username, display_name, avatar, roles, suspend, created_at")
+      .single();
+
+    if (error) {
+      console.error("[Admin Users] update failed:", error.message);
+      return NextResponse.json({ error: "Failed to update user" }, { status: 500 });
+    }
+
+    return NextResponse.json({ message: "User updated successfully", data });
+  } catch (err) {
+    console.error("[Admin Users] unexpected error:", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
+}
 
 function sanitizeSearchTerm(value: string): string {
   return value

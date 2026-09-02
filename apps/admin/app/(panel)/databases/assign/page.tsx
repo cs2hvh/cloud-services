@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { requireAdmin } from "@/lib/supabase/auth";
-import AdminDatabaseAssign from "@/components/admin/databases/assign-database-new";
+import AdminDatabaseAssign from "@admin/components/admin/databases/assign-database-new";
 import { Locations } from "@/lib/supabase/queries/locations";
 import { Products } from "@/lib/supabase/queries/products";
 import { Users } from "@/lib/supabase/queries/users";

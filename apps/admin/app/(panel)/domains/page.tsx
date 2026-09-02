@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { requireAdmin } from "@/lib/supabase/auth";
-import AdminDomains from "@/components/admin/domains/admin-domains";
+import AdminDomains from "@admin/components/admin/domains/admin-domains";
 
 export const dynamic = "force-dynamic";
 

@@ -1,3 +1,71 @@
-// Re-export of the main app's handler (single implementation during migration).
-export { GET } from "@/app/api/admin/audit-logs/stats/route";
-export const dynamic = "force-dynamic";
+import { NextRequest, NextResponse } from "next/server";
+import { authenticateUser } from "@/lib/auth/server-auth";
+import { requireAdmin } from "@/lib/supabase/auth";
+import { AuditLogService } from "@/lib/audit";
+import { z } from "zod";
+import { logError, sanitizeError } from "@/lib/api/error-sanitizer";
+
+const statsSchema = z.object({
+  start_date: z.string().datetime().optional(),
+  end_date: z.string().datetime().optional(),
+});
+
+/**
+ * GET /api/admin/audit-logs/stats
+ * 
+ * Get audit log statistics (counts by action, service type, etc.)
+ * Admin-only endpoint.
+ */
+export async function GET(req: NextRequest) {
+  // Authenticate user
+  const auth = await authenticateUser();
+  if (!auth.authenticated) return auth.response;
+
+  // Require admin privileges
+  const adminCheck = await requireAdmin();
+  if (!adminCheck.ok) {
+    return NextResponse.json(
+      { error: "Unauthorized - Admin access required" },
+      { status: 403 }
+    );
+  }
+
+  try {
+    // Parse query parameters
+    const { searchParams } = new URL(req.url);
+    const rawParams = {
+      start_date: searchParams.get('start_date') || undefined,
+      end_date: searchParams.get('end_date') || undefined,
+    };
+
+    const validation = statsSchema.safeParse(rawParams);
+    if (!validation.success) {
+      return NextResponse.json(
+        {
+          error: "Invalid query parameters",
+          details: validation.error.errors,
+        },
+        { status: 400 }
+      );
+    }
+
+    const params = validation.data;
+
+    // Get stats
+    const result = await AuditLogService.getStats({
+      date_from: params.start_date,
+      date_to: params.end_date,
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    logError('GET /api/admin/audit-logs/stats', error);
+    return NextResponse.json(
+      { error: sanitizeError(error) },
+      { status: 500 }
+    );
+  }
+}

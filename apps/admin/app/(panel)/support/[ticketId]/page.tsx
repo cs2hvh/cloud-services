@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import AdminSupportTicketDetailView from "@/components/admin/support/admin-support-ticket-detail";
+import AdminSupportTicketDetailView from "@admin/components/admin/support/admin-support-ticket-detail";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { createServiceClient } from "@/lib/supabase/server";
 import { SupportTickets } from "@/lib/supabase/queries/support_tickets";
