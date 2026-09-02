@@ -6,6 +6,11 @@ import { PageHeader } from "@admin/components/page-header";
 import { Callout } from "@admin/components/deploy/bits";
 import { PriceBook } from "@admin/components/pricing/price-book";
 import {
+  MarketingLabels,
+  type CategoryRow,
+} from "@admin/components/pricing/marketing-labels";
+import { monthlyUsd } from "@admin/lib/catalog";
+import {
   BILLING_ACTIVE_SINCE,
   SWEEP_STATUS,
   type PriceRow,
@@ -35,7 +40,7 @@ export default async function PricingPage({
   const { service } = await searchParams;
 
   const supabase = await createServiceClient();
-  const [plansRes, pricesRes] = await Promise.all([
+  const [plansRes, pricesRes, categoriesRes] = await Promise.all([
     supabase
       .from("service_plans")
       .select("*")
@@ -47,6 +52,11 @@ export default async function PricingPage({
       .from("service_pricing")
       .select("*")
       .is("effective_to", null),
+    supabase
+      .from("pricing_categories")
+      .select("id, slug, label, starting_price_label")
+      .eq("active", true)
+      .order("sort_order"),
   ]);
 
   if (plansRes.error) {
@@ -148,6 +158,58 @@ export default async function PricingPage({
       )}
 
       <PriceBook plans={plans} prices={prices} initialService={service} />
+
+      {(() => {
+        // Cheapest live monthly price per service_type, so the hand-typed
+        // marketing labels can be compared against what the book says.
+        const priceRowOf = new Map(
+          prices.map((p) => [`${p.service_type}:${p.plan_key}`, p]),
+        );
+        const floorOf = (serviceType: string): number | null => {
+          const typed = plans.filter((p) => p.service_type === serviceType);
+          const flat = priceRowOf.get(`${serviceType}:*`);
+          const monthlies = typed
+            .map((p) =>
+              monthlyUsd(priceRowOf.get(`${serviceType}:${p.plan_key}`) ?? flat),
+            )
+            .filter((n) => n > 0);
+          if (monthlies.length === 0 && flat) {
+            const m = monthlyUsd(flat);
+            return m > 0 ? m : null;
+          }
+          return monthlies.length ? Math.min(...monthlies) : null;
+        };
+        // Marketing category slugs → price-book service types (best effort;
+        // unmapped categories show "no mapping" rather than a wrong number).
+        const CATEGORY_SERVICE: Record<string, string> = {
+          database: "database",
+          databases: "database",
+          compute: "compute",
+          vps: "compute",
+          servers: "compute",
+          kubernetes: "kubernetes",
+          gpu: "gpu_pod",
+          "gpu-cloud": "gpu_pod",
+          storage: "objectspace",
+          "object-storage": "objectspace",
+          network: "spectrum",
+          "network-ddos": "spectrum",
+          apps: "platform_apps",
+          "platform-apps": "platform_apps",
+        };
+        const categories: CategoryRow[] = (categoriesRes.data ?? []).map((c) => ({
+          id: c.id,
+          slug: c.slug,
+          label: c.label,
+          starting_price_label: c.starting_price_label,
+          floor: CATEGORY_SERVICE[c.slug] ? floorOf(CATEGORY_SERVICE[c.slug]) : null,
+        }));
+        return categories.length > 0 ? (
+          <div className="mt-6">
+            <MarketingLabels categories={categories} />
+          </div>
+        ) : null;
+      })()}
 
       <p className="mt-6 text-xs text-muted-foreground">
         Prices are append-only: a change closes the current row and inserts a

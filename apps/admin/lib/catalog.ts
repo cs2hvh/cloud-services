@@ -39,7 +39,7 @@ interface LivePrice {
   amount: number;
 }
 
-function monthlyUsd(p: LivePrice | undefined): number {
+export function monthlyUsd(p: LivePrice | undefined): number {
   if (!p) return 0;
   const amount = Number(p.amount);
   switch (p.unit) {
