@@ -79,7 +79,7 @@ export const AuditLogService = {
   async query(
     filters: AuditLogFilters,
     pagination: AuditLogPagination
-  ): Promise<{ data: AuditLogEntry[]; total: number }> {
+  ): Promise<{ data: AuditLogEntry[]; total: number; error?: string }> {
     try {
       const supabase = await createServiceClient();
       const { page, limit } = pagination;
@@ -126,13 +126,15 @@ export const AuditLogService = {
 
       if (error) {
         console.error(`[AuditLogService.query] Error: ${error.message}`);
-        return { data: [], total: 0 };
+        // An unreadable log and an empty log are different states — callers
+        // that ignore `error` keep the old empty-result behavior.
+        return { data: [], total: 0, error: error.message };
       }
 
       return { data: (data as AuditLogEntry[]) || [], total: count || 0 };
     } catch (err) {
       console.error(`[AuditLogService.query] Error: ${err}`);
-      return { data: [], total: 0 };
+      return { data: [], total: 0, error: String(err) };
     }
   },
 

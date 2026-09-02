@@ -60,7 +60,13 @@ async function LiveOverview() {
           </Link>
         </div>
         <div className="p-4">
-          {(activity.data ?? []).length > 0 ? (
+          {activity.error ? (
+            <p className="text-xs text-red-400">
+              Audit log unreadable — {activity.error.message}. Writes are
+              failing the same way, so admin actions are currently not being
+              recorded.
+            </p>
+          ) : (activity.data ?? []).length > 0 ? (
             <Table head={["when", "action", "service", "what", "by"]}>
               {(activity.data ?? []).map((a) => (
                 <tr key={a.id} className="border-t border-border/60">

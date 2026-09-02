@@ -85,6 +85,15 @@ export async function GET(req: NextRequest) {
       }
     );
 
+    // A dead audit read must not render as an empty-but-healthy log — that
+    // hid six days of unwritten audits once already.
+    if (result.error) {
+      return NextResponse.json(
+        { error: `Audit log unreadable: ${result.error}` },
+        { status: 502 }
+      );
+    }
+
     return NextResponse.json({
       success: true,
       data: result.data,
