@@ -1,0 +1,11 @@
+# Panel admin allowlist — the definitive list of accounts that may enter
+# control.ahurasense.com. Set by Harshit, 2026-09-02.
+#
+# One email per line; blank lines and # comments ignored. Every deploy writes
+# this as ADMIN_EMAILS into the panel's .env (replacing any existing line),
+# so changing access = edit this file + push. The allowlist is the STRONG
+# auth path: it overrides user_profiles.roles on purpose — a compromised
+# account could edit its own database role, but not this file.
+harshit.hv@outlook.com
+vedendra.singh@ahurasense.com
+deep.aghera@ahurasense.com

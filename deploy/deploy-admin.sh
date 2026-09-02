@@ -71,6 +71,22 @@ if ! grep -q '^NEXT_PUBLIC_MAIN_APP_URL=' .env 2>/dev/null; then
   ok "wrote NEXT_PUBLIC_MAIN_APP_URL=https://ahurasense.com to .env"
 fi
 
+# ── admin allowlist as code (deploy/panel-admins) ───────────────────────────
+# Versioned in git so "who can enter the panel" is auditable and changing it
+# is an edit + push, not an SSH session. REPLACES any existing ADMIN_EMAILS
+# line — the env must track the file, not drift from it. Read at service
+# start (dotenv in next.config), and the deploy restarts the service after.
+if [[ -f deploy/panel-admins ]]; then
+  ADMINS="$(grep -vE '^[[:space:]]*(#|$)' deploy/panel-admins | tr -d ' \r' | paste -sd, -)"
+  if [[ -n "$ADMINS" ]]; then
+    sed -i '/^ADMIN_EMAILS=/d' .env 2>/dev/null || true
+    echo "ADMIN_EMAILS=$ADMINS" >> .env
+    ok "ADMIN_EMAILS set from deploy/panel-admins: $ADMINS"
+  else
+    echo "WARN: deploy/panel-admins exists but lists no emails — ADMIN_EMAILS left untouched."
+  fi
+fi
+
 step "Building the admin app"
 npm run admin:build || die "build failed — live panel untouched"
 
