@@ -50,7 +50,15 @@ export const siteConfig = {
     logo: "https://samatva.blr1.cdn.digitaloceanspaces.com/images/logo.gif",
     favicon: "https://samatva.blr1.cdn.digitaloceanspaces.com/images/logo.gif",
   },
-  social: {
-    twitter: "@ahuracloud",
-  },
+  // No social handle.
+  //
+  // This was "@ahuracloud", a dead brand, and it fed twitter:creator and
+  // twitter:site on every page. Guessing "@ahurasense" would be worse than
+  // omitting it: if that handle belongs to somebody else, every share of this
+  // site credits a stranger. Twitter cards are valid without creator/site —
+  // they simply render without attribution.
+  //
+  // Set this, and re-add the two lines in app/layout.tsx that read it, once
+  // there is a real account to point at.
+  social: {} as { twitter?: string },
 };

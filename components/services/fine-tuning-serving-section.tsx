@@ -12,16 +12,30 @@ import {
 } from "lucide-react";
 
 import { Container } from "@/components/ui/container";
+import { SERVING_IMAGE_URI } from "@/lib/inference/branding";
 
 // ─── Looping code typewriter ─────────────────────────────────────────
 //
 // Types the command out, holds, then restarts — loops while the section
 // is in view. SSR-safe (renders nothing typed until `start` flips true,
 // no Math.random) and respects reduced-motion by showing the full text.
+//
+// The image comes from SERVING_IMAGE_URI, not a literal. This read
+// `ghcr.io/ahuracloud/serving-vllm:latest`, which was wrong three ways at
+// once — wrong org, wrong image name, and a `latest` tag the build only
+// publishes from the default branch. CI pushes
+// ghcr.io/<owner>/ahura-ft-serving-vllm, and the managed-serving path
+// provisions ghcr.io/cs2hvh/ahura-ft-serving-vllm:vllm-0.7.3.
+//
+// So this was a copyable docker command for an image that has never
+// existed. SERVING_IMAGE_URI is the same constant the provisioner uses,
+// and its own comment asks that customer-visible copy match the image
+// actually provisioned — which is now true by construction rather than by
+// someone remembering.
 const DOCKER_CMD = `docker run --gpus all -p 8000:8000 \\
   -e BASE_MODEL="phi-4" \\
   -e ADAPTER_DOWNLOAD_URL=<presigned> \\
-  ghcr.io/ahuracloud/serving-vllm:latest`;
+  ${SERVING_IMAGE_URI}`;
 
 const CURL_CMD = `curl https://api.ahurasense.com/v1/chat/completions \\
   -H "Authorization: Bearer $AHURA_API_KEY" \\

@@ -126,7 +126,7 @@ export const DomainMarketplacePurchaseRequestListQuerySchema = z
 
 export const DomainMarketplaceSummarySchema = z
   .object({
-    channel: z.literal("ahuracloud").openapi({ example: "ahuracloud" }),
+    channel: z.literal("ahurasense").openapi({ example: "ahurasense" }),
     configured: z.boolean().openapi({ example: true }),
     mode: z.literal("managed_reseller").openapi({ example: "managed_reseller" }),
     capabilities: z.object({
@@ -150,13 +150,13 @@ export const DomainMarketplaceResultSchema = z
     currency: z.string().openapi({ example: "USD" }),
     purchaseType: z.string().nullable().openapi({ example: "registration" }),
     reason: z.string().nullable().openapi({ example: null }),
-    fulfillment: z.literal("ahuracloud").openapi({ example: "ahuracloud" }),
+    fulfillment: z.literal("ahurasense").openapi({ example: "ahurasense" }),
   })
   .openapi("DomainMarketplaceResult");
 
 export const DomainMarketplaceSearchDataSchema = z
   .object({
-    channel: z.literal("ahuracloud").openapi({ example: "ahuracloud" }),
+    channel: z.literal("ahurasense").openapi({ example: "ahurasense" }),
     query: z.string().openapi({ example: "mybrand" }),
     results: z.array(DomainMarketplaceResultSchema),
   })
@@ -176,7 +176,7 @@ export const DomainMarketplacePurchaseRequestRecordSchema = z
     purchase_price: z.number().nullable().openapi({ example: 12.99 }),
     renewal_price: z.number().nullable().openapi({ example: 14.99 }),
     currency: z.string().openapi({ example: "USD" }),
-    provider: z.string().openapi({ example: "ahuracloud" }),
+    provider: z.string().openapi({ example: "ahurasense" }),
     idempotency_key: z.string().nullable().openapi({ example: "idem-domain-001" }),
     provider_request_id: z.string().nullable().openapi({ example: "123456" }),
     last_error: z.string().nullable().openapi({ example: null }),
@@ -201,7 +201,7 @@ export const DomainMarketplacePurchaseRequestPublicSchema = z
     purchase_price: z.number().nullable().openapi({ example: 12.99 }),
     renewal_price: z.number().nullable().openapi({ example: 14.99 }),
     currency: z.string().openapi({ example: "USD" }),
-    provider: z.string().openapi({ example: "ahuracloud" }),
+    provider: z.string().openapi({ example: "ahurasense" }),
     last_error: z.string().nullable().openapi({ example: null }),
     metadata: z.record(z.unknown()).openapi({
       example: {

@@ -1,7 +1,7 @@
 // Shared types for the Domain Marketplace feature
 
 export interface MarketplaceSummary {
-  channel: 'ahuracloud';
+  channel: 'ahurasense';
   configured: boolean;
   mode: 'managed_reseller';
   capabilities: {
@@ -21,7 +21,7 @@ export interface SearchResultItem {
   currency: string;
   purchaseType: string | null;
   reason: string | null;
-  fulfillment: 'ahuracloud';
+  fulfillment: 'ahurasense';
 }
 
 export interface PurchaseRequest {

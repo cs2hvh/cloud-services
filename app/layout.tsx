@@ -92,8 +92,8 @@ export const metadata: Metadata = {
     title: siteConfig.title,
     description: siteConfig.description,
     images: [siteConfig.ogImage],
-    creator: siteConfig.social.twitter,
-    site: siteConfig.social.twitter,
+    // creator/site omitted deliberately — see config/site.ts. Restore both
+    // when there is a real handle; an unverified one credits a stranger.
   },
   // Favicon / touch icons are provided by the file convention
   // (app/icon.png + app/apple-icon.png) — served same-origin with a cache

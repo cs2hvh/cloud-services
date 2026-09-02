@@ -11,7 +11,7 @@ import type {
 import type { ActorContext, DomainPurchaseRequest } from "@/lib/domain-service/core/types";
 
 export interface DomainMarketplaceSummary {
-  channel: "ahuracloud";
+  channel: "ahurasense";
   configured: boolean;
   mode: "managed_reseller";
   capabilities: {
@@ -31,11 +31,11 @@ export interface DomainMarketplaceResult {
   currency: string;
   purchaseType: string | null;
   reason: string | null;
-  fulfillment: "ahuracloud";
+  fulfillment: "ahurasense";
 }
 
 export interface DomainSearchResponse {
-  channel: "ahuracloud";
+  channel: "ahurasense";
   query: string;
   results: DomainMarketplaceResult[];
 }
@@ -82,7 +82,7 @@ export class DomainMarketplaceService {
       || Boolean(process.env.NAMECOM_BASIC_AUTH);
 
     return {
-      channel: "ahuracloud",
+      channel: "ahurasense",
       configured,
       mode: "managed_reseller",
       capabilities: {
@@ -168,7 +168,7 @@ export class DomainMarketplaceService {
     }
 
     return {
-      channel: "ahuracloud",
+      channel: "ahurasense",
       query,
       results,
     };
@@ -520,7 +520,7 @@ export class DomainMarketplaceService {
         metadata: {
           event: "domain_purchase_completed",
           source_app_id: input.appId || null,
-          provider: "ahuracloud",
+          provider: "ahurasense",
           provider_order_id: purchase.order ? String(purchase.order) : null,
           amount: first.purchasePrice ?? null,
           currency: "USD",
@@ -915,7 +915,7 @@ function toMarketplaceResult(item: {
     currency: "USD",
     purchaseType: item.purchaseType ?? null,
     reason: item.reason ?? null,
-    fulfillment: "ahuracloud",
+    fulfillment: "ahurasense",
   };
 }
 
@@ -926,6 +926,6 @@ function isBlockingPurchaseStatus(status: DomainPurchaseRequest["status"]): bool
 function toPublicPurchaseRequest(request: DomainPurchaseRequest): DomainPurchaseRequest {
   return {
     ...request,
-    provider: "ahuracloud",
+    provider: "ahurasense",
   };
 }
