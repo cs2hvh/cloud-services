@@ -22,7 +22,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { StatusChip, Table } from "@admin/components/deploy/bits";
-import LinodePlansTab from "@admin/components/admin/linode/plans-tab";
 import {
   RATE_MODELS,
   UNITS_BY_MODEL,
@@ -72,12 +71,11 @@ export function PriceBook({ plans, prices, initialService }: Props) {
   const groups =
     service === "all" ? allGroups : allGroups.filter(([t]) => t === service);
 
-  // Compute quotes are driven by the Linode markup console (per-type markup
+  // Compute prices live in the Linode console's Plans tab (per-type markup
   // on Linode's list price, frozen onto servers at create) — the fixed rows
-  // below never moved the dashboard price, which read as broken. So the
-  // compute pill renders the REAL control, moved here from the Linode
-  // console, charge-book drift column included. The raw book rows for
-  // compute remain visible under "All services".
+  // here never moved the dashboard price, which read as broken. The pill
+  // points at the real control instead of duplicating it. The raw book rows
+  // for compute remain visible under "All services".
   const computeConsole = service === "compute";
 
   return (
@@ -99,7 +97,22 @@ export function PriceBook({ plans, prices, initialService }: Props) {
         ))}
       </div>
 
-      {computeConsole && <LinodePlansTab />}
+      {computeConsole && (
+        <div className="rounded-xl border border-border bg-card p-6">
+          <p className="text-sm font-medium">Compute prices are set in the Linode console</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Every instance type has its own markup and floor there — the customer
+            price you set freezes onto servers at create time and is what the
+            dashboard quotes.
+          </p>
+          <a
+            href="/servers/linode"
+            className="mt-3 inline-flex items-center rounded-md border border-border px-3 py-1.5 text-xs transition-colors hover:border-[#3987e5]/50 hover:text-foreground"
+          >
+            Open the Linode console → Plans →
+          </a>
+        </div>
+      )}
 
       {!computeConsole && groups.map(([serviceType, groupPlans]) => (
         <section

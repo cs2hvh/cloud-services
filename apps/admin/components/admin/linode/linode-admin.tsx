@@ -9,6 +9,7 @@ import { useState } from "react";
 import { BarChart3, Boxes, Globe2, HardDrive, Tag } from "lucide-react";
 
 import OverviewTab from "@admin/components/admin/linode/overview-tab";
+import PlansTab from "@admin/components/admin/linode/plans-tab";
 import RegionsTab from "@admin/components/admin/linode/regions-tab";
 import ImagesTab from "@admin/components/admin/linode/images-tab";
 import InstancesTab from "@admin/components/admin/linode/instances-tab";
@@ -59,25 +60,7 @@ export default function LinodeAdmin() {
             </div>
 
             {tab === "overview" && <OverviewTab />}
-            {tab === "plans" && (
-                // The markup console moved to the price book so every price
-                // control lives on one page. This stub keeps muscle memory
-                // working instead of a vanished tab.
-                <div className="rounded-xl border border-border bg-card p-6">
-                    <p className="text-sm font-medium">Plan pricing moved to the price book</p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                        The per-type markup and floor controls (with the charge-book drift
-                        column) now live on the Pricing page, compute view — one page for
-                        every price on the platform.
-                    </p>
-                    <a
-                        href="/pricing?service=compute"
-                        className="mt-3 inline-flex items-center rounded-md border border-border px-3 py-1.5 text-xs transition-colors hover:border-[#3987e5]/50 hover:text-foreground"
-                    >
-                        Open compute pricing →
-                    </a>
-                </div>
-            )}
+            {tab === "plans" && <PlansTab />}
             {tab === "regions" && <RegionsTab />}
             {tab === "images" && <ImagesTab />}
             {tab === "instances" && <InstancesTab />}
