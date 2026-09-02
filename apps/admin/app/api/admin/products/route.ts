@@ -1,214 +1,76 @@
-import { NextRequest, NextResponse } from "next/server";
-import { Products } from "@/lib/supabase/queries/products";
+import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/supabase/auth";
-import {
-  createProductSchema,
-  updateProductSchema,
-  deleteProductSchema,
-} from "@/lib/validation/products";
-import { validateRequest } from "@/lib/middleware/validate-request";
-import { logError, sanitizeError } from "@/lib/api/error-sanitizer";
+import { loadCatalogPlans } from "@admin/lib/catalog";
 
-// GET - Fetch all products or filter by type
-export async function GET(req: NextRequest) {
-  // Check admin authentication
-  const adminCheck = await requireAdmin();
-  if (!adminCheck.ok) {
+export const dynamic = "force-dynamic";
+
+/**
+ * Legacy plans endpoint, reshaped onto reality: public.products is dropped,
+ * so GET serves service_plans + the live price book through the same
+ * product-shaped rows the section components expect. Writes are refused with
+ * a pointer — the price book (/pricing, billing.set_price) is the single
+ * write surface; recreating a products write path here would fork pricing
+ * again.
+ */
+
+const TYPE_MAP: Record<string, string> = {
+  database: "database",
+  kubernetes: "kubernetes",
+  "object-storage": "objectspace",
+  object_storage: "objectspace",
+  objectspace: "objectspace",
+  "network-ddos": "spectrum",
+  network_ddos: "spectrum",
+  spectrum: "spectrum",
+};
+
+export async function GET(request: Request) {
+  const admin = await requireAdmin();
+  if (!admin.ok) {
     return NextResponse.json(
       { error: "Unauthorized - Admin access required" },
-      { status: 401 }
+      { status: 403 },
     );
   }
 
-  try {
-    const { searchParams } = new URL(req.url);
-    const type = searchParams.get("type");
-
-    let products;
-    if (type) {
-      products = await Products.get_by_type(type);
-    } else {
-      products = await Products.get_all();
-    }
-
+  const { searchParams } = new URL(request.url);
+  const rawType = (searchParams.get("type") ?? "").trim();
+  const serviceType = TYPE_MAP[rawType];
+  if (!serviceType) {
     return NextResponse.json(
-      { products, count: products.length },
-      { status: 200 }
-    );
-  } catch (error) {
-    logError("GET /api/admin/products", error);
-    return NextResponse.json(
-      { error: sanitizeError(error) },
-      { status: 500 }
+      { error: `Unknown plan type "${rawType}"` },
+      { status: 400 },
     );
   }
+
+  const catalog = await loadCatalogPlans(serviceType);
+  if (catalog.error) {
+    return NextResponse.json({ error: catalog.error }, { status: 500 });
+  }
+  return NextResponse.json({ data: catalog.plans });
 }
 
-// POST - Create a new product
-export async function POST(req: NextRequest) {
-  // Check admin authentication
-  const adminCheck = await requireAdmin();
-  if (!adminCheck.ok) {
-    return NextResponse.json(
-      { error: "Unauthorized - Admin access required" },
-      { status: 401 }
-    );
-  }
+const gone = () =>
+  NextResponse.json(
+    {
+      error:
+        "Plan writes moved to the price book: catalog rows live in public.service_plans (billing lane's schema), prices are set on /pricing via billing.set_price(). public.products no longer exists.",
+    },
+    { status: 410 },
+  );
 
-  try {
-    const body = await req.json();
-
-    // Validate request body
-    const validation = validateRequest(createProductSchema, body);
-    if (!validation.success) {
-      return validation.response;
-    }
-
-    const validatedData = validation.data;
-
-    // Create product — cast type so new product types (inference_vector, custom_image)
-    // pass TS narrowing; the DB column is plain text with no CHECK constraint.
-    const result = await Products.create(validatedData as Parameters<typeof Products.create>[0]);
-  
-
-    if (!result.success) {
-      console.log("[Products API] POST error - creation failed:", result.error);
-      return NextResponse.json(
-        { error: result.error || "Failed to create product" },
-        { status: 400 }
-      );
-    }
-
-    return NextResponse.json(
-      { product: result.data, message: "Product created successfully" },
-      { status: 201 }
-    );
-  } catch (error) {
-    logError("POST /api/admin/products", error);
-    return NextResponse.json(
-      { error: sanitizeError(error) },
-      { status: 500 }
-    );
-  }
+export async function POST() {
+  const admin = await requireAdmin();
+  if (!admin.ok) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  return gone();
 }
-
-// PUT - Update an existing product
-export async function PUT(req: NextRequest) {
-  // Check admin authentication
-  const adminCheck = await requireAdmin();
-  if (!adminCheck.ok) {
-    return NextResponse.json(
-      { error: "Unauthorized - Admin access required" },
-      { status: 401 }
-    );
-  }
-
-  try {
-    const body = await req.json();
-
-    // Validate request body
-    const validation = validateRequest(updateProductSchema, body);
-    if (!validation.success) {
-      return validation.response;
-    }
-
-    const validatedData = validation.data;
-    const { id, ...updateData } = validatedData;
-
-    // Check if product exists
-    const existingProduct = await Products.get_by_id(id);
-    if (!existingProduct) {
-      return NextResponse.json(
-        { error: "Product not found" },
-        { status: 404 }
-      );
-    }
-
-    const result = await Products.update(id, updateData as Parameters<typeof Products.update>[1]);
-
-    if (!result.success) {
-      return NextResponse.json(
-        { error: result.error || "Failed to update product" },
-        { status: 400 }
-      );
-    }
-
-    return NextResponse.json(
-      { product: result.data, message: "Product updated successfully" },
-      { status: 200 }
-    );
-  } catch (error) {
-    logError("PUT /api/admin/products", error);
-    return NextResponse.json(
-      { error: sanitizeError(error) },
-      { status: 500 }
-    );
-  }
+export async function PUT() {
+  const admin = await requireAdmin();
+  if (!admin.ok) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  return gone();
 }
-
-// DELETE - Delete a product
-export async function DELETE(req: NextRequest) {
-  // Check admin authentication
-  const adminCheck = await requireAdmin();
-  if (!adminCheck.ok) {
-    return NextResponse.json(
-      { error: "Unauthorized - Admin access required" },
-      { status: 401 }
-    );
-  }
-
-  try {
-    const body = await req.json();
-
-    // Validate request body
-    const validation = validateRequest(deleteProductSchema, body);
-    if (!validation.success) {
-      return validation.response;
-    }
-
-    const { id } = validation.data;
-
-    // Check if product exists
-    const existingProduct = await Products.get_by_id(id);
-    if (!existingProduct) {
-      return NextResponse.json(
-        { error: "Product not found" },
-        { status: 404 }
-      );
-    }
-
-    // Check if product is in use
-    const usage = await Products.check_usage(id);
-    if (usage.inUse) {
-      return NextResponse.json(
-        {
-          error: `Cannot delete product. It is currently used by ${usage.count} database cluster(s)`,
-          inUse: true,
-          count: usage.count,
-        },
-        { status: 400 }
-      );
-    }
-
-    // Delete product
-    const result = await Products.delete(id);
-
-    if (!result.success) {
-      return NextResponse.json(
-        { error: result.error || "Failed to delete product" },
-        { status: 400 }
-      );
-    }
-
-    return NextResponse.json(
-      { message: "Product deleted successfully" },
-      { status: 200 }
-    );
-  } catch (error) {
-    logError("DELETE /api/admin/products", error);
-    return NextResponse.json(
-      { error: sanitizeError(error) },
-      { status: 500 }
-    );
-  }
+export async function DELETE() {
+  const admin = await requireAdmin();
+  if (!admin.ok) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  return gone();
 }

@@ -4,9 +4,8 @@ import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { requireAdmin } from "@/lib/supabase/auth";
 import AdminDatabases from "@admin/components/admin/databases/admin-databases";
 import { Database_Clusters } from "@/lib/supabase/queries/database_clusters";
-import { getCachedProducts } from "@/lib/cache/query-cache";
-import { planCatalogOffline } from "@admin/lib/catalog-status";
-import { CatalogOfflineBanner } from "@admin/components/catalog-offline-banner";
+import { loadCatalogPlans } from "@admin/lib/catalog";
+import { Callout } from "@admin/components/deploy/bits";
 
 export const dynamic = "force-dynamic";
 
@@ -16,18 +15,23 @@ const AdminDatabasesSuspense = async () => {
     notFound();
   }
 
-  const [databases, databaseProducts, catalogOffline] = await Promise.all([
+  // Plans come from service_plans + the live price book — the dropped
+  // products table is not read anywhere in this panel anymore.
+  const [databases, catalog] = await Promise.all([
     Database_Clusters.get_all_for_admin(),
-    getCachedProducts.byType("database"),
-    planCatalogOffline(),
+    loadCatalogPlans("database"),
   ]);
 
   return (
     <>
-      {catalogOffline && <CatalogOfflineBanner />}
+      {catalog.error && (
+        <Callout tone="critical">
+          Plan catalog could not be read: {catalog.error}
+        </Callout>
+      )}
       <AdminDatabases
         all_databases={databases}
-        all_products={databaseProducts}
+        all_products={catalog.plans}
         basePath="/databases"
       />
     </>

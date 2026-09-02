@@ -28,22 +28,16 @@ export default function LinodeAdmin() {
     const [tab, setTab] = useState<Tab>("overview");
 
     return (
-        <div className="mx-auto max-w-[1400px]">
+        <div>
             <div className="mb-6">
-                <a
-                    href="/dashboard/admin"
-                    className="text-[12px] text-white/45 transition-colors hover:text-white"
-                >
-                    ← Admin
-                </a>
-                <h1 className="mt-3 text-[28px] font-semibold tracking-[-0.02em]">Linode</h1>
-                <p className="mt-1 text-[13.5px] text-white/50">
+                <h1 className="font-heading text-xl font-semibold tracking-tight">Linode Console</h1>
+                <p className="mt-1 text-sm text-muted-foreground">
                     Resold compute catalog — sync status, plan pricing, regions, images and live
                     instances.
                 </p>
             </div>
 
-            <div className="mb-6 flex gap-1 overflow-x-auto border-b border-white/[0.08]">
+            <div className="mb-6 flex gap-1 overflow-x-auto border-b border-border">
                 {TABS.map((t) => {
                     const Icon = t.icon;
                     const active = tab === t.id;
@@ -52,13 +46,13 @@ export default function LinodeAdmin() {
                             key={t.id}
                             onClick={() => setTab(t.id)}
                             className={`relative inline-flex items-center gap-2 whitespace-nowrap px-4 py-3 text-[13px] font-medium transition-colors ${
-                                active ? "text-white" : "text-white/45 hover:text-white/80"
+                                active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
                             }`}
                         >
                             <Icon className="h-3.5 w-3.5" />
                             {t.label}
                             {active && (
-                                <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-[#0095FF]" />
+                                <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-[#3987e5]" />
                             )}
                         </button>
                     );

@@ -4,11 +4,10 @@ import { LoadingSpinner } from "@/components/dashboard/utils/loading";
 import { requireAdmin } from "@/lib/supabase/auth";
 import AdminDatabaseAssign from "@admin/components/admin/databases/assign-database-new";
 import { Locations } from "@/lib/supabase/queries/locations";
-import { Products } from "@/lib/supabase/queries/products";
 import { Users } from "@/lib/supabase/queries/users";
 import { Projects } from "@/lib/supabase/queries/projects";
-import { planCatalogOffline } from "@admin/lib/catalog-status";
-import { CatalogOfflineBanner } from "@admin/components/catalog-offline-banner";
+import { loadCatalogPlans } from "@admin/lib/catalog";
+import { Callout } from "@admin/components/deploy/bits";
 
 export const dynamic = "force-dynamic";
 
@@ -18,20 +17,25 @@ const AdminDatabaseAssignSuspense = async () => {
     notFound();
   }
 
-  const products = await Products.get_by_type("database");
-  const locations = await Locations.get_all();
-  const users = await Users.get_all_profiles();
-  const projects = await Projects.get_all_for_admin();
-  const catalogOffline = await planCatalogOffline();
+  const [catalog, locations, users, projects] = await Promise.all([
+    loadCatalogPlans("database"),
+    Locations.get_all(),
+    Users.get_all_profiles(),
+    Projects.get_all_for_admin(),
+  ]);
 
-  if (catalogOffline) {
-    // No plans exist to assign; rendering the wizard would dead-end at step 1.
-    return <CatalogOfflineBanner />;
+  if (catalog.error || catalog.plans.length === 0) {
+    // No plans to assign — the wizard would dead-end at step 1.
+    return (
+      <Callout tone="critical">
+        Plan catalog unavailable{catalog.error ? `: ${catalog.error}` : " (no active database plans)"}.
+      </Callout>
+    );
   }
 
   return (
     <AdminDatabaseAssign
-      products={products}
+      products={catalog.plans}
       locations={locations}
       allUsers={users}
       allProjects={projects || []}
