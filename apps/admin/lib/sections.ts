@@ -41,7 +41,10 @@ export type AdminSection = {
 };
 
 export const MAIN_APP_URL =
-  process.env.NEXT_PUBLIC_MAIN_APP_URL || "https://ahuracloud.com";
+  // Fallback must be the domain that RESOLVES TODAY. ahuracloud.com was here
+  // before and doesn't — the sidebar's unmigrated links and the next.config
+  // redirects all dead-ended on a live panel until a probe caught it.
+  process.env.NEXT_PUBLIC_MAIN_APP_URL || "https://ahurasense.com";
 
 /** Group render order for the sidebar and overview. "" renders ungrouped at top. */
 export const SECTION_GROUPS = ["", "Platform", "Compute", "Services", "Commerce"];

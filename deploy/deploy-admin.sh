@@ -60,6 +60,17 @@ else
   ok "lockfile unchanged — skipping npm ci"
 fi
 
+# ── ensure required env (NEXT_PUBLIC_* are inlined at BUILD time) ───────────
+# The .env is a first-run copy of the main app's and the main app does not
+# carry this var, so it must be written here BEFORE the build, idempotently.
+# An absent var plus a source fallback is how the live panel shipped four
+# dead links pointing at a domain with no DNS — the var being explicit means
+# the fallback is never the thing in play.
+if ! grep -q '^NEXT_PUBLIC_MAIN_APP_URL=' .env 2>/dev/null; then
+  echo 'NEXT_PUBLIC_MAIN_APP_URL=https://ahurasense.com' >> .env
+  ok "wrote NEXT_PUBLIC_MAIN_APP_URL=https://ahurasense.com to .env"
+fi
+
 step "Building the admin app"
 npm run admin:build || die "build failed — live panel untouched"
 

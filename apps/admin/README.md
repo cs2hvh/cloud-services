@@ -1,7 +1,7 @@
 # AhuraSense Admin Panel
 
 A standalone Next.js app for the admin panel, meant to be deployed on its own
-subdomain (e.g. `admin.ahuracloud.com`) separately from the customer-facing
+subdomain (e.g. `control.ahurasense.com`) separately from the customer-facing
 app. It lives in the same repo and imports the shared code directly — there is
 no duplicated business logic.
 
@@ -46,7 +46,7 @@ Env comes from the repo root `.env` / `.env.local` (loaded in
 plus whatever the migrated sections' shared services need. Optional:
 `ADMIN_EMAILS` (comma-separated allowlist; when set it overrides the
 role-based check), `NEXT_PUBLIC_MAIN_APP_URL` (where unmigrated sections
-link to; defaults to https://ahuracloud.com).
+link to; defaults to https://ahurasense.com).
 
 ## Migrating a section (playbook)
 
