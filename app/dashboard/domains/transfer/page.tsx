@@ -755,10 +755,6 @@ export default function DomainTransferPage() {
         {/* ── Hero ──────────────────────────────────────── */}
         <header className="mb-8 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
-            <div className={`${MONO} mb-3 inline-flex items-center gap-3 text-[10.5px] uppercase tracking-[0.14em] text-white/55`}>
-              <span className="h-px w-4 bg-white/30" />
-              Domain Transfer Center
-            </div>
             <h1 className="text-[36px] sm:text-[44px] leading-[1.05] tracking-[-0.025em] text-white font-semibold">
               Transfer{" "}
               <span style={SERIF_STYLE} className="text-white/55 font-normal">

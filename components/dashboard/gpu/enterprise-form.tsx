@@ -234,10 +234,6 @@ export default function EnterpriseInquiryForm() {
                     Back to GPU Cloud
                 </Link>
 
-                <div className={`${MONO} mb-3 flex items-center gap-3 text-[10.5px] uppercase tracking-[0.14em] text-white/55`}>
-                    <span className="h-px w-4" style={{ background: ACCENT }} />
-                    GPU Cloud · Enterprise
-                </div>
 
                 <h1 className="text-[36px] sm:text-[44px] leading-[1.05] tracking-[-0.025em] text-white font-semibold max-w-3xl">
                     Scale GPUs on{" "}

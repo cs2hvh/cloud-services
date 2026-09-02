@@ -112,9 +112,6 @@ export default function CustomImagesPage() {
         {/* Hero */}
         <header className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between mb-9">
           <div className="max-w-3xl">
-            <div className={`${MONO} mb-3 flex items-center gap-3 text-[10.5px] uppercase tracking-[0.14em] text-white/55`}>
-              <span className="h-px w-4 bg-white/45" /> Compute · Custom Images
-            </div>
             <h1 className="text-[34px] sm:text-[42px] leading-[1.05] tracking-[-0.025em] text-white font-semibold">
               Your{' '}
               <span style={SERIF_STYLE} className="text-white/55 font-normal">images</span>.

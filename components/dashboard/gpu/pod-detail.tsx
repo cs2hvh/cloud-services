@@ -279,10 +279,6 @@ export default function GpuPodDetail() {
                         Back to GPU Cloud
                     </Link>
 
-                    <div className={`${MONO} mb-3 flex items-center gap-3 text-[10.5px] uppercase tracking-[0.14em] text-white/55`}>
-                        <span className="h-px w-4" style={{ background: ACCENT }} />
-                        GPU Cloud · Pod
-                    </div>
 
                     <h1 className={`${MONO} text-[28px] sm:text-[36px] leading-[1.05] tracking-[-0.015em] text-white font-semibold truncate`}>
                         {pod.name}

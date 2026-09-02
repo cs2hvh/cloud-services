@@ -175,10 +175,6 @@ export default function GpuStorage() {
                             <ArrowLeft className="h-3 w-3" />
                             Back to GPU Cloud
                         </Link>
-                        <div className={`${MONO} mb-3 flex items-center gap-3 text-[10.5px] uppercase tracking-[0.14em] text-white/55`}>
-                            <span className="h-px w-4" style={{ background: ACCENT }} />
-                            GPU Cloud · Storage
-                        </div>
                         <h1 className="text-[34px] sm:text-[42px] leading-[1.05] tracking-[-0.025em] text-white font-semibold">
                             Network{" "}
                             <span style={SERIF_STYLE} className="text-[#0095FF] font-normal">volumes</span>

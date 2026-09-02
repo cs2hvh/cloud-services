@@ -298,10 +298,6 @@ export default function BareMetalPage() {
                 {/* Hero */}
                 <header className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between mb-7">
                     <div className="max-w-3xl">
-                        <div className={`${MONO} mb-3 flex items-center gap-3 text-[10.5px] uppercase tracking-[0.14em] text-white/55`}>
-                            <span className="h-px w-4 bg-white/45" />
-                            Compute · Bare Metal
-                        </div>
                         <h1 className="text-[34px] sm:text-[42px] leading-[1.05] tracking-[-0.025em] text-white font-semibold">
                             Dedicated{' '}
                             <span style={SERIF_STYLE} className="text-[#0095FF] font-normal">
@@ -310,7 +306,7 @@ export default function BareMetalPage() {
                         </h1>
                         <p className={`mt-3 max-w-xl text-[13.5px] text-white/55 leading-relaxed`}>
                             Single-tenant physical servers with full root access and dedicated
-                            hardware — no virtualization, no neighbours. Billed monthly.
+                            hardware.
                         </p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">

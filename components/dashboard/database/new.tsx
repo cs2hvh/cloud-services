@@ -357,12 +357,6 @@ const DatabaseSelect = ({
         </div>
 
         {/* Hero */}
-        <div
-          className={`${MONO} mb-3 flex items-center gap-3 text-[10.5px] uppercase tracking-[0.14em] text-white/55`}
-        >
-          <span className="h-px w-4 bg-white/45" />
-          Database · Provisioning
-        </div>
         <h1 className="text-[34px] sm:text-[40px] leading-[1.05] tracking-[-0.025em] text-white font-semibold mb-2">
           Spin up a managed cluster{" "}
           <span style={{ ...SERIF_STYLE, color: ACCENT }} className="font-normal">
