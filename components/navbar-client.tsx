@@ -209,11 +209,42 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
     setIsLoading(false);
   }, [initialUser]);
 
+  // Identity at the last event, so a refresh only fires on a REAL transition.
+  // `undefined` means "no event seen yet" and is deliberately distinct from
+  // `null` (signed out) — the first event must never trigger a refresh.
+  const lastUserIdRef = useRef<string | null | undefined>(undefined);
+
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        const nextUserId = session?.user?.id ?? null;
         setUser(session?.user ?? null);
-        if (event === "SIGNED_IN" || event === "SIGNED_OUT") {
+
+        // WHY THIS IS NOT `if (event === "SIGNED_IN" || event === "SIGNED_OUT")`
+        //
+        // That version made the 404 page flicker in a permanent reload loop.
+        //
+        // onAuthStateChange fires on subscribe, on token refresh, and when the
+        // tab regains focus — not only on a genuine sign-in. Refreshing on any
+        // of those re-renders the tree; if this component is inside the part
+        // that re-renders, it unmounts, remounts, subscribes again, receives
+        // another event, and refreshes again. Self-feeding, as fast as the
+        // network allows.
+        //
+        // On marketing pages the loop never closed because <Navbar> lives in
+        // app/(marketing)/layout.tsx, and a layout survives router.refresh()
+        // — React reconciles it in place, so the subscription is never torn
+        // down. app/not-found.tsx renders <Navbar> inside the PAGE instead, so
+        // every refresh remounted it. That is why only the 404 flickered.
+        //
+        // Comparing identity instead of trusting the event name means a
+        // repeated event for the same user is a no-op, and the cycle cannot
+        // close no matter where this component is mounted.
+        const isFirstEvent = lastUserIdRef.current === undefined;
+        const identityChanged = lastUserIdRef.current !== nextUserId;
+        lastUserIdRef.current = nextUserId;
+
+        if (!isFirstEvent && identityChanged) {
           router.refresh();
         }
       },
