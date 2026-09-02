@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import {
     AlertTriangle,
+    Check,
     ChevronDown,
     ChevronRight,
     Loader2,
@@ -43,6 +44,17 @@ const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
 const ACCENT = "#0095FF";
 const ACCENT_DIM = "rgba(0,149,255,0.12)";
 const BORDER_ACCENT = "rgba(0,149,255,0.4)";
+
+// Vendor colours, brightened for a dark background.
+//
+// These were NVIDIA's #76B900 and AMD's #ED4C3A — the brand values, taken
+// from brand sheets that assume a white page. On #0f1115 that green is a dark
+// olive: it reads as dim rather than as a colour, and it is the model name,
+// the single most-read string in a 48-row list. Raising the lightness keeps
+// each vendor recognisable while making the name legible at 13px, which is
+// the job it actually has here.
+const NVIDIA_GREEN = "#9BE016";
+const AMD_RED = "#FF6B5A";
 
 // ─── Container image templates ─────────────────────────────────────────
 
@@ -741,9 +753,10 @@ export default function DeployWizard({
                                                 <p className="mb-3 text-[11.5px] leading-relaxed text-white/40">
                                                     {gen.blurb}
                                                 </p>
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-2.5">
+                                                <GpuListHead />
+                                                <div className="border border-white/[0.06] bg-[#0f1115]">
                                                     {cards.map((c) => (
-                                                        <GpuCard
+                                                        <GpuRow
                                                             key={c.row.gpuCatalogId}
                                                             row={c.row}
                                                             selected={gpuCatalogId === c.row.gpuCatalogId}
@@ -758,9 +771,9 @@ export default function DeployWizard({
                                 {outOfStock.length > 0 && (
                                     <>
                                         {!collapseOOS && (
-                                            <div className={`grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-2.5 ${inStock.length > 0 ? "mt-2.5" : ""}`}>
+                                            <div className={`border border-white/[0.06] bg-[#0f1115] ${inStock.length > 0 ? "mt-4" : ""}`}>
                                                 {outOfStock.map((c) => (
-                                                    <GpuCard
+                                                    <GpuRow
                                                         key={c.row.gpuCatalogId}
                                                         row={c.row}
                                                         selected={false}
@@ -1352,7 +1365,37 @@ function FilterChip({
     );
 }
 
-function GpuCard({
+/**
+ * One GPU as a LIST ROW, not a card.
+ *
+ * The catalogue is 48 GPUs. As cards four across that is twelve rows of
+ * boxes, and comparing two of them means comparing two paragraphs in
+ * different places on screen. The thing a buyer actually does here is scan one
+ * number down a column — price, or VRAM — and a card grid makes that the one
+ * thing you cannot do.
+ *
+ * So: fixed columns, aligned values, one line per GPU. The specs are the same
+ * ones the card carried; they are just in the same place on every row now.
+ */
+const GPU_GRID =
+    "grid-cols-[18px_minmax(0,1fr)_88px_70px_108px_84px] gap-3";
+
+function GpuListHead() {
+    return (
+        <div
+            className={`${MONO} hidden md:grid ${GPU_GRID} items-center px-3 pb-1.5 text-[9.5px] uppercase tracking-[0.14em] text-white/30`}
+        >
+            <span />
+            <span>Model</span>
+            <span>Arch</span>
+            <span>VRAM</span>
+            <span>Capacity</span>
+            <span className="text-right">$ / GPU-hr</span>
+        </div>
+    );
+}
+
+function GpuRow({
     row,
     selected,
     onSelect,
@@ -1373,127 +1416,102 @@ function GpuCard({
               ? 0
               : 1;
 
+    // Capacity as three segments. A bar reads at a glance in a way the words
+    // alone do not when they repeat down 48 rows — but the words stay, because
+    // "two of three segments" is not a unit anybody thinks in.
+    const filled = isOut ? 0 : row.stockStatus === "high" ? 3 : row.stockStatus === "low" ? 1 : 2;
+
     return (
         <button
             type="button"
             onClick={onSelect}
             disabled={isOut}
-            className="group relative flex min-h-[158px] flex-col overflow-hidden border p-4 text-left transition-all"
-            style={
-                selected
-                    ? {
-                          background: "#1a1d23",
-                          borderColor: ACCENT,
-                          boxShadow: `0 0 0 1px ${ACCENT}, 0 8px 32px rgba(0,149,255,0.07)`,
-                      }
-                    : isOut
-                      ? { background: "#111216", borderColor: "rgba(255,255,255,0.06)", opacity: 0.4, cursor: "not-allowed" }
-                      : { background: "#111216", borderColor: "rgba(255,255,255,0.06)" }
-            }
-            onMouseEnter={(e) => {
-                if (selected || isOut) return;
-                e.currentTarget.style.background = "#16181d";
-                e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)";
-                e.currentTarget.style.transform = "translateY(-1px)";
-            }}
-            onMouseLeave={(e) => {
-                if (selected || isOut) return;
-                e.currentTarget.style.background = "#111216";
-                e.currentTarget.style.borderColor = "rgba(255,255,255,0.06)";
-                e.currentTarget.style.transform = "none";
-            }}
+            className={`group grid w-full ${GPU_GRID} items-center border-b border-white/[0.04] px-3 py-2.5 text-left transition-colors last:border-b-0 ${
+                isOut
+                    ? "cursor-not-allowed opacity-40"
+                    : selected
+                      ? "bg-[#15181f]"
+                      : "hover:bg-white/[0.025]"
+            }`}
+            style={selected ? { boxShadow: `inset 2px 0 0 ${ACCENT}` } : undefined}
         >
-            {selected && (
-                <span
-                    className="absolute left-0 right-0 top-0 h-px"
-                    style={{
-                        background: `linear-gradient(90deg, transparent, ${ACCENT}, transparent)`,
-                    }}
-                />
-            )}
+            {/* Selection box */}
+            <span
+                className="flex h-3.5 w-3.5 items-center justify-center border transition-colors"
+                style={{
+                    borderColor: selected ? ACCENT : "rgba(255,255,255,0.18)",
+                    background: selected ? ACCENT : "transparent",
+                }}
+            >
+                {selected && <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />}
+            </span>
 
-            {/* Top — name + arch + vram pill */}
-            <div className="mb-1 flex items-start justify-between gap-2.5">
-                <div className="min-w-0 flex-1">
-                    {/* Vendor-coloured, not hardcoded NVIDIA green — the MI300X
-                        is an AMD part and was being rendered in NVIDIA's brand
-                        colour, which is both wrong and actively misleading on a
-                        page whose whole job is telling cards apart. */}
-                    <h3
-                        className="text-[14.5px] font-semibold tracking-[-0.015em]"
-                        style={{ color: vendor === "AMD" ? "#ED4C3A" : "#76B900" }}
+            {/* Model — name, tier, vendor, max count */}
+            <span className="min-w-0">
+                <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                    <span
+                        className="truncate text-[13px] font-semibold tracking-[-0.01em]"
+                        style={{ color: vendor === "AMD" ? AMD_RED : NVIDIA_GREEN }}
                     >
                         {row.displayName}
-                    </h3>
-                    <div className={`${MONO} mt-0.5 flex items-center gap-1.5 text-[10.5px] text-white/35`}>
-                        <span className="text-white/55">{vendor}</span>
-                        <span className="opacity-40">·</span>
-                        <span>{arch}</span>
-                        {generationIndex(row.displayName) === GEN_LATEST && (
-                            <>
-                                <span className="opacity-40">·</span>
-                                {/* Repeated on the card as well as the section
-                                    heading, because cards are also shown
-                                    ungrouped in the out-of-stock list. */}
-                                <span style={{ color: ACCENT }}>New</span>
-                            </>
-                        )}
-                    </div>
-                </div>
-                <span
-                    className={`${MONO} shrink-0 border border-white/[0.06] bg-white/[0.03] px-1.5 py-0.5 text-[10.5px] font-medium text-white/65`}
-                >
-                    {row.memoryGb} GB
+                    </span>
+                    <span
+                        className={`${MONO} shrink-0 text-[9px] uppercase tracking-[0.12em] text-white/30`}
+                    >
+                        {tier}
+                    </span>
                 </span>
-            </div>
-
-            {/* Mid — price + sparkline */}
-            <div className="mt-3 mb-3 flex items-baseline justify-between">
-                <div style={SERIF_STYLE} className="flex items-baseline gap-0.5 text-[28px] leading-none tracking-[-0.025em] text-white font-bold tabular-nums">
-                    <span className="text-[16px] text-white/55 font-medium">$</span>
-                    {row.onDemandPerHr !== null
-                        ? (row.onDemandPerHr * GPU_MARKUP_PCT).toFixed(2)
-                        : "—"}
-                    <span className={`${MONO} ml-1 text-[9.5px] tracking-[0.02em] text-white/35 font-normal`}>
-                        /GPU·hr
-                    </span>
-                </div>
-            </div>
-
-            {/* Bottom — stock dot + tier + max */}
-            <div className="mt-auto flex items-center justify-between gap-2 border-t border-dashed border-white/[0.06] pt-3">
-                <div className={`${MONO} flex items-center gap-2 text-[11px] text-white/65`}>
-                    <span className="relative">
-                        <span className={`block h-1.5 w-1.5 rounded-full ${stock.dotClass}`} />
-                        {!isOut && (
-                            <span
-                                className="pointer-events-none absolute -inset-[3.5px] rounded-full border opacity-30"
-                                style={{ borderColor: stock.color, animation: "deploy-pulse 2.4s infinite" }}
-                            />
-                        )}
-                    </span>
-                    {stock.label}
-                </div>
-                <div className={`${MONO} flex items-center gap-2 text-[9.5px] uppercase tracking-[0.08em] text-white/35`}>
+                <span className={`${MONO} mt-0.5 flex items-center gap-1.5 text-[10px] text-white/35`}>
+                    <span>{vendor.toLowerCase()}</span>
                     {!isOut && max > 0 && (
-                        <span className="text-white/55">
-                            up to {max}×
-                        </span>
+                        <>
+                            <span className="opacity-40">·</span>
+                            <span>up to {max}×</span>
+                        </>
                     )}
-                    <span>{tier}</span>
-                </div>
-            </div>
+                </span>
+            </span>
 
-            {/* Pulse keyframes scoped via inline style tag */}
-            <style>{`
-                @keyframes deploy-pulse {
-                    0%, 100% { opacity: 0.35; transform: scale(1); }
-                    50% { opacity: 0; transform: scale(1.6); }
-                }
-            `}</style>
+            {/* Arch */}
+            <span className={`${MONO} truncate text-[11px] text-white/60`}>{arch}</span>
+
+            {/* VRAM */}
+            <span className={`${MONO} text-[11.5px] tabular-nums text-white/75`}>
+                {row.memoryGb} GB
+            </span>
+
+            {/* Capacity */}
+            <span className="flex items-center gap-2">
+                <span className="flex shrink-0 gap-[2px]" aria-hidden>
+                    {[0, 1, 2].map((i) => (
+                        <span
+                            key={i}
+                            className="block h-[3px] w-[7px]"
+                            style={{
+                                background: i < filled ? stock.color : "rgba(255,255,255,0.12)",
+                            }}
+                        />
+                    ))}
+                </span>
+                <span className={`${MONO} truncate text-[10px] leading-tight text-white/45`}>
+                    {stock.label}
+                </span>
+            </span>
+
+            {/* Price */}
+            <span
+                className={`${MONO} text-right text-[13px] font-semibold tabular-nums ${
+                    isOut ? "text-white/30" : "text-white"
+                }`}
+            >
+                {row.onDemandPerHr !== null
+                    ? (row.onDemandPerHr * GPU_MARKUP_PCT).toFixed(2)
+                    : "—"}
+            </span>
         </button>
     );
 }
+
 
 function DetailRow({
     label,
