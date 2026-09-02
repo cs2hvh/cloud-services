@@ -203,8 +203,8 @@ export default function PlansTab() {
         <div className="space-y-4">
             <p className="text-[13px] text-white/50">
                 Markup multiplies Linode&apos;s list price (1.25 = 25% markup); floor is the minimum
-                customer $/hr. Customer price = max(list × markup, floor). Prices freeze onto
-                servers at create time.
+                customer $/hr. Customer price = max(list × markup, floor). An edited price applies
+                to VMs created from then on — running VMs keep the rate they were sold at.
             </p>
 
             {/* Class sub-tabs */}

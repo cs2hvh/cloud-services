@@ -52,6 +52,16 @@ export async function POST(request: Request) {
 
   const serviceType = String(body.serviceType ?? "").trim();
   const planKey = String(body.planKey ?? "").trim();
+
+  // The compute '*' row is a resolver target ("bill the frozen per-server
+  // rate", markup 1.0), not a price — at 2.0 every compute VM bills double.
+  // Its plan row is inactive so no UI offers it; this closes the direct-POST
+  // door. Other services' '*' rows genuinely ARE prices and stay writable.
+  if (serviceType === "compute" && planKey === "*") {
+    return bad(
+      "compute/'*' is billing plumbing (passthrough to the per-server frozen rate), not a price. Set per-instance prices in the Linode console instead."
+    );
+  }
   const rateModel = String(body.rateModel ?? "") as RateModel;
   const unit = String(body.unit ?? "");
   const amount = Number(body.amount);
