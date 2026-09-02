@@ -610,9 +610,14 @@ export default function DeployWizard({
             />
             <div className="relative z-10 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px]">
                 {/* ── Main column ────────────────────────────────────── */}
-                <div className="px-6 py-7 sm:px-10 sm:py-9 max-w-[1280px]">
-                    {/* Page title */}
-                    <h1 className="text-[56px] sm:text-[64px] leading-[0.95] tracking-[-0.025em] text-white font-semibold">
+                <div className="px-6 py-5 sm:px-10 sm:py-6 max-w-[1280px]">
+                    {/* Page title.
+                        Was 64px with 8/7 spacing around a four-cell stepper,
+                        which pushed the first GPU below the fold on a laptop —
+                        on a page whose entire job is choosing from that list.
+                        The title is orientation, not content; it gets the room
+                        orientation needs and no more. */}
+                    <h1 className="text-[30px] sm:text-[34px] leading-[1.05] tracking-[-0.02em] text-white font-semibold">
                         Launch{" "}
                         <span style={SERIF_STYLE} className="text-[#0095FF] font-normal">
                             GPU
@@ -620,7 +625,7 @@ export default function DeployWizard({
                     </h1>
 
                     {/* Stepper */}
-                    <div className="mt-8 mb-7 grid grid-cols-2 sm:grid-cols-4 border-y border-white/[0.07] py-4">
+                    <div className="mt-4 mb-5 grid grid-cols-2 sm:grid-cols-4 border-y border-white/[0.07] py-3">
                         <StepCell
                             num="01"
                             slot="GPU"
@@ -761,6 +766,8 @@ export default function DeployWizard({
                                                             row={c.row}
                                                             selected={gpuCatalogId === c.row.gpuCatalogId}
                                                             onSelect={() => setGpuCatalogId(c.row.gpuCatalogId)}
+                                                            gpuCount={gpuCount}
+                                                            onCount={setGpuCount}
                                                         />
                                                     ))}
                                                 </div>
@@ -778,6 +785,8 @@ export default function DeployWizard({
                                                         row={c.row}
                                                         selected={false}
                                                         onSelect={() => {}}
+                                                        gpuCount={gpuCount}
+                                                        onCount={setGpuCount}
                                                     />
                                                 ))}
                                             </div>
@@ -807,50 +816,6 @@ export default function DeployWizard({
                     })()}
 
                     {gpuError && <ErrorMsg>{gpuError}</ErrorMsg>}
-
-                    {/* Count + mode */}
-                    {selectedRow && (
-                        <div className="mt-8 grid gap-5 sm:grid-cols-2">
-                            <div>
-                                <Label className={`${MONO} mb-2 block text-[10.5px] uppercase tracking-[0.14em] text-white/45`}>
-                                    GPU count
-                                </Label>
-                                <div className="flex flex-wrap gap-2">
-                                    {availableCounts.length > 0 ? (
-                                        availableCounts.map((n) => {
-                                            const selected = gpuCount === n;
-                                            return (
-                                                <button
-                                                    key={n}
-                                                    type="button"
-                                                    onClick={() => setGpuCount(n)}
-                                                    className={`${MONO} flex h-10 min-w-[60px] items-center justify-center border px-3 text-[13px] font-semibold tabular-nums transition-all`}
-                                                    style={
-                                                        selected
-                                                            ? {
-                                                                  borderColor: BORDER_ACCENT,
-                                                                  background: ACCENT_DIM,
-                                                                  color: "#ffffff",
-                                                                  boxShadow: `0 0 0 1px ${BORDER_ACCENT}`,
-                                                              }
-                                                            : {
-                                                                  borderColor: "rgba(255,255,255,0.08)",
-                                                                  background: "#111216",
-                                                                  color: "rgba(255,255,255,0.78)",
-                                                              }
-                                                    }
-                                                >
-                                                    {n}×
-                                                </button>
-                                            );
-                                        })
-                                    ) : (
-                                        <p className="text-[12px] text-white/40">Out of stock.</p>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    )}
 
                     {/* ── 02 · Identity & image ──────────────────────── */}
                     <SectionTitle index="02" title="Identity & image" />
@@ -1111,126 +1076,151 @@ export default function DeployWizard({
                 </div>
 
                 {/* ── Right summary panel ─────────────────────────────── */}
-                <aside className="border-l border-white/[0.06] bg-[#0d0e11] px-7 py-7 lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto">
-                    <h2 className="text-[30px] leading-[1.05] tracking-[-0.02em] font-semibold">
-                        Your{" "}
-                        <span style={SERIF_STYLE} className="text-white/55 font-normal">
-                            GPU
-                        </span>
-                    </h2>
+                {/*
+                  Summary as a CARD, matching the VM deploy panel.
 
-                    {/* Big price */}
-                    <div className="mt-6 pb-5 border-b border-white/[0.06]">
-                        <div className="flex items-baseline">
-                            <span style={SERIF_STYLE} className="text-[30px] text-white/55 mr-0.5 font-medium">$</span>
-                            <span style={SERIF_STYLE} className="text-[68px] leading-[0.95] tracking-[-0.035em] text-white font-bold tabular-nums">
-                                {estimatedHourly !== null ? estimatedHourly.toFixed(2) : "—"}
+                  This was a bare full-height column with a 68px price sitting
+                  on the page background — a different shape from every other
+                  deploy surface in the product, so the two pages did not read
+                  as the same wizard. Same card, same header, same status pill,
+                  same row rhythm, same gradient button as
+                  components/dashboard/compute/vps/linode.tsx.
+                */}
+                <aside className="px-6 py-6 sm:px-7 lg:sticky lg:top-6 self-start">
+                    <div className="border border-white/[0.06] bg-[#111216] rounded-[6px] overflow-hidden">
+                        <header className="flex items-start justify-between gap-2 border-b border-white/[0.06] px-5 py-4">
+                            <div>
+                                <p className={`${MONO} mb-1 text-[10px] uppercase tracking-[0.14em] text-white/40`}>
+                                    Configuration
+                                </p>
+                                <h3 className="text-[15px] font-semibold tracking-[-0.01em] text-white">
+                                    Your pod
+                                </h3>
+                            </div>
+                            <span
+                                className={`${MONO} inline-flex items-center gap-1.5 text-[9.5px] uppercase tracking-[0.14em] font-semibold`}
+                                style={{ color: canSubmit ? "#4ade80" : ACCENT }}
+                            >
+                                <span
+                                    className="h-1.5 w-1.5 rounded-full"
+                                    style={{
+                                        background: canSubmit ? "#4ade80" : ACCENT,
+                                        boxShadow: `0 0 6px ${canSubmit ? "#4ade80" : ACCENT}`,
+                                    }}
+                                />
+                                {canSubmit ? "Ready" : "Pending"}
                             </span>
-                            <span className={`${MONO} ml-2 text-[12px] text-white/45`}>/hr</span>
+                        </header>
+
+                        {/* Detail rows */}
+                        <div className="px-5 py-3">
+                            <DetailRow label="Name" value={name.trim() || "—"} mono />
+                            <DetailRow
+                                label="GPU"
+                                value={selectedRow ? `${gpuCount}× ${selectedRow.displayName}` : "—"}
+                            />
+                            <DetailRow label="Image" value={effectiveImage || "—"} mono truncate />
+                            <DetailRow
+                                label="Disk"
+                                value={`${containerDiskGb} GB${volumeGb > 0 ? ` + ${volumeGb} GB vol` : ""}`}
+                            />
+                            {selectedVolume && (
+                                <DetailRow
+                                    label="Net vol"
+                                    value={`${selectedVolume.name} · ${selectedVolume.dataCenterId}`}
+                                    mono
+                                    truncate
+                                />
+                            )}
+                            {selectedRow && (
+                                <DetailRow
+                                    label="Stock"
+                                    value={stockMeta(selectedRow.stockStatus).label}
+                                />
+                            )}
                         </div>
 
-                        <div className="mt-3.5 pt-3.5 border-t border-dashed border-white/[0.06] grid grid-cols-2 gap-0">
-                            <div className="pr-3 border-r border-dashed border-white/[0.06]">
-                                <p className={`${MONO} text-[9.5px] uppercase tracking-[0.1em] text-white/35`}>~Daily</p>
-                                <p className={`${MONO} mt-1 text-[12.5px] text-white tabular-nums`}>
-                                    {dailyCost !== null ? `$${dailyCost.toFixed(2)}` : "—"}
-                                </p>
-                            </div>
-                            <div className="pl-3">
-                                <p className={`${MONO} text-[9.5px] uppercase tracking-[0.1em] text-white/35`}>~Monthly</p>
-                                <p className={`${MONO} mt-1 text-[12.5px] text-white tabular-nums`}>
-                                    {monthlyCost !== null ? `$${monthlyCost.toFixed(2)}` : "—"}
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* Compute vs storage split — so adjusting disk changes the price */}
-                        {estimatedHourly !== null && (
-                            <div className={`${MONO} mt-3 flex items-center justify-between text-[10.5px] text-white/40 tabular-nums`}>
-                                <span>Compute ${gpuHourly?.toFixed(3)}/hr</span>
-                                <span>
-                                    Storage ${storageHourly.toFixed(3)}/hr
-                                    <span className="text-white/25"> · {containerDiskGb + volumeGb} GB</span>
+                        {/* Price */}
+                        <div className="border-t border-white/[0.06] px-5 py-4">
+                            <div className="mb-1 flex items-baseline justify-between">
+                                <span className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/40`}>
+                                    Estimated
                                 </span>
+                                {/* Daily as well as monthly: a GPU is rented for
+                                    an afternoon far more often than for a month,
+                                    so the day figure is the one being decided
+                                    against. */}
+                                {dailyCost !== null && monthlyCost !== null && (
+                                    <span className={`${MONO} text-[10.5px] tabular-nums text-white/45`}>
+                                        ${dailyCost.toFixed(2)} / day · ${monthlyCost.toFixed(0)} / mo
+                                    </span>
+                                )}
                             </div>
-                        )}
+                            <div className="flex items-baseline gap-1">
+                                {estimatedHourly === null ? (
+                                    <span style={SERIF_STYLE} className="text-[28px] font-bold leading-none text-white/35">
+                                        —
+                                    </span>
+                                ) : (
+                                    <>
+                                        <span style={SERIF_STYLE} className="text-[18px] font-medium leading-none text-white/50">
+                                            $
+                                        </span>
+                                        <span
+                                            style={SERIF_STYLE}
+                                            className="text-[38px] font-bold leading-none tracking-[-0.03em] tabular-nums text-white"
+                                        >
+                                            {estimatedHourly.toFixed(2)}
+                                        </span>
+                                        <span className={`${MONO} ml-1 text-[11px] text-white/40`}>/ hr</span>
+                                    </>
+                                )}
+                            </div>
+
+                            {/* Compute vs storage, so changing disk visibly changes the price. */}
+                            {estimatedHourly !== null && (
+                                <p className={`${MONO} mt-2 text-[10px] tabular-nums text-white/35`}>
+                                    Compute ${gpuHourly?.toFixed(3)}/hr · Storage $
+                                    {storageHourly.toFixed(3)}/hr ({containerDiskGb + volumeGb} GB)
+                                </p>
+                            )}
+
+                            <button
+                                type="button"
+                                onClick={handleLaunch}
+                                disabled={isLoading}
+                                className={`${MONO} mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-[5px] text-[11.5px] font-semibold uppercase tracking-[0.14em] transition-all disabled:cursor-not-allowed`}
+                                style={{
+                                    background: !isLoading
+                                        ? `linear-gradient(135deg, ${ACCENT}, #0066B3)`
+                                        : "#1a1d24",
+                                    color: !isLoading ? "#ffffff" : "rgba(255,255,255,0.35)",
+                                    boxShadow: !isLoading
+                                        ? "0 8px 20px rgba(0,149,255,0.18), inset 0 1px 0 rgba(255,255,255,0.15)"
+                                        : "none",
+                                }}
+                            >
+                                {isLoading ? (
+                                    <>
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                        Deploying…
+                                    </>
+                                ) : (
+                                    <>
+                                        Launch
+                                        <span aria-hidden>→</span>
+                                    </>
+                                )}
+                            </button>
+
+                            <Link
+                                href="/dashboard/services/gpu"
+                                className={`${MONO} mt-3 block text-center text-[10.5px] uppercase tracking-[0.12em] text-white/35 hover:text-white/65`}
+                            >
+                                Cancel
+                            </Link>
+                        </div>
                     </div>
-
-                    {/* Detail rows */}
-                    <div className="mt-5 flex flex-col">
-                        <DetailRow label="Name" value={name.trim() || "—"} mono />
-                        <DetailRow
-                            label="GPU"
-                            value={selectedRow ? `${gpuCount}× ${selectedRow.displayName}` : "—"}
-                        />
-                        <DetailRow label="Image" value={effectiveImage || "—"} mono truncate />
-                        <DetailRow
-                            label="Disk"
-                            value={`${containerDiskGb} GB${volumeGb > 0 ? ` + ${volumeGb} GB vol` : ""}`}
-                        />
-                        {selectedVolume && (
-                            <DetailRow
-                                label="Net vol"
-                                value={`${selectedVolume.name} · ${selectedVolume.dataCenterId}`}
-                                mono
-                                truncate
-                            />
-                        )}
-                        {selectedRow && (
-                            <DetailRow
-                                label="Stock"
-                                value={stockMeta(selectedRow.stockStatus).label}
-                            />
-                        )}
-                    </div>
-
-                    {/* Deploy button */}
-                    <button
-                        type="button"
-                        onClick={handleLaunch}
-                        disabled={isLoading}
-                        className="mt-5 flex w-full items-center justify-center gap-2 px-5 py-3.5 text-[13.5px] font-semibold transition-all disabled:cursor-not-allowed disabled:bg-[#111216] disabled:text-white/30"
-                        style={
-                            !isLoading
-                                ? {
-                                      background: ACCENT,
-                                      color: "#001930",
-                                      boxShadow: "0 8px 20px rgba(0,149,255,0.18)",
-                                  }
-                                : {}
-                        }
-                        onMouseEnter={(e) => {
-                            if (isLoading) return;
-                            e.currentTarget.style.background = "#ffffff";
-                            e.currentTarget.style.color = "#000000";
-                            e.currentTarget.style.transform = "translateY(-2px)";
-                        }}
-                        onMouseLeave={(e) => {
-                            if (isLoading) return;
-                            e.currentTarget.style.background = ACCENT;
-                            e.currentTarget.style.color = "#001930";
-                            e.currentTarget.style.transform = "none";
-                        }}
-                    >
-                        {isLoading ? (
-                            <>
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                                Deploying…
-                            </>
-                        ) : (
-                            <>
-                                Launch
-                                <span aria-hidden>→</span>
-                            </>
-                        )}
-                    </button>
-
-                    <Link
-                        href="/dashboard/services/gpu"
-                        className="mt-3 block text-center text-[12px] text-white/35 hover:text-white/65"
-                    >
-                        Cancel
-                    </Link>
                 </aside>
             </div>
         </div>
@@ -1399,119 +1389,170 @@ function GpuRow({
     row,
     selected,
     onSelect,
+    gpuCount,
+    onCount,
 }: {
     row: InventoryRowClient;
     selected: boolean;
     onSelect: () => void;
+    gpuCount: number;
+    onCount: (n: number) => void;
 }) {
     const stock = stockMeta(row.stockStatus);
     const isOut = row.stockStatus === "none";
     const tier = tierLabel(row.displayName);
     const arch = archLabel(row.displayName);
     const vendor = vendorLabel(row.displayName);
-    const max =
+    const counts =
         row.availableCounts.length > 0
-            ? Math.max(...row.availableCounts)
-            : isOut
-              ? 0
-              : 1;
+            ? [...row.availableCounts].sort((a, b) => a - b)
+            : [];
+    const max = counts.length > 0 ? Math.max(...counts) : isOut ? 0 : 1;
 
     // Capacity as three segments. A bar reads at a glance in a way the words
-    // alone do not when they repeat down 48 rows — but the words stay, because
-    // "two of three segments" is not a unit anybody thinks in.
+    // alone do not when the same four phrases repeat down 40-odd rows — but the
+    // words stay, because "two of three segments" is not a unit anybody thinks
+    // in.
     const filled = isOut ? 0 : row.stockStatus === "high" ? 3 : row.stockStatus === "low" ? 1 : 2;
 
     return (
-        <button
-            type="button"
-            onClick={onSelect}
-            disabled={isOut}
-            className={`group grid w-full ${GPU_GRID} items-center border-b border-white/[0.04] px-3 py-2.5 text-left transition-colors last:border-b-0 ${
-                isOut
-                    ? "cursor-not-allowed opacity-40"
-                    : selected
-                      ? "bg-[#15181f]"
-                      : "hover:bg-white/[0.025]"
+        <div
+            className={`border-b border-white/[0.04] last:border-b-0 ${
+                selected ? "bg-[#15181f]" : ""
             }`}
             style={selected ? { boxShadow: `inset 2px 0 0 ${ACCENT}` } : undefined}
         >
-            {/* Selection box */}
-            <span
-                className="flex h-3.5 w-3.5 items-center justify-center border transition-colors"
-                style={{
-                    borderColor: selected ? ACCENT : "rgba(255,255,255,0.18)",
-                    background: selected ? ACCENT : "transparent",
-                }}
-            >
-                {selected && <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />}
-            </span>
-
-            {/* Model — name, tier, vendor, max count */}
-            <span className="min-w-0">
-                <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                    <span
-                        className="truncate text-[13px] font-semibold tracking-[-0.01em]"
-                        style={{ color: vendor === "AMD" ? AMD_RED : NVIDIA_GREEN }}
-                    >
-                        {row.displayName}
-                    </span>
-                    <span
-                        className={`${MONO} shrink-0 text-[9px] uppercase tracking-[0.12em] text-white/30`}
-                    >
-                        {tier}
-                    </span>
-                </span>
-                <span className={`${MONO} mt-0.5 flex items-center gap-1.5 text-[10px] text-white/35`}>
-                    <span>{vendor.toLowerCase()}</span>
-                    {!isOut && max > 0 && (
-                        <>
-                            <span className="opacity-40">·</span>
-                            <span>up to {max}×</span>
-                        </>
-                    )}
-                </span>
-            </span>
-
-            {/* Arch */}
-            <span className={`${MONO} truncate text-[11px] text-white/60`}>{arch}</span>
-
-            {/* VRAM */}
-            <span className={`${MONO} text-[11.5px] tabular-nums text-white/75`}>
-                {row.memoryGb} GB
-            </span>
-
-            {/* Capacity */}
-            <span className="flex items-center gap-2">
-                <span className="flex shrink-0 gap-[2px]" aria-hidden>
-                    {[0, 1, 2].map((i) => (
-                        <span
-                            key={i}
-                            className="block h-[3px] w-[7px]"
-                            style={{
-                                background: i < filled ? stock.color : "rgba(255,255,255,0.12)",
-                            }}
-                        />
-                    ))}
-                </span>
-                <span className={`${MONO} truncate text-[10px] leading-tight text-white/45`}>
-                    {stock.label}
-                </span>
-            </span>
-
-            {/* Price */}
-            <span
-                className={`${MONO} text-right text-[13px] font-semibold tabular-nums ${
-                    isOut ? "text-white/30" : "text-white"
+            <button
+                type="button"
+                onClick={onSelect}
+                disabled={isOut}
+                className={`group grid w-full ${GPU_GRID} items-center px-3 py-2.5 text-left transition-colors ${
+                    isOut
+                        ? "cursor-not-allowed opacity-40"
+                        : selected
+                          ? ""
+                          : "hover:bg-white/[0.025]"
                 }`}
             >
-                {row.onDemandPerHr !== null
-                    ? (row.onDemandPerHr * GPU_MARKUP_PCT).toFixed(2)
-                    : "—"}
-            </span>
-        </button>
+                {/* Selection box */}
+                <span
+                    className="flex h-3.5 w-3.5 items-center justify-center border transition-colors"
+                    style={{
+                        borderColor: selected ? ACCENT : "rgba(255,255,255,0.18)",
+                        background: selected ? ACCENT : "transparent",
+                    }}
+                >
+                    {selected && <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />}
+                </span>
+
+                {/* Model — name, tier, vendor, max count */}
+                <span className="min-w-0">
+                    <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                        <span
+                            className="truncate text-[13px] font-semibold tracking-[-0.01em]"
+                            style={{ color: vendor === "AMD" ? AMD_RED : NVIDIA_GREEN }}
+                        >
+                            {row.displayName}
+                        </span>
+                        <span
+                            className={`${MONO} shrink-0 text-[9px] uppercase tracking-[0.12em] text-white/30`}
+                        >
+                            {tier}
+                        </span>
+                    </span>
+                    <span className={`${MONO} mt-0.5 flex items-center gap-1.5 text-[10px] text-white/35`}>
+                        <span>{vendor.toLowerCase()}</span>
+                        {!isOut && max > 0 && (
+                            <>
+                                <span className="opacity-40">·</span>
+                                <span>up to {max}×</span>
+                            </>
+                        )}
+                    </span>
+                </span>
+
+                {/* Arch */}
+                <span className={`${MONO} truncate text-[11px] text-white/60`}>{arch}</span>
+
+                {/* VRAM */}
+                <span className={`${MONO} text-[11.5px] tabular-nums text-white/75`}>
+                    {row.memoryGb} GB
+                </span>
+
+                {/* Capacity */}
+                <span className="flex items-center gap-2">
+                    <span className="flex shrink-0 gap-[2px]" aria-hidden>
+                        {[0, 1, 2].map((i) => (
+                            <span
+                                key={i}
+                                className="block h-[3px] w-[7px]"
+                                style={{
+                                    background: i < filled ? stock.color : "rgba(255,255,255,0.12)",
+                                }}
+                            />
+                        ))}
+                    </span>
+                    <span className={`${MONO} truncate text-[10px] leading-tight text-white/45`}>
+                        {stock.label}
+                    </span>
+                </span>
+
+                {/* Price */}
+                <span
+                    className={`${MONO} text-right text-[13px] font-semibold tabular-nums ${
+                        isOut ? "text-white/30" : "text-white"
+                    }`}
+                >
+                    {row.onDemandPerHr !== null
+                        ? (row.onDemandPerHr * GPU_MARKUP_PCT).toFixed(2)
+                        : "—"}
+                </span>
+            </button>
+
+            {/*
+              How many of this card — inside the row that names it.
+
+              This was a separate "GPU count" block below the whole list, so
+              picking 8× meant choosing a card, scrolling past forty others, and
+              setting a number next to nothing. The count only means anything in
+              the context of the GPU it counts, and the per-row maximum differs:
+              8× is offered for an H100 and not for a B200. Here the options ARE
+              that row's availableCounts, so an impossible choice cannot be
+              presented in the first place.
+            */}
+            {selected && !isOut && counts.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2 px-3 pb-3 pl-[42px]">
+                    <span className={`${MONO} text-[9.5px] uppercase tracking-[0.14em] text-white/40`}>
+                        How many
+                    </span>
+                    {counts.map((n) => {
+                        const on = gpuCount === n;
+                        return (
+                            <button
+                                key={n}
+                                type="button"
+                                onClick={() => onCount(n)}
+                                className={`${MONO} flex h-7 min-w-[42px] items-center justify-center border px-2 text-[11.5px] font-semibold tabular-nums transition-colors`}
+                                style={
+                                    on
+                                        ? { borderColor: BORDER_ACCENT, background: ACCENT_DIM, color: "#fff" }
+                                        : { borderColor: "rgba(255,255,255,0.08)", background: "#111216", color: "rgba(255,255,255,0.7)" }
+                                }
+                            >
+                                {n}×
+                            </button>
+                        );
+                    })}
+                    {row.onDemandPerHr !== null && gpuCount > 1 && (
+                        <span className={`${MONO} ml-1 text-[10.5px] tabular-nums text-white/45`}>
+                            = ${(row.onDemandPerHr * GPU_MARKUP_PCT * gpuCount).toFixed(2)}/hr
+                        </span>
+                    )}
+                </div>
+            )}
+        </div>
     );
 }
-
 
 function DetailRow({
     label,
