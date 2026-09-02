@@ -1,136 +1,114 @@
-import { Products } from "@/lib/supabase/queries/products";
+// Service rates — resolved from the price book the admin panel writes.
+//
+// WHAT CHANGED, AND WHY IT MATTERS
+//
+// Every function here used to read public.products, which was dropped on
+// 2026-08-31 when pricing moved to billing.service_pricing. Nothing broke
+// loudly: `products` returning nothing became `ratesFromProduct(null)` became
+// { initialCost: 0, hourlyRate: 0 }. A service whose price could not be found
+// was quoted, and billed, as FREE.
+//
+// That is the same defect this whole billing rebuild exists to remove — an
+// empty result read as a good result — and it sat directly on the provisioning
+// path. So the new implementation THROWS when a price is missing. A deploy that
+// cannot be priced must fail, not succeed at zero.
+//
+// The exported signatures are unchanged, so all sixteen callers are untouched.
+// Only the source of the numbers moved.
+
+import {
+  findPrice,
+  getRates,
+  getRatesForService,
+  HOURS_IN_MONTH,
+} from "@/lib/pricing/price-book";
 
 type Rates = { initialCost: number; hourlyRate: number };
 
-const HOURS_IN_MONTH = 24 * 30;
+export { HOURS_IN_MONTH };
 
-function roundToTwoDecimals(value: number): number {
-  return Math.round(value * 100) / 100;
-}
+// ── Compute-adjacent services ─────────────────────────────────────────────
 
-function toFiniteNumber(value?: number | null): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : 0;
-}
-
-function clampCurrencyAmount(value?: number | null): number {
-  const amount = toFiniteNumber(value);
-  if (amount <= 0) return 0;
-  return roundToTwoDecimals(amount);
-}
-
-function normalizeMonthlyMultiplier(value?: number): number {
-  if (typeof value !== "number" || !Number.isFinite(value)) return 1;
-  return Math.max(Math.trunc(value), 1);
-}
-
-function monthlyToHourly(priceMonthly?: number | null): number {
-  const p = toFiniteNumber(priceMonthly);
-  if (!p || p <= 0) return 0;
-  // 6 decimal places so low-rate services (vector $8/mo → $0.011111/hr) accumulate
-  // correctly over a billing month. The cron rounds individual charges to 2 decimals,
-  // but the stored rate must be precise enough that monthly sum ≈ monthly price.
-  return Math.round((p / HOURS_IN_MONTH) * 1_000_000) / 1_000_000;
-}
-
-function ratesFromProduct(
-  product?: { price?: number | null; fixed_price?: number | null } | null,
-  options?: { monthlyMultiplier?: number }
-): Rates {
-  const monthlyMultiplier = normalizeMonthlyMultiplier(options?.monthlyMultiplier);
-  const rawFixed = toFiniteNumber(product?.fixed_price);
-  const rawPrice = toFiniteNumber(product?.price);
-  // Guard: negative prices would cause deduct(-X) to ADD credits to the user
-  if (rawFixed < 0 || rawPrice < 0) {
-    throw new Error(
-      `Invalid product pricing: price=${rawPrice}, fixed_price=${rawFixed}. Negative prices are not allowed.`
-    );
-  }
-  const initialCost = clampCurrencyAmount(rawFixed);
-  const hourlyRate = monthlyToHourly(rawPrice * monthlyMultiplier);
-  return { initialCost, hourlyRate };
-}
-
-export async function getRatesForDatabase(planId:string): Promise<Rates> {
-  const products = await Products.get_by_id(planId);
-  //const byEngine = products.filter((p: any) => p.sub === params.engine);
-  //const match = byEngine.find((p: any) => (p as any).slug === params.sizeSlug) ?? byEngine[0] ?? products[0];
-  return ratesFromProduct(products);
+export async function getRatesForDatabase(planId: string): Promise<Rates> {
+  return getRates("database", planId);
 }
 
 export async function getRatesForDatabaseBySlug(sizeSlug: string): Promise<Rates> {
-  const product = await Products.get_by_type_and_slug("database", sizeSlug);
-  return ratesFromProduct(product);
+  return getRates("database", sizeSlug);
 }
 
-export async function getRatesForKubernetes(plan_id:string, totalNodes = 1): Promise<Rates> {
-    console.log("Fetching rates for Kubernetes plan ID:", plan_id);
-  const products = await Products.get_by_id(plan_id);
-  return ratesFromProduct(products, { monthlyMultiplier: totalNodes });
+/**
+ * A cluster is priced per node.
+ *
+ * `totalNodes` multiplies the recurring rate only. The setup fee is charged
+ * once for the cluster, not once per node — which is how it behaved when the
+ * multiplier was applied to `price` and not to `fixed_price`.
+ */
+export async function getRatesForKubernetes(plan_id: string, totalNodes = 1): Promise<Rates> {
+  return getRates("kubernetes", plan_id, { units: totalNodes });
 }
 
 export const getRatesForKubernetesExisting = getRatesForKubernetes;
 
 export async function getRatesForObjectStorage(): Promise<Rates> {
-  const products = await Products.get_by_type("object-storage");
-  const pick = products[0] ?? null;
-  return ratesFromProduct(pick as any);
+  return getRates("objectspace");
 }
 
 export async function getRatesForSpectrum(): Promise<Rates> {
-  // Spectrum pricing stored under product type 'network-ddos'
-  const products = await Products.get_by_type("network-ddos");
-  const pick = products[0] ?? null;
-  return ratesFromProduct(pick as any);
+  return getRates("spectrum");
 }
 
-export async function getRatesForPlatformApp(size: "small" | "medium" | "large" | "xlarge" | "xxlarge"): Promise<Rates> {
-  // Platform apps pricing stored under product type 'platform-apps' with sub = size
-  const products = await Products.get_by_type_and_subtype("platform-apps", size);
-  const pick = products[0] ?? null;
-  return ratesFromProduct(pick as any);
+export async function getRatesForPlatformApp(
+  size: "small" | "medium" | "large" | "xlarge" | "xxlarge",
+): Promise<Rates> {
+  return getRates("platform_apps", size);
 }
-
-// Fallback constants — used when no product row exists in the DB yet.
-// Create a product with type="inference_vector" to override via admin UI.
-const INFERENCE_VECTOR_MONTHLY_USD_FALLBACK = 8;
-// Create a product with type="custom_image" to override; price = $/GB/month.
-const CUSTOM_IMAGE_USD_PER_GB_MONTH_FALLBACK = 0.05;
 
 export async function getRatesForInferenceVector(): Promise<Rates> {
-  const products = await Products.get_by_type("inference_vector");
-  const pick = products[0] ?? null;
-  if (!pick) {
-    return { initialCost: 0, hourlyRate: monthlyToHourly(INFERENCE_VECTOR_MONTHLY_USD_FALLBACK) };
-  }
-  return ratesFromProduct(pick as any);
+  return getRates("inference_vector");
 }
 
-// Returns the $/GB/month rate for custom OS image storage.
-// Callers compute hourlyRate = (sizeGb * rate) / HOURS_IN_MONTH themselves
-// because the GB count is only known at provision time.
+/**
+ * $/GB/month for custom OS image storage.
+ *
+ * Callers multiply by the image size themselves, because the GB count is only
+ * known at provision time. Returned in the book's own unit rather than
+ * converted, so the caller's arithmetic is unchanged.
+ */
 export async function getRatePerGbForCustomImage(): Promise<number> {
-  const products = await Products.get_by_type("custom_image");
-  const pick = products[0] ?? null;
-  const rate = pick?.price != null && Number.isFinite(Number(pick.price)) && Number(pick.price) > 0
-    ? Number(pick.price)
-    : CUSTOM_IMAGE_USD_PER_GB_MONTH_FALLBACK;
-  return rate;
+  // Read the row rather than going through getRates: custom_image is priced
+  // per_gb_hour, and an hourly figure is meaningless until the GB count is
+  // known. The caller supplies that.
+  const row = await findPrice("custom_image");
+  if (!row) {
+    throw new Error(
+      "No live price for custom_image. Set one in the admin panel before creating images.",
+    );
+  }
+  // Stored either way; callers expect per GB per month.
+  return row.unit === "usd_per_gb_hour" ? row.amount * HOURS_IN_MONTH : row.amount;
 }
 
+/**
+ * Every platform-app size, for the size picker.
+ *
+ * `price` is the monthly figure the UI shows. A size with no live price is
+ * OMITTED rather than defaulted to zero — a picker showing "$0/mo" for a size
+ * nobody priced is how a customer ends up deploying something free.
+ */
 export async function getAllPlatformAppRates(): Promise<Record<string, Rates & { price: number }>> {
-  // Get all platform app pricing for UI display
-  const products = await Products.get_by_type("platform-apps");
+  const byPlan = await getRatesForService("platform_apps");
   const rates: Record<string, Rates & { price: number }> = {};
-  
+
   for (const size of ["small", "medium", "large", "xlarge", "xxlarge"]) {
-    const product = products.find((p: any) => p.sub === size);
-    const { initialCost, hourlyRate } = ratesFromProduct(product as any);
+    const r = byPlan[size];
+    if (!r) continue;
     rates[size] = {
-      initialCost,
-      hourlyRate,
-      price: clampCurrencyAmount((product as any)?.price),
+      initialCost: r.initialCost,
+      hourlyRate: r.hourlyRate,
+      price: r.monthly,
     };
   }
-  
+
   return rates;
 }
