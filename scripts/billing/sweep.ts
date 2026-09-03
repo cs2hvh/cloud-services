@@ -143,16 +143,20 @@ const SERVICES: Record<string, ServiceSpec> = {
     // max(observed RunPod price x markup, floor) x gpu_count, storage
     // excluded. Billed back through the gpu_pod / '*' 1.0 passthrough row,
     // the same shape as compute's hourly_cost, so quote and charge are one
-    // number. The previous entry billed runpod_cost_per_hr x the live markup,
-    // which could not reproduce the quote: resolve_hourly_rate's markup
-    // branch never reads the unit count, so an 8-GPU pod would have billed
-    // one eighth of its price, and the per-GPU floor was applied once to the
-    // whole pod. Invisible so far only because every pod ever created had
-    // gpu_count = 1 and gpu_pod had never produced a charge row.
+    // number.
+    //
+    // The previous entry billed runpod_cost_per_hr x the LIVE markup. That
+    // reproduced the quote correctly (charge_service_hour multiplies by
+    // p_units after the floor, exactly as computeResalePerHour does), but it
+    // re-rated running pods whenever the markup moved, and it has: pods 1-7
+    // carry ~1.25, pods 8-15 carry 1.00. A first draft of this comment claimed
+    // the old path dropped the GPU count; it did not. The hazard runs the
+    // other way, see fixedUnits below.
     upstreamCostColumn: "gpu_hourly_usd",
-    // gpu_count is already inside the frozen rate; the meter's `units` column
-    // (set to gpu_count by openGpuPodMeters) is descriptive here, not a
-    // multiplier.
+    // MANDATORY. The frozen rate already includes gpu_count, and
+    // openGpuPodMeters records gpu_count in the meter's `units` column, which
+    // charge_service_hour multiplies by. Without this pin an 8-GPU pod
+    // (pod 4: $14.88/hr quoted) would bill $119.07/hr.
     fixedUnits: 1,
   },
   /**
