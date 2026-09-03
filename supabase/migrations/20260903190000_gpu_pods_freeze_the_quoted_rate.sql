@@ -1,50 +1,58 @@
 -- gpu_pods.gpu_hourly_usd — the GPU resale rate the customer was quoted,
 -- frozen at create, GPU only.
 --
--- WHY A NEW COLUMN AND NOT hourly_cost_usd
+-- CORRECTION, 2026-09-03, SAME DAY. The rationale first committed with this
+-- file was wrong in three places. It is rewritten below rather than preserved,
+-- because a migration comment is read as fact by whoever comes next; the
+-- record of the error is in this header and in the commit that followed.
 --
--- hourly_cost_usd is (GPU resale) + (local disk storage):
+-- WHAT I GOT WRONG
 --
---   pod 15: runpod 0.99 + (140GB * $0.10/mo / 730) = 0.99 + 0.0192 = 1.0092
+-- I claimed the old registry entry (markup x runpod_cost_per_hr) could not
+-- reproduce the quote, for two reasons. Both were false:
 --
--- Storage already bills through its own gpu_pod_storage meter, so pointing the
--- sweep's gpu_pod registry entry at hourly_cost_usd would charge the disk twice.
--- Nor can hourly_cost_usd simply be narrowed to GPU-only: it is rendered to
--- customers in five places as the pod's total rate — active-pods-table,
--- pod-detail, the gpu-dashboard spend total (a SUM across pods), the create
--- response, and pod-read-operations' row mapper. Narrowing it would understate
--- every one of them silently, with no error and no code change to notice.
+--   1. "resolve_hourly_rate ignores the GPU count, so an 8-GPU pod bills one
+--      eighth." No. resolve_hourly_rate takes p_quantity AND the caller passes
+--      p_units separately; charge_service_hour applies the count one level up,
+--      `v_gross := round(v_hourly * coalesce(p_units, 1), 6)`. I read
+--      resolve_hourly_rate, saw p_quantity unused by the markup branch, and
+--      never read its caller.
 --
--- So hourly_cost_usd keeps its meaning (customer-visible total) and the billing
--- spine gets its own column.
+--   2. "The floor is applied per-pod, not per-GPU." No. greatest(rate, floor)
+--      happens before the units multiply, so the SQL produced
+--      max(observed x markup, floor) x gpu_count — identical to the quote's
+--      computeResalePerHour.
 --
--- WHY FROZEN RATHER THAN RE-DERIVED
+--   3. "Every pod ever created has gpu_count = 1." False, and the one a query
+--      would have settled: pod 4 has EIGHT GPUs and pod 5 has two. I read five
+--      rows under a LIMIT and generalised to fifteen.
 --
--- The obvious alternative is to keep charging markup * runpod_cost_per_hr, which
--- is what the registry does today. That cannot reproduce the quote, for two
--- independent reasons:
+-- The direction of the error matters. The old path was correct on count, and
+-- the danger was the opposite of what I described: this frozen rate ALREADY
+-- includes gpu_count, while openGpuPodMeters sets the meter's units to
+-- gpu_count, so billing it through the unchanged registry would have charged
+-- pod 4 EIGHT TIMES its rate — $119.07/hr against $14.88. The peer session
+-- caught that and added `fixedUnits: 1` to the gpu_pod registry entry, which is
+-- what makes this column safe to bill from. Without it this migration would
+-- have been an overcharge, not a fix.
 --
---   1. GPU COUNT. runpod_cost_per_hr is the PER-GPU upstream rate. The quote
---      (computeResalePerHour) multiplies by gpuCount; billing.resolve_hourly_rate
---      does not — its markup branch is `p_upstream_cost * p_amount` and ignores
---      p_quantity entirely. The sweep passes gpu_count as p_units and it is
---      silently dropped. An 8-GPU pod would bill one eighth of its quote.
+-- WHY THE COLUMN IS STILL RIGHT
 --
---   2. FLOOR. The quote applies floor_per_hour_usd PER GPU and then multiplies
---      (`max(observed * markup, floor) * gpuCount`). resolve_hourly_rate applies
---      the floor once, to the whole pod, at the very end.
+-- One real reason, not three: NON-RETROACTIVITY. The old path multiplied by
+-- whatever markup gpu_pricing held at charge time, so changing the markup
+-- silently re-rated every running pod. That is not hypothetical here — the
+-- markup HAS moved: pods 1-7 were created at ~1.25 and pods 8-15 at 1.00. A
+-- live-markup path would bill the old pods at today's number. Freezing matches
+-- compute (servers.hourly_cost) and set_price's rule that a price change is
+-- never retroactive.
 --
--- Both are invisible today: every pod ever created has gpu_count = 1, and
--- gpu_pod has never produced a single charge row. They would appear on the first
--- multi-GPU pod after GPU billing goes live, as an underbill proportional to the
--- GPU count — the kind that looks like healthy revenue, just less of it.
+-- WHY NOT hourly_cost_usd
 --
--- Freezing sidesteps both: the number written here already has count and the
--- per-GPU floor baked in, because it is literally the number the customer was
--- shown. It also makes GPU consistent with compute (servers.hourly_cost) and
--- with set_price's rule that a price change is never retroactive: set_gpu_markup
--- now moves the rate for pods created after it, and leaves running pods alone.
-
+-- It is GPU + local disk (pod 15: 0.99 + 140GB x $0.10/mo / 730 = 1.0092), so
+-- billing against it would charge the disk twice — gpu_pod_storage already
+-- meters it. It also cannot be narrowed to GPU-only: five customer-facing
+-- readers render it as the pod's all-in rate, including a SUM across pods on
+-- the dashboard, and narrowing it would understate all five with no error.
 alter table public.gpu_pods
   add column if not exists gpu_hourly_usd numeric(12,4);
 
