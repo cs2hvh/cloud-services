@@ -62,13 +62,15 @@ export async function billOverageIfNeeded(
   }
 
   try {
-    const balanceAfter = await Billing.deduct(row.user_id, charge);
-    await Billing.save_transaction({
+    // Overage bytes are CLAIMED before this runs, so a charge that vanished
+    // without a record also consumed the bytes that justified it — there was
+    // no way afterwards to show what the customer had been billed for.
+    // Deduct and record now commit together.
+    await Billing.move_credit({
       userId: row.user_id,
       amount: charge,
-      status: "completed",
+      direction: "debit",
       type: "usage",
-      balanceAfter,
       description: `Platform app bandwidth overage for ${appName}`,
       serviceId: row.app_id,
       serviceType: "platform_apps",
@@ -80,8 +82,6 @@ export async function billOverageIfNeeded(
         overage_bytes: claimedBytes,
         overage_rate_per_gb: quota.overagePerGb,
       },
-    }).catch((error) => {
-      console.warn(`[platform-app-bandwidth] Failed to record overage transaction:`, error);
     });
 
     // Re-read so we merge onto the post-claim metadata (which holds the

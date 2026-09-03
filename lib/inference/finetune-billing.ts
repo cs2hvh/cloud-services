@@ -44,15 +44,16 @@ export async function chargeFinetuneUsage(
       console.error(`[FT charge] no payer for org ${orgId}, job ${jobId} — $${usd.toFixed(2)} not charged`);
       return;
     }
-    const newBalance = await Billing.deduct(payer, usd);
     const end = new Date();
     const start = new Date(end.getTime() - Math.max(0, elapsedSeconds) * 1000);
-    await Billing.save_transaction({
+    // Charge and record in one transaction. A fine-tune bills a single lump
+    // for hours already consumed, so a lost row here is a charge no one can
+    // reconstruct — the job has finished and the elapsed time is gone.
+    await Billing.move_credit({
       userId: payer,
       amount: usd,
-      status: "completed",
+      direction: "debit",
       type: "usage",
-      balanceAfter: typeof newBalance === "number" ? newBalance : null,
       serviceId: jobId,
       serviceType: "inference_finetune",
       periodStart: start.toISOString(),

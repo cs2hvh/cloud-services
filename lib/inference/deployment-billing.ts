@@ -94,13 +94,15 @@ export async function meterDeployment(
         `[deploy meter] no payer for org ${row.org_id}, deployment ${row.id} — $${usd.toFixed(2)} not charged`
       );
     } else {
-      const newBalance = await Billing.deduct(payer, usd);
-      await Billing.save_transaction({
+      // Charge and record commit together. The outer catch logs and moves on,
+      // so a failed row here previously left the org billed for GPU time with
+      // no record of the interval it covered — and the meter had already moved
+      // past it.
+      await Billing.move_credit({
         userId: payer,
         amount: usd,
-        status: "completed",
+        direction: "debit",
         type: "usage",
-        balanceAfter: typeof newBalance === "number" ? newBalance : null,
         serviceId: row.id,
         serviceType: "inference_deployment",
         periodStart: new Date(lastMs).toISOString(),

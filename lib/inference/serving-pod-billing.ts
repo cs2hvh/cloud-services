@@ -114,13 +114,14 @@ export async function settleServingPod(
       console.error(`[serving settle] no payer for org ${row.org_id}, ft ${ftId} — $${usd.toFixed(2)} not charged`);
       return result;
     }
-    const newBalance = await Billing.deduct(payer, usd);
-    await Billing.save_transaction({
+    // One transaction: the deduct and the usage row commit together. The outer
+    // catch below logs and continues, so previously a failed row left the org
+    // charged for serving time with no record of the period it covered.
+    await Billing.move_credit({
       userId: payer,
       amount: usd,
-      status: "completed",
+      direction: "debit",
       type: "usage",
-      balanceAfter: typeof newBalance === "number" ? newBalance : null,
       serviceId: ftId,
       serviceType: "inference_serving",
       periodStart: startedAt.toISOString(),

@@ -1,7 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { Promocodes } from "@/lib/supabase/queries/promocodes";
-import { Billing } from "@/lib/supabase/queries/billing";
 import { resolveGraceForUserAfterTopup } from "@/lib/billing/grace/recovery";
 import { limitByUser } from "@/lib/cooldown/userbased";
 
@@ -55,20 +54,11 @@ export async function POST(request: Request) {
       );
     }
 
-    // Record coupon redemption as a transaction
-    try {
-      await Billing.save_transaction({
-        userId: user.id,
-        amount: result.amount!,
-        status: "completed",
-        type: "coupon",
-        balanceAfter: result.balance,
-        description: code.toUpperCase().trim(),
-      });
-    } catch (txnErr) {
-      console.error("[Coupons] Failed to save coupon transaction:", txnErr);
-      // Don't fail the redemption — credits are already added
-    }
+    // The ledger row is written inside billing_redeem_promocode_atomic now,
+    // in the same transaction as the credit. It used to be written here, in a
+    // try/catch that logged and continued because "credits are already added"
+    // — which is how the 2026-08 audit found $110 of coupon credit sitting in
+    // a balance with nothing explaining it. There is nothing to do here.
 
     try {
       await resolveGraceForUserAfterTopup({ userId: user.id });

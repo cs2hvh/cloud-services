@@ -650,13 +650,14 @@ export const clusterLifecycleOperations = {
           try {
             const { initialCost } = await getRatesForKubernetes(planId, 1);
             if (initialCost > 0) {
-              const refundResult = await Billing.topup(cluster.owner_id, initialCost);
-              await Billing.save_transaction({
+              // Refund and its record commit together. The catch below only
+              // warns, so a failed row previously returned the setup fee with
+              // nothing showing the customer it had come back.
+              await Billing.move_credit({
                 userId: cluster.owner_id,
                 amount: initialCost,
-                status: "completed",
+                direction: "credit",
                 type: "refund",
-                balanceAfter: refundResult.credit_balance,
                 serviceId: request.clusterId,
                 serviceType: "kubernetes",
                 description: `Refund for kubernetes setup charge (cluster never provisioned)`,

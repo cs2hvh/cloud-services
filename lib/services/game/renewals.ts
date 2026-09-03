@@ -40,21 +40,26 @@ interface SweepRow extends GameServerRow {
 async function chargeRenewal(row: SweepRow): Promise<boolean> {
   const price = Number(row.monthly_price ?? 0);
   if (!(price > 0)) return true; // free/legacy rows never block on billing
+  // Charge and record together. Previously the deduct stood alone and the
+  // ledger row was fired off with .catch(console.warn) — and a renewal runs
+  // unattended every month, so an unrecorded one was the least likely of any
+  // charge on the platform to be noticed and the most likely to be disputed a
+  // year later. If the row cannot be written the renewal does not happen,
+  // which is the honest outcome: no money moves either.
   try {
-    await Billing.deduct(row.user_id!, price);
+    await Billing.move_credit({
+      userId: row.user_id!,
+      amount: price,
+      direction: "debit",
+      type: "recurring",
+      serviceId: row.billing_service_id,
+      serviceType: "game_server",
+      description: `Game server renewal: ${row.name} (1 month)`,
+      metadata: { server_id: row.id, plan_slug: row.plan_slug },
+    });
   } catch {
     return false;
   }
-  Billing.save_transaction({
-    userId: row.user_id!,
-    amount: price,
-    status: "completed",
-    type: "recurring",
-    serviceId: row.billing_service_id,
-    serviceType: "game_server",
-    description: `Game server renewal: ${row.name} (1 month)`,
-    metadata: { server_id: row.id, plan_slug: row.plan_slug },
-  }).catch((e) => console.warn("[game-renewals] renewal transaction failed:", e?.message ?? e));
   return true;
 }
 

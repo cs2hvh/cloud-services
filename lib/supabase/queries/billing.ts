@@ -32,7 +32,7 @@ const getPromocodeRedemptions = (
   return value.filter(isPromocodeRedemptionEntry);
 };
 
-const ensurePositiveAmount = (amount: number, operation: "Top-up" | "Deduction") => {
+const ensurePositiveAmount = (amount: number, operation: "Top-up" | "Deduction" | "Movement") => {
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new Error(`${operation} amount must be a positive number`);
   }
@@ -405,6 +405,117 @@ export const Billing = {
     return data as number;
   },
 
+  /**
+   * Link an already-written ledger row to the service it paid for.
+   *
+   * Some flows must take the money BEFORE the service row exists — a game
+   * server charges first, because the atomic deduct is also the concurrency
+   * gate, and only then inserts the row that has a billing_service_id. The
+   * money and its ledger row still commit together at the gate; this attaches
+   * the identifier afterwards.
+   *
+   * Failure here is genuinely non-fatal and is the one place a warn is
+   * honest: the charge and its record both exist, and only the link between
+   * the record and the service is missing.
+   */
+  attach_transaction_service: async (params: {
+    transactionId: string;
+    serviceId?: string | null;
+    metadata?: Record<string, unknown>;
+  }): Promise<void> => {
+    if (!params.transactionId) return;
+    const supabase = await createServiceClient();
+    const patch: Record<string, unknown> = {};
+    if (params.serviceId) patch.service_id = params.serviceId;
+    if (params.metadata) patch.metadata = params.metadata;
+    if (Object.keys(patch).length === 0) return;
+
+    const { error } = await supabase
+      .schema("billing")
+      .from("transactions")
+      .update(patch)
+      .eq("id", params.transactionId);
+
+    if (error) {
+      console.warn(
+        `[Billing] could not link transaction ${params.transactionId} to its service:`,
+        error.message
+      );
+    }
+  },
+
+  /**
+   * Move a balance AND write its ledger row, atomically.
+   *
+   * PREFER THIS over `deduct`/`topup` followed by `save_transaction`.
+   *
+   * Those were two separate steps, and the second was routinely written as
+   * `.catch(e => console.warn(...))` or a try/catch that logged and continued.
+   * The money had already moved by then, so a failed write left a balance
+   * changed with nothing explaining why — no retry, no queue, no
+   * reconciliation. The 2026-08 audit found $110 of coupon credit with no
+   * ledger row; a failed provision on 2026-09-02 took $0.0075 the same way.
+   *
+   * billing.move_credit does both inside ONE database transaction, so a
+   * constraint violation on the row rolls the money back with it. That is the
+   * property billing.charge_service_hour already had and everything else
+   * lacked.
+   *
+   * Throws on insufficient balance, an unknown transaction type, or an unknown
+   * service type. All three were previously silent.
+   */
+  move_credit: async (params: {
+    userId: string;
+    amount: number;
+    direction: "debit" | "credit";
+    type: BillingTransactionType;
+    status?: BillingTransactionStatus;
+    description?: string;
+    currency?: string;
+    serviceId?: string | null;
+    serviceType?: BillableServiceType | null;
+    periodStart?: string | null;
+    periodEnd?: string | null;
+    stripeSessionId?: string | null;
+    stripePaymentIntent?: string | null;
+    stripeInvoiceId?: string | null;
+    receiptUrl?: string | null;
+    metadata?: Record<string, unknown>;
+  }): Promise<{ balance: number; transactionId: string }> => {
+    ensurePositiveAmount(params.amount, "Movement");
+    const supabase = await createServiceClient();
+
+    const { data, error } = await supabase.schema("billing").rpc("move_credit", {
+      p_user_id: params.userId,
+      p_amount: params.amount,
+      p_direction: params.direction,
+      p_type: params.type,
+      p_status: params.status ?? "completed",
+      p_description: params.description ?? null,
+      p_currency: params.currency ?? "usd",
+      p_service_id: params.serviceId ?? null,
+      p_service_type: params.serviceType ?? null,
+      p_period_start: params.periodStart ?? null,
+      p_period_end: params.periodEnd ?? null,
+      p_stripe_session_id: params.stripeSessionId ?? null,
+      p_stripe_payment_intent: params.stripePaymentIntent ?? null,
+      p_stripe_invoice_id: params.stripeInvoiceId ?? null,
+      p_receipt_url: params.receiptUrl ?? null,
+      p_metadata: params.metadata ?? {},
+    });
+
+    // No fallback and no swallow. A movement that cannot be recorded has not
+    // happened, and the caller needs to know that rather than proceed as if
+    // the customer had been charged.
+    if (error) throw new Error(`Balance movement failed: ${error.message}`);
+
+    const payload = (data ?? {}) as { balance?: number; transactionId?: string };
+    return {
+      balance: Number(payload.balance ?? 0),
+      transactionId: String(payload.transactionId ?? ""),
+    };
+  },
+
   add_active_kubernetes: async (params: {
     userId: string;
     serviceId: string;
@@ -597,33 +708,25 @@ export const Billing = {
 
     let newBalance: number | null = null;
     if (params.initialCost > 0) {
+      // One transaction: the setup charge and its ledger row. These were two
+      // separate steps, the second wrapped in a warn-and-continue, so a failed
+      // row left a customer charged a setup fee with nothing recording it.
       try {
-        newBalance = await Billing.deduct(params.userId, params.initialCost);
+        const movement = await Billing.move_credit({
+          userId: params.userId,
+          amount: params.initialCost,
+          direction: "debit",
+          type: "setup",
+          serviceId: params.serviceId,
+          serviceType: "platform_apps",
+          description: "Initial platform app setup charge",
+        });
+        newBalance = movement.balance;
       } catch (error) {
         throw new Error(
           `Failed to deduct initial platform app charge: ${
             error instanceof Error ? error.message : String(error)
           }`
-        );
-      }
-    }
-
-    if (params.initialCost > 0) {
-      try {
-        await Billing.save_transaction({
-          userId: params.userId,
-          amount: params.initialCost,
-          status: "completed",
-          type: "setup",
-          balanceAfter: newBalance,
-          serviceId: params.serviceId,
-          serviceType: "platform_apps",
-          description: "Initial platform app setup charge",
-        });
-      } catch (error) {
-        console.warn(
-          "[Billing.activate_platform_app] Failed to record setup transaction:",
-          error instanceof Error ? error.message : String(error)
         );
       }
     }
@@ -643,26 +746,20 @@ export const Billing = {
       const raceLostToExistingActiveRow = isUniqueViolation(error);
       try {
         if (params.initialCost > 0) {
-          const refundResult = await Billing.topup(params.userId, params.initialCost);
-          try {
-            await Billing.save_transaction({
-              userId: params.userId,
-              amount: params.initialCost,
-              status: "completed",
-              type: "refund",
-              balanceAfter: refundResult.credit_balance,
-              serviceId: params.serviceId,
-              serviceType: "platform_apps",
-              description: raceLostToExistingActiveRow
-                ? "Platform app setup charge refunded after duplicate activation race"
-                : "Platform app setup charge refunded after billing registration failed",
-            });
-          } catch (txnError) {
-            console.warn(
-              "[Billing.activate_platform_app] Failed to record refund transaction:",
-              txnError instanceof Error ? txnError.message : String(txnError)
-            );
-          }
+          // The refund and its record commit together. A refund whose row was
+          // lost is the worst of the set: the money came back and neither the
+          // customer nor support can show that it ever left.
+          await Billing.move_credit({
+            userId: params.userId,
+            amount: params.initialCost,
+            direction: "credit",
+            type: "refund",
+            serviceId: params.serviceId,
+            serviceType: "platform_apps",
+            description: raceLostToExistingActiveRow
+              ? "Platform app setup charge refunded after duplicate activation race"
+              : "Platform app setup charge refunded after billing registration failed",
+          });
         }
       } catch (refundError) {
         throw new Error(
@@ -897,32 +994,27 @@ export const Billing = {
     let deductionApplied = false;
     if (charge > 0) {
       try {
-        newBalance = await Billing.deduct(row.user_id, charge);
+        // Charge and record together. This is a teardown, so a lost row was
+        // unrecoverable by design: the active row is deleted immediately
+        // after, taking with it the only other evidence of the period.
+        const movement = await Billing.move_credit({
+          userId: row.user_id,
+          amount: charge,
+          direction: "debit",
+          type: "usage",
+          serviceId: params.serviceId,
+          serviceType: type,
+          periodStart: lastBilledAt,
+          periodEnd: new Date().toISOString(),
+          description: `Final prorated ${serviceLabel(type)} usage charge`,
+        });
+        newBalance = movement.balance;
         deductionApplied = true;
         console.log(`[Billing.close_active_service] Deduction successful`, {
           userId: params.userId,
           charge,
           newBalance,
         });
-        try {
-          await Billing.save_transaction({
-            userId: row.user_id,
-            amount: charge,
-            status: "completed",
-            type: "usage",
-            balanceAfter: newBalance,
-            serviceId: params.serviceId,
-            serviceType: type,
-            periodStart: lastBilledAt,
-            periodEnd: new Date().toISOString(),
-            description: `Final prorated ${serviceLabel(type)} usage charge`,
-          });
-        } catch (txnError) {
-          console.warn(
-            "[Billing.close_active_service] Failed to record usage transaction:",
-            txnError instanceof Error ? txnError.message : String(txnError)
-          );
-        }
       } catch (error) {
         if (params.failOnInsufficient) {
           throw new Error("Insufficient balance");
@@ -968,24 +1060,15 @@ export const Billing = {
     if (delErr) {
       if (deductionApplied && charge > 0) {
         try {
-          const refundResult = await Billing.topup(row.user_id, charge);
-          try {
-            await Billing.save_transaction({
-              userId: row.user_id,
-              amount: charge,
-              status: "completed",
-              type: "refund",
-              balanceAfter: refundResult.credit_balance,
-              serviceId: params.serviceId,
-              serviceType: type,
-              description: `Refund for ${type.replace("_", " ")} final charge after cleanup failure`,
-            });
-          } catch (txnError) {
-            console.warn(
-              "[Billing.close_active_service] Failed to record refund transaction:",
-              txnError instanceof Error ? txnError.message : String(txnError)
-            );
-          }
+          await Billing.move_credit({
+            userId: row.user_id,
+            amount: charge,
+            direction: "credit",
+            type: "refund",
+            serviceId: params.serviceId,
+            serviceType: type,
+            description: `Refund for ${type.replace("_", " ")} final charge after cleanup failure`,
+          });
         } catch (refundError) {
           console.error(
             `[Billing.close_active_service] Failed to refund charge after delete error for ${type}:`,

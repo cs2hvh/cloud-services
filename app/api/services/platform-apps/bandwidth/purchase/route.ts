@@ -89,39 +89,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Deduct — throws if balance dropped between check and deduct (race safety)
-    const balanceAfter = await Billing.deduct(auth.user!.id, pack.price);
-
-    // Increment purchased_bytes for this billing period.
-    // If the upsert fails after the deduct, refund immediately.
-    let updatedRow;
-    try {
-      updatedRow = await addPurchasedBytes(app_id, auth.user!.id, pack.bytes);
-    } catch (applyErr) {
-      Billing.topup(auth.user!.id, pack.price)
-        .then((refundResult) =>
-          Billing.save_transaction({
-            userId: auth.user!.id,
-            amount: pack.price,
-            status: "completed",
-            type: "refund",
-            balanceAfter: refundResult.credit_balance,
-            serviceId: app_id,
-            serviceType: "platform_apps",
-            description: `Bandwidth pack ${pack.label} refunded after apply failure`,
-          })
-        )
-        .catch((refundErr) => logError("services/platform-apps/bandwidth/purchase:refund", refundErr));
-      throw applyErr;
-    }
-
     const { start, end } = monthBounds();
-    Billing.save_transaction({
+
+    // Charge and record together — throws if the balance dropped between the
+    // check and here (race safety), and now also if the ledger row cannot be
+    // written. Previously the deduct stood alone and the purchase row was
+    // fired off later with .catch(console.warn), so a customer could pay for a
+    // bandwidth pack with nothing in their history naming it.
+    await Billing.move_credit({
       userId: auth.user!.id,
       amount: pack.price,
-      status: "completed",
+      direction: "debit",
       type: "purchase",
-      balanceAfter,
       description: `${pack.label} platform app bandwidth pack for ${app.name}`,
       serviceId: app_id,
       serviceType: "platform_apps",
@@ -134,9 +113,32 @@ export async function POST(req: NextRequest) {
         pack_label: pack.label,
         bandwidth_bytes: pack.bytes,
       },
-    }).catch((error) => {
-      console.warn("[platform-app-bandwidth] Failed to record pack purchase transaction:", error);
     });
+
+    // Increment purchased_bytes for this billing period.
+    // If the upsert fails after the charge, refund immediately.
+    let updatedRow;
+    try {
+      updatedRow = await addPurchasedBytes(app_id, auth.user!.id, pack.bytes);
+    } catch (applyErr) {
+      // Awaited, not fire-and-forget: the request is already failing, and a
+      // refund that silently fails to land is how a customer ends up paying
+      // for bytes they never received.
+      try {
+        await Billing.move_credit({
+          userId: auth.user!.id,
+          amount: pack.price,
+          direction: "credit",
+          type: "refund",
+          serviceId: app_id,
+          serviceType: "platform_apps",
+          description: `Bandwidth pack ${pack.label} refunded after apply failure`,
+        });
+      } catch (refundErr) {
+        logError("services/platform-apps/bandwidth/purchase:refund", refundErr);
+      }
+      throw applyErr;
+    }
 
     // Resolve quota and build the updated summary for the caller to refresh the UI
     const quota = await resolveQuota(app.size);

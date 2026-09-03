@@ -163,12 +163,27 @@ export async function createGameServer(input: CreateInput): Promise<CreateGameSe
   const monthlyPrice = plan.monthlyPrice;
   let serverId: number | null = null;
   let charged = false;
+  let chargeTransactionId: string | null = null;
   let pteroServerId: number | null = null;
 
   try {
     // ── charge (atomic deduct IS the concurrency gate) ─────────────────────
+    // The ledger row is written HERE, with the money, rather than after the
+    // server row is inserted. It used to be fired off later with
+    // .catch(console.warn), so a customer could be charged for a game server
+    // with nothing in their history naming it. The service id is not known
+    // yet — it is attached below, once the row exists.
     try {
-      await Billing.deduct(input.userId, monthlyPrice);
+      const movement = await Billing.move_credit({
+        userId: input.userId,
+        amount: monthlyPrice,
+        direction: "debit",
+        type: "purchase",
+        serviceType: "game_server",
+        description: `Game server: ${catalog.displayName} — ${plan.name} (1 month)`,
+        metadata: { plan_slug: plan.slug, region: input.region },
+      });
+      chargeTransactionId = movement.transactionId;
       charged = true;
     } catch {
       const balance = await Billing.get_balance(input.userId).catch(() => 0);
@@ -237,17 +252,14 @@ export async function createGameServer(input: CreateInput): Promise<CreateGameSe
     if (insertError || !row) throw new Error(`DB insert failed: ${insertError?.message}`);
     serverId = row.id;
 
-    // Purchase ledger row (best-effort; balance already moved).
-    Billing.save_transaction({
-      userId: input.userId,
-      amount: monthlyPrice,
-      status: "completed",
-      type: "purchase",
+    // The charge and its ledger row already committed together at the gate
+    // above. This only attaches the service identifiers now that they exist,
+    // so a failure here costs a link, not a record.
+    await Billing.attach_transaction_service({
+      transactionId: chargeTransactionId ?? "",
       serviceId: row.billing_service_id,
-      serviceType: "game_server",
-      description: `Game server: ${catalog.displayName} — ${plan.name} (1 month)`,
       metadata: { server_id: row.id, plan_slug: plan.slug, region: input.region },
-    }).catch((e) => console.warn("[game-provision] purchase transaction failed:", e?.message ?? e));
+    });
 
     await logEvent(row.id, "created", `Order placed: ${plan.name} in ${placement.host.display_region}`, {
       plan: plan.slug,
@@ -321,16 +333,18 @@ export async function createGameServer(input: CreateInput): Promise<CreateGameSe
     let refundNote = "";
     if (charged) {
       try {
-        await Billing.topup(input.userId, monthlyPrice);
-        Billing.save_transaction({
+        // The refund row was previously discarded with `.catch(() => {})` —
+        // not even logged. A customer whose provision failed got their money
+        // back with no evidence it ever left or returned.
+        await Billing.move_credit({
           userId: input.userId,
           amount: monthlyPrice,
-          status: "completed",
+          direction: "credit",
           type: "refund",
           serviceType: "game_server",
           description: "Game server refund: provisioning failed",
           metadata: { server_id: serverId },
-        }).catch(() => {});
+        });
         refundNote = "Charge refunded.";
       } catch (refundError) {
         console.error("[Game:provision:refund] failed:", refundError);

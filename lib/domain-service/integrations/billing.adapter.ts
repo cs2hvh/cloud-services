@@ -32,14 +32,15 @@ export function createDomainBillingAdapter(): DomainBillingPort {
       }
 
       try {
-        const balanceAfter = await Billing.deduct(params.userId, amount);
-        // Record purchase in billing.transactions (non-blocking)
-        Billing.save_transaction({
+        // The charge and its ledger row commit together. This used to deduct
+        // and then fire the record off with .catch(console.warn) — so a failed
+        // write left the customer charged for a domain with nothing in their
+        // history saying so.
+        await Billing.move_credit({
           userId: params.userId,
           amount,
-          status: "completed",
+          direction: "debit",
           type: "purchase",
-          balanceAfter,
           serviceType: "domain",
           description: `Domain purchase: ${params.domain}`,
           metadata: {
@@ -47,12 +48,10 @@ export function createDomainBillingAdapter(): DomainBillingPort {
             purchase_request_id: params.purchaseRequestId,
             currency: params.currency,
           },
-        }).catch((err: unknown) => {
-          console.warn("[DomainBilling] Failed to record purchase transaction:", toErrorMessage(err));
         });
       } catch (error: unknown) {
         const message = toErrorMessage(error);
-        if (/insufficient balance/i.test(message)) {
+        if (/insufficient (credit )?balance/i.test(message)) {
           throw new DomainServiceError({
             code: DOMAIN_ERROR_CODES.INSUFFICIENT_CREDITS,
             message: `Insufficient credits. Required $${amount.toFixed(2)}`,
@@ -73,14 +72,13 @@ export function createDomainBillingAdapter(): DomainBillingPort {
       }
 
       try {
-        const result = await Billing.topup(params.userId, amount);
-        // Record refund in billing.transactions (non-blocking)
-        Billing.save_transaction({
+        // A refund with no ledger row is worse than a charge with none: the
+        // customer's balance rises and neither they nor support can say why.
+        await Billing.move_credit({
           userId: params.userId,
           amount,
-          status: "completed",
+          direction: "credit",
           type: "refund",
-          balanceAfter: result.credit_balance,
           serviceType: "domain",
           description: `Domain purchase refund: ${params.domain}`,
           metadata: {
@@ -89,8 +87,6 @@ export function createDomainBillingAdapter(): DomainBillingPort {
             reason: params.reason,
             currency: params.currency,
           },
-        }).catch((err: unknown) => {
-          console.warn("[DomainBilling] Failed to record refund transaction:", toErrorMessage(err));
         });
       } catch (error: unknown) {
         throw new DomainServiceError({
@@ -143,23 +139,22 @@ export function createDomainBillingAdapter(): DomainBillingPort {
       }
 
       try {
-        const balanceAfter = await Billing.deduct(params.userId, amount);
-        Billing.save_transaction({
+        // Renewals recur unattended, so an unrecorded one is the least likely
+        // of the three to ever be noticed — and the most likely to be disputed
+        // a year later.
+        await Billing.move_credit({
           userId: params.userId,
           amount,
-          status: "completed",
+          direction: "debit",
           type: "purchase",
-          balanceAfter,
           serviceType: "domain",
           description: `Domain renewal: ${params.domain}`,
           metadata: { domain: params.domain, purchase_request_id: params.purchaseRequestId, currency: params.currency, renewal: true },
-        }).catch((err: unknown) => {
-          console.warn("[DomainBilling] Failed to record renewal transaction:", toErrorMessage(err));
         });
       } catch (error: unknown) {
         const message = toErrorMessage(error);
         throw new DomainServiceError({
-          code: /insufficient balance/i.test(message) ? DOMAIN_ERROR_CODES.INSUFFICIENT_CREDITS : DOMAIN_ERROR_CODES.BILLING_CHARGE_FAILED,
+          code: /insufficient (credit )?balance/i.test(message) ? DOMAIN_ERROR_CODES.INSUFFICIENT_CREDITS : DOMAIN_ERROR_CODES.BILLING_CHARGE_FAILED,
           message: `Domain renewal billing failed: ${message}`,
         });
       }

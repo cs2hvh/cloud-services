@@ -5,8 +5,10 @@ import { DOMAIN_ERROR_CODES, DomainServiceError } from "@/lib/domain-service/cor
 vi.mock("@/lib/supabase/queries/billing", () => ({
   Billing: {
     get_balance: vi.fn(),
-    deduct: vi.fn(),
-    topup: vi.fn(),
+    // move_credit replaced deduct-then-save_transaction. The two-step version
+    // could leave a domain charged with no ledger row when the second step
+    // failed, so the adapter now moves the money and records it in one call.
+    move_credit: vi.fn(),
   },
 }));
 
@@ -18,7 +20,10 @@ describe("Domain billing adapter", () => {
   it("TC-DOM-BILL-001: should check balance and charge domain purchase", async () => {
     const { Billing } = await import("@/lib/supabase/queries/billing");
     vi.mocked(Billing.get_balance).mockResolvedValue(50);
-    vi.mocked(Billing.deduct).mockResolvedValue(37.01 as never);
+    vi.mocked(Billing.move_credit).mockResolvedValue({
+      balance: 37.01,
+      transactionId: "txn-1",
+    });
 
     const adapter = createDomainBillingAdapter();
     await adapter.chargeDomainPurchase({
@@ -30,7 +35,18 @@ describe("Domain billing adapter", () => {
     });
 
     expect(Billing.get_balance).toHaveBeenCalledWith("user-123");
-    expect(Billing.deduct).toHaveBeenCalledWith("user-123", 12.99);
+    // The charge carries its own ledger detail — that is the point of the
+    // change. Asserting the type and service keeps a future refactor from
+    // quietly dropping the row back out of the money movement.
+    expect(Billing.move_credit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "user-123",
+        amount: 12.99,
+        direction: "debit",
+        type: "purchase",
+        serviceType: "domain",
+      })
+    );
   });
 
   it("TC-DOM-BILL-001: should throw insufficient credits error when balance is too low", async () => {
@@ -52,9 +68,12 @@ describe("Domain billing adapter", () => {
     });
   });
 
-  it("TC-DOM-BILL-002: should refund domain purchase by topping up balance", async () => {
+  it("TC-DOM-BILL-002: should refund domain purchase by crediting the balance", async () => {
     const { Billing } = await import("@/lib/supabase/queries/billing");
-    vi.mocked(Billing.topup).mockResolvedValue({ credit_balance: 100 } as never);
+    vi.mocked(Billing.move_credit).mockResolvedValue({
+      balance: 100,
+      transactionId: "txn-2",
+    });
 
     const adapter = createDomainBillingAdapter();
     await adapter.refundDomainPurchase({
@@ -66,7 +85,15 @@ describe("Domain billing adapter", () => {
       reason: "purchase_failed",
     });
 
-    expect(Billing.topup).toHaveBeenCalledWith("user-123", 12.99);
+    expect(Billing.move_credit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "user-123",
+        amount: 12.99,
+        direction: "credit",
+        type: "refund",
+        serviceType: "domain",
+      })
+    );
   });
 
   it("TC-DOM-BILL-003: should prevent negative purchase amounts", async () => {
@@ -119,7 +146,8 @@ describe("Domain billing adapter", () => {
     });
 
     expect(Billing.get_balance).not.toHaveBeenCalled();
-    expect(Billing.deduct).not.toHaveBeenCalled();
-    expect(Billing.topup).not.toHaveBeenCalled();
+    // A zero-value domain must not move money OR write a ledger row — both are
+    // now the same call, so one assertion covers what previously took two.
+    expect(Billing.move_credit).not.toHaveBeenCalled();
   });
 });
