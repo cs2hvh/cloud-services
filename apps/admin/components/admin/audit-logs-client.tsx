@@ -187,6 +187,24 @@ export default function AuditLogsClient({
                 <SelectItem value="object_storage" className="text-white focus:bg-neutral-800 focus:text-white">
                   Object Storage
                 </SelectItem>
+                <SelectItem value="compute" className="text-white focus:bg-neutral-800 focus:text-white">
+                  Compute
+                </SelectItem>
+                <SelectItem value="domain" className="text-white focus:bg-neutral-800 focus:text-white">
+                  Domains
+                </SelectItem>
+                <SelectItem value="billing" className="text-white focus:bg-neutral-800 focus:text-white">
+                  Billing
+                </SelectItem>
+                <SelectItem value="pricing" className="text-white focus:bg-neutral-800 focus:text-white">
+                  Pricing
+                </SelectItem>
+                <SelectItem value="discount" className="text-white focus:bg-neutral-800 focus:text-white">
+                  Discounts
+                </SelectItem>
+                <SelectItem value="gpu" className="text-white focus:bg-neutral-800 focus:text-white">
+                  GPU
+                </SelectItem>
               </SelectContent>
             </Select>
 
@@ -212,6 +230,9 @@ export default function AuditLogsClient({
                 </SelectItem>
                 <SelectItem value="delete" className="text-white focus:bg-neutral-800 focus:text-white">
                   Delete
+                </SelectItem>
+                <SelectItem value="access" className="text-white focus:bg-neutral-800 focus:text-white">
+                  Access (customer-data reads)
                 </SelectItem>
               </SelectContent>
             </Select>

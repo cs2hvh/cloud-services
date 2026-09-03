@@ -1,6 +1,5 @@
 import type { LucideIcon } from "lucide-react";
 import {
-  LayoutDashboard,
   Users,
   LifeBuoy,
   BadgeDollarSign,
@@ -50,8 +49,7 @@ export const MAIN_APP_URL =
 export const SECTION_GROUPS = ["", "Platform", "Compute", "Services", "Commerce"];
 
 export const ADMIN_SECTIONS: AdminSection[] = [
-  { title: "Overview", slug: "", icon: LayoutDashboard, migrated: true, description: "Admin home", group: "" },
-  { title: "HQ Monitor", slug: "monitor", icon: Radar, migrated: true, description: "Live platform map — flows, health, money", group: "" },
+  { title: "HQ Monitor", slug: "", icon: Radar, migrated: true, description: "Live platform map, analytics, recent activity", group: "" },
 
   { title: "Users", slug: "users", icon: Users, migrated: true, description: "Accounts, roles, suspensions", group: "Platform" },
   { title: "Support", slug: "support", icon: LifeBuoy, migrated: true, description: "Tickets and replies", group: "Platform" },

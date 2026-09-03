@@ -15,8 +15,8 @@ const datetimeString = z.string().refine((val) => {
 
 const querySchema = z.object({
   user_id: z.string().uuid().optional(),
-  service_type: z.enum(['database', 'kubernetes', 'platform_apps', 'network_ddos', 'object_storage', 'auth', 'git_webhook']).optional(),
-  action: z.enum(['create', 'update', 'delete', 'login', 'logout', 'token_expired', 'token_refreshed', 'webhook_received', 'provider_connect', 'provider_disconnect', 'password_change']).optional(),
+  service_type: z.enum(['database', 'kubernetes', 'platform_apps', 'network_ddos', 'object_storage', 'auth', 'git_webhook', 'compute', 'domain', 'billing', 'pricing', 'discount', 'gpu', 'ai_agent', 'knowledge_base']).optional(),
+  action: z.enum(['create', 'update', 'delete', 'login', 'logout', 'access', 'token_expired', 'token_refreshed', 'webhook_received', 'provider_connect', 'provider_disconnect', 'password_change']).optional(),
   start_date: datetimeString.optional(),
   end_date: datetimeString.optional(),
   page: z.coerce.number().int().positive().default(1),

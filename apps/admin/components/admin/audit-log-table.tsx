@@ -39,7 +39,7 @@ interface AuditLogTableProps {
   isLoading?: boolean;
 }
 
-const actionColors = {
+const actionColors: Record<string, string> = {
   create: "bg-emerald-950/50 text-emerald-400 border border-emerald-900",
   update: "bg-blue-950/50 text-blue-400 border border-blue-900",
   delete: "bg-red-950/50 text-red-400 border border-red-900",
@@ -127,7 +127,9 @@ export function AuditLogTable({
                   {log.user_email || "Unknown"}
                 </span>
                 <span className="font-mono text-xs text-neutral-500">
-                  {log.user_id.slice(0, 8)}...
+                  {/* System rows can carry null ids — a log page must never
+                      crash on the shape of what it is logging. */}
+                  {log.user_id ? `${log.user_id.slice(0, 8)}...` : "—"}
                 </span>
                 <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-neutral-800 text-neutral-400 mt-1 w-fit">
                   {log.user_role}
@@ -135,8 +137,13 @@ export function AuditLogTable({
               </div>
             </TableCell>
             <TableCell>
-              <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${actionColors[log.action]}`}>
-                {log.action.toUpperCase()}
+              <span
+                className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
+                  actionColors[log.action] ??
+                  "bg-neutral-800 text-neutral-300 border border-neutral-700"
+                }`}
+              >
+                {(log.action ?? "unknown").toUpperCase()}
               </span>
             </TableCell>
             <TableCell>
@@ -150,7 +157,7 @@ export function AuditLogTable({
                   {log.service_name || "Unnamed"}
                 </span>
                 <span className="font-mono text-xs text-neutral-500">
-                  {log.service_id.slice(0, 12)}...
+                  {log.service_id ? `${log.service_id.slice(0, 12)}...` : "—"}
                 </span>
               </div>
             </TableCell>

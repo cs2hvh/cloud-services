@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ExternalLink, ShieldCheck } from "lucide-react";
+import { Nunito } from "next/font/google";
+import { ExternalLink } from "lucide-react";
 import {
   ADMIN_SECTIONS,
   SECTION_GROUPS,
@@ -12,6 +13,10 @@ import {
 import { cn } from "@/lib/utils";
 
 const ACCENT = "#3987e5";
+
+// The brand is typographic: "ahura" in white, "sense" in #0095FF, Nunito —
+// exactly the wordmark the main site's navbar renders. No icon beside it.
+const nunito = Nunito({ subsets: ["latin"], weight: ["400"] });
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -70,22 +75,15 @@ export function Sidebar() {
 
   return (
     <aside className="flex h-screen w-60 shrink-0 flex-col border-r border-border bg-black/30">
-      <div className="flex h-14 items-center gap-2.5 border-b border-border px-4">
-        <div
-          className="flex h-7 w-7 items-center justify-center rounded-lg"
-          style={{
-            background: "linear-gradient(135deg, #3987e5 0%, #9085e9 100%)",
-          }}
+      <div className="flex h-16 flex-col justify-center border-b border-border px-5">
+        <Link
+          href="/"
+          className={`${nunito.className} text-[21px] leading-none tracking-[0.01em] text-white`}
         >
-          <ShieldCheck className="h-4 w-4 text-white" />
-        </div>
-        <div className="leading-tight">
-          <div className="font-heading text-[13px] font-semibold tracking-wide">
-            AhuraSense
-          </div>
-          <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-            Admin
-          </div>
+          ahura<span className="text-[#0095FF]">sense</span>
+        </Link>
+        <div className="mt-1.5 text-[9px] font-medium uppercase tracking-[0.28em] text-muted-foreground/80">
+          Control Panel
         </div>
       </div>
 
