@@ -32,6 +32,7 @@ interface Feed {
     sweepAgeH: number | null;
     charged24h: number;
     chargeCount24h: number;
+    charges24hTruncated: boolean;
     byService: Record<string, { count: number; usd: number }>;
     openMeters: number | null;
     invariantBad: number | null;
@@ -41,6 +42,7 @@ interface Feed {
       billed: number;
       missing: number;
       worst: { service_type: string; missing: number } | null;
+      overBilled: number;
     } | null;
     unpricedSellable: number | null;
     gpuBooks: {
@@ -190,7 +192,17 @@ function buildGraph(f: Feed): { nodes: Node<HqNodeData>[]; edges: Edge[] } {
   const cov = b.coverage;
   // Coverage outranks recency — the sweep read green through a 12-hour gap.
   const covTone: Tone =
-    cov === null ? "dim" : cov.open === 0 ? "dim" : cov.missing === 0 ? "ok" : cov.missing <= 2 ? "warn" : "bad";
+    cov === null
+      ? "dim"
+      : cov.open === 0
+        ? "dim"
+        : cov.overBilled > 0
+          ? "bad"
+          : cov.missing === 0
+            ? "ok"
+            : cov.missing <= 2
+              ? "warn"
+              : "bad";
   const invTone: Tone = f.billing.invariantBad === null ? "dim" : f.billing.invariantBad > 0 ? "bad" : "ok";
   const failTone: Tone = (b.failuresUnresolved ?? 0) > 0 ? "bad" : "ok";
   const mainTone: Tone = f.providers.mainApp.up ? "ok" : "bad";
@@ -312,9 +324,11 @@ function buildGraph(f: Feed): { nodes: Node<HqNodeData>[]; edges: Edge[] } {
           ? "coverage read failed"
           : cov.open === 0
             ? "0 meters examined"
-            : `${cov.billed}/${cov.expected} hrs · ${cov.open} meters${
-                cov.worst ? ` · worst: ${cov.worst.service_type} −${cov.worst.missing}h` : ""
-              }`,
+            : cov.overBilled > 0
+              ? `${cov.overBilled} meter(s) OVER-billed — duplicate charge hours`
+              : `${cov.billed}/${cov.expected} hrs · ${cov.open} meters${
+                  cov.worst ? ` · worst: ${cov.worst.service_type} −${cov.worst.missing}h` : ""
+                }`,
       tone: covTone,
       wide: true,
     }),
@@ -333,9 +347,11 @@ function buildGraph(f: Feed): { nodes: Node<HqNodeData>[]; edges: Edge[] } {
     }),
     n("ledger", 1400, 330, {
       label: "Ledger · 24h",
-      value: money(b.charged24h),
-      sub: `usage charged · topups ${money(b.topups24h)}`,
-      tone: "info",
+      value: `${b.charges24hTruncated ? "≥ " : ""}${money(b.charged24h)}`,
+      sub: b.charges24hTruncated
+        ? `first 1000 of ${b.chargeCount24h} charges — sum is partial`
+        : `usage charged · topups ${money(b.topups24h)}`,
+      tone: b.charges24hTruncated ? "warn" : "info",
       wide: true,
     }),
     n("coupons", 1400, 585, {
@@ -512,7 +528,10 @@ export default function HqBoard() {
         {/* KPI strip — top left */}
         <div className="pointer-events-none absolute left-3 top-3 flex flex-wrap gap-2">
           {[
-            { k: "charged 24h", v: money(feed.billing.charged24h) },
+            {
+              k: "charged 24h",
+              v: `${feed.billing.charges24hTruncated ? "≥ " : ""}${money(feed.billing.charged24h)}`,
+            },
             {
               k: "hrs unbilled",
               v: feed.billing.coverage === null ? "?" : String(feed.billing.coverage.missing),

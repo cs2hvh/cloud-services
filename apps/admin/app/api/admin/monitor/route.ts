@@ -87,6 +87,7 @@ export async function GET() {
     domainsRes,
     sweepLastRes,
     charges24Res,
+    charges24CountRes,
     openMetersRes,
     failuresCountRes,
     failuresRecentRes,
@@ -122,6 +123,10 @@ export async function GET() {
       .gte("period_start", dayAgo)
       .order("period_start", { ascending: false })
       .limit(1000),
+    // Exact count alongside the capped row fetch: PostgREST's server-side max
+    // is 1000 rows, so past that the SUM above goes partial — the count tells
+    // us when, and the board says "≥" instead of pretending completeness.
+    billing.from("service_charges").select("id", head).gte("period_start", dayAgo),
     // Every meter that is open by EITHER definition — the union catches the
     // rows where the two definitions disagree, which is its own alert.
     billing
@@ -190,14 +195,23 @@ export async function GET() {
     : null;
 
   // --- BILLED COVERAGE: hours elapsed vs hours actually charged, per open
-  // meter, over the last 7 days. Conservative hour math (first partial hour
-  // and the current hour excluded) so a red number is never an off-by-one.
+  // meter, over the last 7 days. Billed is COUNTED BY THE SERVER inside the
+  // exact same window as expected — [fromHour, floorHourNow):
+  //   * a shared upper bound, or the always-billed current hour papers over
+  //     exactly one in-window gap per meter (found in review: min-clamping
+  //     an unbounded count reported 0 missing when 1 was);
+  //   * head counts, because PostgREST caps row fetches at 1000 server-side
+  //     and a truncated fetch fails toward a false red that grows with
+  //     meter age — counts have no cap;
+  //   * no clamp: billed > expected means duplicate charges for an hour,
+  //     which must surface as an anomaly, not be floored away.
   let coverage: {
     open: number;
     expected: number;
     billed: number;
     missing: number;
     worst: { service_type: string; missing: number } | null;
+    overBilled: number;
   } | null = null;
   if (meterRows) {
     const now = Date.now();
@@ -208,57 +222,46 @@ export async function GET() {
       const rawStart = Math.max(Date.parse(m.started_at as string), activeSince, windowFloor);
       const startHour = Math.ceil(rawStart / HOUR_MS) * HOUR_MS;
       return {
-        key: `${m.service_type}:${m.service_id}`,
         service_type: m.service_type as string,
+        service_id: m.service_id as string,
         startHour,
         expected: Math.max(0, Math.round((floorHourNow - startHour) / HOUR_MS)),
       };
     });
-    const ids = [...new Set(openMeterList.map((m) => m.service_id as string))];
-    let billedByKey = new Map<string, Set<number>>();
-    let coverageReadOk = true;
-    if (ids.length > 0) {
-      const minStart = Math.min(...windows.map((w) => w.startHour));
-      const covRes = await billing
-        .from("service_charges")
-        .select("service_type, service_id, period_start")
-        .in("service_id", ids)
-        .gte("period_start", new Date(minStart).toISOString())
-        .limit(5000);
-      if (covRes.error) {
-        coverageReadOk = false;
-      } else {
-        billedByKey = new Map();
-        for (const c of covRes.data ?? []) {
-          const key = `${c.service_type}:${c.service_id}`;
-          const set = billedByKey.get(key) ?? new Set<number>();
-          set.add(Date.parse(c.period_start as string));
-          billedByKey.set(key, set);
-        }
-      }
-    }
-    if (coverageReadOk) {
+    const toIso = new Date(floorHourNow).toISOString();
+    const billedCounts = await Promise.all(
+      windows.map((w) =>
+        billing
+          .from("service_charges")
+          .select("id", head)
+          .eq("service_type", w.service_type)
+          .eq("service_id", w.service_id)
+          .gte("period_start", new Date(w.startHour).toISOString())
+          .lt("period_start", toIso),
+      ),
+    );
+    if (!billedCounts.some((r) => r.error)) {
       let expected = 0;
       let billed = 0;
+      let overBilled = 0;
       let worst: { service_type: string; missing: number } | null = null;
-      for (const w of windows) {
-        const billedHours = [...(billedByKey.get(w.key) ?? new Set<number>())].filter(
-          (h) => h >= w.startHour,
-        ).length;
-        const b = Math.min(w.expected, billedHours);
+      windows.forEach((w, i) => {
+        const b = billedCounts[i].count ?? 0;
         expected += w.expected;
         billed += b;
+        if (b > w.expected) overBilled += 1;
         const miss = w.expected - b;
         if (miss > 0 && (worst === null || miss > worst.missing)) {
           worst = { service_type: w.service_type, missing: miss };
         }
-      }
+      });
       coverage = {
         open: openMeterList.length,
         expected,
         billed,
-        missing: expected - billed,
+        missing: Math.max(0, expected - billed),
         worst,
+        overBilled,
       };
     }
   }
@@ -368,7 +371,10 @@ export async function GET() {
       sweepLastAt,
       sweepAgeH,
       charged24h,
-      chargeCount24h: charges.length,
+      chargeCount24h: count(charges24CountRes) ?? charges.length,
+      // The row fetch is server-capped at 1000; past that the sums above are
+      // partial (and biased toward dropping the oldest hours of the day).
+      charges24hTruncated: (count(charges24CountRes) ?? charges.length) > charges.length,
       byService,
       openMeters: meterRows ? openMeterList.length : null,
       invariantBad,
