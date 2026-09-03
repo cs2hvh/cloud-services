@@ -441,6 +441,11 @@ export const podLifecycleOperations = {
                         },
                     },
                     hourly_cost_usd: hourlyCostUsd,
+                    // GPU only, count included, storage excluded: this is what the
+                    // gpu_pod meter charges. hourly_cost_usd above is the
+                    // all-in figure shown to the customer and must not be used
+                    // for billing — gpu_pod_storage bills the disk separately.
+                    gpu_hourly_usd: gpuCostUsd,
                     runpod_cost_per_hr: observedPerHr,
                     billing_start: billingStart.toISOString(),
                 })
@@ -638,6 +643,7 @@ export const podLifecycleOperations = {
                     interruptible: req.interruptible,
                     gpu_count: req.gpuCount,
                     hourly_cost_usd: hourlyCostUsd,
+                    gpu_hourly_usd: gpuCostUsd,
                     runpod_cost_per_hr: observedPerHr,
                     data_center_id: runpodPod.machine?.dataCenterId,
                 },
