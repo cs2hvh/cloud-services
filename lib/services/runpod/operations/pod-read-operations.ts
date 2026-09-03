@@ -6,6 +6,7 @@
 import { closeActiveBilling } from "@/config/billing-flow";
 import { GENERIC_SERVICE_ERROR } from "@/lib/inference/error-messages";
 import { BillingCredits } from "@/lib/billing/credits";
+import { closeMeter } from "@/lib/billing/meters";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { createServiceClient } from "@/lib/supabase/server";
 
@@ -379,6 +380,33 @@ export const podReadOperations = {
                                 billErr
                             );
                         }
+
+                        // closeActiveBilling above closes the `gpu_pod` meter
+                        // only. Storage is a SEPARATE meter on the same service
+                        // id and has to be closed explicitly — destroyPod does
+                        // this; this path did not.
+                        //
+                        // So a pod that vanished upstream left gpu_pod_storage
+                        // open forever. The disk is gone with the pod, so the
+                        // sweep found no resource behind the meter and reported
+                        // PROBLEM-no-resource every hour, for every pod ever
+                        // lost to a spot interruption — permanent noise from a
+                        // meter that can never be billed again, which is how a
+                        // real problem stops being visible among the false ones.
+                        //
+                        // Unlike a STOP, there is nothing left to keep charging
+                        // for here: the pod is terminated or interrupted and its
+                        // disk went with it. destroyPod keeps storage billing
+                        // through a stop for exactly the opposite reason.
+                        try {
+                            await closeMeter("gpu_pod_storage", r.billing_service_id);
+                        } catch (meterErr) {
+                            console.error(
+                                `[GPU:reconcile] storage meter close failed for pod ${r.id}:`,
+                                meterErr
+                            );
+                        }
+
                         await supabase
                             .from("gpu_pods")
                             .update({
