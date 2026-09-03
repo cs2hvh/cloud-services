@@ -289,7 +289,7 @@ export default function AnalyticsView() {
             rev.ok
               ? rev.effectiveDiscountPct === null
                 ? `coupon credits ${money(feed.cash.coupons30)}`
-                : `${rev.effectiveDiscountPct.toFixed(1)}% off gross · coupons ${money(feed.cash.coupons30)}`
+                : `${rev.effectiveDiscountPct.toFixed(1)}% off recorded gross · coupons ${money(feed.cash.coupons30)}`
               : "read failed"
           }
           tone={rev.ok ? undefined : "dim"}
@@ -502,8 +502,10 @@ export default function AnalyticsView() {
         Aggregated server-side · refreshed every 60s · billing has existed since{" "}
         {new Date(feed.billingActiveSince).toUTCString().slice(0, 16)}, so billed figures cover{" "}
         {feed.billedWindowDays} day(s) while top-ups and signups span the full {feed.windowDays} ·
-        margin covers only rows carrying upstream cost (compute today) · &ldquo;≥&rdquo; marks a
-        sum that hit the row-fetch cap and is declared partial rather than passed off as complete.
+        margin and discount-rate cover only rows that record upstream cost / gross — the
+        coverage figures are computed from the rows, never assumed from a service name ·
+        &ldquo;≥&rdquo; marks a sum that hit the row-fetch cap and is declared partial rather
+        than passed off as complete.
       </p>
     </div>
   );

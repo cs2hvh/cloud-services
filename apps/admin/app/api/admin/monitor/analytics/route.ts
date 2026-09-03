@@ -173,9 +173,12 @@ export async function GET() {
     const day = dayKey(p.period_start);
     const amt = Number(p.amount_usd);
     const b = bucket(day);
+    // project_charges records NO gross/discount/upstream — those are unknown
+    // (NULL), not zero. Folding deploy dollars into the gross denominator
+    // would claim "no discounts were given on deploy"; the discount rate is
+    // therefore computed only over rows that actually record gross.
     b.byService["deploy"] = (b.byService["deploy"] ?? 0) + amt;
     b.total += amt;
-    b.gross += amt;
     mix.set("deploy", (mix.get("deploy") ?? 0) + amt);
     spendByUser.set(p.user_id, (spendByUser.get(p.user_id) ?? 0) + amt);
   }
