@@ -1,7 +1,8 @@
 # Platform Overview
 
-**Verified against production on 2026-09-03.** Numbers in this document were
-read from the running system on that date and are stated as observed.
+**Verified against production on 2026-09-03, last re-read 17:06 UTC.** Numbers in
+this document were read from the running system on that date and are stated as
+observed.
 
 AhuraSense is a sovereign-cloud platform: customers rent compute, storage,
 GPUs, managed databases, Kubernetes clusters, game servers, domains and an
@@ -27,11 +28,15 @@ source of most of the coupling problems this documentation set records: the two
 apps agree on table shapes rather than on an API, so a schema change in one can
 silently break the other.
 
-The admin panel was split out of the customer app. Some legacy admin routes
-still live in this repo under `app/api/admin/` and `app/dashboard/admin/` and
-are served from `ahurasense.com` — referred to throughout as **the old admin**.
-It has not been retired, and at least one of its routes was writing prices
-without the guards the panel uses (fixed 2026-09-03, commit `81e8599d`).
+The admin panel was split out of the customer app. The customer app's own admin
+console (`app/dashboard/admin/`, 25 pages and 81 components) was removed on
+2026-09-03 (`dcaa5b1c`). The 77 API routes under `app/api/admin/` remain and are
+served from `ahurasense.com`, referred to throughout as **the old admin**. The
+object-storage and DDoS create flows branch into them for admin users, so
+retiring them is separate work. At least one of those routes was writing prices
+without the guards the panel uses (fixed 2026-09-03, commit `81e8599d`), and
+`app/api/admin/users` trusted a `roles` column that any signed-in user could set
+on their own row until the same afternoon (see [Data Model](04-data-model.md) §6).
 
 ---
 
@@ -95,6 +100,16 @@ wrong is how the platform has lost money, so each is named:
 - **Step 6 could take money without recording it.** Seventeen call sites moved a
   balance and then wrote the ledger row as a separate, discardable step. Fixed
   2026-09-03 (`46dbdac1`).
+- **Step 6 had a second spine that kept no ledger.** `paas.charge_project_hour`
+  debited the wallet every hour from 2026-08-28 and never wrote
+  `billing.transactions`, so the drain was invisible on the customer's billing
+  page and reported as uncollected accrual. Fixed 2026-09-03 (migration
+  `20260903165150`); 823 rows backfilled.
+- **Teardown would have billed the lifetime twice.** The v1 "final prorated
+  charge" was `hourly_rate × (now − last_billed_at)`, and nothing had advanced
+  `last_billed_at` since 2026-08-24, so it resolved to every hour the sweep had
+  already billed. Found 2026-09-03 before any post-relaunch teardown ran; the
+  deduction is gone.
 
 See [Pricing & Billing](03-pricing-and-billing.md) for the full spine.
 
@@ -149,23 +164,29 @@ commit the change; it was applied directly to the role setting.
 **Max rows.** The project caps every PostgREST response at **1000 rows**
 regardless of the limit a client requests (verified: asked 3000, got 1000). Any
 client-side aggregation over a table that can exceed 1000 rows will silently
-under-count. This bit the admin monitor board before it shipped.
+under-count. This bit the admin monitor board before it shipped, and the sweep's
+meter load and `lib/supabase/select-all.ts` paginate for the same reason
+(2026-09-03).
 
 ---
 
 ## 6. Data model
 
-Seven schemas, 205 base tables:
+Seven schemas, 206 base tables:
 
 | Schema | Tables | RLS off | Contents |
 |---|---|---|---|
-| `public` | 78 | 8 | services, plans, catalogues, hosts, users |
+| `public` | 78 | 0 | services, plans, catalogues, hosts, users |
 | `inference` | 67 | 9 | AI Labs: models, deployments, traces, vectors |
-| `billing` | 23 | 6 | wallet, prices, meters, charges, ledger |
+| `billing` | 24 | 6 | wallet, prices, meters, charges, ledger, sweep runs |
 | `paas` | 15 | 0 | platform-apps projects, deployments, domains |
 | `audits` | 13 | 0 | append-only audit log, monthly partitions |
 | `agentcore` | 6 | 0 | agent runs |
 | `support` | 3 | 0 | tickets, messages, attachments |
+
+`public` was at 8 until the afternoon of 2026-09-03, when the eight tables that
+had been reachable with the anon key were locked down (migration
+`20260903195000`; [Data Model](04-data-model.md) §6).
 
 `audits` is **immutable by trigger** — `audits.prevent_audit_modification()`
 raises on UPDATE and DELETE, and even the table owner cannot remove a row. This
@@ -182,19 +203,30 @@ push to dev  →  GitHub Actions (.github/workflows/deploy.yml)  →  ssh  →  
 ```
 
 - **`dev` auto-deploys to production.** There is no staging environment.
-- **There is no test gate.** The workflow does not run the test suite. The suite
-  is currently red (72 of 196 files failing as of 2026-09-03), and has been for
-  long enough that a red suite carries no signal.
-- Services are managed by systemd: `ahura-web`, `ahura-cron`,
-  `ahura-build-worker`.
+- **No test gate has run yet.** The working-tree `deploy.yml` (uncommitted on
+  2026-09-03) makes the deploy wait on a `tsc --noEmit` job and runs vitest
+  alongside without gating, so the failure count is at least visible; neither
+  has executed. The suite is red (72 of 196 files failing as of 2026-09-03), and
+  has been for long enough that a red suite carries no signal.
+- Services are managed by systemd: `ahura-web`, `ahura-build-worker`, and three
+  timers (`ahura-billing-sweep`, `ahura-game-renewals`,
+  `ahura-domain-renewals`) that `deploy.yml` copies from `deploy/systemd/`,
+  enables, and asserts active on every deploy, failing the deploy if one is not.
+  `ahura-cron`, the v1 biller whose script was deleted in August, is disabled
+  and masked by both `deploy.sh` and the workflow; until 2026-09-03 `deploy.sh`
+  restarted it on every deploy.
 - Database migrations are **not** applied by the pipeline. They are applied
   manually, which is why `supabase/migrations` has historically drifted behind
   the live schema — eleven migrations had to be reconstructed from
-  `schema_migrations.statements` in late August.
+  `schema_migrations.statements` in late August. A `migration-drift.yml`
+  workflow (uncommitted 2026-09-03; every 6 hours and on any push touching
+  `supabase/migrations/`) compares the folder with `schema_migrations`; it needs
+  the `SUPABASE_DB_URL` secret and exits 2 without it.
 
 Other workflows build images (`ft-runner`, `ft-serving`, `deploy-runner`,
 `gpu-os-images`) and run the billing watchdog (`billing-deadman.yml`, every 2
-hours, 3-hour staleness threshold).
+hours; [Pricing & Billing](03-pricing-and-billing.md) §7 lists the four
+questions it asks).
 
 ---
 
@@ -202,16 +234,44 @@ hours, 3-hour staleness threshold).
 
 | Job | Where | Cadence | Notes |
 |---|---|---|---|
-| Hourly billing sweep | `scripts/billing/sweep.ts` | hourly | **dry-run by default**; requires `--apply` |
-| Billing deadman | `.github/workflows/billing-deadman.yml` | every 2h | asks the DB whether money moved; 3h threshold |
-| RunPod inventory sync | in-app | 60s | GPU availability and pricing |
-| Game renewal sweep | `lib/services/game/renewals.ts` | via cron route | prepaid monthly |
-| PaaS usage sampler | `paas.usage_samples` | — | see deploy-v2 notes |
+| Hourly billing sweep | `ahura-billing-sweep.timer` → `scripts/billing/sweep.ts --apply` | `*:10:00`, up to 60s jitter | bills the hour just closed; **dry-run without `--apply`**; every run writes `billing.sweep_runs` |
+| Game renewals | `ahura-game-renewals.timer` → `POST /api/internal/game/renewals` | every 15 min | prepaid monthly; had no caller 2026-08-24 → 09-03 |
+| Domain renewals | `ahura-domain-renewals.timer` → `POST /api/domains/renewal/poll` | daily 09:05 UTC | had no caller 2026-08-24 → 09-03 |
+| PaaS meter | Kubernetes CronJob `sweep-meter-apps` → `paas.charge_project_hour` | hourly at `:04` | `--apply` since 2026-08-28; its own spine, ledgered since 09-03 |
+| Billing dead-man | `.github/workflows/billing-deadman.yml` | every 2h | four questions to the DB; exit 0 / 1 / 2 |
+| Migration drift | `.github/workflows/migration-drift.yml` | every 6h, and on push | needs `SUPABASE_DB_URL` |
+| RunPod inventory sync / reconcile | Cloudflare Worker | 60s / 5 min | GPU availability and pricing; closes meters for vanished pods |
 
-**The sweep's schedule is not fully accounted for.** It billed every hour from
-03:00 to 11:00 on 2026-09-03 but nothing between 16:00 on 2026-09-02 and 02:00
-on 2026-09-03, and no in-repo scheduler explains either. `billing.meter_coverage()`
-exists to make such gaps visible; see [Current State](07-current-state.md).
+The two renewal timers call their routes through
+`scripts/ops/call-internal-route.ts`. All three unit files live in
+`deploy/systemd/` and are installed by the deploy workflow. Before 2026-09-03
+the sweep timer existed on the host only because someone had once run the
+commands in `deploy/systemd/README.md` by hand, and the two renewal routes had
+had no caller since the cron worker was deleted on 2026-08-24: three game
+servers ran 29 days past `ends_at` with `auto_renew` on, $26/mo between them,
+and nobody was charged, suspended or told. The workflow that guarantees the
+timers was not yet pushed at 17:06 UTC on 2026-09-03; whether the two renewal
+timers were already on the host by hand was not checked from this session.
+
+**The sweep's schedule is accounted for.** `billing.service_charges` rows land
+between `:10:00` and `:11:01` past every hour from 2026-08-31 10:10 to
+2026-09-03 16:10, 79 consecutive fires without a miss; that is the timer above
+(`OnCalendar=*:10:00`, `RandomizedDelaySec=60`). The two holes coverage had
+surfaced were not scheduling failures. 08-31 07:00–08:00 is the window between
+a manual run at 07:38 (which billed 06:00) and the timer's first fire at 10:10
+(which billed 09:00); the timer was not installed yet. 09-02 16:00 → 09-03
+02:00 had four charges every hour; only the compute meter was skipped, because
+migration `20260902140000` (the `compute/*` markup row) was applied by hand at
+about 15:00 on 09-02 while the sweep code that passes `servers.hourly_cost` as
+the upstream cost (`a6098a2d`) was not pushed until 03:16 on 09-03, so
+`resolve_hourly_rate` raised "markup requires upstream cost" every hour and the
+sweep wrote PROBLEM to the journal. Detail in
+[Pricing & Billing](03-pricing-and-billing.md) §6.
+
+Deliberately still unscheduled: the grace-delete, grace-events and
+bandwidth-sync routes. They are v1 machinery that reads `billing.active_*` and
+`billing.service_lifecycle`, nothing writes `service_lifecycle` rows any more,
+and the deletion executor treated a failed read as "already deleted".
 
 ---
 

@@ -188,9 +188,12 @@ and the gap behind it looked like history.
 meter-hours, $3.59, no record anywhere.
 
 The sweep now writes a `status='failed'`, `type='usage'` transaction for the
-unpaid hour — the same treatment `close_active_service` already gave an
-unaffordable final charge at teardown. Deduped by a partial unique index so an
-insolvent day produces one row per hour rather than hundreds.
+unpaid hour. `close_active_service` used to write the same row for an
+unaffordable final charge at teardown; that final charge was removed on
+2026-09-03 because it re-billed the resource's whole lifetime
+([Pricing & Billing](03-pricing-and-billing.md) §4), so the sweep is now the
+only writer of arrears rows. Deduped by a partial unique index so an insolvent
+day produces one row per hour rather than hundreds.
 
 **Widening `transactions_service_type_check` was not optional.** It predated
 `gpu_volume` and `gpu_pod_storage`, both live metered types, and the arrears
@@ -202,4 +205,5 @@ Verified in a rolled-back transaction: an insolvent `gpu_volume` charge writes
 one arrears row; retrying the same hour writes none.
 
 **Nothing settles arrears yet.** The rows make the debt visible; collecting it
-on a later top-up is not implemented.
+on a later top-up is not implemented. Zero arrears rows exist as of 2026-09-03
+17:06 UTC. Open decision in [Current State](07-current-state.md) §3.

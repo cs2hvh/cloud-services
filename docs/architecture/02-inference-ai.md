@@ -4,7 +4,7 @@
 **Upstream provider:** Wokey (migrated from OpenRouter, 2026-08-26)
 **Edge:** Cloudflare Worker `ahura-inference-edge` → `api.ahurasense.com/v1/*`
 **Status:** Live in production, low traffic
-**Last verified against running system:** 2026-09-01
+**Last verified against running system:** 2026-09-01; the billing claim in §3 corrected 2026-09-03
 
 ---
 
@@ -92,9 +92,22 @@ POST /v1/chat/completions
 two concurrent requests can both read "under the limit" and both proceed. A DO
 gives a single-threaded counter per key — the only way the limit is real.
 
-**Spend caps use KV** deliberately: a slightly stale spend number is acceptable
-because the hourly billing sweep is authoritative. Correctness lives in Postgres;
-KV is a fast approximate gate.
+**Spend caps use KV**, and the cap is the only money control on this path. The
+2026-09-01 version of this paragraph said a stale KV counter was acceptable
+"because the hourly billing sweep is authoritative". That was false. Nothing
+bills `inference.usage` to a wallet: the sweep walks `billing.service_meters`,
+no meter is ever opened for gateway traffic, and the usage consumer prices each
+row (`pricing`, `upstream_pricing`) and stops. The KV counter enforces a
+per-key hard cap, not a balance. As of 2026-09-03: 2,083 usage rows, the last on
+2026-08-26, 39 active keys, none of it charged to anyone. Recorded as an open
+decision in [Current State](07-current-state.md) §3.
+
+Two fixes from 2026-09-03 sit in `workers/inference/src` and are **code only
+until `wrangler deploy` runs**: a stored hard cap of `0` now blocks (only `NULL`
+means no cap; `0` used to read as unlimited), and the usage consumer inserts the
+row with `error_code='unpriced'` for an unknown model or empty pricing instead
+of dropping the event, and counts a failed org lookup for spend alerts rather
+than skipping it.
 
 ### The upstream translation seam
 
@@ -231,7 +244,7 @@ All on the Cloudflare Worker's single `* * * * *` trigger, dispatched by minute:
 |---|---|---|
 | serving-pod watchdog | every minute | reap pods serving dead models |
 | finetune watchdog | `*/5` | stale heartbeats, zombie pods |
-| deployment meter | `*/5` | meter BYO serverless deployments (0 today) |
+| deployment meter | `*/5` | meter BYO serverless deployments (0 today); since 2026-09-03 an unknown SKU, a missing payer or a failed inventory read leaves `last_metered_at` where it was (outcomes `unpriced`, `no_payer`) instead of advancing it over an unbilled interval |
 | semantic cache GC | `:00` hourly | bound cache growth |
 
 `inference.cron_runs` records job outcomes — though note only 9 rows, and a
@@ -313,6 +326,9 @@ sync writing 135,000 rows a day.
   `--no-save --legacy-peer-deps`.
 - **`lib/ai/openrouter.ts` is still on OpenRouter** — the AI-agents lane was
   never migrated. It is a separate code path from this service.
+- **Gateway usage is not billed.** No meter, no wallet debit and no ledger row
+  for any of the 2,083 usage rows; the per-key hard cap is the only limit. See
+  §3.
 - **Traffic is near zero.** 2,083 usage rows total, 9 in the last week, and
   those were migration tests. The gateway is alive and idle, not broken.
 - **Fine-tune failure rate is 63%** and unexplained.

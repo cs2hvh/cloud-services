@@ -3,7 +3,7 @@
 **Service:** GPU Cloud (on-demand GPU compute)
 **Upstream provider:** RunPod
 **Status:** Live in production
-**Last verified against running system:** 2026-09-01
+**Last verified against running system:** 2026-09-01; the billing sections (§4 teardown, §5, §7) re-read 2026-09-03
 
 ---
 
@@ -182,12 +182,22 @@ mirrors how RunPod charges us.
 
 ```
 1  Destroy on RunPod   best-effort — DB cleanup must happen regardless
-2  Close billing       prorate the final partial hour, close both meters
+2  Close billing       close both meters; the partial final hour is not billed
 3  Mark terminated     status + billing_end
 ```
 
 Step 1 is best-effort on purpose: if RunPod is unreachable, refusing to close
 billing would keep charging for a pod the customer asked to delete.
+
+Step 2 deducts nothing since 2026-09-03. The v1 "final prorated charge" in
+`closeActiveBilling` was `hourly_rate × (now − last_billed_at)`, and
+`last_billed_at` was only ever advanced by the cron worker deleted on
+2026-08-24, so at teardown it would have re-billed every hour the sweep had
+already charged: a 30-day pod would have paid for 720 hours twice. Found by
+reading the two paths side by side, before any post-relaunch teardown had run.
+The v1 number is now logged for comparison and not deducted; under-charging by
+up to an hour is the safe error while the sweep bills only whole completed
+hours.
 
 ---
 
@@ -197,7 +207,7 @@ billing would keep charging for a pod the customer asked to delete.
 |---|---|---|---|
 | **Inventory sync** | Cloudflare Worker | every minute | Two GraphQL queries (SECURE + COMMUNITY), probes pod sizes 1–10, writes ~94 snapshot rows, prunes past 24h |
 | **GPU reconcile** | Cloudflare Worker | every 5 min | Fetches each live pod from RunPod; detects spot interruption (404), state drift, upstream deletion; **closes billing for pods that vanished** |
-| **Billing sweep** | systemd, Linode | hourly at `:10` | Charges one hour per open meter |
+| **Billing sweep** | `ahura-billing-sweep.timer`, Linode; installed by every deploy since 2026-09-03 | hourly at `:10` | Charges one hour per open meter; records the run in `billing.sweep_runs` |
 
 Both worker jobs are single-flighted through a Redis NX lock, so a slow run
 cannot overlap itself.
@@ -281,14 +291,17 @@ A stopped pod releases the GPU upstream but keeps its disk, and RunPod keeps
 charging us for the disk. Splitting the meters is what lets a stopped pod bill
 storage-only, and what puts GPU and storage on an invoice as separate lines.
 
-`gpu_volume` is a third, independent meter at `$0.0875/GB/month` — network
+`gpu_volume` is a third, independent meter at `$0.08/GB/month` (since
+2026-09-02 12:00 UTC; `$0.0875` before) — network
 volumes outlive pods, so they are metered on their own lifecycle. They had
 **never been billed** before 2026-08-31, because they had no uuid key the
 billing spine could reference.
 
 Meters open in `settleProvision` and close in `closeActiveBilling`, both in
 `config/billing-flow.ts`, so GPU inherits metering rather than implementing it.
-Full detail in the billing architecture doc.
+`settleProvision` still writes the v1 `billing.active_*` row as well, as
+metadata only; nothing bills from it. Full detail in the billing architecture
+doc.
 
 ---
 

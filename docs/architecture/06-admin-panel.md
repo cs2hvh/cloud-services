@@ -40,13 +40,18 @@ neither deploy order broke anything.
 
 ## 2. The old admin still exists
 
-Legacy admin routes remain in the **customer** repo under `app/api/admin/` and
-`app/dashboard/admin/`, served from `ahurasense.com`. It has not been retired.
+The customer app's admin console (`app/dashboard/admin/`: 25 pages, 81
+components, an 18-entry sidebar section, and a probe that called
+`/api/admin/proxmox/hosts` on every dashboard load to decide whether to draw
+it) was removed on 2026-09-03 (`dcaa5b1c`). The 77 API routes under
+`app/api/admin/` remain in the **customer** repo, served from `ahurasense.com`:
+the object-storage and DDoS create flows branch into them for admin users, so
+they could not go in the same change.
 
-Removal is gated on the operator working in `control.ahurasense.com` for long
-enough to be confident nothing is missing. The panel is de-coupled from it
-(commit `a9bbba8d`, zero references verified), so removal is a decision, not a
-blocker.
+Removing the routes is gated on the operator working in `control.ahurasense.com`
+for long enough to be confident nothing is missing. The panel is de-coupled from
+them (commit `a9bbba8d`, re-verified before the console was deleted: zero source
+references), so removal is a decision, not a blocker.
 
 **Until then, the old admin is a second door onto the same data**, and it has
 not always carried the same guards. On 2026-09-03 its GPU pricing route was
@@ -58,6 +63,12 @@ Its Linode plans route, by contrast, was already well-guarded — markup ≥ 1,
 floor ≥ 0, and a 404 anchor on `linode_types` to avoid seeding orphan pricing
 rows. The guards were inherited: the panel's route is a port of it. Do not
 assume the old admin is uniformly unguarded; check.
+
+The same afternoon, `app/api/admin/users` was found using its own guard: it read
+only `user_profiles.roles`, ignored `ADMIN_EMAILS`, and trusted a column that
+any signed-in user could set on their own row, because the table's update
+policy had no `WITH CHECK` ([Data Model](04-data-model.md) §6). It now calls
+the shared `requireAdmin()`, and the policy pins `roles` and `suspend`.
 
 ---
 
@@ -199,6 +210,14 @@ nothing, carrying the authority of a computed verdict.
 That is recorded here rather than quietly amended, because the inference felt
 well-evidenced right up to the moment it was checked against a case it had not
 been derived from.
+
+Since 2026-09-03 the dead-man (`scripts/billing/deadman.ts`) consumes the same
+`meter_coverage()`, treating `stall` and `unexplained` as failures and
+`arrears` as informational, and adds `billing.unbilled_resources()`, which lists
+live rows with no open meter at all (8 vector collections and 3 expired game
+servers on 09-03). The board reads neither `unbilled_resources()` nor
+`billing.sweep_runs` yet; a resource that never got a meter is still invisible
+to it.
 
 ---
 
