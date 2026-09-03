@@ -45,6 +45,7 @@ interface Feed {
       billed: number;
       missing: number;
       hoursByVerdict: { arrears: number; stall: number; unexplained: number };
+      stallWindow: { from: string; to: string; hours: number; meters: number } | null;
       worst: { service_type: string; missing: number } | null;
       windowBug: boolean;
     } | null;
@@ -114,7 +115,12 @@ function HqNode({ data }: NodeProps<Node<HqNodeData>>) {
         {data.value}
       </div>
       {data.sub && (
-        <div className="mt-0.5 truncate text-[10.5px] leading-tight text-white/40">{data.sub}</div>
+        <div
+          className="mt-0.5 truncate text-[10.5px] leading-tight text-white/40"
+          title={data.sub}
+        >
+          {data.sub}
+        </div>
       )}
       {/* Invisible handles on all four sides so edges can approach naturally. */}
       {(["t", "b", "l", "r"] as const).map((id) => {
@@ -328,7 +334,7 @@ function buildGraph(f: Feed): { nodes: Node<HqNodeData>[]; edges: Edge[] } {
             ? "no open meters"
             : cov.missing === 0
               ? "fully billed"
-              : `${cov.missing} hrs MISSING`,
+              : `${cov.missing} meter-hrs MISSING`,
       sub:
         cov === null
           ? "coverage read failed"
@@ -341,14 +347,22 @@ function buildGraph(f: Feed): { nodes: Node<HqNodeData>[]; edges: Edge[] } {
                 "billed > expected — window bug, distrust this node"
               : cov.missing === 0
                 ? `${cov.billed}/${cov.expected} hrs · ${cov.open} meters`
-                : `${cov.billed}/${cov.expected} hrs · ${[
-                    cov.hoursByVerdict.stall > 0 && `stall ${cov.hoursByVerdict.stall}h — page billing`,
+                : [
+                    // Stall headline is WALL-CLOCK — the window an operator
+                    // greps logs for — not summed meter-hours.
+                    cov.stallWindow
+                      ? `STALL ${cov.stallWindow.hours}h · ${cov.stallWindow.from
+                          .slice(5, 16)
+                          .replace("T", " ")}–${cov.stallWindow.to.slice(11, 16)} · ${cov.stallWindow.meters} meters`
+                      : cov.hoursByVerdict.stall > 0 &&
+                        `stall ${cov.hoursByVerdict.stall} meter-hrs`,
                     cov.hoursByVerdict.unexplained > 0 &&
-                      `unexplained ${cov.hoursByVerdict.unexplained}h — human call`,
-                    cov.hoursByVerdict.arrears > 0 && `owed ${cov.hoursByVerdict.arrears}h (receipted)`,
+                      `unexplained ${cov.hoursByVerdict.unexplained}mh — human call`,
+                    cov.hoursByVerdict.arrears > 0 &&
+                      `owed ${cov.hoursByVerdict.arrears}mh (receipted)`,
                   ]
                     .filter(Boolean)
-                    .join(" · ")}`,
+                    .join(" · "),
       tone: covTone,
       wide: true,
     }),
@@ -553,7 +567,7 @@ export default function HqBoard() {
               v: `${feed.billing.charges24hTruncated ? "≥ " : ""}${money(feed.billing.charged24h)}`,
             },
             {
-              k: "hrs unbilled",
+              k: "meter-hrs unbilled",
               v: feed.billing.coverage === null ? "?" : String(feed.billing.coverage.missing),
               bad: (feed.billing.coverage?.missing ?? 0) > 0,
             },

@@ -201,12 +201,19 @@ export async function GET() {
   // counts (no row caps, no client window math) and its verdict replaced the
   // aggregate shape proxy — whose two-way split misfiled "biller skipped a
   // solvent meter" as "chase the customer" on its very first live case.
+  // NB: the RPC counts METER-hours — two meters missing the same two hours
+  // is 4 meter-hours but ONE 2-hour outage. The stall headline is therefore
+  // the WALL-CLOCK span (what an operator greps logs for); meter-hour totals
+  // are labeled as meter-hours everywhere so nobody hunts a 4h outage that
+  // was 2. (Disjoint stalls would merge into one min..max span here — an
+  // overstatement the detail row counts keep honest.)
   let coverage: {
     open: number;
     expected: number;
     billed: number;
     missing: number;
     hoursByVerdict: { arrears: number; stall: number; unexplained: number };
+    stallWindow: { from: string; to: string; hours: number; meters: number } | null;
     worst: { service_type: string; missing: number } | null;
     windowBug: boolean;
   } | null = null;
@@ -219,12 +226,17 @@ export async function GET() {
         expected: number | string;
         billed: number | string;
         missing: number | string;
+        first_missing: string | null;
+        last_missing: string | null;
         verdict: string;
       }>;
       let expected = 0;
       let billed = 0;
       let missing = 0;
       const hoursByVerdict = { arrears: 0, stall: 0, unexplained: 0 };
+      let stallFrom: number | null = null;
+      let stallTo: number | null = null;
+      let stallMeters = 0;
       let worst: { service_type: string; missing: number } | null = null;
       let windowBug = false;
       for (const r of rows) {
@@ -239,12 +251,38 @@ export async function GET() {
           const bucket =
             r.verdict === "arrears" ? "arrears" : r.verdict === "stall" ? "stall" : "unexplained";
           hoursByVerdict[bucket] += mis;
+          if (r.verdict === "stall" && r.first_missing && r.last_missing) {
+            stallMeters += 1;
+            const f = Date.parse(r.first_missing);
+            const l = Date.parse(r.last_missing);
+            if (stallFrom === null || f < stallFrom) stallFrom = f;
+            if (stallTo === null || l > stallTo) stallTo = l;
+          }
           if (worst === null || mis > worst.missing) {
             worst = { service_type: r.service_type, missing: mis };
           }
         }
       }
-      coverage = { open: rows.length, expected, billed, missing, hoursByVerdict, worst, windowBug };
+      const stallWindow =
+        stallFrom !== null && stallTo !== null
+          ? {
+              from: new Date(stallFrom).toISOString(),
+              to: new Date(stallTo).toISOString(),
+              // period_start hours are inclusive: 07:00..08:00 = 2 hours.
+              hours: Math.round((stallTo - stallFrom) / 3600000) + 1,
+              meters: stallMeters,
+            }
+          : null;
+      coverage = {
+        open: rows.length,
+        expected,
+        billed,
+        missing,
+        hoursByVerdict,
+        stallWindow,
+        worst,
+        windowBug,
+      };
     }
   }
 
