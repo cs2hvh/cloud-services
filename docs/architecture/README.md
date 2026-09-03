@@ -10,9 +10,14 @@ it — because the reasoning is what stops the same defect being reintroduced.
 
 | # | Document | Covers |
 |---|---|---|
+| 00 | [Platform Overview](00-platform-overview.md) | **start here** — services, provisioning-to-charge flow, providers, deployment, scheduled work |
 | 01 | [GPU Pods](01-gpu-pods.md) | RunPod-backed GPU compute, inventory sync, network volumes, terminal proxy |
 | 02 | [Inference & AI Labs](02-inference-ai.md) | OpenAI-compatible gateway on Cloudflare, model catalogue, fine-tuning, vectors, playground |
 | 03 | [Pricing & Billing](03-pricing-and-billing.md) | the price book, meters, hourly charge spine, discounts, sweep, watchdog |
+| 04 | [Data Model](04-data-model.md) | schemas, RLS posture, guarded functions, the audit log, dropped tables |
+| 05 | [Coupons & Discounts](05-coupons-and-discounts.md) | promocodes vs rate discounts, redemption order, arrears |
+| 06 | [Admin Panel](06-admin-panel.md) | the operator surface, the two-book pricing problem, the monitor board |
+| 07 | [Current State](07-current-state.md) | what works today, open decisions, known gaps |
 
 ## Conventions
 
@@ -22,3 +27,11 @@ it — because the reasoning is what stops the same defect being reintroduced.
   path is worse than none, because it is trusted.
 - Where a design choice was made to prevent a specific past failure, the failure
   is named. "Don't do X" is forgettable; "X cost $4,629.91 on 2026-08-30" is not.
+
+## If you read only one thing
+
+[Current State](07-current-state.md) section 6. Almost every defect this platform
+has paid for was a signal that read healthy while being wrong — a dropped table
+returning no rows became "free", a dead audit log became "no activity", a sweep
+with an eleven-hour hole reported "last ran: minutes ago". Every fix was the same
+shape: make the empty case say something instead of resolving to a plausible zero.

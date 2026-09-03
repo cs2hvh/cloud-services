@@ -573,3 +573,113 @@ stripped `service_role` — it inherits EXECUTE from PUBLIC rather than holding 
 directly. EXECUTE is now granted explicitly. Worth recording that it failed
 **safely**: the sweep reported a permission error and charged nothing, rather
 than charging wrongly.
+
+---
+
+# Addendum — 2026-09-03
+
+Everything above was written before the read-path rewire. This addendum records
+what changed and supersedes any earlier statement it contradicts.
+
+## The dashboard now quotes from the book
+
+Until 2026-09-02 **nothing customer-facing read `billing.service_pricing`.**
+Three separate paths quoted instead, and two of them failed silently:
+
+| Path | Read | State |
+|---|---|---|
+| `config/pricing.ts` | `public.products` | dropped 2026-08-31 |
+| `lib/pricing/plan-catalog.ts` | `public.instance_plans` | dropped 2026-08-31 |
+| `createPod` | `public.gpu_pricing` | live, separate book |
+
+`products` returning nothing became `{ initialCost: 0, hourlyRate: 0 }` — a
+service whose price could not be found was quoted **and billed** as free, on the
+provisioning path. `plan-catalog` was worse: it caught its own failure, logged
+*"using code defaults"*, and served hardcoded `DEFAULT_PLANS`, so the VPS picker
+kept working, looked correct, and ignored the admin panel entirely.
+
+`lib/pricing/price-book.ts` is now the single place the app asks what something
+costs. `resolveHourly()` deliberately mirrors `billing.resolve_hourly_rate()`,
+720 h/month included — quote and charge agree only if they do identical
+arithmetic. **A missing price throws.** Every path this replaced preferred a
+plausible zero to an honest error.
+
+Two things this turned up:
+
+- **Setup fees would have been silently zeroed.** The old catalogue carried
+  `fixed_price` alongside `price`; the book modelled only the recurring half.
+  `service_pricing` gained `setup_fee_usd`, backfilled from the archive — 14
+  live fees, all $5 (8 Kubernetes plans, 3 app sizes, object storage, 2 database
+  plans). `set_price` carries an omitted fee forward.
+- **The test suite was pinning the bug.** `tests/unit/pricing.test.ts` asserted
+  twice that a missing price returns `hourlyRate: 0`. A defect written down as
+  the specification, which converts every attempt to fix it into a broken build.
+  Inverted.
+
+## Resold compute bills the rate frozen at create
+
+`charge_service_hour` resolves the price live by `(service_type, plan_key)` and
+returns `no-price` before writing anything if it misses. Compute had two
+disjoint key spaces:
+
+```
+billing.service_pricing   a-1, s-2…s-9, d-2…d-32     self-hosted   13 rows
+public.linode_types       g6-standard-N, g1-*         resold        75 rows
+```
+
+Not one key appeared in both. A Linode VM opened a meter keyed
+`g6-standard-1`, found nothing, and was **quoted at markup and billed nothing,
+forever**. Confirmed on a real VM created through the customer UI: the quote was
+right, the rate froze onto the server row correctly, the meter opened with the
+right key, and the charge never happened.
+
+`lib/billing/meters.ts:64` documents this exact failure in order to prevent it,
+then strips the `linode:` prefix and stops — `linode:g6-standard-1` becomes
+`g6-standard-1`, which is still not `s-3`. The guard names two key spaces and
+only removes a prefix.
+
+Resold compute now bills `servers.hourly_cost`, written at create by both create
+paths. A `compute` / `*` passthrough row (`markup`, `1.0`) plus a `'*'` fallback
+in `current_price` makes the lookup resolve. Quote and charge are the same number
+by construction.
+
+## Money and its ledger row commit together
+
+Seventeen call sites moved a balance and then wrote `billing.transactions` as a
+separate, discardable step — either a floating `.catch(console.warn)` or a
+try/catch that logged and continued. The money had already moved; a failed write
+was simply lost, with no retry, queue or reconciliation.
+
+`billing.move_credit(...)` does both in one transaction, so a constraint
+violation rolls the money back rather than leaving it unexplained. That is the
+property `charge_service_hour` already had and nothing else did.
+
+Three `save_transaction` sites remain and are correct: the arrears row in
+`close_active_service` (no money moves, so nothing to be atomic with) and the
+two Stripe webhook paths (which claim a `pending` row *before* the money moves
+and complete it after, so the record cannot be lost).
+
+## Usage rows carry their balance
+
+`account_ledger` hardcoded `NULL` for `balance_after` on the whole usage half of
+the union, so the rows a customer most wants explained — the hourly charges that
+quietly drain a wallet — were the only ones with no running balance.
+`charge_service_hour` now records the balance its own deduction produced, and
+the daily rollup reports the balance left by the last charge of that day.
+
+Deriving it backwards from the current balance would have fixed history too, and
+would have been a lie: ledger completeness was exactly what was broken, and a
+derived balance silently absorbs every missing row into a wrong number. Rows
+charged before this keep a NULL the UI renders as nothing.
+
+## Arrears
+
+An hour the wallet cannot cover is now recorded as owed rather than forgotten.
+See [Coupons & Discounts](05-coupons-and-discounts.md) §3.
+
+## Coverage monitoring
+
+`billing.meter_coverage()` — hours elapsed vs hours billed per open meter, with
+a verdict. "When did the sweep last run" reads green while a hole sits behind
+it. See [Current State](07-current-state.md) §4 and
+[Admin Panel](06-admin-panel.md) §5.
