@@ -186,12 +186,15 @@ export async function createGameServer(input: CreateInput): Promise<CreateGameSe
       chargeTransactionId = movement.transactionId;
       charged = true;
     } catch {
-      const balance = await Billing.get_balance(input.userId).catch(() => 0);
+      // null, not 0: a balance that could not be read must not be quoted as $0.00.
+      const balance = await Billing.get_balance(input.userId).catch(() => null);
       return {
         ok: false,
         error: {
           code: "INSUFFICIENT_FUNDS",
-          message: `Insufficient balance. This plan costs $${monthlyPrice.toFixed(2)}/month — your balance is $${balance.toFixed(2)}.`,
+          message:
+            `Insufficient balance. This plan costs $${monthlyPrice.toFixed(2)}/month` +
+            (balance === null ? "." : ` — your balance is $${balance.toFixed(2)}.`),
           required: monthlyPrice,
         },
       };
@@ -505,7 +508,10 @@ export async function reconcileInstallingGameServers(onlyServerId?: number): Pro
   if (error) throw new Error(`install reconcile query failed: ${error.message}`);
 
   const summary = { checked: 0, completed: 0, failed: 0 };
-  const catalog = await getGameCatalog(supabase).catch(() => []);
+  // No `.catch(() => [])`: an unreadable catalog used to become an empty one
+  // here, and every install then completed with requiresEula=false and a
+  // generic game label. The throw reaches the callers' own error paths.
+  const catalog = await getGameCatalog(supabase);
 
   for (const row of data ?? []) {
     summary.checked++;

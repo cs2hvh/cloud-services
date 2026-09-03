@@ -1,15 +1,17 @@
 // Runtime game-plan + game-catalog readers with a ~60s in-memory cache.
-// Mirrors lib/pricing/plan-catalog.ts (compute). DB is the source of truth;
-// DEFAULT_GAME_PLANS is only a fallback for transient DB errors.
+// Mirrors lib/pricing/plan-catalog.ts (compute). DB is the source of truth,
+// and the ONLY source: a catalog that cannot be read throws.
+//
+// It used to catch the plan query error and serve DEFAULT_GAME_PLANS with
+// isActive forced true — hardcoded prices, every plan on sale, whatever the
+// admin panel said and whether or not the table still existed. Nobody sees a
+// broken page that way; they see prices that are wrong. plan-catalog.ts had
+// the same fallback for compute and removed it for the same reason; the
+// constant is deleted with it.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import {
-  DEFAULT_GAME_PLANS,
-  type GameCatalogEntry,
-  type GameEnvField,
-  type GamePlan,
-} from "./game-plans";
+import type { GameCatalogEntry, GameEnvField, GamePlan } from "./game-plans";
 
 export type CatalogGamePlan = GamePlan & { isActive: boolean; sortOrder: number };
 
@@ -29,7 +31,7 @@ type PlanRow = {
   databases: number;
   backups: number;
   extra_allocations: number;
-  monthly_price: number | string;
+  monthly_price: number | string | null;
   allowed_regions: string[] | null;
   allowed_host_ids: string[] | null;
   is_active: boolean;
@@ -59,22 +61,19 @@ export async function getAllGamePlans(supabase: SupabaseClient): Promise<Catalog
   const now = Date.now();
   if (planCache && now - planCache.fetchedAt < CACHE_TTL_MS) return planCache.value;
 
-  try {
-    const { data, error } = await supabase
-      .from("game_server_plans")
-      .select(
-        "slug, game_type, name, tagline, cpu_pct, memory_mb, disk_gb, swap_mb, databases, backups, extra_allocations, monthly_price, allowed_regions, allowed_host_ids, is_active, sort_order",
-      )
-      .order("sort_order", { ascending: true })
-      .order("slug", { ascending: true });
-    if (error) throw error;
-    const plans = ((data ?? []) as PlanRow[]).map(rowToPlan);
-    planCache = { value: plans, fetchedAt: now };
-    return plans;
-  } catch (e) {
-    console.warn("[game-plan-catalog] DB query failed, using code defaults:", e);
-    return DEFAULT_GAME_PLANS.map((p) => ({ ...p, isActive: true, sortOrder: 0 }));
-  }
+  const { data, error } = await supabase
+    .from("game_server_plans")
+    .select(
+      "slug, game_type, name, tagline, cpu_pct, memory_mb, disk_gb, swap_mb, databases, backups, extra_allocations, monthly_price, allowed_regions, allowed_host_ids, is_active, sort_order",
+    )
+    .order("sort_order", { ascending: true })
+    .order("slug", { ascending: true });
+  // No silent fallback — see the header. The route serving this returns an
+  // error instead of a menu, which is the honest outcome.
+  if (error) throw new Error(`game plan catalog unavailable: ${error.message}`);
+  const plans = ((data ?? []) as PlanRow[]).map(rowToPlan);
+  planCache = { value: plans, fetchedAt: now };
+  return plans;
 }
 
 export async function getActiveGamePlans(supabase: SupabaseClient): Promise<CatalogGamePlan[]> {
@@ -98,10 +97,9 @@ export async function getGameCatalog(supabase: SupabaseClient): Promise<GameCata
       "id, display_name, description, nest_id, egg_id, docker_image, startup, default_environment, env_schema, port_plan, credential_field, min_memory_mb, min_disk_gb, requires_eula, is_active, sort_order",
     )
     .order("sort_order", { ascending: true });
-  if (error) {
-    console.warn("[game-plan-catalog] catalog query failed:", error.message);
-    return catalogCache?.value ?? [];
-  }
+  // Same rule as the plans: no stale snapshot, no empty list. A storefront
+  // with no games and a database that cannot be reached must not look alike.
+  if (error) throw new Error(`game catalog unavailable: ${error.message}`);
   const entries = ((data ?? []) as CatalogRow[]).map(rowToCatalog);
   catalogCache = { value: entries, fetchedAt: now };
   return entries;
@@ -121,6 +119,17 @@ export function invalidateGamePlanCache(): void {
 }
 
 function rowToPlan(row: PlanRow): CatalogGamePlan {
+  // Number(null) and Number("") are both 0: a plan whose price was never
+  // written would be sold — and renewed — for nothing, and the picker would
+  // show it that way. A NULL/NaN price is a broken row, named by slug so the
+  // fix is one UPDATE away.
+  const monthlyPrice =
+    row.monthly_price === null || row.monthly_price === undefined || String(row.monthly_price).trim() === ""
+      ? NaN
+      : Number(row.monthly_price);
+  if (!Number.isFinite(monthlyPrice)) {
+    throw new Error(`game plan "${row.slug}" has no readable monthly_price (${JSON.stringify(row.monthly_price)})`);
+  }
   return {
     slug: row.slug,
     gameType: row.game_type,
@@ -133,7 +142,7 @@ function rowToPlan(row: PlanRow): CatalogGamePlan {
     databases: row.databases,
     backups: row.backups,
     extraAllocations: row.extra_allocations,
-    monthlyPrice: Number(row.monthly_price),
+    monthlyPrice,
     allowedRegions: row.allowed_regions ?? undefined,
     allowedHostIds: row.allowed_host_ids ?? undefined,
     isActive: row.is_active,

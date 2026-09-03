@@ -22,6 +22,8 @@
  * and reduced its own RLS to decoration.
  */
 
+import { selectAll as selectAllPages } from "../supabase/select-all.ts";
+
 const SCHEMA = "paas";
 
 function env(name: string): string {
@@ -77,6 +79,23 @@ export const db = {
   update: <T>(table: string, query: string, patch: unknown) =>
     req<T[]>("PATCH", `${table}?${query}`, patch, "return=representation"),
   delete: (table: string, query: string) => req<null>("DELETE", `${table}?${query}`),
+  /**
+   * Every row, in pages. PostgREST caps one response at 1000 rows whatever
+   * `limit` asks for, so a plain `select` over a table past that size returns
+   * the first 1000 and no error — and meter-apps.ts would quietly stop
+   * charging every project after the thousandth. `query` MUST carry an
+   * `order=` that is total (a unique column, or created_at,id) or pages can
+   * overlap.
+   */
+  selectAll: <T>(table: string, query: string) =>
+    selectAllPages<T>(
+      async (from, to) => ({
+        // req throws DbError on a failed page; nothing here turns that into [].
+        data: await req<T[]>("GET", `${table}?${query}&limit=${to - from + 1}&offset=${from}`),
+        error: null,
+      }),
+      { label: `paas/${table}` },
+    ),
   /**
    * Call a SECURITY DEFINER function. Promoted here from an inline copy in
    * drift-sweep.ts once a second caller appeared — app-deploy-3 was right not
@@ -325,7 +344,9 @@ export const teams = {
 };
 
 export const projects = {
-  list: () => db.select<ProjectRow>("projects", "select=*&deleted_at=is.null&order=created_at"),
+  // Paged: this list feeds the meter, and a capped read would silently drop
+  // every project past the first thousand from billing.
+  list: () => db.selectAll<ProjectRow>("projects", "select=*&deleted_at=is.null&order=created_at,id"),
   byRef: async (ref: string) =>
     (await db.select<ProjectRow>("projects", `select=*&ref=eq.${ref}`))[0] ?? null,
 

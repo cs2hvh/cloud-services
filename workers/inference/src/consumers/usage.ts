@@ -23,6 +23,14 @@ interface ModelOffPeak {
   discount_pct?: number;
 }
 
+/**
+ * Written to usage.error_code when a SUCCESSFUL request could not be priced
+ * (model missing from inference.models, or a pricing JSON with no rates).
+ * inference.usage has no metadata/jsonb column, so this is the only per-row
+ * place to flag it. Find them: WHERE status = 'success' AND error_code = 'unpriced'.
+ */
+const UNPRICED_MARKER = "unpriced";
+
 interface PricingInfo {
   pricing: ModelPricing;
   /**
@@ -79,10 +87,32 @@ export async function handleUsageBatch(
   }
 
   // 2. Build inference.usage rows with computed cost
+  let unpriced = 0;
   const rows = batch.messages.map((msg) => {
     const event = msg.body;
     const info = pricingMap.get(event.modelId);
     const { costCents, upstreamCostCents, isOffPeak } = computeCost(event, info);
+
+    // A successful call we cannot price bills 0 while the upstream has already
+    // been paid. Previously silent: no log, no counter, an ordinary-looking
+    // row. Log it, count it, and mark the row so it can be found and
+    // re-priced. Error rows are legitimately 0 and are not flagged.
+    const isUnpriced =
+      event.status === "success" && (!info || !hasUsablePricing(info.pricing));
+    if (isUnpriced) {
+      unpriced++;
+      console.error(
+        JSON.stringify({
+          level: "error",
+          scope: "usage-consumer",
+          message: "Unpriced usage billed at 0",
+          reason: info ? "no_pricing" : "unknown_model",
+          model_id: event.modelId,
+          org_id: event.orgId,
+          request_id: event.requestId,
+        })
+      );
+    }
 
     return {
       org_id: event.orgId,
@@ -113,7 +143,9 @@ export async function handleUsageBatch(
       latency_ms: event.latencyMs,
       ttft_ms: event.ttftMs,
       status: event.status,
-      error_code: event.errorCode,
+      // Success rows carry no error code, so the slot doubles as the unpriced
+      // marker (see UNPRICED_MARKER). A real code, if any, is never overwritten.
+      error_code: isUnpriced ? (event.errorCode ?? UNPRICED_MARKER) : event.errorCode,
       cache_kind: event.cacheKind ?? "none",
       created_at: event.occurredAt,
     };
@@ -169,7 +201,7 @@ export async function handleUsageBatch(
   //     whether the new total crosses 80%/100% of the org's monthly
   //     budget OR 90%/100% of the hard cap. Dedup via KV so we never
   //     fire the same threshold twice in one month.
-  await fireSpendAlerts(env, totalsByOrg, month);
+  const { orgsUnchecked } = await fireSpendAlerts(env, totalsByOrg, month);
 
   batch.ackAll();
 
@@ -180,8 +212,21 @@ export async function handleUsageBatch(
       message: "Flushed usage batch",
       count: rows.length,
       total_cents: rows.reduce((sum, r) => sum + r.cost_cents, 0),
+      // Successful rows inserted at cost 0 because the model/pricing was
+      // unknown — each one is also logged individually above.
+      unpriced,
+      // Orgs whose spend thresholds could not be evaluated this batch.
+      spend_alert_orgs_unchecked: orgsUnchecked,
     })
   );
+}
+
+/**
+ * True when the pricing JSON carries at least one numeric rate. The column
+ * defaults to '{}', and rateCost's `?? 0` would price that as a free model.
+ */
+function hasUsablePricing(p: ModelPricing): boolean {
+  return Number.isFinite(p.input_cents_per_mtok) || Number.isFinite(p.output_cents_per_mtok);
 }
 
 /**
@@ -298,13 +343,17 @@ const THRESHOLDS: ThresholdSpec[] = [
  * to cross, dedupes against KV, and fires one POST per crossing to the
  * control-plane internal endpoint. Best-effort throughout — alert
  * failures NEVER block the usage-batch ack.
+ *
+ * Returns how many orgs in the batch had NO threshold evaluation (cap lookup
+ * failed, or the org row was missing) so the caller can count it: the KV
+ * counters are already bumped, so a crossing missed here is never re-checked.
  */
 async function fireSpendAlerts(
   env: Env,
   totalsByOrg: Map<string, { prev: number; next: number }>,
   month: string
-): Promise<void> {
-  if (totalsByOrg.size === 0) return;
+): Promise<{ orgsUnchecked: number }> {
+  if (totalsByOrg.size === 0) return { orgsUnchecked: 0 };
 
   const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
@@ -312,14 +361,42 @@ async function fireSpendAlerts(
   });
 
   const orgIds = [...totalsByOrg.keys()];
-  const { data: orgRows } = await supabase
+  const { data: orgRows, error: orgErr } = await supabase
     .schema("inference")
     .from("orgs")
     .select("id, monthly_budget_cents, hard_cap_cents")
     .in("id", orgIds)
     .returns<Array<{ id: string; monthly_budget_cents: number | null; hard_cap_cents: number | null }>>();
 
-  if (!orgRows || orgRows.length === 0) return;
+  // A failed cap lookup used to discard `error` and return as if no threshold
+  // was due. It is not "no alerts due" — it is "we don't know", and the org
+  // owner may have just crossed their cap. Log and count it.
+  if (orgErr || !orgRows) {
+    console.error(
+      JSON.stringify({
+        level: "error",
+        scope: "spend-alert",
+        message: "Org cap lookup failed; spend thresholds not evaluated",
+        org_ids: orgIds,
+        err: orgErr?.message ?? "no rows returned",
+      })
+    );
+    return { orgsUnchecked: orgIds.length };
+  }
+
+  const seen = new Set(orgRows.map((r) => r.id));
+  const orgsUnchecked = orgIds.filter((id) => !seen.has(id)).length;
+  if (orgsUnchecked > 0) {
+    console.warn(
+      JSON.stringify({
+        level: "warn",
+        scope: "spend-alert",
+        message: "Orgs with usage but no inference.orgs row; thresholds not evaluated",
+        org_ids: orgIds.filter((id) => !seen.has(id)),
+      })
+    );
+  }
+  if (orgRows.length === 0) return { orgsUnchecked };
 
   // Compute seconds until the end of the current UTC month — used as
   // the dedup-key TTL so alerts auto-reset on the 1st.
@@ -356,6 +433,7 @@ async function fireSpendAlerts(
   }
 
   await Promise.allSettled(work);
+  return { orgsUnchecked };
 }
 
 async function maybeFireOne(

@@ -31,19 +31,19 @@ interface RpcClient {
 }
 
 /**
- * `no-record` is allowed through, and that is a POLICY CHOICE rather than an
- * oversight.
+ * `no-record` REFUSES.
  *
- * On this database 24 of 37 accounts have no `billing.user_credits` row — every
- * user who predates credit billing. Treating a missing row as a zero balance
- * would lock all of them out of a platform they are already paying for, to close
- * a leak they are not causing. Treating a genuinely spent balance as fine would
- * be free compute forever.
+ * It used to be allowed through, as a policy choice: 24 of 37 accounts had no
+ * `billing.user_credits` row (every user predating credit billing), and locking
+ * them out to close a leak they were not causing looked wrong. What allowing it
+ * actually did was start the deploy and then have `paas.charge_project_hour`
+ * answer `insufficient` every hour for as long as the pod ran — an app nobody
+ * could be charged for, running, with the refusal arriving one hour late and
+ * stopping nothing. The gate is where a missing row has to be answered, and the
+ * answer names it so the customer knows what to do.
  *
- * So the two are answered differently: `short` refuses, `no-record` is allowed
- * and REPORTED, so the gap shows up in logs and in the metering sweep rather
- * than being silently absorbed. Flipping it to a refusal is one branch here,
- * once every account has a record.
+ * `short` and `no-record` remain distinct states — a missing row is not an
+ * empty wallet, and `balance` stays null — but both refuse.
  */
 export function decide(state: string, balance: number | null, hourly: number): Affordability {
   switch (state) {
@@ -59,7 +59,7 @@ export function decide(state: string, balance: number | null, hourly: number): A
         state: "no-record",
         balance: null,
         hourly,
-        reason: "No credit account yet. Allowed, and reported.",
+        reason: `No credit account: no balance to draw on, $${hourly.toFixed(6)} needed for the first hour. Add credit to deploy.`,
       };
     case "ok":
       if (balance !== null && balance < hourly) {
@@ -85,9 +85,9 @@ export function decide(state: string, balance: number | null, hourly: number): A
   }
 }
 
-/** True when a deploy should be REFUSED. Unknown refuses — see `decide`. */
+/** True when a deploy should be REFUSED. Unknown and no-record refuse — see `decide`. */
 export function shouldRefuse(a: Affordability): boolean {
-  return a.state === "short" || a.state === "no-payer" || a.state === "unknown";
+  return a.state === "short" || a.state === "no-record" || a.state === "no-payer" || a.state === "unknown";
 }
 
 export async function affordability(

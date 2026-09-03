@@ -39,8 +39,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     try {
       const { completed } = await reconcileInstallingGameServers(id);
       if (completed > 0) server = (await getOwnedServer(id, user.id)) ?? server;
-    } catch {
-      /* best-effort */
+    } catch (e) {
+      // Best-effort — the cron sweep retries — but not silent: an unreadable
+      // catalog or panel must leave a trace, not just a server that stays
+      // "installing" with nothing in the logs.
+      console.warn(`[game-server-route] opportunistic reconcile for server ${id} failed:`, e instanceof Error ? e.message : e);
     }
   }
 

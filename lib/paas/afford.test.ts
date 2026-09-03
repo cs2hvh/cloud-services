@@ -26,15 +26,16 @@ test("exactly one hour's worth is enough — the boundary is inclusive", () => {
   assert.equal(decide("ok", HOURLY - 0.000001, HOURLY).state, "short");
 });
 
-test("NO CREDIT RECORD IS NOT A ZERO BALANCE", () => {
-  // The distinction this whole module exists for. On the live database 24 of 37
-  // accounts have no billing.user_credits row — every user predating credit
-  // billing. Refusing them would lock existing customers out of a platform they
-  // already pay for, to close a leak they are not causing.
+test("NO CREDIT RECORD IS NOT A ZERO BALANCE — and it REFUSES", () => {
+  // A missing billing.user_credits row is reported as its own state, never as
+  // $0 — but it refuses. It used to be allowed through, and the deploy then ran
+  // while charge_project_hour answered `insufficient` every hour: free compute
+  // with a refusal that arrived an hour late and stopped nothing.
   const a = decide("no-record", null, HOURLY);
   assert.equal(a.state, "no-record");
-  assert.equal(shouldRefuse(a), false, "an account that predates billing must not be locked out");
+  assert.equal(shouldRefuse(a), true, "a deploy nobody can be charged for must not start");
   assert.equal(a.balance, null, "null, never 0 — a missing row is not an empty wallet");
+  assert.match(a.reason, /credit account/);
 });
 
 test("a project nobody can be billed for is REFUSED and says so", () => {

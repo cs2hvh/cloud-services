@@ -13,6 +13,7 @@ import { createClient } from "@supabase/supabase-js";
 import { authenticateUser } from "@/lib/auth/server-auth";
 import { limitByUser } from "@/lib/cooldown/userbased";
 import { getActiveOrgForUser } from "@/lib/inference/orgs";
+import { selectAll } from "@/lib/supabase/select-all";
 
 interface UsageRow {
   created_at: string;
@@ -58,29 +59,36 @@ export async function GET(request: NextRequest) {
   since.setUTCHours(0, 0, 0, 0);
   since.setUTCDate(since.getUTCDate() - (days - 1));
 
-  // Pull all rows in window for this org (org-scoped via WHERE)
-  // For 100k req/hour scale we'll add pagination in Phase 2; for now full pull
-  // is fine since most orgs see <10k req/day in early access.
-  const { data, error } = await supabase
-    .schema("inference")
-    .from("usage")
-    .select(
-      "created_at, api_key_id, model_id, modality, input_tokens, output_tokens, cost_cents, latency_ms, status, billed_to, cache_kind"
-    )
-    .eq("org_id", org.org_id)
-    .gte("created_at", since.toISOString())
-    .order("created_at", { ascending: false })
-    .returns<UsageRow[]>();
-
-  if (error) {
+  // Pull all rows in window for this org (org-scoped via WHERE), in pages.
+  // PostgREST caps one response at 1000 rows regardless of the limit asked
+  // for, so the single select this replaced summed a busy org's month over
+  // its most recent 1000 requests and reported that as the total.
+  let rows: UsageRow[];
+  try {
+    rows = await selectAll<UsageRow>(
+      (from, to) =>
+        supabase
+          .schema("inference")
+          .from("usage")
+          .select(
+            "created_at, api_key_id, model_id, modality, input_tokens, output_tokens, cost_cents, latency_ms, status, billed_to, cache_kind"
+          )
+          .eq("org_id", org.org_id)
+          .gte("created_at", since.toISOString())
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: false })
+          .range(from, to)
+          .returns<UsageRow[]>(),
+      { label: "inference.usage" }
+    );
+  } catch (error) {
+    // Prevents: a failed page answering 200 with a partial (or empty) summary.
     console.error("[Inference Usage] fetch error:", error);
     return NextResponse.json(
       { error: "Failed to fetch usage" },
       { status: 500 }
     );
   }
-
-  const rows = data ?? [];
 
   // ── Aggregations ──────────────────────────────────────────────
   const month = new Date().toISOString().slice(0, 7);

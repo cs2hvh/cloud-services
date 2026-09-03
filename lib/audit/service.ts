@@ -4,6 +4,7 @@
 // ============================================
 
 import { createServiceClient } from "@/lib/supabase/server";
+import { selectAll } from "@/lib/supabase/select-all";
 import type {
   CreateAuditLogParams,
   AuditLogEntry,
@@ -124,15 +125,19 @@ export const AuditLogService = {
 
       const { data, error, count } = await query;
 
+      // Prevents: an unreachable audits schema rendering as "no activity" —
+      // that exact failure hid an unexposed schema for 8 days.
       if (error) {
-        console.error(`[AuditLogService.query] Error: ${error.message}`);
-        return { data: [], total: 0 };
+        throw new Error(`[AuditLogService.query] audit log read failed: ${error.message}`);
+      }
+      if (count === null) {
+        throw new Error("[AuditLogService.query] audit log count missing from response");
       }
 
-      return { data: (data as AuditLogEntry[]) || [], total: count || 0 };
+      return { data: (data as AuditLogEntry[]) || [], total: count };
     } catch (err) {
       console.error(`[AuditLogService.query] Error: ${err}`);
-      return { data: [], total: 0 };
+      throw err;
     }
   },
 
@@ -216,17 +221,17 @@ export const AuditLogService = {
         .order("created_at", { ascending: false })
         .limit(limit);
 
+      // Prevents: a failed read rendering the user's activity feed as empty.
       if (error) {
-        console.error(
-          `[AuditLogService.getRecentByUser] Error: ${error.message}`
+        throw new Error(
+          `[AuditLogService.getRecentByUser] audit log read failed: ${error.message}`
         );
-        return [];
       }
 
       return (data as AuditLogEntry[]) || [];
     } catch (err) {
       console.error(`[AuditLogService.getRecentByUser] Error: ${err}`);
-      return [];
+      throw err;
     }
   },
 
@@ -244,23 +249,45 @@ export const AuditLogService = {
     try {
       const supabase = await createServiceClient();
 
-      let query = supabase.schema('audits').from('audit_logs').select("*");
+      // Applied to both reads below so the count and the breakdown describe
+      // the same window.
+      const scoped = <
+        Q extends {
+          gte: (column: string, value: string) => Q;
+          lte: (column: string, value: string) => Q;
+        },
+      >(
+        query: Q
+      ): Q => {
+        let q = query;
+        if (filters?.date_from) q = q.gte("created_at", filters.date_from);
+        if (filters?.date_to) q = q.lte("created_at", filters.date_to);
+        return q;
+      };
 
-      if (filters?.date_from) {
-        query = query.gte("created_at", filters.date_from);
+      // `total` is the server's exact count, not the length of whatever came
+      // back: PostgREST caps a response at 1000 rows, so the old
+      // `logs.length` reported every busy window as exactly 1000.
+      const { count, error: countError } = await scoped(
+        supabase.schema('audits').from('audit_logs').select("*", { count: "exact", head: true })
+      );
+      if (countError) {
+        throw new Error(`[AuditLogService.getStats] audit log count failed: ${countError.message}`);
       }
-      if (filters?.date_to) {
-        query = query.lte("created_at", filters.date_to);
+      if (count === null) {
+        throw new Error("[AuditLogService.getStats] audit log count missing from response");
       }
 
-      const { data, error } = await query;
-
-      if (error) {
-        console.error(`[AuditLogService.getStats] Error: ${error.message}`);
-        return { total: 0, by_action: {}, by_service: {} };
-      }
-
-      const logs = (data as AuditLogEntry[]) || [];
+      // Paged read of just the two grouped columns. Throws on a failed page
+      // rather than reporting an unreachable table as zero activity.
+      const logs = await selectAll<Pick<AuditLogEntry, "action" | "service_type">>(
+        (from, to) =>
+          scoped(supabase.schema('audits').from('audit_logs').select("action, service_type"))
+            .order("created_at", { ascending: false })
+            .order("id", { ascending: false })
+            .range(from, to),
+        { label: "audits.audit_logs" }
+      );
 
       // Compute stats
       const by_action: Record<string, number> = {};
@@ -273,13 +300,13 @@ export const AuditLogService = {
       });
 
       return {
-        total: logs.length,
+        total: count,
         by_action,
         by_service,
       };
     } catch (err) {
       console.error(`[AuditLogService.getStats] Error: ${err}`);
-      return { total: 0, by_action: {}, by_service: {} };
+      throw err;
     }
   },
 };

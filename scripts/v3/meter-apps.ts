@@ -71,29 +71,44 @@ async function main(): Promise<void> {
   // list, which would silently mean "nothing is running, bill nobody" and hand
   // out free compute for the duration of an outage.
   let running: Set<string> | null = null;
+  let unreadable = "API server failed its health check";
   try {
     const k = kube(loadKubeconfig(KUBECONFIG));
     if (await k.healthz()) {
-      const pods = await k.get<{ items?: Array<{ metadata?: { name?: string }; status?: { phase?: string } }> }>(
-        "/api/v1/pods",
-        true,
-      );
-      running = new Set(
-        (pods?.items ?? [])
-          .filter((p) => p.status?.phase === "Running")
-          .map((p) => p.metadata?.name ?? "")
-          .filter(Boolean),
-      );
+      // allowMissing is OFF. A 404 on /api/v1/pods is a broken API server, not
+      // an empty cluster — and with it on, the 404 came back as null, `?? []`
+      // turned null into "no pods", every project was idle and the run exited
+      // clean having billed nothing: the exact outcome the header rules out.
+      const body: unknown = await k.get("/api/v1/pods");
+      // The client returns a STRING for a body that is not JSON (see the note in
+      // k8s/client.ts), and a proxy error page is one; an object with no `items`
+      // array is unreadable too. Neither is a pod list, so neither may become
+      // an empty one. Left null so the guard below fires.
+      const items = (body as { items?: unknown } | null)?.items;
+      if (!Array.isArray(items)) {
+        unreadable =
+          typeof body === "string"
+            ? `pod list body is not JSON: ${body.slice(0, 80)}`
+            : `pod list has no items array (${body === null ? "null body" : `items is ${typeof items}`})`;
+      } else {
+        running = new Set(
+          (items as Array<{ metadata?: { name?: string }; status?: { phase?: string } }>)
+            .filter((p) => p.status?.phase === "Running")
+            .map((p) => p.metadata?.name ?? "")
+            .filter(Boolean),
+        );
+      }
     }
-  } catch {
+  } catch (e) {
     running = null;
+    unreadable = (e as Error).message.slice(0, 200);
   }
 
   console.log(`\nMetering — hour beginning ${PERIOD.toISOString()}  ${APPLY ? "APPLYING" : "DRY RUN"}`);
   line();
 
   if (running === null) {
-    console.error(`  CLUSTER UNREADABLE — billed nothing.`);
+    console.error(`  CLUSTER UNREADABLE — billed nothing. (${unreadable})`);
     console.error(`  An unreadable cluster is not an empty one. Charging here would take money`);
     console.error(`  for work nobody verified; skipping is recoverable, because the hour is`);
     console.error(`  keyed and a later run will charge it exactly once.`);

@@ -33,6 +33,13 @@
       "autoPort": false
     },
     {
+      "//": "Explicit project directory. Without it the preview resolved to another checkout that also has app/(marketing)/services/compute, so a new route here 404'd while an existing one served fine.",
+      "name": "cloud-services-dev",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["next", "dev", "-p", "3007", "C:\\cloud-services"],
+      "port": 3007
+    },
+    {
       "name": "v2-ui-dev",
       "runtimeExecutable": "npx",
       "runtimeArgs": [

@@ -30,7 +30,13 @@ export const spendCheckMiddleware: MiddlewareHandler<{
   const auth = c.get("auth");
   const keyCap = auth.hardCapCents;
   const orgCap = auth.orgHardCapCents;
-  if (!keyCap && !orgCap) {
+  // hard_cap_cents is a nullable BIGINT with NO default on both
+  // inference.api_keys (20260523000001) and inference.orgs (20260526000007):
+  // NULL means "no cap set", while a stored 0 is a deliberate block-everything
+  // cap. The old `!keyCap && !orgCap` read 0 as unset and let traffic through.
+  const keyCapUnset = keyCap === null || keyCap === undefined;
+  const orgCapUnset = orgCap === null || orgCap === undefined;
+  if (keyCapUnset && orgCapUnset) {
     await next();
     return;
   }
@@ -59,6 +65,19 @@ export const spendCheckMiddleware: MiddlewareHandler<{
   }
   const current = currentRaw ? Number.parseInt(currentRaw, 10) : 0;
   if (!Number.isFinite(current)) {
+    // Corrupt counter value: fail open like the KV outage above (documented
+    // design), but say so — this path used to let the request through with
+    // no trace at all.
+    console.warn(
+      JSON.stringify({
+        level: "warn",
+        scope: "spend",
+        message: "Spend counter unparseable; failing open",
+        orgId: auth.orgId,
+        keyId: auth.keyId,
+        raw: currentRaw,
+      })
+    );
     await next();
     return;
   }

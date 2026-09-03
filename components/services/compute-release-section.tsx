@@ -248,11 +248,18 @@ const ComputeReleaseSection = () => {
                     >
                         Need a custom configuration?
                     </p>
+                    {/*
+                      Points at the dedicated-server page, not at an anchor on
+                      this one. This section features three machines; the other
+                      fourteen had nowhere to be, so "Browse all server SKUs"
+                      scrolled the reader down the same page and showed them
+                      nothing more.
+                    */}
                     <Link
-                        href="/services/compute#pricing"
+                        href="/services/compute/bare-metal"
                         className={`${MONO} group inline-flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.18em] text-white transition-colors hover:text-[#0095FF]`}
                     >
-                        Browse all server SKUs
+                        Browse all {BARE_METAL_SKUS.length} servers
                         <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
                     </Link>
                 </div>
