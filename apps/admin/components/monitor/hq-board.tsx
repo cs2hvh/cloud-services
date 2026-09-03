@@ -43,6 +43,7 @@ interface Feed {
       missing: number;
       worst: { service_type: string; missing: number } | null;
       overBilled: number;
+      shape: "balance" | "stall" | "unknown";
     } | null;
     unpricedSellable: number | null;
     gpuBooks: {
@@ -191,6 +192,8 @@ function buildGraph(f: Feed): { nodes: Node<HqNodeData>[]; edges: Edge[] } {
   const flowing = b.sweepAgeH !== null && b.sweepAgeH <= 1.5;
   const cov = b.coverage;
   // Coverage outranks recency — the sweep read green through a 12-hour gap.
+  // Broken (stall-shaped) pages someone; owed (balance-shaped) chases an
+  // invoice — amber, because the biller behaved correctly.
   const covTone: Tone =
     cov === null
       ? "dim"
@@ -200,9 +203,11 @@ function buildGraph(f: Feed): { nodes: Node<HqNodeData>[]; edges: Edge[] } {
           ? "bad"
           : cov.missing === 0
             ? "ok"
-            : cov.missing <= 2
+            : cov.shape === "balance"
               ? "warn"
-              : "bad";
+              : cov.missing <= 2
+                ? "warn"
+                : "bad";
   const invTone: Tone = f.billing.invariantBad === null ? "dim" : f.billing.invariantBad > 0 ? "bad" : "ok";
   const failTone: Tone = (b.failuresUnresolved ?? 0) > 0 ? "bad" : "ok";
   const mainTone: Tone = f.providers.mainApp.up ? "ok" : "bad";
@@ -325,9 +330,20 @@ function buildGraph(f: Feed): { nodes: Node<HqNodeData>[]; edges: Edge[] } {
           : cov.open === 0
             ? "0 meters examined"
             : cov.overBilled > 0
-              ? `${cov.overBilled} meter(s) OVER-billed — duplicate charge hours`
+              ? // service_charges has a unique index per (service, hour), so
+                // billed > expected can only mean THIS node's window math is
+                // wrong — say so rather than accuse the data.
+                `${cov.overBilled} meter(s) billed > expected — window bug in this node, distrust it`
               : `${cov.billed}/${cov.expected} hrs · ${cov.open} meters${
                   cov.worst ? ` · worst: ${cov.worst.service_type} −${cov.worst.missing}h` : ""
+                }${
+                  cov.missing === 0
+                    ? ""
+                    : cov.shape === "balance"
+                      ? " · balance-shaped: customer owes, biller fine"
+                      : cov.shape === "stall"
+                        ? " · stall-shaped: every meter gapped — page billing"
+                        : ""
                 }`,
       tone: covTone,
       wide: true,

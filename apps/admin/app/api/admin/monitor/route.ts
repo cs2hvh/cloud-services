@@ -212,6 +212,7 @@ export async function GET() {
     missing: number;
     worst: { service_type: string; missing: number } | null;
     overBilled: number;
+    shape: "balance" | "stall" | "unknown";
   } | null = null;
   if (meterRows) {
     const now = Date.now();
@@ -244,6 +245,8 @@ export async function GET() {
       let expected = 0;
       let billed = 0;
       let overBilled = 0;
+      let gapMeters = 0;
+      let cleanMeters = 0;
       let worst: { service_type: string; missing: number } | null = null;
       windows.forEach((w, i) => {
         const b = billedCounts[i].count ?? 0;
@@ -251,10 +254,29 @@ export async function GET() {
         billed += b;
         if (b > w.expected) overBilled += 1;
         const miss = w.expected - b;
+        if (w.expected > 0) {
+          if (miss > 0) gapMeters += 1;
+          else cleanMeters += 1;
+        }
         if (miss > 0 && (worst === null || miss > worst.missing)) {
           worst = { service_type: w.service_type, missing: miss };
         }
       });
+      // Broken and owed need opposite responses (billing-lane classification,
+      // live case: two same-user gpu_volumes refused 28h on empty balance
+      // while a funded meter billed the identical window). Aggregate proxy:
+      // a sweep stall cannot bill one meter and skip another in the same
+      // hours — gaps alongside fully-billed meters are balance-shaped. The
+      // coverage RPC will classify per-hour properly; this is the honest
+      // approximation until then.
+      const shape: "balance" | "stall" | "unknown" =
+        gapMeters === 0
+          ? "unknown"
+          : cleanMeters > 0
+            ? "balance"
+            : gapMeters > 1
+              ? "stall"
+              : "unknown";
       coverage = {
         open: openMeterList.length,
         expected,
@@ -262,6 +284,7 @@ export async function GET() {
         missing: Math.max(0, expected - billed),
         worst,
         overBilled,
+        shape,
       };
     }
   }
