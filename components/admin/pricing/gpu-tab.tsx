@@ -45,7 +45,7 @@ export default function GpuTab() {
     const key = rowKey(row);
     setSaving(key);
     try {
-      await api.put("/admin/pricing/gpu", {
+      const res = await api.put("/admin/pricing/gpu", {
         gpu_catalog_id: row.gpu_catalog_id,
         cloud_type: row.cloud_type,
         interruptible: row.interruptible,
@@ -53,9 +53,29 @@ export default function GpuTab() {
         floor_per_hour_usd: row.floor_per_hour_usd,
       });
       setRows((prev) => prev.map((r) => rowKey(r) === key ? { ...r, _dirty: false } : r));
-      toast.success("Saved");
-    } catch {
-      toast.error("Failed to save");
+
+      // The write now goes through billing.set_gpu_markup, which reports
+      // whether this quote markup still agrees with what gpu_pods are actually
+      // CHARGED (billing.service_pricing). On 2026-09-02 those two drifted to
+      // 1.0 and 10.0 — quoted at cost, billed at ten times it — and nothing on
+      // screen said so. Saving quietly is what let that sit.
+      const drift = res.data?.drift as { agrees?: boolean; chargeMarkup?: number } | undefined;
+      if (drift && drift.agrees === false) {
+        toast.warning(
+          `Saved — but this no longer matches the charge book (${drift.chargeMarkup}×). Customers would be quoted one rate and billed another.`,
+          { duration: 10_000 }
+        );
+      } else {
+        toast.success("Saved");
+      }
+    } catch (e) {
+      // Show the server's reason. The guards return specific messages —
+      // "markup_pct must be >= 1.000 …", "No GPU 'x' in public.gpu_catalog" —
+      // and a bare "Failed to save" throws away the only part that tells an
+      // operator what to do differently.
+      const message = (e as { response?: { data?: { error?: string } } })
+        ?.response?.data?.error;
+      toast.error(message || "Failed to save");
     } finally {
       setSaving(null);
     }
