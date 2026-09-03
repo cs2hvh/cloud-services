@@ -1,4 +1,5 @@
-import { createClient, createSSRClient } from "@/lib/supabase/server";
+import { createSSRClient } from "@/lib/supabase/server";
+import { requireAdmin } from "@/lib/supabase/auth";
 import { NextResponse } from "next/server";
 
 function sanitizeSearchTerm(value: string): string {
@@ -9,35 +10,12 @@ function sanitizeSearchTerm(value: string): string {
     .trim();
 }
 
-// Helper function to check if user is admin
-async function checkAdminAuth() {
-  const supabase = await createClient();
-  
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { authorized: false, user: null };
-  }
-
-  // Get user profile to check roles
-  const { data: profile } = await supabase
-    .from("user_profiles")
-    .select("roles")
-    .eq("id", user.id)
-    .single();
-
-  const isAdmin = profile?.roles?.includes("admin");
-
-  return { authorized: isAdmin, user };
-}
-
 // GET: List all users with pagination and search
 export async function GET(request: Request) {
-  const { authorized } = await checkAdminAuth();
+  // Shared guard: honours ADMIN_EMAILS, which the local roles-only check ignored.
+  const adminCheck = await requireAdmin();
 
-  if (!authorized) {
+  if (!adminCheck.ok) {
     return NextResponse.json(
       { error: "Unauthorized - Admin access required" },
       { status: 403 }
@@ -151,9 +129,9 @@ export async function GET(request: Request) {
 
 // PATCH: Update user roles or suspend status
 export async function PATCH(request: Request) {
-  const { authorized, user: adminUser } = await checkAdminAuth();
+  const adminCheck = await requireAdmin();
 
-  if (!authorized) {
+  if (!adminCheck.ok) {
     return NextResponse.json(
       { error: "Unauthorized - Admin access required" },
       { status: 403 }
@@ -172,7 +150,7 @@ export async function PATCH(request: Request) {
     }
 
     // Prevent self-demotion
-    if (userId === adminUser?.id && roles && !roles.includes("admin")) {
+    if (userId === adminCheck.userId && roles && !roles.includes("admin")) {
       return NextResponse.json(
         { error: "Cannot remove your own admin role" },
         { status: 400 }

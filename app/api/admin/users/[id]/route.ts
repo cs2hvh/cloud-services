@@ -1,38 +1,16 @@
-import { createClient, createSSRClient } from "@/lib/supabase/server";
+import { createSSRClient } from "@/lib/supabase/server";
+import { requireAdmin } from "@/lib/supabase/auth";
 import { NextResponse } from "next/server";
-
-// Helper function to check if user is admin
-async function checkAdminAuth() {
-  const supabase = await createClient();
-  
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { authorized: false, user: null };
-  }
-
-  // Get user profile to check roles
-  const { data: profile } = await supabase
-    .from("user_profiles")
-    .select("roles")
-    .eq("id", user.id)
-    .single();
-
-  const isAdmin = profile?.roles?.includes("admin");
-
-  return { authorized: isAdmin, user };
-}
 
 // GET: Get detailed user information
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { authorized } = await checkAdminAuth();
+  // Shared guard: honours ADMIN_EMAILS, which the local roles-only check ignored.
+  const adminCheck = await requireAdmin();
 
-  if (!authorized) {
+  if (!adminCheck.ok) {
     return NextResponse.json(
       { error: "Unauthorized - Admin access required" },
       { status: 403 }
