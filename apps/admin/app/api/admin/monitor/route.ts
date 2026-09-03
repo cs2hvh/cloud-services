@@ -95,6 +95,7 @@ export async function GET() {
     txns24Res,
     linodeSyncRes,
     auditProbeRes,
+    supportOpenRes,
     mainApp,
   ] = await Promise.all([
     supabase.from("user_profiles").select("id", head),
@@ -162,6 +163,11 @@ export async function GET() {
       .order("synced_at", { ascending: false })
       .limit(1),
     supabase.schema("audits").from("audit_logs").select("id", head),
+    supabase
+      .schema("support")
+      .from("support_tickets")
+      .select("id", head)
+      .eq("status", "open"),
     probeMainApp(),
   ]);
 
@@ -413,6 +419,7 @@ export async function GET() {
       mainApp,
     },
     audits,
+    support: { open: count(supportOpenRes) },
     events,
   });
 }

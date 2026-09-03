@@ -7,6 +7,7 @@
 // red" are answerable at a glance from across a room.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Maximize2, Minimize2 } from "lucide-react";
 import {
   Background,
   Handle,
@@ -68,6 +69,7 @@ interface Feed {
     mainApp: { up: boolean; ms: number | null };
   };
   audits: { up: boolean; rows: number | null; error: string | null };
+  support: { open: number | null };
   events: HqEvent[];
 }
 
@@ -106,7 +108,12 @@ function HqNode({ data }: NodeProps<Node<HqNodeData>>) {
       } ${data.href ? "hover:border-[#3987e5]/70" : ""} ${data.wide ? "w-[230px]" : "w-[172px]"}`}
     >
       <div className="flex items-center gap-1.5">
-        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${TONE_DOT[data.tone]}`} />
+        {/* Bad and attention states pulse — across a room, motion is the alarm. */}
+        <span
+          className={`h-1.5 w-1.5 shrink-0 rounded-full ${TONE_DOT[data.tone]} ${
+            data.tone === "bad" || data.tone === "attn" ? "animate-pulse" : ""
+          }`}
+        />
         <span className="truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-white/45">
           {data.label}
         </span>
@@ -242,6 +249,13 @@ function buildGraph(f: Feed): { nodes: Node<HqNodeData>[]; edges: Edge[] } {
       value: "3 admins",
       sub: "allowlist-gated",
       tone: "info",
+    }),
+    n("support", 0, 475, {
+      label: "Support",
+      value: f.support.open === null ? "—" : String(f.support.open),
+      sub: f.support.open === null ? "read failed" : "open tickets",
+      tone: f.support.open === null ? "dim" : "info",
+      href: "/support",
     }),
     // Apps
     n("mainapp", 250, 330, {
@@ -422,6 +436,8 @@ function buildGraph(f: Feed): { nodes: Node<HqNodeData>[]; edges: Edge[] } {
   const edges: Edge[] = [
     e({ from: "customers", to: "mainapp", animated: true, tone: "info" }),
     e({ from: "operators", to: "panel", animated: true, tone: "info" }),
+    e({ from: "customers", to: "support", fromH: "b", toH: "t", tone: "dim" }),
+    e({ from: "support", to: "panel", fromH: "r", toH: "l", tone: "dim" }),
     e({ from: "linode", to: "compute", fromH: "b", toH: "t", tone: "dim" }),
     e({ from: "runpod", to: "gpu", fromH: "b", toH: "t", tone: "dim" }),
     // App → services: the left column of services takes the direct edges;
@@ -471,6 +487,22 @@ export default function HqBoard() {
   const [fetchedAt, setFetchedAt] = useState<number | null>(null);
   const [, forceTick] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const boardRef = useRef<HTMLDivElement | null>(null);
+  const [isFs, setIsFs] = useState(false);
+
+  useEffect(() => {
+    const onFs = () => setIsFs(document.fullscreenElement === boardRef.current);
+    document.addEventListener("fullscreenchange", onFs);
+    return () => document.removeEventListener("fullscreenchange", onFs);
+  }, []);
+
+  const toggleFs = useCallback(() => {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+    } else {
+      void boardRef.current?.requestFullscreen().catch(() => {});
+    }
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -528,7 +560,12 @@ export default function HqBoard() {
   const staleS = fetchedAt ? Math.round((Date.now() - fetchedAt) / 1000) : null;
 
   return (
-    <div className="flex h-[calc(100vh-170px)] min-h-[560px] flex-col overflow-hidden rounded-xl border border-border bg-[#0b0c0f]">
+    <div
+      ref={boardRef}
+      className={`flex flex-col overflow-hidden rounded-xl border border-border bg-[#0b0c0f] ${
+        isFs ? "h-screen" : "h-[calc(100vh-170px)] min-h-[560px]"
+      }`}
+    >
       <div className="relative flex-1">
         <ReactFlow
           nodes={graph.nodes}
@@ -547,16 +584,43 @@ export default function HqBoard() {
         </ReactFlow>
 
         {/* Live status — top right */}
-        <div className="pointer-events-none absolute right-3 top-3 flex items-center gap-2">
+        <div className="absolute right-3 top-3 flex items-center gap-2">
           {error && (
-            <span className="rounded-full border border-red-500/40 bg-red-500/10 px-2.5 py-1 text-[11px] text-red-300">
+            <span className="pointer-events-none rounded-full border border-red-500/40 bg-red-500/10 px-2.5 py-1 text-[11px] text-red-300">
               refresh failing: {error}
             </span>
           )}
-          <span className="flex items-center gap-1.5 rounded-full border border-border bg-[#111216]/90 px-2.5 py-1 text-[11px] text-white/60">
+          <span className="pointer-events-none flex items-center gap-1.5 rounded-full border border-border bg-[#111216]/90 px-2.5 py-1 text-[11px] text-white/60">
             <span className={`h-1.5 w-1.5 rounded-full ${error ? "bg-red-400" : "animate-pulse bg-emerald-400"}`} />
             LIVE · {staleS === null ? "—" : `${staleS}s ago`}
           </span>
+          <button
+            onClick={toggleFs}
+            title={isFs ? "Exit present mode" : "Present mode (fullscreen)"}
+            className="flex items-center gap-1.5 rounded-full border border-border bg-[#111216]/90 px-2.5 py-1 text-[11px] text-white/60 transition-colors hover:text-white"
+          >
+            {isFs ? <Minimize2 className="h-3 w-3" /> : <Maximize2 className="h-3 w-3" />}
+            {isFs ? "exit" : "present"}
+          </button>
+        </div>
+
+        {/* Tone legend — bottom left. The colors are a vocabulary; say it. */}
+        <div className="pointer-events-none absolute bottom-3 left-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-full border border-border bg-[#111216]/90 px-3 py-1.5">
+          {(
+            [
+              ["ok", "healthy"],
+              ["warn", "owed / degraded"],
+              ["attn", "unexplained — human call"],
+              ["bad", "broken — act now"],
+              ["dim", "idle / unknown"],
+              ["info", "neutral"],
+            ] as const
+          ).map(([tone, label]) => (
+            <span key={tone} className="inline-flex items-center gap-1.5 text-[10px] text-white/50">
+              <span className={`h-1.5 w-1.5 rounded-full ${TONE_DOT[tone]}`} />
+              {label}
+            </span>
+          ))}
         </div>
 
         {/* KPI strip — top left */}

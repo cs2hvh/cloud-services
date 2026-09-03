@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { StatusChip, Table, Callout } from "@admin/components/deploy/bits";
+import { StatusChip, Table } from "@admin/components/deploy/bits";
 import {
   DISCOUNT_KINDS,
   discountValueLabel,
