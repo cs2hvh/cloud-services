@@ -33,8 +33,32 @@ export async function PUT(req: NextRequest) {
     // (user_metadata lives under `data` in updateUser)
     const metadata: Record<string, unknown> = {};
     if (typeof displayName === "string") metadata.display_name = displayName;
-    if (typeof userName === "string") metadata.username = userName;
     if (typeof profilePic === "string") metadata.avatar_url = profilePic;
+
+    // A username is set once and then fixed, like email and phone. It is how
+    // other people address this account, so letting it change silently
+    // re-points every reference anyone else holds. Enforced HERE and not only
+    // by disabling the input: a disabled field is a courtesy, not a rule.
+    const currentUsername =
+      typeof user.user_metadata?.username === "string"
+        ? user.user_metadata.username.trim()
+        : "";
+
+    if (typeof userName === "string") {
+      const nextUsername = userName.trim();
+      if (currentUsername && nextUsername !== currentUsername) {
+        return NextResponse.json(
+          { error: "Your username can't be changed once it's set." },
+          { status: 400 },
+        );
+      }
+      // Resending the same value is a no-op rather than an error — the client
+      // sends the whole profile, so an unchanged username must not fail a save
+      // that is really about the display name.
+      if (!currentUsername && nextUsername) {
+        metadata.username = nextUsername;
+      }
+    }
 
     // Nothing to update?
     const hasMetadata = Object.keys(metadata).length > 0;

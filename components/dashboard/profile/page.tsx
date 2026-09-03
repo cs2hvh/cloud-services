@@ -80,8 +80,11 @@ const ProfileSettings: React.FC = () => {
     setProfile((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Only display name and username are writable — the update endpoint ignores
-  // email, and phone changes need an SMS provider that is not connected.
+  // Display name is always writable. Username is writable only until it has
+  // one — the update endpoint ignores email, and phone changes need an SMS
+  // provider that is not connected.
+  const usernameLocked = Boolean(savedProfile.userName?.trim());
+
   const isDirty = useMemo(
     () =>
       profile.displayName !== savedProfile.displayName ||
@@ -187,15 +190,37 @@ const ProfileSettings: React.FC = () => {
             />
           </Field>
 
-          <Field id="userName" label="Username" hint="Your unique handle." icon={User}>
+          {/*
+            Set once, then fixed — the same treatment as email and phone. It is
+            how other people address this account, so changing it silently
+            re-points every reference anyone else holds.
+
+            Keyed off savedProfile, not profile, so the field does not lock
+            itself mid-typing while someone is choosing their first one. The
+            update route enforces the same rule; a read-only input is a
+            courtesy, not the guarantee.
+          */}
+          <Field
+            id="userName"
+            label="Username"
+            hint={
+              usernameLocked
+                ? "Set once. Contact support if it needs to change."
+                : "Your unique handle. Choose carefully — this cannot be changed later."
+            }
+            icon={User}
+            locked={usernameLocked}
+          >
             <Input
               id="userName"
               type="text"
               name="userName"
               value={profile.userName}
               onChange={handleChange}
+              readOnly={usernameLocked}
+              aria-readonly={usernameLocked}
               placeholder="username"
-              className={INPUT_CLASS}
+              className={usernameLocked ? READONLY_INPUT_CLASS : INPUT_CLASS}
             />
           </Field>
         </div>
