@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -67,6 +67,35 @@ function formatDateTime(date: string): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+/** Time only. Inside the thread the day is carried by a separator row. */
+function formatTime(date: string): string {
+  return new Date(date).toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+/** Day heading for a separator: "Today", "Yesterday", or a dated label. */
+function formatDayLabel(date: string): string {
+  const then = new Date(date);
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((startOfDay(new Date()) - startOfDay(then)) / 86_400_000);
+
+  if (days === 0) return "Today";
+  if (days === 1) return "Yesterday";
+  return then.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    ...(then.getFullYear() === new Date().getFullYear() ? {} : { year: "numeric" }),
+  });
+}
+
+/** True when two timestamps fall on different calendar days. */
+function isNewDay(current: string, previous: string | null): boolean {
+  if (!previous) return true;
+  return new Date(current).toDateString() !== new Date(previous).toDateString();
 }
 
 function statusMeta(status: SupportTicketStatus): { color: string; label: string } {
@@ -616,50 +645,140 @@ export default function SupportTicketDetailView({ ticket, initialResources }: Su
                 <p className="text-[13px] text-white/55">No replies yet. Start the conversation below.</p>
               </div>
             ) : (
-              <div className="space-y-3">
-                {ticket.messages.map((message) => {
+              /*
+                A ticket is a conversation, so it reads as one: the customer's
+                messages sit right, support's sit left. Previously every message
+                was an identical full-width card with only a coloured left edge
+                to tell them apart, which made a back-and-forth look like a
+                stack of log entries and forced you to read the name badge to
+                know who was speaking.
+              */
+              <div className="rounded-[6px] border border-white/[0.06] bg-[#0e0f13] px-3 py-2 sm:px-4 sm:py-3">
+                {ticket.messages.map((message, index) => {
                   const identity = getMessageIdentity(message);
                   const actor = actorMeta(message.actor_type);
+                  const isSystem = message.actor_type === "system";
+                  const isOwn = message.actor_type === "user";
+
+                  // Consecutive messages from the same person lose the avatar
+                  // and name, so a rapid exchange reads as one turn rather than
+                  // repeating the header three times.
+                  const previous = index > 0 ? ticket.messages[index - 1] : null;
+                  const startsGroup = !previous || previous.actor_type !== message.actor_type;
+
+                  // A ticket can run for days. Carrying the date on a separator
+                  // lets every message show just a time, instead of repeating
+                  // "Sep 3, 2026" on each line of the same afternoon.
+                  const dayBreak = isNewDay(
+                    message.created_at,
+                    previous?.created_at ?? null
+                  );
+                  const daySeparator = dayBreak ? (
+                    <div className="flex items-center gap-3 px-1 pt-4 pb-1">
+                      <span className="h-px flex-1 bg-white/[0.07]" />
+                      <span
+                        className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/35`}
+                      >
+                        {formatDayLabel(message.created_at)}
+                      </span>
+                      <span className="h-px flex-1 bg-white/[0.07]" />
+                    </div>
+                  ) : null;
+
+                  // System notices are events, not speech — centred, quiet, and
+                  // never wearing a speech bubble.
+                  if (isSystem) {
+                    return (
+                      <Fragment key={message.id}>
+                        {daySeparator}
+                        <div className="flex justify-center py-2.5">
+                          <div
+                            className={`${MONO} flex max-w-[85%] flex-wrap items-center justify-center gap-2 rounded-full border border-white/[0.06] bg-white/[0.02] px-3 py-1 text-[10.5px] text-white/45`}
+                          >
+                            <span
+                              dangerouslySetInnerHTML={{
+                                __html: sanitizeSupportRichText(message.message),
+                              }}
+                            />
+                            <span className="tabular-nums text-white/25">
+                              {formatTime(message.created_at)}
+                            </span>
+                          </div>
+                        </div>
+                      </Fragment>
+                    );
+                  }
+
                   return (
+                    <Fragment key={message.id}>
+                    {daySeparator}
                     <div
-                      key={message.id}
-                      className="border border-white/[0.06] border-l-2 bg-[#111216] rounded-[6px] p-4 sm:p-5"
-                      style={{ borderLeftColor: actor.color }}
+                      className={`flex gap-2.5 ${startsGroup ? "pt-3.5" : "pt-1"} ${
+                        isOwn ? "flex-row-reverse" : "flex-row"
+                      }`}
                     >
-                      <div className="mb-3 flex items-start justify-between gap-3">
-                        <div className="flex min-w-0 items-center gap-2.5">
-                          <Avatar className="h-9 w-9 border border-white/10 rounded-[5px]">
+                      {/* Avatar rail. Kept at width even when empty so grouped
+                          bubbles stay on the same edge as the first. */}
+                      <div className="w-9 shrink-0">
+                        {startsGroup && (
+                          <Avatar className="h-9 w-9 rounded-[5px] border border-white/10">
                             <AvatarImage src={identity.avatar || undefined} />
                             <AvatarFallback
-                              className={`${MONO} bg-[#0d0e11] text-[11px] text-white/75 rounded-[5px]`}
+                              className={`${MONO} rounded-[5px] bg-[#0d0e11] text-[11px] text-white/75`}
                             >
                               {identity.name.charAt(0).toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p className="truncate text-[13px] font-medium text-white">{identity.name}</p>
-                              <span
-                                className={`${MONO} inline-flex items-center gap-1 text-[9px] uppercase tracking-[0.12em] font-semibold px-1.5 py-0.5 rounded-[3px]`}
-                                style={{ color: actor.color, background: `${actor.color}1a` }}
-                              >
-                                {actor.label}
-                              </span>
-                            </div>
-                            <p className={`${MONO} truncate text-[10.5px] text-white/40`}>
-                              {identity.email}
-                            </p>
-                          </div>
-                        </div>
-                        <p className={`${MONO} shrink-0 text-[10.5px] text-white/40 tabular-nums`}>
-                          {formatDateTime(message.created_at)}
-                        </p>
+                        )}
                       </div>
+
                       <div
-                        className="prose prose-invert max-w-none text-[13.5px] text-white/85 prose-p:my-1.5 prose-li:my-0.5 leading-relaxed"
-                        dangerouslySetInnerHTML={{ __html: sanitizeSupportRichText(message.message) }}
-                      />
+                        className={`flex min-w-0 max-w-[80%] flex-col ${
+                          isOwn ? "items-end" : "items-start"
+                        }`}
+                      >
+                        {startsGroup && (
+                          <div
+                            className={`mb-1 flex min-w-0 items-center gap-2 ${
+                              isOwn ? "flex-row-reverse" : ""
+                            }`}
+                          >
+                            <span className="truncate text-[12.5px] font-medium text-white">
+                              {identity.name}
+                            </span>
+                            <span
+                              className={`${MONO} shrink-0 rounded-[3px] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em]`}
+                              style={{ color: actor.color, background: `${actor.color}1a` }}
+                            >
+                              {actor.label}
+                            </span>
+                          </div>
+                        )}
+
+                        <div
+                          className={`min-w-0 rounded-[8px] border px-3.5 py-2.5 text-left text-[13.5px] leading-relaxed ${
+                            isOwn
+                              ? "border-[#22d3ee]/20 bg-[#22d3ee]/[0.07] text-white/90"
+                              : "border-white/[0.07] bg-[#15171c] text-white/85"
+                          }`}
+                        >
+                          <div
+                            className="prose prose-invert max-w-none break-words prose-p:my-1.5 prose-li:my-0.5"
+                            dangerouslySetInnerHTML={{
+                              __html: sanitizeSupportRichText(message.message),
+                            }}
+                          />
+                        </div>
+
+                        <span
+                          className={`${MONO} mt-1 px-0.5 text-[10px] tabular-nums text-white/30`}
+                          title={`${identity.email} · ${formatDateTime(message.created_at)}`}
+                        >
+                          {formatTime(message.created_at)}
+                        </span>
+                      </div>
                     </div>
+                    </Fragment>
                   );
                 })}
               </div>
