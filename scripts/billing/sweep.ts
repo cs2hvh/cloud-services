@@ -95,6 +95,14 @@ const SERVICES: Record<string, ServiceSpec> = {
     idColumn: "billing_service_id",
     billableStatuses: ["running", "active", "provisioning", "stopped"],
     nonBillableStatuses: ["deleted", "destroyed", "terminated", "failed", "error"],
+    // The price frozen onto the server when it was created (markup x provider
+    // list, at that moment). Resold VMs bill this back through the compute '*'
+    // passthrough row, which is what makes the quote and the charge the same
+    // number rather than two numbers that are supposed to agree.
+    //
+    // Self-hosted plans (s-*, d-*) have fixed_hourly rows of their own and
+    // never read this — see the rate-model check at the guard below.
+    upstreamCostColumn: "hourly_cost",
   },
   gpu_pod: {
     schema: "public", table: "gpu_pods",
@@ -338,16 +346,49 @@ async function main(): Promise<number> {
 
   // Live price book, for the dry-run price check above. The real run resolves
   // the price inside charge_service_hour (as of the hour being billed, which
-  // matters for backfill); this index only answers "does a price exist at all".
+  // matters for backfill); this index answers "does a price exist at all" and,
+  // when one does, which rate model will be used to apply it.
+  // Filtered to the hour BEING BILLED, not merely to "currently live". A price
+  // created at 15:00 is not in force for the 14:00 hour: billing.current_price
+  // applies effective_from <= p_at, and prices are deliberately not retroactive
+  // (20260830000003_billing_v2_prices_change_on_hour_boundaries).
+  //
+  // Without this filter the dry run reported "would-charge" for an hour the real
+  // run then refused with 'no-price'. A dry run that answers a different
+  // question than the real run is precisely the false confidence it exists to
+  // prevent — it was caught by running both against the same meter minutes
+  // apart, which is the only reason it is not still here.
   const { data: priceRows, error: priceErr } = await db
     .schema("billing").from("service_pricing")
-    .select("service_type, plan_key")
-    .is("effective_to", null);
+    .select("service_type, plan_key, rate_model, effective_from")
+    .lte("effective_from", periodIso)
+    .or(`effective_to.is.null,effective_to.gt.${periodIso}`)
+    .order("effective_from", { ascending: true });
   if (priceErr) throw new Error(`could not load price book: ${priceErr.message}`);
-  const priceIndex = new Set<string>(
-    (priceRows ?? []).map((p: { service_type: string; plan_key: string }) =>
-      priceKey(p.service_type, p.plan_key))
-  );
+
+  // Ascending, so a later row overwrites an earlier one for the same key and
+  // the newest in force survives — the row current_price picks with its
+  // `order by effective_from desc limit 1`.
+  const priceIndex = new Map<string, string>();
+  for (const p of (priceRows ?? []) as Array<{
+    service_type: string; plan_key: string; rate_model: string;
+  }>) {
+    priceIndex.set(priceKey(p.service_type, p.plan_key), p.rate_model);
+  }
+
+  /**
+   * The rate model that will price this meter, or null if nothing will.
+   *
+   * Mirrors billing.current_price: an exact plan_key wins, and a key with no
+   * row of its own falls back to the service's '*' row. The dry run has to
+   * resolve the way the charge does — otherwise it confidently answers a
+   * different question than the one it was asked, which is the failure mode
+   * the dry run exists to prevent.
+   */
+  const resolveRateModel = (serviceType: string, planKey: string): string | null =>
+    priceIndex.get(priceKey(serviceType, planKey))
+    ?? priceIndex.get(priceKey(serviceType, "*"))
+    ?? null;
 
   const byService = new Map<string, Meter[]>();
   for (const m of meters) {
@@ -423,19 +464,30 @@ async function main(): Promise<number> {
         quantity = Number(res.container_disk_gb ?? 0) + Number(res.volume_gb ?? 0);
       }
 
-      // Upstream cost for markup pricing (GPU: RunPod's per-GPU hourly price).
+      // Upstream cost for markup pricing (GPU: RunPod's per-GPU hourly price;
+      // resold compute: the rate frozen onto the server row at create time).
+      //
+      // Required ONLY when the resolved row is actually a markup. Compute holds
+      // both models at once — self-hosted plans are fixed_hourly and ignore
+      // upstream cost entirely — so refusing to bill a fixed-rate plan over a
+      // number it never reads would stop billing on plans that price perfectly
+      // well. The demand for an upstream cost has to follow the rate model, not
+      // the service.
       let upstreamCost: number | null = null;
       if (spec.upstreamCostColumn) {
         const raw = res[spec.upstreamCostColumn];
         if (raw === null || raw === undefined) {
-          lines.push({
-            meter,
-            outcome: "PROBLEM-error",
-            detail: `${spec.upstreamCostColumn} is null — cannot price a markup without an upstream cost`,
-          });
-          continue;
+          if (resolveRateModel(meter.service_type, meter.plan_key) === "markup") {
+            lines.push({
+              meter,
+              outcome: "PROBLEM-error",
+              detail: `${spec.upstreamCostColumn} is null — cannot price a markup without an upstream cost`,
+            });
+            continue;
+          }
+        } else {
+          upstreamCost = Number(raw);
         }
-        upstreamCost = Number(raw);
       }
 
       // Units: prefer the live resource (a resized cluster changes node count)
@@ -451,8 +503,10 @@ async function main(): Promise<number> {
         // dry run answers the same question the real run would.
         //
         // This caught `ubuntu-8c-85g`, whose plan_slug is NULL — its meter
-        // falls back to plan_key '*', for which no compute price exists.
-        if (!priceIndex.has(priceKey(meter.service_type, meter.plan_key))) {
+        // falls back to plan_key '*', for which no compute price existed.
+        // Compute now HAS a '*' row (the resold passthrough), so that shape
+        // prices instead of stalling — as does every Linode type key.
+        if (!resolveRateModel(meter.service_type, meter.plan_key)) {
           lines.push({
             meter,
             outcome: "no-price",

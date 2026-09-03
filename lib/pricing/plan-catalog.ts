@@ -75,6 +75,11 @@ export async function getAllPlans(supabase: SupabaseClient): Promise<CatalogPlan
             .from("service_plans")
             .select("plan_key, display_name, tier, vcpu, memory_mb, disk_gb, is_active, sort_order, allowed_regions, metadata")
             .eq("service_type", "compute")
+            // '*' is not a plan. It is the resolution target that lets resold
+            // VMs bill the rate frozen on the server row, and it carries no
+            // specs — left in, it would render as a selectable 0 vCPU / 0 GB
+            // plan in the customer's picker.
+            .neq("plan_key", "*")
             .order("sort_order", { ascending: true })
             .order("plan_key", { ascending: true }),
         supabase
