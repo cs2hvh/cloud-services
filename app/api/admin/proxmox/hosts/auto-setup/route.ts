@@ -17,7 +17,7 @@ import { spawn } from "child_process";
 import { randomUUID } from "crypto";
 
 import { requireAdmin } from "@/lib/supabase/auth";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createWorkerClient } from "@/lib/supabase/server";
 import { writeCloudInitSnippet } from "@/lib/proxmox-utils";
 import {
     DEFAULT_LINUX_CLOUD_INIT_FILENAME,
@@ -169,7 +169,7 @@ function makeEmitter(controller: ReadableStreamDefaultController<Uint8Array>, en
 }
 
 async function runAutoSetup(body: Body, emit: Emit): Promise<void> {
-    const sb = createServerSupabase();
+    const sb = await createWorkerClient();
 
     // Step 1: host row (idempotent by name)
     emit("step", "Registering host in proxmox_hosts");
@@ -288,7 +288,7 @@ async function runAutoSetup(body: Body, emit: Emit): Promise<void> {
 
 // ─── Step helpers ────────────────────────────────────────────────
 async function resolveHostId(
-    sb: ReturnType<typeof createServerSupabase>,
+    sb: Awaited<ReturnType<typeof createWorkerClient>>,
     body: Body,
     emit: Emit
 ): Promise<string> {

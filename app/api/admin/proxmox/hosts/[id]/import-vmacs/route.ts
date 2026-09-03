@@ -14,7 +14,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createWorkerClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/supabase/auth";
 import {
     OvhApiError,
@@ -37,7 +37,7 @@ type HostRow = {
 };
 
 async function loadHost(id: string): Promise<HostRow | null> {
-    const sb = createServerSupabase();
+    const sb = await createWorkerClient();
     const { data } = await sb
         .from("proxmox_hosts")
         .select("id,name,host_url,provider")
@@ -132,7 +132,7 @@ export async function POST(
     }
 
     // Snapshot DB state — which (mac, ip) pairs are already in pool
-    const supabase = createServerSupabase();
+    const supabase = await createWorkerClient();
     const { data: existingPools } = await supabase
         .from("public_ip_pools")
         .select("id, mac, public_ip_pool_ips ( id, ip )")

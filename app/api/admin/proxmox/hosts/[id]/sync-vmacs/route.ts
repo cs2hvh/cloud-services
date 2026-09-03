@@ -18,7 +18,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createWorkerClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/supabase/auth";
 import {
     OvhApiError,
@@ -47,7 +47,7 @@ type HostRow = {
 };
 
 async function loadHost(id: string): Promise<HostRow | null> {
-    const supabase = createServerSupabase();
+    const supabase = await createWorkerClient();
     const { data, error } = await supabase
         .from("proxmox_hosts")
         .select("id,name,host_url,provider,server_series,network_mode")
@@ -201,7 +201,7 @@ export async function POST(
     }
 
     // Phase 2: sequential create + poll + persist
-    const supabase = createServerSupabase();
+    const supabase = await createWorkerClient();
     const created: Array<{ ip: string; mac: string }> = [];
     const errors: Array<{ ip: string; error: string }> = [];
     const knownMacs = new Set(report.virtualMacs);
@@ -276,7 +276,7 @@ export async function POST(
 
 // ─── DB write — one pool row + one IP row per vMAC ──────────────
 async function persistVmacPool(
-    supabase: ReturnType<typeof createServerSupabase>,
+    supabase: Awaited<ReturnType<typeof createWorkerClient>>,
     hostId: string,
     mac: string,
     ip: string

@@ -13,7 +13,7 @@ import { NextRequest } from "next/server";
 import { spawn } from "child_process";
 
 import { requireAdmin } from "@/lib/supabase/auth";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createWorkerClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 1800;
@@ -56,7 +56,7 @@ export async function POST(
     if (!id) return jsonError(400, "Missing host id");
 
     // Confirm the host exists before streaming (the script reads its SSH creds).
-    const sb = createServerSupabase();
+    const sb = await createWorkerClient();
     const { data: host, error } = await sb
         .from("proxmox_hosts")
         .select("id, name")

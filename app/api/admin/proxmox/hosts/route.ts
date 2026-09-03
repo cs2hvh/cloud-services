@@ -117,8 +117,8 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // Use server Supabase client (anon key with disabled cookies)
-    const supabase = createServerSupabase();
+    // Use service-role client (admin-guarded above; proxmox_* / public_ip_* tables are RLS-protected)
+    const supabase = await createWorkerClient();
 
     const { data: hosts, error } = await supabase
       .from("proxmox_hosts")
@@ -180,8 +180,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Use server Supabase client (anon key with disabled cookies)
-    const supabase = createServerSupabase();
+    // Use service-role client (admin-guarded above; proxmox_* / public_ip_* tables are RLS-protected)
+    const supabase = await createWorkerClient();
 
     // Prepare host payload
     const hostPayload: Record<string, unknown> = {
