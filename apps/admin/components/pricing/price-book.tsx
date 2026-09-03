@@ -44,6 +44,40 @@ interface Props {
 const money = (n: number, places = 2) =>
   `$${n.toLocaleString("en-US", { minimumFractionDigits: places, maximumFractionDigits: places })}`;
 
+const FRESH_MS = 7 * 24 * 3600 * 1000;
+
+/**
+ * A price that changed recently should explain itself right in the table:
+ * fresh rows show their age and their note, and a fresh row WITHOUT a note
+ * is flagged — an unexplained price movement is exactly how a test write
+ * (s-9, +80%, note NULL, same batch as the gpu 10×) sits unnoticed until
+ * a customer is quoted it.
+ */
+function SinceCell({ price }: { price: PriceRow }) {
+  const stamp = price.effective_from.slice(0, 13).replace("T", " ") + ":00";
+  const age = Date.now() - Date.parse(price.effective_from);
+  if (!(age >= 0 && age < FRESH_MS)) return <>{stamp}</>;
+  const rel = age < 24 * 3600 * 1000 ? "today" : `${Math.floor(age / 86400000)}d ago`;
+  const note = price.note?.trim();
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1.5">
+      {stamp}
+      {note ? (
+        <span
+          className="inline-flex max-w-[180px] items-center truncate rounded-full border border-border px-2 py-0.5 text-[11px]"
+          title={note}
+        >
+          {rel} · {note}
+        </span>
+      ) : (
+        <span className="inline-flex items-center rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-300">
+          changed {rel} · no note
+        </span>
+      )}
+    </span>
+  );
+}
+
 export function PriceBook({ plans, prices, initialService }: Props) {
   const router = useRouter();
   const [editing, setEditing] = useState<ServicePlan | null>(null);
@@ -160,7 +194,7 @@ export function PriceBook({ plans, prices, initialService }: Props) {
                       {monthly === null ? "—" : `${money(monthly)}${perGb}`}
                     </td>
                     <td className="py-1.5 pr-4 text-muted-foreground">
-                      {price ? price.effective_from.slice(0, 13).replace("T", " ") + ":00" : "—"}
+                      {price ? <SinceCell price={price} /> : "—"}
                     </td>
                     <td className="py-1.5 text-right">
                       <Button
