@@ -72,13 +72,29 @@ export const CURRENCY_GROUPS: CurrencyGroup[] = groupCurrencies(CURRENCIES);
 
 /**
  * Base URL for currency glyphs, e.g. `${ICON_BASE}/currencies/usdt.svg`.
- * Override with NEXT_PUBLIC_ZXGATEWAY_STORAGE_URL to point at the ZX asset CDN.
+ *
+ * Defaults to THIS origin — the glyphs live in public/currencies. It used to
+ * default to https://storage.zxgateway.cc, which does not resolve at all (every
+ * request returns nothing, not a 404), so every crypto icon on the billing page
+ * and in the deposit dialog rendered broken. A third-party CDN with no fallback
+ * is a single point of failure for something we can serve ourselves in 500
+ * bytes.
+ *
+ * Set NEXT_PUBLIC_ZXGATEWAY_STORAGE_URL to point back at a CDN if one is ever
+ * stood up; CURRENCY_ICON_FALLBACK still covers symbols it does not carry.
  */
 export const CURRENCY_ICON_BASE = (
-  process.env.NEXT_PUBLIC_ZXGATEWAY_STORAGE_URL || "https://storage.zxgateway.cc"
+  process.env.NEXT_PUBLIC_ZXGATEWAY_STORAGE_URL || ""
 ).replace(/\/+$/, "");
 
-/** Glyph URL for a currency symbol, e.g. "USDT" → ".../currencies/usdt.svg". */
+/**
+ * Shown when a symbol has no glyph of its own. The currency list comes from the
+ * gateway at runtime, so it can name assets we have never seen — those should
+ * render as a generic coin rather than a broken image.
+ */
+export const CURRENCY_ICON_FALLBACK = "/currencies/coin.svg";
+
+/** Glyph URL for a currency symbol, e.g. "USDT" → "/currencies/usdt.svg". */
 export function currencyIconUrl(symbol: string): string {
   return `${CURRENCY_ICON_BASE}/currencies/${symbol.toLowerCase()}.svg`;
 }

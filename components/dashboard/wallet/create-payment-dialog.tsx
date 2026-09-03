@@ -43,11 +43,36 @@ import { getCurrencies } from "@/actions/currencies"
 import type { FormState } from "@/actions/create-payment-schema"
 import {
   currencyIconUrl,
+  CURRENCY_ICON_FALLBACK,
   groupCurrencies,
   networkLabel,
   type Currency,
   type CurrencyGroup,
 } from "@/config/currencies"
+
+/**
+ * A currency glyph that degrades to a generic coin instead of a broken image.
+ *
+ * The currency list comes from the gateway at runtime, so it can name assets we
+ * hold no glyph for — and until now the glyph host did not resolve at all, so
+ * every icon in this dialog was broken. Own state per glyph rather than a
+ * shared map: each one fails independently.
+ */
+function CurrencyGlyph({ src, alt }: { src: string; alt: string }) {
+  const [url, setUrl] = useState(src)
+  return (
+    <Image
+      src={url}
+      alt={alt}
+      fill
+      className="object-contain"
+      unoptimized
+      onError={() => {
+        if (url !== CURRENCY_ICON_FALLBACK) setUrl(CURRENCY_ICON_FALLBACK)
+      }}
+    />
+  )
+}
 import { CirclePlus } from "lucide-react"
 
 // Pick a sensible default selection: USDT → TRC-20 when present, else the first
@@ -202,13 +227,7 @@ export function CreatePaymentDialog({
                           <FieldContent>
                             <div className="flex items-center gap-3">
                               <div className="relative size-9 shrink-0">
-                                <Image
-                                  src={iconUrl}
-                                  alt={g.name}
-                                  fill
-                                  className="object-contain"
-                                  unoptimized
-                                />
+                                <CurrencyGlyph src={iconUrl} alt={g.name} />
                               </div>
                               <div className="flex flex-col">
                                 <FieldTitle className="text-base">{g.name}</FieldTitle>

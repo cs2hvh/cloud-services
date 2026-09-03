@@ -1,6 +1,6 @@
 "use client";
 
-import { currencyIconUrl, type Currency } from "@/config/currencies";
+import { currencyIconUrl, CURRENCY_ICON_FALLBACK, type Currency } from "@/config/currencies";
 // Billing & payments — editorial pill-tab nav (Balance / Coupons /
 // Transactions), big Nunito balance hero, top-up form + recurring
 // card, coupon redemption, and a clean transactions table. All
@@ -285,18 +285,12 @@ export default function BillingTabs({
     return (
         <div className="min-w-0">
             {/* Hero */}
-            <h1 className="text-[34px] sm:text-[40px] leading-[1.05] tracking-[-0.025em] text-white font-semibold mb-2">
+            <h1 className="text-[34px] sm:text-[40px] leading-[1.05] tracking-[-0.025em] text-white font-semibold mb-10">
                 Billing{" "}
                 <span style={{ ...SERIF_STYLE, color: ACCENT }} className="font-normal">
                     & payments
                 </span>
             </h1>
-            <p
-                className={`${MONO} max-w-xl text-[11.5px] text-white/45 leading-relaxed mb-10`}
-            >
-                Manage your balance, redeem coupons, and review every charge —
-                paid via Stripe or USDT.
-            </p>
 
             {/* Pill tab nav */}
             <div className="border-b border-white/[0.06] mb-8">
@@ -579,6 +573,14 @@ function BalanceTab({
                                         src={currencyIconUrl("BTC")}
                                         alt="BTC"
                                         className="h-5 w-5"
+                                        onError={(e) => {
+                                            // Never leave a broken glyph on a payment
+                                            // control — it reads as a broken payment
+                                            // method. Falls back to a generic coin.
+                                            const img = e.currentTarget;
+                                            if (img.src.endsWith(CURRENCY_ICON_FALLBACK)) return;
+                                            img.src = CURRENCY_ICON_FALLBACK;
+                                        }}
                                     />
                                 }
                                 label="Crypto"
