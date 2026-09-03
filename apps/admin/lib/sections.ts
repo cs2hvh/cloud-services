@@ -15,6 +15,7 @@ import {
   ShieldAlert,
   Archive,
   Activity,
+  Radar,
   Globe,
   Bot,
   ScrollText,
@@ -50,6 +51,7 @@ export const SECTION_GROUPS = ["", "Platform", "Compute", "Services", "Commerce"
 
 export const ADMIN_SECTIONS: AdminSection[] = [
   { title: "Overview", slug: "", icon: LayoutDashboard, migrated: true, description: "Admin home", group: "" },
+  { title: "HQ Monitor", slug: "monitor", icon: Radar, migrated: true, description: "Live platform map — flows, health, money", group: "" },
 
   { title: "Users", slug: "users", icon: Users, migrated: true, description: "Accounts, roles, suspensions", group: "Platform" },
   { title: "Support", slug: "support", icon: LifeBuoy, migrated: true, description: "Tickets and replies", group: "Platform" },

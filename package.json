@@ -70,6 +70,7 @@
     "@upstash/redis": "^1.35.3",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
+    "@xyflow/react": "^12.11.6",
     "axios": "^1.15.0",
     "bcryptjs": "^3.0.2",
     "bullmq": "^5.58.9",
