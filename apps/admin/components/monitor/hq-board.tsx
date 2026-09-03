@@ -489,6 +489,15 @@ export default function HqBoard() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const boardRef = useRef<HTMLDivElement | null>(null);
   const [isFs, setIsFs] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const apply = () => setIsMobile(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
 
   useEffect(() => {
     const onFs = () => setIsFs(document.fullscreenElement === boardRef.current);
@@ -602,10 +611,14 @@ export default function HqBoard() {
     <div
       ref={boardRef}
       className={`flex flex-col overflow-hidden rounded-xl border border-border bg-[#0b0c0f] ${
-        isFs ? "h-screen" : "h-[calc(100vh-170px)] min-h-[440px] md:min-h-[560px]"
+        isFs ? "h-screen" : "h-[420px] md:h-[calc(100vh-170px)] md:min-h-[560px]"
       }`}
     >
       <div className="relative flex-1">
+        {/* On a phone the flow must NOT capture single-finger drags — the page
+            has content below and needs to scroll past the map. Pinch-zoom and
+            node taps still work; full pan/drag interactivity returns in
+            present (fullscreen) mode, where there is no page to scroll. */}
         <ReactFlow
           nodes={graph.nodes}
           edges={graph.edges}
@@ -617,6 +630,10 @@ export default function HqBoard() {
           proOptions={{ hideAttribution: true }}
           nodesConnectable={false}
           elementsSelectable={false}
+          panOnDrag={!isMobile || isFs}
+          nodesDraggable={!isMobile || isFs}
+          preventScrolling={!isMobile || isFs}
+          zoomOnPinch
           colorMode="dark"
         >
           <Background color="rgba(255,255,255,0.05)" gap={28} size={1} />
