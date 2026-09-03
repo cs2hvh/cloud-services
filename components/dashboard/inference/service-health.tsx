@@ -111,7 +111,7 @@ export function ServiceHealth({
         <StatCell
           label="Last checked"
           value={new Date(fetchedAt).toLocaleTimeString()}
-          hint="Live — not cached"
+          hint="Live · not cached"
           accent={ACCENT}
         />
       </StatsStrip>

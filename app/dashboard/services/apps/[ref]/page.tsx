@@ -389,7 +389,7 @@ export default async function ProjectPage({
       */}
       <Card title="Health" icon={Activity}>
         {samples.error ? (
-          <Failed what="health samples" detail="The app is unaffected — this is a monitoring read." />
+          <Failed what="health samples" detail="The app is unaffected. This is a monitoring read." />
         ) : (
           (() => {
             const health = summariseHealth((samples.data ?? []) as unknown as UsageSample[]);
@@ -606,7 +606,7 @@ export default async function ProjectPage({
               value: project.scale_to_zero ? (
                 `after ${Math.round((project.idle_seconds ?? 900) / 60)} min idle`
               ) : (
-                <span className="text-white/40">no — always warm</span>
+                <span className="text-white/40">no, always warm</span>
               ),
             },
             {

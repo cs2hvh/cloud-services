@@ -823,7 +823,7 @@ export const SettingsTab = ({
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-white/50">Storage</p>
-            <h3 className="mt-0.5 text-sm font-semibold text-white">Upsize Storage — Current: {currentStorageGiB > 0 ? `${currentStorageGiB} GiB` : "Managed"}</h3>
+            <h3 className="mt-0.5 text-sm font-semibold text-white">Upsize Storage · Current: {currentStorageGiB > 0 ? `${currentStorageGiB} GiB` : "Managed"}</h3>
           </div>
         </div>
         <div className="px-5 py-3 space-y-2">

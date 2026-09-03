@@ -125,7 +125,7 @@ const SingleBucket = ({ bucket }: SingleBucketProps) => {
                     />
                     <CodeRow
                         label="Secret access key"
-                        hint="Secret — keep private"
+                        hint="Secret · keep private"
                         value={bucketData.secret_key || ""}
                         masked={!showSecretKey}
                         copied={copiedItem === "Secret access key"}

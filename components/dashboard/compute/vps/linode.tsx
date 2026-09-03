@@ -412,7 +412,7 @@ const LinodeCreate = ({ options }: { options: LinodeComputeOptions }) => {
                         <Section
                             num="01"
                             title="Region"
-                            desc="Where your server physically lives. Pick the region closest to your users — plans and pricing can vary per region."
+                            desc="Where your server physically lives. Pick the region closest to your users; plans and pricing can vary per region."
                             status={regionStatus}
                             statusLabel={selectedRegionInfo?.label ?? "Choose region"}
                         >

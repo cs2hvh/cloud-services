@@ -738,7 +738,7 @@ export function LinkDatabaseModal({
                 {source === 'create' && isDatabaseReady && (
                   <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-green-500/10 border border-green-500/20">
                     <Server className="w-4 h-4 text-green-400 flex-shrink-0" />
-                    <p className="text-xs text-green-400">Database online — ready to link</p>
+                    <p className="text-xs text-green-400">Database online. Ready to link.</p>
                   </div>
                 )}
               </>

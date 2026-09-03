@@ -720,7 +720,7 @@ const SpectrumAppCreate = ({
                         <Section
                             num={isSSHorRDP ? "03" : "04"}
                             title="Origin"
-                            desc="Where edge traffic terminates — your protected service."
+                            desc="Where edge traffic terminates. Your protected service."
                             status={originOk ? "done" : "idle"}
                             statusLabel={
                                 originOk
@@ -795,7 +795,7 @@ const SpectrumAppCreate = ({
                             <Section
                                 num="05"
                                 title="Advanced settings"
-                                desc="Optional — proxy protocol, IP rules, and edge connectivity."
+                                desc="Optional · proxy protocol, IP rules, and edge connectivity."
                                 status="done"
                                 statusLabel={
                                     formData.proxyProtocol === "off" &&

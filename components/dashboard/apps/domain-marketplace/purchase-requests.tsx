@@ -159,7 +159,7 @@ export function PurchaseRequests({
                               <span className="text-white/55 font-mono">{displayEmail}</span>
                             </span>
                           ) : (
-                            <span className="text-[10px] text-amber-400/70" title="Verification email routing is pending — will retry automatically">
+                            <span className="text-[10px] text-amber-400/70" title="Verification email routing is pending. It will retry automatically.">
                               Verification email routing pending…
                             </span>
                           )}

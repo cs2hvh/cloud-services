@@ -83,7 +83,7 @@ export function VpsMonitoringTab({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="text-[11px] text-white/30 font-medium uppercase tracking-wider">Live — 15s refresh</span>
+          <span className="text-[11px] text-white/30 font-medium uppercase tracking-wider">Live · 15s refresh</span>
         </div>
         <button onClick={onRefetch} className="text-[11px] text-white/30 hover:text-white/60 transition-colors flex items-center gap-1.5">
           <RefreshCw className={`h-3 w-3 ${loading ? 'animate-spin' : ''}`} />

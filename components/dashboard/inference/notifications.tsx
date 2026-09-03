@@ -302,7 +302,7 @@ export function NotificationsSettings({
         <ChannelCard
           icon={<Bell className="h-3.5 w-3.5" />}
           title="In-app bell"
-          subtitle="Shows up in the dashboard notification bell. On by default — cheap, always on unless you turn it off."
+          subtitle="Shows up in the dashboard notification bell. On by default: cheap, and always on unless you turn it off."
           enabled={config.in_app_enabled}
           onToggle={(v) => canMutate && setConfig((c) => ({ ...c, in_app_enabled: v }))}
           canMutate={canMutate}
@@ -314,7 +314,7 @@ export function NotificationsSettings({
         <ChannelCard
           icon={<Mail className="h-3.5 w-3.5" />}
           title="Email"
-          subtitle="Sent to the addresses you list below. Max 5. Uses our standard email template — no per-recipient customization."
+          subtitle="Sent to the addresses you list below. Max 5. Uses our standard email template, with no per-recipient customization."
           enabled={config.email_recipients.length > 0}
           onToggle={async () => {
             // Email "enabled" is implicit (any recipients = enabled). Toggle

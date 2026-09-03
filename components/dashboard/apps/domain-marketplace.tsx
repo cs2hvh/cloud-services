@@ -469,7 +469,7 @@ export function DomainMarketplaceTab({
             >
               <span className="font-medium">
                 Registrant Contact
-                <span className="ml-2 text-[11px] font-normal text-white/40">Optional — WHOIS / ICANN records</span>
+                <span className="ml-2 text-[11px] font-normal text-white/40">Optional · WHOIS / ICANN records</span>
               </span>
               {showContactForm
                 ? <ChevronUp className="h-4 w-4 shrink-0 text-white/40" />

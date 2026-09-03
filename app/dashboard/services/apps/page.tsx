@@ -183,7 +183,7 @@ export default async function ProjectsPage({
       {readFailed ? (
         <Failed
           what="your projects"
-          detail="Your apps are still running — this page could not read them. Try again in a moment."
+          detail="Your apps are still running. This page could not read them; try again in a moment."
         />
       ) : null}
 

@@ -839,7 +839,7 @@ export default function DomainTransferPage() {
               </div>
               <div className="border border-white/[0.08] bg-white/[0.04] px-4 py-2.5 text-xs text-white/55 shrink-0">
                 <p className="font-semibold text-white/80">Current step</p>
-                <p className="mt-0.5">{stage === "lookup" ? "1 of 2 — Validate domain" : "2 of 2 — Submit auth code"}</p>
+                <p className="mt-0.5">{stage === "lookup" ? "1 of 2 · Validate domain" : "2 of 2 · Submit auth code"}</p>
               </div>
             </div>
           </div>
@@ -906,7 +906,7 @@ export default function DomainTransferPage() {
                   <Input
                     id="domain"
                     name="domainNoAuto"
-                    placeholder="Enter the domain to transfer — e.g. yourbrand.com"
+                    placeholder="Enter the domain to transfer, e.g. yourbrand.com"
                     autoComplete="off"
                     autoCorrect="off"
                     autoCapitalize="none"
@@ -1014,7 +1014,7 @@ export default function DomainTransferPage() {
                     >
                       <span className="font-medium">
                         Registrant Contact
-                        <span className="ml-2 text-[11px] font-normal text-white/40">Optional — WHOIS / ICANN records</span>
+                        <span className="ml-2 text-[11px] font-normal text-white/40">Optional · WHOIS / ICANN records</span>
                       </span>
                       {showContactForm
                         ? <ChevronUp className="h-4 w-4 shrink-0 text-white/40" />

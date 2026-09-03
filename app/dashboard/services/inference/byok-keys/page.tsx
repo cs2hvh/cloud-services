@@ -197,7 +197,7 @@ export default function ByokKeysPage() {
         <StatCell
           label="Routable keys"
           value={String(routableCount)}
-          hint="Wokey — the active upstream"
+          hint="Wokey · active upstream"
           accent={routableCount > 0 ? ACCENT : undefined}
         />
         <StatCell

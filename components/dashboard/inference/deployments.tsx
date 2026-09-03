@@ -866,7 +866,7 @@ export function Deployments({
             <AlertDialogDescription>
               This terminates the serving endpoint (workers stop billing within ~30s),
               unregisters the model from your catalog, and marks the deployment deleted.
-              The action is asynchronous — the row will move to <span className="font-mono text-white/80">paused</span> first,
+              The action is asynchronous. The row will move to <span className="font-mono text-white/80">paused</span> first,
               then <span className="font-mono text-white/80">deleted</span> once teardown completes.
             </AlertDialogDescription>
           </AlertDialogHeader>

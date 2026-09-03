@@ -934,7 +934,7 @@ export default function DeployWizard({
                             </div>
                             <Select value={networkVolumeId || "none"} onValueChange={(v) => setNetworkVolumeId(v === "none" ? "" : v)}>
                                 <SelectTrigger className="h-10 border-white/[0.08] bg-[#0d0e11] text-[13px] text-white focus-visible:ring-0 focus-visible:border-white/25">
-                                    <SelectValue placeholder={volumesLoading ? "Loading…" : "None — don't attach a network volume"} />
+                                    <SelectValue placeholder={volumesLoading ? "Loading…" : "None · don't attach a network volume"} />
                                 </SelectTrigger>
                                 <SelectContent className="border-white/[0.1] bg-[#111216] text-white">
                                     <SelectItem value="none">None — don&apos;t attach a network volume</SelectItem>
@@ -1035,7 +1035,7 @@ export default function DeployWizard({
                         >
                             <div className="text-left">
                                 <p className={`${MONO} text-[10.5px] uppercase tracking-[0.14em] text-white/45`}>Optional</p>
-                                <h2 className="mt-1 text-[15px] font-semibold tracking-tight text-white">Advanced — ports & environment</h2>
+                                <h2 className="mt-1 text-[15px] font-semibold tracking-tight text-white">Advanced · ports & environment</h2>
                             </div>
                             {advancedOpen ? <ChevronDown className="h-4 w-4 text-white/60" /> : <ChevronRight className="h-4 w-4 text-white/60" />}
                         </button>

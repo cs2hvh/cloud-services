@@ -709,7 +709,7 @@ export function RuntimeLogs({ appId, appName, appStatus }: RuntimeLogsProps) {
                   </button>
                 </>
               ) : instances.some((i) => i.status === 'Pending' || !i.ready) ? (
-                <p className="text-[12px] text-[#fbbf24]/80">Instance is starting — logs will appear shortly</p>
+                <p className="text-[12px] text-[#fbbf24]/80">Instance is starting. Logs will appear shortly.</p>
               ) : instances.some((i) => i.status === 'Failed') ? (
                 <p className="text-[12px] text-[#f87171]/80">Instance failed to start. Check build logs for errors.</p>
               ) : streaming ? (

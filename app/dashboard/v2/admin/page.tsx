@@ -266,7 +266,7 @@ export default async function OperatorPage() {
 
       <Panel
         title="Workloads"
-        subtitle="Kubernetes Deployments against paas.deployments — the layer fleet drift cannot see"
+        subtitle="Kubernetes Deployments against paas.deployments. The layer fleet drift cannot see."
       >
         {"error" in workloads ? (
           <Unavailable error={workloads.error} />
@@ -312,7 +312,7 @@ export default async function OperatorPage() {
         )}
       </Panel>
 
-      <Panel title="Object storage" subtitle="R2 against paas.deployments — nothing prunes this bucket">
+      <Panel title="Object storage" subtitle="R2 against paas.deployments. Nothing prunes this bucket.">
         {"error" in storage ? (
           <Unavailable error={storage.error} />
         ) : (
@@ -340,7 +340,7 @@ export default async function OperatorPage() {
         )}
       </Panel>
 
-      <Panel title="Running now" subtitle="A point-in-time read — not accumulated usage">
+      <Panel title="Running now" subtitle="A point-in-time read, not accumulated usage">
         {"error" in usage ? (
           <Unavailable error={usage.error} />
         ) : (
