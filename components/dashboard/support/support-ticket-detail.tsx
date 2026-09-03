@@ -191,6 +191,9 @@ export default function SupportTicketDetailView({ ticket, initialResources }: Su
   const [attachmentUploading, setAttachmentUploading] = useState(false);
 
   const [replyText, setReplyText] = useState("");
+  // Text length, not markup length. An empty editor holds "<p></p>", so any
+  // check against the raw string treats a blank reply as ready to send.
+  const replyLength = useMemo(() => plainTextFromRichText(replyText).length, [replyText]);
   const [replySending, setReplySending] = useState(false);
   const [replyError, setReplyError] = useState("");
 
@@ -349,18 +352,21 @@ export default function SupportTicketDetailView({ ticket, initialResources }: Su
   }
 
   async function sendReply() {
-    const trimmed = replyText.trim();
-    if (trimmed.length < 2) {
+    // Guard on the TEXT length, not the markup: an empty editor still holds
+    // "<p></p>", which a raw .length check reads as content and would post as
+    // a blank reply. The markup itself is what gets sent.
+    if (plainTextFromRichText(replyText).length < 2) {
       setReplyError("Write a little more before sending.");
       return;
     }
+    const html = replyText.trim();
     setReplySending(true);
     setReplyError("");
     try {
       const response = await fetch(`/api/support/tickets/${ticket.id}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: trimmed }),
+        body: JSON.stringify({ message: html }),
       });
       const payload = (await response.json().catch(() => ({}))) as { error?: string };
       if (!response.ok) {
@@ -787,24 +793,36 @@ export default function SupportTicketDetailView({ ticket, initialResources }: Su
             {/* Reply composer */}
             <div className="mt-4">
               {canReply ? (
-                <div className="border border-white/[0.08] bg-[#111216] rounded-[6px] p-3.5 focus-within:border-[#0095FF]/40 transition-colors">
-                  <textarea
+                /*
+                  The same editor the create form uses. A customer who wrote
+                  their ticket with formatting, code blocks and links had to
+                  follow it up in a bare textarea, so a pasted stack trace came
+                  back as one unreadable run of text — in the place where
+                  formatting matters most, since replies are where the actual
+                  error output goes.
+
+                  Cmd/Ctrl+Enter is bound on the wrapper: the editor owns its
+                  own keymap, and this rides above it without fighting it.
+                */
+                <div
+                  className="border border-white/[0.08] bg-[#111216] rounded-[6px] overflow-hidden focus-within:border-[#0095FF]/40 transition-colors"
+                  onKeyDown={(event) => {
+                    if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                      event.preventDefault();
+                      if (!replySending && replyLength >= 2) void sendReply();
+                    }
+                  }}
+                >
+                  <SupportRichTextEditor
                     value={replyText}
-                    onChange={(event) => {
-                      setReplyText(event.target.value);
+                    onChange={(next) => {
+                      setReplyText(next);
                       if (replyError) setReplyError("");
                     }}
-                    onKeyDown={(event) => {
-                      if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-                        event.preventDefault();
-                        void sendReply();
-                      }
-                    }}
-                    rows={3}
                     placeholder="Write a reply to support…"
-                    className="w-full resize-y bg-transparent text-[13.5px] text-white placeholder:text-white/30 leading-relaxed outline-none min-h-[72px]"
+                    minHeightClassName="min-h-[120px]"
                   />
-                  <div className="mt-2 flex items-center justify-between gap-3 border-t border-white/[0.06] pt-2.5">
+                  <div className="flex items-center justify-between gap-3 border-t border-white/[0.06] px-3.5 py-2.5">
                     <span className={`${MONO} text-[10px] text-white/30`}>
                       {replyError ? (
                         <span className="text-rose-300">{replyError}</span>
@@ -815,7 +833,7 @@ export default function SupportTicketDetailView({ ticket, initialResources }: Su
                     <button
                       type="button"
                       onClick={() => void sendReply()}
-                      disabled={replySending || replyText.trim().length < 2}
+                      disabled={replySending || replyLength < 2}
                       className={`${MONO} inline-flex h-9 items-center gap-1.5 px-4 text-[11px] uppercase tracking-[0.14em] font-semibold rounded-[5px] transition-all disabled:opacity-40 disabled:cursor-not-allowed`}
                       style={{
                         background: `linear-gradient(135deg, ${ACCENT}, #0066B3)`,

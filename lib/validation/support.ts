@@ -77,11 +77,18 @@ export const supportAttachmentDeleteSchema = z.object({
 });
 
 export const supportTicketReplySchema = z.object({
+  // Measured as TEXT, not markup — the reply composer sends editor HTML now,
+  // and a plain .max() on the string would count every tag against the
+  // customer's limit. A formatted reply and the same words typed flat should
+  // hit the ceiling at the same point. Matches descriptionSchema above.
   message: z
     .string()
-    .trim()
-    .min(2, "Message must be at least 2 characters")
-    .max(8000, "Message cannot exceed 8000 characters"),
+    .refine((value) => getSupportRichTextLength(value) >= 2, {
+      message: "Message must be at least 2 characters",
+    })
+    .refine((value) => getSupportRichTextLength(value) <= 8000, {
+      message: "Message cannot exceed 8000 characters",
+    }),
 });
 
 export const supportTicketIdParamSchema = z.object({

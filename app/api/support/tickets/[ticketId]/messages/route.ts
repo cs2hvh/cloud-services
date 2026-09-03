@@ -75,7 +75,19 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return validation.response;
     }
 
-    const html = sanitizeSupportRichText(plainTextToHtml(validation.data.message));
+    // The composer sends editor HTML, like the create form's description does.
+    // Anything WITHOUT markup — a direct API call, an older client — is still
+    // treated as plain text so its paragraphs and line breaks survive; running
+    // real HTML through plainTextToHtml would escape it and the customer would
+    // see their own tags rendered as literal text.
+    //
+    // Either path ends at the same sanitizer, so what gets stored is the same
+    // restricted markup the thread has always rendered.
+    const submitted = validation.data.message;
+    const containsMarkup = /<\/?[a-z][^>]*>/i.test(submitted);
+    const html = sanitizeSupportRichText(
+      containsMarkup ? submitted : plainTextToHtml(submitted)
+    );
     if (!html || html.replace(/<[^>]*>/g, "").trim().length < 2) {
       return NextResponse.json({ error: "Message cannot be empty" }, { status: 400 });
     }
