@@ -106,6 +106,14 @@ interface ServiceSpec {
   /** Columns for markup pricing: cost per unit per hour, and the unit count. */
   upstreamCostColumn?: string;
   unitsColumn?: string;
+  /**
+   * Bill this many units regardless of what the meter or the resource says.
+   * For a resource whose frozen rate ALREADY includes its unit count (a GPU
+   * pod's gpu_hourly_usd has gpu_count multiplied in), multiplying by the
+   * meter's `units` (which openGpuPodMeters sets to gpu_count) again would
+   * bill an 8-GPU pod eight times over.
+   */
+  fixedUnits?: number;
 }
 
 const SERVICES: Record<string, ServiceSpec> = {
@@ -131,8 +139,21 @@ const SERVICES: Record<string, ServiceSpec> = {
     // NOT billable under the pod's own plan here.
     billableStatuses: ["running"],
     nonBillableStatuses: ["stopped", "terminated", "failed", "error", "exited"],
-    upstreamCostColumn: "runpod_cost_per_hr",
-    unitsColumn: "gpu_count",
+    // The customer rate FROZEN at create (gpu_hourly_usd, 20260903190000):
+    // max(observed RunPod price x markup, floor) x gpu_count, storage
+    // excluded. Billed back through the gpu_pod / '*' 1.0 passthrough row,
+    // the same shape as compute's hourly_cost, so quote and charge are one
+    // number. The previous entry billed runpod_cost_per_hr x the live markup,
+    // which could not reproduce the quote: resolve_hourly_rate's markup
+    // branch never reads the unit count, so an 8-GPU pod would have billed
+    // one eighth of its price, and the per-GPU floor was applied once to the
+    // whole pod. Invisible so far only because every pod ever created had
+    // gpu_count = 1 and gpu_pod had never produced a charge row.
+    upstreamCostColumn: "gpu_hourly_usd",
+    // gpu_count is already inside the frozen rate; the meter's `units` column
+    // (set to gpu_count by openGpuPodMeters) is descriptive here, not a
+    // multiplier.
+    fixedUnits: 1,
   },
   /**
    * A pod's local disk, billed separately from its GPU and on a different
@@ -556,11 +577,14 @@ async function main(): Promise<number> {
         }
       }
 
-      // Units: prefer the live resource (a resized cluster changes node count)
-      // and fall back to what the meter recorded.
-      const units = spec.unitsColumn
-        ? Number(res[spec.unitsColumn] ?? meter.units)
-        : Number(meter.units);
+      // Units: a fixed count when the rate already includes it; otherwise
+      // prefer the live resource (a resized cluster changes node count) and
+      // fall back to what the meter recorded.
+      const units = spec.fixedUnits !== undefined
+        ? spec.fixedUnits
+        : spec.unitsColumn
+          ? Number(res[spec.unitsColumn] ?? meter.units)
+          : Number(meter.units);
 
       if (!args.apply) {
         // A dry run that reports "would-charge" for a meter with no price is

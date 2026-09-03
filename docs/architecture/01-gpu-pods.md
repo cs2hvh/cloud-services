@@ -115,7 +115,7 @@ a product decision taken 2026-08-26. `floor_per_hour_usd` is 0.
 | Identity | `id` (bigint), `billing_service_id` (uuid), `runpod_pod_id`, `owner_id` |
 | Spec | `gpu_catalog_id`, `gpu_count`, `cloud_type`, `interruptible`, `image_name`, `template_id`, `container_disk_gb`, `volume_gb`, `network_volume_id` |
 | Runtime | `status`, `public_ip`, `port_mappings`, `ssh_command`, `details` |
-| Money | `hourly_cost_usd` (frozen at checkout), `runpod_cost_per_hr`, `billing_start`, `billing_end` |
+| Money | `hourly_cost_usd` (the all-in rate shown to the customer, GPU plus storage), `gpu_hourly_usd` (GPU-only, `gpu_count` included, storage excluded; added 2026-09-03 and what the sweep bills through the `gpu_pod` / `*` passthrough), `runpod_cost_per_hr` (per GPU, what RunPod charges us), `billing_start`, `billing_end` |
 | Secrets | `env_blob` (AES-256-GCM), `terminal_key_blob` (AES-256-GCM) |
 
 **Two ids on purpose.** `id` is a bigint for humans and URLs;
