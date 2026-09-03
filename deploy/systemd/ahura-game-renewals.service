@@ -1,0 +1,23 @@
+[Unit]
+# Game server renewals (prepaid monthly).
+#
+# Drives /api/internal/game/renewals, which the deleted cron-worker.js used to
+# call. Between 2026-08-24 and 2026-09-03 nothing called it: three servers ran
+# 29 days past their paid period with auto_renew on and nobody was charged,
+# suspended or told.
+Description=AhuraCloud game server renewal sweep
+Documentation=file:///root/cloud-services/lib/services/game/renewals.ts
+After=network-online.target ahura-web.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/root/cloud-services
+ExecStart=/usr/bin/node --experimental-strip-types --env-file=/root/cloud-services/.env /root/cloud-services/scripts/ops/call-internal-route.ts POST /api/internal/game/renewals
+TimeoutStartSec=360
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

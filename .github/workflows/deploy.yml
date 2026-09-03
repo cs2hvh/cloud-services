@@ -29,13 +29,61 @@ on:
         description: Branch to deploy
         required: true
         default: dev
+      skip_checks:
+        description: Deploy even if the typecheck fails (emergency only)
+        required: false
+        default: 'false'
 
 concurrency:
   group: deploy-${{ github.event.inputs.branch || github.ref_name }}
   cancel-in-progress: false   # don't interrupt an in-flight build mid-deploy
 
 jobs:
+  # ── the gate ──────────────────────────────────────────────────────────────
+  #
+  # Until 2026-09-03 nothing stood between a push to dev and production. The
+  # vitest suite had been red for long enough that a red suite carried no
+  # signal, so it could not be the gate. The typecheck was clean, so it can:
+  # `next build` would fail on the host anyway, but failing HERE keeps the
+  # broken revision off the box and out of `git reset --hard`.
+  #
+  # The unit tests run alongside and do not gate yet (72 of 196 files were
+  # failing on 2026-09-03). They are here so the count is visible on every
+  # push instead of nowhere; the day the suite is green, move it into the gate.
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch || github.ref_name }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Typecheck
+        run: npx tsc --noEmit -p tsconfig.json
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch || github.ref_name }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Unit tests (not gating yet — see the comment above)
+        run: npx vitest run --reporter=default 2>&1 | tail -40
+
   deploy:
+    needs: [typecheck]
+    if: ${{ always() && (needs.typecheck.result == 'success' || github.event.inputs.skip_checks == 'true') }}
     runs-on: ubuntu-latest
     environment: DEPLOY_HOST    # your secrets live in the environment named "DEPLOY_HOST"
     steps:
@@ -104,3 +152,48 @@ jobs:
               journalctl -u ahura-build-worker -n 40 --no-pager || true
               exit 1
             fi
+
+            # ── the billing sweep and renewal timers are installed HERE ───────
+            #
+            # Until 2026-09-03 the hourly billing sweep timer existed only
+            # because someone once ran the commands in deploy/systemd/README.md
+            # by hand. A rebuilt host would have billed nothing and said
+            # nothing — the 2026-08-24 failure with a different file name.
+            # Game and domain renewals had no scheduler at all after the old
+            # cron worker was deleted. All three are unit files in the repo now
+            # and every deploy re-installs them.
+            for u in ahura-billing-sweep ahura-game-renewals ahura-domain-renewals; do
+              cp "/root/cloud-services/deploy/systemd/$u.service" /etc/systemd/system/
+              cp "/root/cloud-services/deploy/systemd/$u.timer"   /etc/systemd/system/
+            done
+            systemctl daemon-reload
+
+            # The retired v1 biller must never start again (see deploy.sh).
+            systemctl disable --now ahura-cron 2>/dev/null || true
+            systemctl mask ahura-cron 2>/dev/null || true
+
+            for u in ahura-billing-sweep ahura-game-renewals ahura-domain-renewals; do
+              systemctl enable --now "$u.timer" || true
+            done
+            sleep 2
+
+            # PROVE THEY ARE ARMED. A timer that failed to enable is silent.
+            TIMERS_OK=1
+            for u in ahura-billing-sweep ahura-game-renewals ahura-domain-renewals; do
+              if systemctl is-active --quiet "$u.timer"; then
+                echo "$u.timer ACTIVE"
+              else
+                echo "=============================================="
+                echo "$u.timer IS NOT ACTIVE"
+                echo "=============================================="
+                systemctl status "$u.timer" --no-pager || true
+                TIMERS_OK=0
+              fi
+            done
+            systemctl list-timers 'ahura-*' --no-pager || true
+            if systemctl is-enabled ahura-cron 2>/dev/null | grep -q masked; then
+              echo "ahura-cron masked"
+            else
+              echo "WARNING: ahura-cron is not masked"
+            fi
+            [ "$TIMERS_OK" = 1 ] || exit 1

@@ -33,11 +33,13 @@ WorkingDirectory=/root/cloud-services
 ExecStart=/usr/bin/node --experimental-strip-types --env-file=/root/cloud-services/.env /root/cloud-services/scripts/billing/sweep.ts --apply
 
 # The sweep exits 1 when it finds problems it did not bill (a dead resource, a
-# missing price, an insufficient balance). Those are real findings that belong
-# in the journal, not failures that should stop the timer — the next hour must
-# still run. SuccessExitStatus keeps systemd from marking the unit failed and
-# and leaving an operator to think billing has stopped when it has not.
-SuccessExitStatus=0 1
+# missing price, an insufficient balance). This used to be listed as a success
+# exit status so the unit would not show "failed". That hid an eleven-hour
+# unbilled compute meter in 2026-09: the sweep said PROBLEM every hour, systemd
+# said success, and nobody reads the journal. A oneshot unit failing does NOT
+# stop its timer — the next hour still runs — so let it fail. The findings
+# themselves now go to billing.sweep_runs, which the dead-man reads.
+SuccessExitStatus=0
 
 # A sweep that cannot finish in ten minutes is wedged, not slow.
 TimeoutStartSec=600

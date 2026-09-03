@@ -160,6 +160,15 @@ export function resolveHourly(
                     `${row.serviceType}/${row.planKey}: markup pricing needs an upstream cost`,
                 );
             }
+            // Mirrors billing.resolve_hourly_rate (20260903165202): a resold
+            // resource that costs us nothing does not exist. A zero here is a
+            // rate that was never written, and quoting it would show a
+            // customer a price the sweep now refuses to charge.
+            if (cost <= 0) {
+                throw new Error(
+                    `${row.serviceType}/${row.planKey}: markup pricing needs a positive upstream cost, got ${cost}`,
+                );
+            }
             hourly = cost * row.amount;
             break;
         }

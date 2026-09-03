@@ -44,8 +44,16 @@
  * Exit codes: 0 clean, 1 problems found (unbilled meters, dead resources,
  * missing prices). Non-zero is what an external monitor watches for — see the
  * note on dead-man alerting at the bottom.
+ *
+ * EVERY RUN IS RECORDED in billing.sweep_runs — period, mode, outcome tally and
+ * the exact problem lines. Until 2026-09-03 the only record of a problem was
+ * this script's stdout in the systemd journal on the host. An eleven-hour hole
+ * on a compute meter was reported there every hour and nobody read it, while
+ * the dead-man saw a fresh max(period_start) from the other meters and stayed
+ * green. The dead-man now reads sweep_runs and billing.meter_coverage().
  */
 
+import os from "node:os";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 // ── Service registry ─────────────────────────────────────────────────────
@@ -82,6 +90,17 @@ interface ServiceSpec {
    * so the report can tell "deliberately not billed" from "we do not know".
    */
   nonBillableStatuses?: string[];
+  /**
+   * Column that carries the lifecycle status. Defaults to "status". Set to
+   * null for a table that has no such column — then merely existing is the
+   * billable state, and `billableStatuses` must contain "exists".
+   *
+   * inference.vector_collections has no status column. The registry used to
+   * select one anyway, PostgREST refused the query, and every vector meter
+   * would have been PROBLEM-error forever. No meter had been opened yet, which
+   * is the only reason it never fired.
+   */
+  statusColumn?: string | null;
   /** Column holding stored bytes, for per_gb_hour pricing. */
   bytesColumn?: string;
   /** Columns for markup pricing: cost per unit per hour, and the unit count. */
@@ -161,20 +180,33 @@ const SERVICES: Record<string, ServiceSpec> = {
     billableStatuses: ["active", "running", "provisioning"],
     nonBillableStatuses: ["deleted", "removed", "failed"],
   },
+  /**
+   * The v1 (Jenkins) apps table. The v2 PaaS in the `paas` schema bills on its
+   * own spine (paas.charge_project_hour, hourly at :04 from a Kubernetes
+   * CronJob) and never opens a meter here. Statuses match the table's CHECK
+   * constraint: pending, building, running, failed, stopped, deleting. The
+   * previous list named "active" and "deployed", which the column cannot hold,
+   * and omitted "pending" and "building", so every mid-build app was reported
+   * as an unknown status.
+   */
   platform_apps: {
     schema: "public", table: "platform_apps",
-    billableStatuses: ["active", "running", "deployed"],
-    nonBillableStatuses: ["deleted", "removed", "failed", "stopped"],
+    billableStatuses: ["running"],
+    nonBillableStatuses: ["pending", "building", "failed", "stopped", "deleting", "deleted", "removed"],
   },
   custom_image: {
     schema: "public", table: "custom_images",
+    idColumn: "billing_service_id",
     billableStatuses: ["active", "ready", "available"],
-    nonBillableStatuses: ["deleted", "removed", "failed"],
+    nonBillableStatuses: ["deleted", "removed", "failed", "deleting"],
   },
   inference_vector: {
     schema: "inference", table: "vector_collections",
-    billableStatuses: ["active", "ready"],
-    nonBillableStatuses: ["deleted", "removed"],
+    // No status column: a collection that exists is billable, and one that has
+    // been deleted is a missing row (PROBLEM-no-resource, which is correct).
+    statusColumn: null,
+    billableStatuses: ["exists"],
+    nonBillableStatuses: [],
   },
 };
 
@@ -232,16 +264,38 @@ interface Meter {
   started_at: string;
 }
 
-async function loadOpenMeters(db: SupabaseClient, filter: string | null): Promise<Meter[]> {
-  let q = db.schema("billing").from("service_meters")
-    .select("id, service_type, service_id, user_id, plan_key, units, status, started_at")
-    .is("ended_at", null)
-    .eq("status", "active");
-  if (filter) q = q.eq("service_type", filter);
+/**
+ * PostgREST on this project caps every response at 1000 rows regardless of
+ * the limit asked for (verified: asked 3000, got 1000). An unpaginated read
+ * here would bill the first thousand meters every hour and silently never
+ * look at the rest, while reporting "charged 1000 of 1000". Page until a
+ * short page.
+ */
+const PAGE = 1000;
 
-  const { data, error } = await q;
-  if (error) throw new Error(`could not load meters: ${error.message}`);
-  return (data ?? []) as Meter[];
+async function loadOpenMeters(db: SupabaseClient, filter: string | null): Promise<Meter[]> {
+  const all: Meter[] = [];
+  for (let from = 0; ; from += PAGE) {
+    let q = db.schema("billing").from("service_meters")
+      .select("id, service_type, service_id, user_id, plan_key, units, status, started_at")
+      .is("ended_at", null)
+      .eq("status", "active")
+      .order("id", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (filter) q = q.eq("service_type", filter);
+
+    const { data, error } = await q;
+    if (error) throw new Error(`could not load meters: ${error.message}`);
+    const page = (data ?? []) as Meter[];
+    all.push(...page);
+    if (page.length < PAGE) break;
+  }
+  return all;
+}
+
+/** The status column to read for a service, or null when existence is the status. */
+function statusColumnOf(spec: ServiceSpec): string | null {
+  return spec.statusColumn === null ? null : (spec.statusColumn ?? "status");
 }
 
 /**
@@ -257,7 +311,9 @@ async function loadResources(
   ids: string[]
 ): Promise<Map<string, Record<string, unknown>>> {
   const idCol = spec.idColumn ?? "id";
-  const cols = [idCol, "status"];
+  const cols = [idCol];
+  const statusCol = statusColumnOf(spec);
+  if (statusCol) cols.push(statusCol);
   if (spec.bytesColumn) cols.push(spec.bytesColumn);
   if (spec.upstreamCostColumn) cols.push(spec.upstreamCostColumn);
   if (spec.unitsColumn) cols.push(spec.unitsColumn);
@@ -304,7 +360,12 @@ interface Line {
   detail?: string;
 }
 
-const PROBLEM = (o: Outcome) => o.startsWith("PROBLEM") || o === "insufficient" || o === "no-price";
+// 'zero-cost' is a problem too: a live resource whose price resolved to
+// nothing is a price that was never written, not a free resource. It was
+// counted as benign until 2026-09-03; billing.resolve_hourly_rate now refuses
+// a zero upstream cost for the same reason.
+const PROBLEM = (o: Outcome) =>
+  o.startsWith("PROBLEM") || o === "insufficient" || o === "no-price" || o === "zero-cost";
 
 // ── Main ─────────────────────────────────────────────────────────────────
 
@@ -332,6 +393,7 @@ async function main(): Promise<number> {
 
   const db = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
   const periodIso = args.period.toISOString();
+  const startedAt = new Date();
 
   console.log(`[sweep] period=${periodIso} mode=${args.apply ? "APPLY" : "dry-run"}`);
   if (!args.apply) {
@@ -341,6 +403,9 @@ async function main(): Promise<number> {
   const meters = await loadOpenMeters(db, args.serviceFilter);
   if (meters.length === 0) {
     console.log("[sweep] no open meters");
+    // Recorded too: "the sweep ran and found nothing" and "the sweep did not
+    // run" must not look the same from outside.
+    await recordRun(db, args, [], startedAt);
     return 0;
   }
 
@@ -432,7 +497,8 @@ async function main(): Promise<number> {
         continue;
       }
 
-      const status = String(res.status ?? "");
+      const statusCol = statusColumnOf(spec);
+      const status = statusCol === null ? "exists" : String(res[statusCol] ?? "");
       if (!spec.billableStatuses.includes(status)) {
         if (spec.nonBillableStatuses?.includes(status)) {
           lines.push({ meter, outcome: "skipped-not-billable", detail: `status=${status}` });
@@ -537,7 +603,54 @@ async function main(): Promise<number> {
     }
   }
 
-  return report(lines, args);
+  const code = report(lines, args);
+  await recordRun(db, args, lines, startedAt);
+  return code;
+}
+
+/**
+ * Write this run to billing.sweep_runs so it can be read from outside the host.
+ *
+ * A failure to record is logged and does not change the exit code: the money
+ * has already moved (or not) by now, and the dead-man will treat a missing run
+ * row as "the sweep did not run", which is the correct alarm for a sweep that
+ * ran and could not say so.
+ */
+async function recordRun(db: SupabaseClient, args: Args, lines: Line[], startedAt: Date): Promise<void> {
+  const tally: Record<string, number> = {};
+  for (const l of lines) tally[l.outcome] = (tally[l.outcome] ?? 0) + 1;
+
+  const problems = lines
+    .filter((l) => PROBLEM(l.outcome))
+    .map((l) => ({
+      service_type: l.meter.service_type,
+      service_id: l.meter.service_id,
+      user_id: l.meter.user_id,
+      plan_key: l.meter.plan_key,
+      outcome: l.outcome,
+      detail: l.detail ?? null,
+    }));
+
+  const { error } = await db.schema("billing").from("sweep_runs").insert({
+    period_start: args.period.toISOString(),
+    started_at: startedAt.toISOString(),
+    finished_at: new Date().toISOString(),
+    mode: args.apply ? "apply" : "dry-run",
+    meters: lines.length,
+    charged: (tally["charged"] ?? 0) + (tally["charged-free"] ?? 0),
+    problems: problems.length,
+    outcomes: tally,
+    problem_lines: problems,
+    host: os.hostname(),
+    git_sha: process.env.GIT_SHA ?? null,
+  });
+
+  if (error) {
+    console.error(
+      `[sweep] could not record this run in billing.sweep_runs: ${error.message} — ` +
+      `the dead-man will report the sweep as not having run`
+    );
+  }
 }
 
 function describeInputs(q: number | null, u: number | null, units: number): string {

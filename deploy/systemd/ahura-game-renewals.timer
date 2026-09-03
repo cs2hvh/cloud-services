@@ -1,0 +1,14 @@
+[Unit]
+Description=Run the game server renewal sweep every 15 minutes
+
+[Timer]
+# lib/services/game/renewals.ts: "Run every 15-60 minutes. Single-flighted via
+# Redis NX lock", so an overlapping tick is harmless.
+OnCalendar=*:00/15
+Persistent=true
+RandomizedDelaySec=30
+AccuracySec=1s
+Unit=ahura-game-renewals.service
+
+[Install]
+WantedBy=timers.target

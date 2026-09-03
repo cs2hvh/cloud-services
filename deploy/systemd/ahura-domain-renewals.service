@@ -1,0 +1,21 @@
+[Unit]
+# Domain renewal billing (daily).
+#
+# Drives /api/domains/renewal/poll, which docs/PRODUCTION.md §8 records as the
+# old cron worker's `0 9 * * *` job. Uncalled since 2026-08-24.
+Description=AhuraCloud domain renewal poll
+Documentation=file:///root/cloud-services/app/api/domains/renewal/poll/route.ts
+After=network-online.target ahura-web.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/root/cloud-services
+ExecStart=/usr/bin/node --experimental-strip-types --env-file=/root/cloud-services/.env /root/cloud-services/scripts/ops/call-internal-route.ts POST /api/domains/renewal/poll
+TimeoutStartSec=360
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

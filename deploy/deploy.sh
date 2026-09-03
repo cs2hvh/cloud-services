@@ -3,8 +3,9 @@
 # deploy.sh — one-command deploy for the self-hosted web app on the Linode VM.
 #
 # Pulls a branch → installs deps (only if the lockfile changed) → builds →
-# restarts the app (+ cron) → health-checks. If the build fails it does NOT
-# restart, so the currently-live version keeps serving.
+# restarts the app → health-checks. If the build fails it does NOT restart, so
+# the currently-live version keeps serving. The billing sweep and renewal
+# timers are installed by .github/workflows/deploy.yml after this script runs.
 #
 # Recommended: copy this OUTSIDE the repo once so `git reset` can't touch it:
 #     cp deploy/deploy.sh /root/deploy.sh && chmod +x /root/deploy.sh
@@ -78,10 +79,17 @@ echo "  build OK (BUILD_ID $(cat .next/BUILD_ID))"
 # ── 4. restart services (brief downtime on a single instance)
 step "Restarting $WEB_SERVICE"
 systemctl restart "$WEB_SERVICE" || die "failed to restart $WEB_SERVICE"
-if [[ $RESTART_CRON == 1 ]]; then
-  step "Restarting $CRON_SERVICE"
-  systemctl restart "$CRON_SERVICE" || echo "  (warning: $CRON_SERVICE restart failed — check it manually)"
-fi
+
+# The old billing cron ($CRON_SERVICE) must NEVER run again. It billed from
+# billing.active_* with rates that include monthly figures written into an
+# hourly column, and it caps a billing window at 24h and charges the cap.
+# Until 2026-09-03 this script restarted it on every deploy; it only failed to
+# bill because its script file no longer exists. Masking makes that permanent.
+# (--no-cron is still accepted so old invocations keep working; it is a no-op.)
+if [[ $RESTART_CRON == 1 ]]; then :; fi
+step "Masking $CRON_SERVICE (the retired v1 biller)"
+systemctl disable --now "$CRON_SERVICE" 2>/dev/null || true
+systemctl mask "$CRON_SERVICE" 2>/dev/null || true
 
 # The build worker runs the code in THIS repo and is not part of the web app, so
 # a deploy that skips it ships build-path changes that never execute. That is

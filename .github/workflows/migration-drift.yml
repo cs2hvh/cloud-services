@@ -1,0 +1,41 @@
+# Does supabase/migrations/ match what the database has applied?
+#
+# The database is deployed separately from every app that reads it: migrations
+# are applied by hand, code ships on push. On 2026-09-01 eleven migrations
+# existed only in production; on 2026-09-02 a hand-applied price row raced a
+# code push and a compute meter went unbilled for eleven hours. This is the
+# cheap half of the fix — it cannot stop the skew, but it stops it going
+# unnoticed.
+#
+# REQUIRED REPOSITORY SECRET: SUPABASE_DB_URL (direct Postgres connection
+# string; the migrations schema is not reachable through PostgREST). Without
+# it every run exits 2 — visibly red, not quietly green.
+
+name: Migration drift
+
+on:
+  push:
+    branches: [dev]
+    paths:
+      - 'supabase/migrations/**'
+      - 'scripts/ci/migration-drift.ts'
+      - '.github/workflows/migration-drift.yml'
+  schedule:
+    - cron: '50 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install the one dependency
+        run: npm install --no-save --no-audit --no-fund pg
+      - name: Compare applied migrations with the folder
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: node --experimental-strip-types scripts/ci/migration-drift.ts

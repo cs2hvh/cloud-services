@@ -127,6 +127,19 @@ describe("resolveHourly", () => {
     ).toThrow(/upstream cost/i);
   });
 
+  it("refuses a markup with a zero or negative upstream cost — a rate never written, not a free resource", () => {
+    // Mirrors billing.resolve_hourly_rate: a resold resource that costs us
+    // nothing does not exist. Quoting $0 would show a customer a price the
+    // sweep now refuses to charge.
+    for (const upstreamCostPerHour of [0, -0.5]) {
+      expect(() =>
+        resolveHourly(row({ rateModel: "markup", amount: 1.25, unit: "multiplier" }), {
+          upstreamCostPerHour,
+        }),
+      ).toThrow(/positive upstream cost/i);
+    }
+  });
+
   it("refuses per-GB pricing with no quantity", () => {
     expect(() =>
       resolveHourly(row({ rateModel: "per_gb_hour", amount: 0.05, unit: "usd_per_gb_month" })),
