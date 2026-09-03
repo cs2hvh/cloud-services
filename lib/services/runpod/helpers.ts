@@ -1,5 +1,7 @@
 // RunPod ID mapping, pricing math, and GraphQL query builders.
 
+import { HOURS_IN_MONTH } from "@/lib/pricing/hours";
+
 import type { CloudType, RunPodGpuTypeLowestPrice, StockStatus } from "./types";
 
 /**
@@ -65,18 +67,32 @@ export function computeResalePerHour(args: {
 /**
  * Storage price for a pod's local disk (container disk + pod volume) in $/GB
  * per month. Network volumes are billed separately by their own meter, so
- * they are NOT included here. Used by both the deploy estimate and the billed
- * hourly rate so they always agree.
+ * they are NOT included here.
  */
 export const GPU_STORAGE_USD_PER_GB_MONTH = 0.1;
 
-/** Hourly storage cost for a pod's local disk (container disk + pod volume). */
+/**
+ * Hourly storage cost for a pod's local disk (container disk + pod volume).
+ *
+ * The divisor MUST be the one billing.hours_in_month() uses, because this
+ * function only quotes: the money is actually taken by the gpu_pod_storage
+ * meter, which resolves usd_per_gb_month through billing.resolve_hourly_rate.
+ * This divided by 730 while that divided by 720, so every pod was quoted 1.4%
+ * less storage than it would have been charged. Importing the shared constant
+ * is the point: whichever value the platform settles on, both sides move
+ * together and cannot drift apart again.
+ *
+ * (Whether 720 or 730 is right is a separate, open question. lib/paas/tiers.ts
+ * argues for 730 and is arithmetically correct that 720 bills 8,640 hours
+ * against an 8,760-hour year. That is a pricing decision affecting every
+ * monthly-priced service, not one to settle here.)
+ */
 export function storagePerHour(args: {
     containerDiskGb: number;
     volumeGb: number;
 }): number {
     const gb = Math.max(0, args.containerDiskGb) + Math.max(0, args.volumeGb);
-    const perHour = (gb * GPU_STORAGE_USD_PER_GB_MONTH) / 730;
+    const perHour = (gb * GPU_STORAGE_USD_PER_GB_MONTH) / HOURS_IN_MONTH;
     return Math.round(perHour * 10000) / 10000;
 }
 

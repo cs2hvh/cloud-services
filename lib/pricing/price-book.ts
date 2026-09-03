@@ -27,8 +27,8 @@
 
 import { createServiceClient } from "@/lib/supabase/server";
 
-/** Hours used to convert a monthly price. Must match billing.hours_in_month(). */
-export const HOURS_IN_MONTH = 24 * 30;
+export { HOURS_IN_MONTH } from "./hours";
+import { HOURS_IN_MONTH } from "./hours";
 
 export type ServiceType =
     | "compute"
