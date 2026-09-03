@@ -94,14 +94,16 @@ const BucketCreate = ({
     useEffect(() => {
         (async () => {
             try {
-                const endpoint = isAdmin
-                    ? "/api/admin/products?type=object-storage"
-                    : "/api/products?type=object-storage";
-                const res = await axios.get(endpoint);
-                const products = res?.data?.products;
-                if (products && products.length > 0) {
-                    setStoragePrice(parseFloat(products[0].price) || 0);
-                }
+                // The price book, not public.products — that table was dropped
+                // on 2026-08-31 and both branches of the old code returned an
+                // empty list, which became a $0 price on the page while the
+                // book held $5.00/mo. Same source the hourly sweep charges
+                // from, so what is shown is what gets billed.
+                const res = await axios.get("/api/services/pricing?service=objectspace");
+                const monthly = res?.data?.monthly;
+                setStoragePrice(
+                    typeof monthly === "number" && Number.isFinite(monthly) ? monthly : null
+                );
             } catch (err) {
                 console.error("Error fetching storage price:", err);
                 setStoragePrice(null);
@@ -222,11 +224,7 @@ const BucketCreate = ({
                 payload,
             );
             toast.success("Bucket created");
-            router.push(
-                isAdmin
-                    ? "/dashboard/admin/object-storage"
-                    : "/dashboard/services/object-storage",
-            );
+            router.push("/dashboard/services/object-storage");
             router.refresh();
         } catch (err) {
             toast.error(
@@ -279,11 +277,7 @@ const BucketCreate = ({
                 {/* Back link */}
                 <div className="mb-6">
                     <Link
-                        href={
-                            isAdmin
-                                ? "/dashboard/admin/object-storage"
-                                : "/dashboard/services/object-storage"
-                        }
+                        href="/dashboard/services/object-storage"
                         className={`${MONO} inline-flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.14em] text-white/40 hover:text-white/75 transition-colors`}
                     >
                         <ChevronLeft className="h-3.5 w-3.5" />

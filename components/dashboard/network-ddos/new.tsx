@@ -153,22 +153,15 @@ const SpectrumAppCreate = ({
     useEffect(() => {
         (async () => {
             try {
-                if (isAdmin) {
-                    const res = await axios.get(
-                        "/api/admin/products?type=network-ddos",
-                    );
-                    const products = res?.data?.products;
-                    if (products && products.length > 0) {
-                        setSpectrumPrice(parseFloat(products[0].price) || 0);
-                    }
-                } else {
-                    const res = await axios.get(
-                        "/api/pricing?category=network-ddos",
-                    );
-                    const monthly = res?.data?.category?.tiers?.[0]?.price?.monthly;
-                    if (typeof monthly === "number" && Number.isFinite(monthly)) {
-                        setSpectrumPrice(monthly);
-                    }
+                // The price book, for admins and customers alike. The admin
+                // branch read public.products (dropped 2026-08-31) and the
+                // customer branch read /api/pricing, which still returns zero
+                // tiers — so BOTH rendered $0 for a service that costs
+                // $300/mo. Same source the hourly sweep charges from.
+                const res = await axios.get("/api/services/pricing?service=spectrum");
+                const monthly = res?.data?.monthly;
+                if (typeof monthly === "number" && Number.isFinite(monthly)) {
+                    setSpectrumPrice(monthly);
                 }
             } catch (err) {
                 console.error("Error fetching spectrum price:", err);
@@ -307,11 +300,7 @@ const SpectrumAppCreate = ({
 
             if (res.status === 201) {
                 toast.success("Spectrum application created.");
-                router.push(
-                    isAdmin
-                        ? "/dashboard/admin/network-ddos"
-                        : "/dashboard/services/network-ddos",
-                );
+                router.push("/dashboard/services/network-ddos");
                 router.refresh();
             } else if (res.status === 402) {
                 toast.error(
@@ -380,11 +369,7 @@ const SpectrumAppCreate = ({
                 {/* Back link */}
                 <div className="mb-6">
                     <Link
-                        href={
-                            isAdmin
-                                ? "/dashboard/admin/network-ddos"
-                                : "/dashboard/services/network-ddos"
-                        }
+                        href="/dashboard/services/network-ddos"
                         className={`${MONO} inline-flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.14em] text-white/40 hover:text-white/75 transition-colors`}
                     >
                         <ChevronLeft className="h-3.5 w-3.5" />
