@@ -19,7 +19,6 @@ import {
     Atom,
     Bell,
     ChevronDown,
-    Cloud,
     Gamepad2,
     LogOut,
     Menu,
@@ -46,7 +45,6 @@ import {
     HelpIcon,
     K8sIcon,
     KeyIcon,
-    NetworkIcon,
     OverviewIcon,
     PlusIcon,
     RocketIcon,
@@ -54,9 +52,7 @@ import {
     SettingsIcon,
     ShieldCheckIcon,
     ShieldIcon,
-    TicketIcon,
     TransferIcon,
-    UsersIcon,
 } from "./custom-icons";
 
 // Cast custom SVG components to LucideIcon shape so they slot
@@ -75,15 +71,12 @@ const Archive = CastIcon(BucketIcon);
 const Globe = CastIcon(GlobeIcon);
 const ShoppingCart = CastIcon(CartIcon);
 const ArrowRightLeft = CastIcon(TransferIcon);
-const Network = CastIcon(NetworkIcon);
 const Shield = CastIcon(ShieldIcon);
 const ShieldCheck = CastIcon(ShieldCheckIcon);
 const Settings = CastIcon(SettingsIcon);
-const Users = CastIcon(UsersIcon);
 const HelpCircle = CastIcon(HelpIcon);
 const Activity = CastIcon(ActivityIcon);
 const BadgeDollarSign = CastIcon(BillingIcon);
-const Ticket = CastIcon(TicketIcon);
 const Bot = CastIcon(BotIcon);
 const FileText = CastIcon(DocsIcon);
 const BookOpen = CastIcon(BookIcon);
@@ -308,10 +301,8 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
     const [aiAgentsExpanded, setAiAgentsExpanded] = useState(pathname.startsWith("/dashboard/services/ai-agents"));
     const [inferenceExpanded, setInferenceExpanded] = useState(pathname.startsWith("/dashboard/services/inference"));
     const [domainsExpanded, setDomainsExpanded] = useState(pathname.startsWith("/dashboard/domains"));
-    const [adminExpanded, setAdminExpanded] = useState(pathname.startsWith("/dashboard/admin"));
     const [isMobileOpen, setIsMobileOpen] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
-    const [isAdmin, setIsAdmin] = useState(false);
 
     useEffect(() => { setIsMobileOpen(false); }, [pathname]);
 
@@ -322,7 +313,6 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
         if (pathname.startsWith("/dashboard/services/ai-agents")) setAiAgentsExpanded(true);
         if (pathname.startsWith("/dashboard/services/inference")) setInferenceExpanded(true);
         if (pathname.startsWith("/dashboard/domains")) setDomainsExpanded(true);
-        if (pathname.startsWith("/dashboard/admin")) setAdminExpanded(true);
     }, [pathname]);
 
     useEffect(() => {
@@ -334,12 +324,6 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
         check();
         window.addEventListener("resize", check);
         return () => window.removeEventListener("resize", check);
-    }, []);
-
-    useEffect(() => {
-        fetch("/api/admin/proxmox/hosts", { cache: "no-store" })
-            .then((r) => setIsAdmin(r.ok))
-            .catch(() => setIsAdmin(false));
     }, []);
 
     // ─── Navigation tree (single source of truth) ─────────────
@@ -444,32 +428,6 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
         { label: "DDoS Protection", href: "/dashboard/services/network-ddos", icon: Shield, matchPrefix: true },
         // Firewall hidden for now — re-add when the service ships.
     ];
-
-    const adminGroup: NavGroup = {
-        label: "Admin Console",
-        icon: Settings,
-        href: "/dashboard/admin",
-        children: [
-            { label: "Proxmox Hosts", href: "/dashboard/admin/hosts", icon: Network, matchPrefix: true },
-            { label: "All Servers", href: "/dashboard/admin/servers", icon: Server, matchPrefix: true },
-            { label: "Users", href: "/dashboard/admin/users", icon: Users, matchPrefix: true },
-            { label: "Support", href: "/dashboard/admin/support", icon: HelpCircle, matchPrefix: true },
-            { label: "Databases", href: "/dashboard/admin/databases", icon: Database, matchPrefix: true },
-            { label: "Object Storage", href: "/dashboard/admin/object-storage", icon: Archive, matchPrefix: true },
-            { label: "DDoS", href: "/dashboard/admin/network-ddos", icon: Shield, matchPrefix: true },
-            { label: "Kubernetes", href: "/dashboard/admin/kubernetes", icon: KubernetesIcon, matchPrefix: true },
-            { label: "Cluster Monitor", href: "/dashboard/admin/cluster-monitor", icon: Activity, matchPrefix: true },
-            { label: "Platform Apps", href: "/dashboard/admin/platform-apps", icon: Rocket, matchPrefix: true },
-            { label: "Plan Pricing", href: "/dashboard/admin/pricing/plans", icon: BadgeDollarSign, matchPrefix: true },
-            { label: "GPU Stock", href: "/dashboard/admin/gpu", icon: GpuCloudIcon, matchPrefix: true },
-            { label: "Linode", href: "/dashboard/admin/linode", icon: Cloud, matchPrefix: true },
-            { label: "Game Hosts", href: "/dashboard/admin/game", icon: Gamepad2, matchPrefix: true },
-            { label: "Coupons", href: "/dashboard/admin/coupons", icon: Ticket, matchPrefix: true },
-            { label: "Audit Logs", href: "/dashboard/admin/audit-logs", icon: ShieldCheck, matchPrefix: true },
-            { label: "AI Agents", href: "/dashboard/admin/ai-agents", icon: Bot, matchPrefix: true },
-            { label: "Domains", href: "/dashboard/admin/domains", icon: Globe, matchPrefix: true },
-        ],
-    };
 
     const support: NavItem[] = [
         { label: "Billing", href: "/dashboard/billing", icon: BadgeDollarSign, matchPrefix: true },
@@ -640,15 +598,7 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                     </div>
                 </div>
 
-                {/* Admin (gated) */}
-                {isAdmin && (
-                    <div className="mb-5">
-                        <SectionLabel>Administration</SectionLabel>
-                        <div className="space-y-0.5">
-                            <GroupRow group={adminGroup} pathname={pathname} expanded={adminExpanded} onToggle={() => setAdminExpanded((p) => !p)} />
-                        </div>
-                    </div>
-                )}
+                {/* Administration lives at control.ahurasense.com, not here. */}
 
                 {/* Support / Account */}
                 <div>

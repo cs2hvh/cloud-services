@@ -196,9 +196,7 @@ const NewClusterForm = ({
       if (settled.error) return;
       if (settled.status === 200) {
         toast.info("Kubernetes cluster creation started");
-        if (role === "admin") {
-          router.push("/dashboard/admin/kubernetes");
-        } else {
+        {
           const id = settled.data?.clusterId;
           router.push(
             id

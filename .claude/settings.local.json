@@ -49,7 +49,12 @@
       "Bash(git -C /c/cloud-services branch -a)",
       "Bash(git -C /c/cloud-services shortlog -sn --since=\"3 months ago\")",
       "Bash(git -C /c/cloud-services log --oneline master..dev)",
-      "Bash(git -C /c/cloud-services diff --stat master..dev)"
+      "Bash(git -C /c/cloud-services diff --stat master..dev)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "mcp__660b694a-c755-4850-8fbd-f36e55df5649__apply_migration",
+      "mcp__660b694a-c755-4850-8fbd-f36e55df5649__execute_sql"
     ]
   }
 }
