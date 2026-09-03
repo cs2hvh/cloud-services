@@ -34,6 +34,21 @@ interface Feed {
     chargeCount24h: number;
     byService: Record<string, { count: number; usd: number }>;
     openMeters: number | null;
+    invariantBad: number | null;
+    coverage: {
+      open: number;
+      expected: number;
+      billed: number;
+      missing: number;
+      worst: { service_type: string; missing: number } | null;
+    } | null;
+    unpricedSellable: number | null;
+    gpuBooks: {
+      agrees: boolean;
+      chargeMarkup: number;
+      quoteMin: number;
+      quoteMax: number;
+    } | null;
     failuresUnresolved: number | null;
     livePrices: number | null;
     liveCoupons: number | null;
@@ -168,14 +183,22 @@ const ageLabel = (h: number | null) =>
 function buildGraph(f: Feed): { nodes: Node<HqNodeData>[]; edges: Edge[] } {
   const s = f.services;
   const b = f.billing;
+  // Deadman thresholds: the watchdog runs every 2h and flags at 3h stale.
   const sweepTone: Tone =
     b.sweepAgeH === null ? "bad" : b.sweepAgeH > 3 ? "bad" : b.sweepAgeH > 1.5 ? "warn" : "ok";
   const flowing = b.sweepAgeH !== null && b.sweepAgeH <= 1.5;
+  const cov = b.coverage;
+  // Coverage outranks recency — the sweep read green through a 12-hour gap.
+  const covTone: Tone =
+    cov === null ? "dim" : cov.open === 0 ? "dim" : cov.missing === 0 ? "ok" : cov.missing <= 2 ? "warn" : "bad";
+  const invTone: Tone = f.billing.invariantBad === null ? "dim" : f.billing.invariantBad > 0 ? "bad" : "ok";
   const failTone: Tone = (b.failuresUnresolved ?? 0) > 0 ? "bad" : "ok";
   const mainTone: Tone = f.providers.mainApp.up ? "ok" : "bad";
   const linodeTone: Tone =
     f.providers.linodeSyncAgeH === null ? "dim" : f.providers.linodeSyncAgeH > 48 ? "warn" : "ok";
-  const svcTone = (v: number | null): Tone => (v === null ? "bad" : v > 0 ? "ok" : "dim");
+  // A failed read is UNKNOWN (grey) — never green, never a healthy-looking zero.
+  const svcTone = (v: number | null): Tone => (v === null ? "dim" : v > 0 ? "ok" : "dim");
+  const svcSub = (v: number | null, sub: string) => (v === null ? "read failed" : sub);
 
   const nodes: Node<HqNodeData>[] = [
     // People
@@ -221,42 +244,92 @@ function buildGraph(f: Feed): { nodes: Node<HqNodeData>[]; edges: Edge[] } {
       href: "/gpu",
     }),
     // Services (billing's own active_* views)
-    n("compute", 560, 150, { label: "Compute VMs", value: num(s.compute), sub: "active meters view", tone: svcTone(s.compute), href: "/servers" }),
-    n("gpu", 790, 150, { label: "GPU Pods", value: num(s.gpu), sub: "active", tone: svcTone(s.gpu), href: "/gpu" }),
-    n("database", 560, 255, { label: "Databases", value: num(s.database), sub: "active", tone: svcTone(s.database), href: "/databases" }),
-    n("kubernetes", 790, 255, { label: "Kubernetes", value: num(s.kubernetes), sub: "active", tone: svcTone(s.kubernetes), href: "/kubernetes" }),
-    n("objectspace", 560, 360, { label: "Object Storage", value: num(s.objectspace), sub: "active", tone: svcTone(s.objectspace), href: "/object-storage" }),
-    n("spectrum", 790, 360, { label: "Network / DDoS", value: num(s.spectrum), sub: "active", tone: svcTone(s.spectrum), href: "/network-ddos" }),
-    n("deploy", 560, 465, { label: "Deploy v2", value: num(s.deploy), sub: "projects", tone: svcTone(s.deploy), href: "/deploy" }),
-    n("domains", 790, 465, { label: "Domains", value: num(s.domains), sub: "attached", tone: svcTone(s.domains), href: "/domains" }),
-    n("inference", 560, 570, { label: "AI / Inference", value: num(s.inference), sub: "active", tone: svcTone(s.inference), href: "/ai" }),
-    n("apps", 790, 570, { label: "Platform Apps", value: num(s.platform_apps), sub: "active", tone: svcTone(s.platform_apps) }),
-    // Billing pipeline
-    n("pricebook", 1090, 90, {
-      label: "Price Book",
-      value: `${num(b.livePrices)} live`,
-      sub: "billing.service_pricing",
-      tone: (b.livePrices ?? 0) > 0 ? "ok" : "bad",
-      href: "/pricing",
+    n("compute", 560, 150, { label: "Compute VMs", value: num(s.compute), sub: svcSub(s.compute, "active meters view"), tone: svcTone(s.compute), href: "/servers" }),
+    n("gpu", 790, 150, {
+      label: "GPU Pods",
+      value: num(s.gpu),
+      sub:
+        b.gpuBooks === null
+          ? svcSub(s.gpu, "books unverified")
+          : b.gpuBooks.agrees
+            ? "quote & charge books agree"
+            : `BOOKS DISAGREE — charge ×${b.gpuBooks.chargeMarkup}`,
+      tone: b.gpuBooks !== null && !b.gpuBooks.agrees ? "bad" : svcTone(s.gpu),
+      href: "/gpu",
     }),
-    n("meters", 1090, 255, {
+    n("database", 560, 255, { label: "Databases", value: num(s.database), sub: svcSub(s.database, "active"), tone: svcTone(s.database), href: "/databases" }),
+    n("kubernetes", 790, 255, { label: "Kubernetes", value: num(s.kubernetes), sub: svcSub(s.kubernetes, "active"), tone: svcTone(s.kubernetes), href: "/kubernetes" }),
+    n("objectspace", 560, 360, { label: "Object Storage", value: num(s.objectspace), sub: svcSub(s.objectspace, "active"), tone: svcTone(s.objectspace), href: "/object-storage" }),
+    n("spectrum", 790, 360, { label: "Network / DDoS", value: num(s.spectrum), sub: svcSub(s.spectrum, "active"), tone: svcTone(s.spectrum), href: "/network-ddos" }),
+    n("deploy", 560, 465, { label: "Deploy v2", value: num(s.deploy), sub: svcSub(s.deploy, "projects"), tone: svcTone(s.deploy), href: "/deploy" }),
+    n("domains", 790, 465, { label: "Domains", value: num(s.domains), sub: svcSub(s.domains, "attached"), tone: svcTone(s.domains), href: "/domains" }),
+    n("inference", 560, 570, { label: "AI / Inference", value: num(s.inference), sub: svcSub(s.inference, "active"), tone: svcTone(s.inference), href: "/ai" }),
+    n("apps", 790, 570, { label: "Platform Apps", value: num(s.platform_apps), sub: svcSub(s.platform_apps, "active"), tone: svcTone(s.platform_apps) }),
+    // Billing pipeline — coverage is the health signal; recency is context.
+    n("pricebook", 1090, 60, {
+      label: "Price Book",
+      value: b.livePrices === null ? "—" : `${b.livePrices} live`,
+      sub:
+        b.unpricedSellable === null
+          ? "coverage unknown"
+          : b.unpricedSellable > 0
+            ? `${b.unpricedSellable} sellable plans unpriced`
+            : "every sellable plan covered",
+      tone:
+        b.livePrices === null
+          ? "dim"
+          : b.livePrices === 0
+            ? "bad"
+            : (b.unpricedSellable ?? 0) > 0
+              ? "warn"
+              : "ok",
+      href: "/pricing",
+      wide: true,
+    }),
+    n("meters", 1090, 205, {
       label: "Open Meters",
       value: num(b.openMeters),
-      sub: "ended_at is null",
-      tone: "info",
+      sub:
+        f.billing.invariantBad === null
+          ? "read failed"
+          : f.billing.invariantBad > 0
+            ? `${f.billing.invariantBad} status/ended_at DISAGREE`
+            : "definitions agree",
+      tone: invTone === "ok" ? "info" : invTone,
     }),
-    n("sweep", 1090, 420, {
-      label: "Billing Sweep",
+    n("coverage", 1090, 350, {
+      label: "Billed Coverage · 7d",
+      value:
+        cov === null
+          ? "unknown"
+          : cov.open === 0
+            ? "no open meters"
+            : cov.missing === 0
+              ? "fully billed"
+              : `${cov.missing} hrs MISSING`,
+      sub:
+        cov === null
+          ? "coverage read failed"
+          : cov.open === 0
+            ? "0 meters examined"
+            : `${cov.billed}/${cov.expected} hrs · ${cov.open} meters${
+                cov.worst ? ` · worst: ${cov.worst.service_type} −${cov.worst.missing}h` : ""
+              }`,
+      tone: covTone,
+      wide: true,
+    }),
+    n("sweep", 1090, 505, {
+      label: "Sweep · last wrote",
       value: ageLabel(b.sweepAgeH),
-      sub: `${b.chargeCount24h} charges · 24h`,
+      sub: `${b.chargeCount24h} charges · 24h · recency can lie, coverage cannot`,
       tone: sweepTone,
       wide: true,
     }),
-    n("failures", 1090, 585, {
+    n("failures", 1090, 650, {
       label: "Billing Failures",
       value: num(b.failuresUnresolved),
-      sub: "unresolved",
-      tone: failTone,
+      sub: b.failuresUnresolved === null ? "read failed" : "unresolved",
+      tone: b.failuresUnresolved === null ? "dim" : failTone,
     }),
     n("ledger", 1400, 330, {
       label: "Ledger · 24h",
@@ -267,15 +340,16 @@ function buildGraph(f: Feed): { nodes: Node<HqNodeData>[]; edges: Edge[] } {
     }),
     n("coupons", 1400, 585, {
       label: "Coupons",
-      value: `${num(b.liveCoupons)} live`,
-      sub: `${b.couponRedemptions24h} redeemed 24h`,
-      tone: "info",
+      value: b.liveCoupons === null ? "—" : `${b.liveCoupons} live`,
+      sub:
+        b.liveCoupons === null ? "read failed" : `${b.couponRedemptions24h} redeemed 24h`,
+      tone: b.liveCoupons === null ? "dim" : "info",
       href: "/coupons",
     }),
     n("audit", 1400, 730, {
       label: "Audit Trail",
       value: f.audits.up ? `${num(f.audits.rows)} rows` : "DARK",
-      sub: f.audits.up ? "pipeline live" : "schema unexposed — writes failing",
+      sub: f.audits.up ? "reachable · probed live" : "unreachable — writes failing",
       tone: f.audits.up ? "ok" : "bad",
       href: "/audit-logs",
       wide: true,
@@ -313,8 +387,16 @@ function buildGraph(f: Feed): { nodes: Node<HqNodeData>[]; edges: Edge[] } {
       .filter((id) => id !== "deploy" && id !== "domains")
       .map((id) => e({ from: id, to: "meters", fromH: "r", toH: "l", tone: "dim" })),
     e({ from: "deploy", to: "ledger", fromH: "r", toH: "b", tone: "dim", label: "project charges" }),
-    e({ from: "pricebook", to: "sweep", fromH: "b", toH: "t", tone: "dim", label: "rates" }),
-    e({ from: "meters", to: "sweep", fromH: "b", toH: "t", animated: flowing, tone: flowing ? "ok" : "warn" }),
+    e({ from: "pricebook", to: "meters", fromH: "b", toH: "t", tone: "dim", label: "rates" }),
+    e({ from: "meters", to: "coverage", fromH: "b", toH: "t", tone: "dim" }),
+    e({
+      from: "coverage",
+      to: "sweep",
+      fromH: "b",
+      toH: "t",
+      animated: flowing && (cov?.missing ?? 0) === 0,
+      tone: covTone === "bad" ? "bad" : flowing ? "ok" : "warn",
+    }),
     e({ from: "sweep", to: "ledger", fromH: "r", toH: "l", animated: flowing, tone: flowing ? "ok" : "warn", label: "hourly charges" }),
     e({ from: "sweep", to: "failures", fromH: "b", toH: "t", tone: failTone === "bad" ? "bad" : "dim" }),
     e({
@@ -431,6 +513,11 @@ export default function HqBoard() {
         <div className="pointer-events-none absolute left-3 top-3 flex flex-wrap gap-2">
           {[
             { k: "charged 24h", v: money(feed.billing.charged24h) },
+            {
+              k: "hrs unbilled",
+              v: feed.billing.coverage === null ? "?" : String(feed.billing.coverage.missing),
+              bad: (feed.billing.coverage?.missing ?? 0) > 0,
+            },
             { k: "open meters", v: num(feed.billing.openMeters) },
             { k: "live prices", v: num(feed.billing.livePrices) },
             {

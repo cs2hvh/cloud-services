@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { createServiceClient } from "@/lib/supabase/server";
 import { MAIN_APP_URL } from "@admin/lib/sections";
+import { BILLING_ACTIVE_SINCE } from "@admin/lib/pricing";
 
 export const dynamic = "force-dynamic";
 
@@ -10,16 +11,24 @@ export const dynamic = "force-dynamic";
  * — every number here is displayed on the live platform map, so each one
  * must be a real read, never a default that could render as health.
  *
- * Signal sources (agreed with the billing lane):
- * - active service counts: billing.active_* views (what the sweep itself sees)
- * - sweep freshness: max(service_charges.created_at) — the sweep's own writes
- * - open meters: service_meters with ended_at IS NULL
- * - failures: billing_failure_events WHERE resolved = false
- * - audit pipeline: probed live (fails with PGRST106 until the schema is
- *   re-exposed; the board shows that as a red node, NOT as a broken board)
+ * Signal doctrine (billing lane review, 2026-09-03):
+ * - BILLED COVERAGE is the primary health signal, not sweep recency. The
+ *   sweep resumed at 03:00 after a 12-hour stall and recency read green the
+ *   whole time — hours-billed vs hours-elapsed per open meter is the query
+ *   that catches what "last ran" cannot.
+ * - Charges group by period_start (the hour BILLED); created_at is when the
+ *   row was written and a backfill makes it meaningless.
+ * - Open meters: the sweep filters ended_at IS NULL **and** status='active';
+ *   nothing enforces their agreement, so meters where the two disagree are a
+ *   signal of their own (a stopped resource still billing, or the reverse).
+ * - A failed read renders grey/unknown — never green, never zero.
+ * - active service counts: billing.active_* views (what the sweep sees)
+ * - audit pipeline: probed live, claims reachability only
  */
 
 const DAY_MS = 24 * 3600 * 1000;
+const HOUR_MS = 3600 * 1000;
+const COVERAGE_WINDOW_MS = 7 * DAY_MS;
 
 type Tone = "ok" | "warn" | "bad" | "dim";
 
@@ -82,6 +91,8 @@ export async function GET() {
     failuresCountRes,
     failuresRecentRes,
     livePricesRes,
+    activePlansRes,
+    gpuQuoteRes,
     liveCouponsRes,
     txns24Res,
     linodeSyncRes,
@@ -107,11 +118,17 @@ export async function GET() {
       .limit(1),
     billing
       .from("service_charges")
-      .select("service_type, amount_usd, created_at, hourly_rate")
-      .gte("created_at", dayAgo)
-      .order("created_at", { ascending: false })
+      .select("service_type, amount_usd, created_at, hourly_rate, period_start")
+      .gte("period_start", dayAgo)
+      .order("period_start", { ascending: false })
       .limit(1000),
-    billing.from("service_meters").select("id", head).is("ended_at", null),
+    // Every meter that is open by EITHER definition — the union catches the
+    // rows where the two definitions disagree, which is its own alert.
+    billing
+      .from("service_meters")
+      .select("id, service_type, service_id, status, started_at, ended_at")
+      .or("ended_at.is.null,status.eq.active")
+      .limit(500),
     billing.from("billing_failure_events").select("id", head).eq("resolved", false),
     billing
       .from("billing_failure_events")
@@ -119,7 +136,13 @@ export async function GET() {
       .eq("resolved", false)
       .order("occurred_at", { ascending: false })
       .limit(5),
-    billing.from("service_pricing").select("id", head).is("effective_to", null),
+    billing
+      .from("service_pricing")
+      .select("service_type, plan_key, rate_model, unit, amount")
+      .is("effective_to", null)
+      .limit(500),
+    supabase.from("service_plans").select("service_type, plan_key").eq("is_active", true).limit(500),
+    supabase.from("gpu_pricing").select("markup_pct").limit(500),
     billing
       .from("promocodes")
       .select("id", head)
@@ -155,6 +178,125 @@ export async function GET() {
     const b = (byService[c.service_type as string] ??= { count: 0, usd: 0 });
     b.count += 1;
     b.usd += Number(c.amount_usd);
+  }
+
+  // --- meters: open set + the invariant the sweep assumes but nothing enforces ---
+  const meterRows = openMetersRes.error ? null : (openMetersRes.data ?? []);
+  const openMeterList = (meterRows ?? []).filter(
+    (m) => m.status === "active" && m.ended_at === null,
+  );
+  const invariantBad = meterRows
+    ? meterRows.filter((m) => (m.status === "active") !== (m.ended_at === null)).length
+    : null;
+
+  // --- BILLED COVERAGE: hours elapsed vs hours actually charged, per open
+  // meter, over the last 7 days. Conservative hour math (first partial hour
+  // and the current hour excluded) so a red number is never an off-by-one.
+  let coverage: {
+    open: number;
+    expected: number;
+    billed: number;
+    missing: number;
+    worst: { service_type: string; missing: number } | null;
+  } | null = null;
+  if (meterRows) {
+    const now = Date.now();
+    const floorHourNow = Math.floor(now / HOUR_MS) * HOUR_MS;
+    const activeSince = Date.parse(BILLING_ACTIVE_SINCE);
+    const windowFloor = now - COVERAGE_WINDOW_MS;
+    const windows = openMeterList.map((m) => {
+      const rawStart = Math.max(Date.parse(m.started_at as string), activeSince, windowFloor);
+      const startHour = Math.ceil(rawStart / HOUR_MS) * HOUR_MS;
+      return {
+        key: `${m.service_type}:${m.service_id}`,
+        service_type: m.service_type as string,
+        startHour,
+        expected: Math.max(0, Math.round((floorHourNow - startHour) / HOUR_MS)),
+      };
+    });
+    const ids = [...new Set(openMeterList.map((m) => m.service_id as string))];
+    let billedByKey = new Map<string, Set<number>>();
+    let coverageReadOk = true;
+    if (ids.length > 0) {
+      const minStart = Math.min(...windows.map((w) => w.startHour));
+      const covRes = await billing
+        .from("service_charges")
+        .select("service_type, service_id, period_start")
+        .in("service_id", ids)
+        .gte("period_start", new Date(minStart).toISOString())
+        .limit(5000);
+      if (covRes.error) {
+        coverageReadOk = false;
+      } else {
+        billedByKey = new Map();
+        for (const c of covRes.data ?? []) {
+          const key = `${c.service_type}:${c.service_id}`;
+          const set = billedByKey.get(key) ?? new Set<number>();
+          set.add(Date.parse(c.period_start as string));
+          billedByKey.set(key, set);
+        }
+      }
+    }
+    if (coverageReadOk) {
+      let expected = 0;
+      let billed = 0;
+      let worst: { service_type: string; missing: number } | null = null;
+      for (const w of windows) {
+        const billedHours = [...(billedByKey.get(w.key) ?? new Set<number>())].filter(
+          (h) => h >= w.startHour,
+        ).length;
+        const b = Math.min(w.expected, billedHours);
+        expected += w.expected;
+        billed += b;
+        const miss = w.expected - b;
+        if (miss > 0 && (worst === null || miss > worst.missing)) {
+          worst = { service_type: w.service_type, missing: miss };
+        }
+      }
+      coverage = {
+        open: openMeterList.length,
+        expected,
+        billed,
+        missing: expected - billed,
+        worst,
+      };
+    }
+  }
+
+  // --- unpriced-but-sellable: active plans with neither an exact live price
+  // nor a '*' fallback — the provisions-nothing-bills-nothing state.
+  const priceRows = livePricesRes.error ? null : (livePricesRes.data ?? []);
+  let unpricedSellable: number | null = null;
+  if (priceRows && !activePlansRes.error) {
+    const priced = new Set(priceRows.map((p) => `${p.service_type}:${p.plan_key}`));
+    unpricedSellable = (activePlansRes.data ?? []).filter(
+      (p) =>
+        !priced.has(`${p.service_type}:${p.plan_key}`) && !priced.has(`${p.service_type}:*`),
+    ).length;
+  }
+
+  // --- gpu: do the two price books agree? (the 10× lesson, kept on screen)
+  let gpuBooks: {
+    agrees: boolean;
+    chargeMarkup: number;
+    quoteMin: number;
+    quoteMax: number;
+  } | null = null;
+  const gpuChargeRow = (priceRows ?? []).find(
+    (p) => p.service_type === "gpu_pod" && p.plan_key === "*" && p.rate_model === "markup",
+  );
+  if (gpuChargeRow && !gpuQuoteRes.error && (gpuQuoteRes.data ?? []).length > 0) {
+    const quotes = (gpuQuoteRes.data ?? []).map((g) => Number(g.markup_pct));
+    const quoteMin = Math.min(...quotes);
+    const quoteMax = Math.max(...quotes);
+    const chargeMarkup = Number(gpuChargeRow.amount);
+    gpuBooks = {
+      chargeMarkup,
+      quoteMin,
+      quoteMax,
+      agrees:
+        Math.abs(quoteMin - chargeMarkup) < 0.001 && Math.abs(quoteMax - chargeMarkup) < 0.001,
+    };
   }
   const txns = txns24Res.data ?? [];
   const topups24h = txns
@@ -228,9 +370,13 @@ export async function GET() {
       charged24h,
       chargeCount24h: charges.length,
       byService,
-      openMeters: count(openMetersRes),
+      openMeters: meterRows ? openMeterList.length : null,
+      invariantBad,
+      coverage,
+      unpricedSellable,
+      gpuBooks,
       failuresUnresolved: count(failuresCountRes),
-      livePrices: count(livePricesRes),
+      livePrices: priceRows ? priceRows.length : null,
       liveCoupons: count(liveCouponsRes),
       topups24h,
       couponRedemptions24h: coupons24h,
