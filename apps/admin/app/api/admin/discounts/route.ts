@@ -121,3 +121,70 @@ export async function POST(request: Request) {
     );
   }
 }
+
+/** Kill switch: flip is_active. best_discount only considers active rows. */
+export async function PATCH(request: Request) {
+  const admin = await requireAdmin();
+  if (!admin.ok || !admin.userId) {
+    return NextResponse.json(
+      { success: false, error: "Unauthorized - Admin access required" },
+      { status: 403 },
+    );
+  }
+
+  let body: Record<string, unknown>;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ success: false, error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const id = String(body.id ?? "");
+  if (!/^[0-9a-f-]{36}$/.test(id)) {
+    return NextResponse.json({ success: false, error: "id is required" }, { status: 400 });
+  }
+  if (typeof body.is_active !== "boolean") {
+    return NextResponse.json(
+      { success: false, error: "is_active must be a boolean" },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const supabase = await createServiceClient();
+    const { data, error } = await supabase
+      .schema("billing")
+      .from("discounts")
+      .update({ is_active: body.is_active })
+      .eq("id", id)
+      .select("id, name")
+      .single();
+    if (error) {
+      console.error("[Admin Discounts] toggle failed:", error.message);
+      return NextResponse.json(
+        { success: false, error: "Discount update failed" },
+        { status: 500 },
+      );
+    }
+
+    await AuditLogService.create({
+      user_id: admin.userId,
+      user_role: "admin",
+      user_email: admin.email,
+      action: "update",
+      service_type: "discount",
+      service_id: id,
+      service_name: data.name as string,
+      after_state: { is_active: body.is_active },
+      metadata: { via: "admin-panel", operation: "discount.toggle" },
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    console.error("[Admin Discounts] unexpected error:", err);
+    return NextResponse.json(
+      { success: false, error: "Internal server error" },
+      { status: 500 },
+    );
+  }
+}

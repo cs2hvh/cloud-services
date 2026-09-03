@@ -9,9 +9,10 @@ import type { Discount, Promocode } from "@admin/lib/offers";
 export const dynamic = "force-dynamic";
 
 /**
- * Two instruments, one page, never merged: promocodes grant credit
- * (legacy, read-only here), discounts change rates (v2, created here).
- * See apps/admin/lib/offers.ts for the data-honesty rules this page obeys.
+ * Two instruments, one page, never merged: promocodes grant wallet credit,
+ * discounts change rates. Both are created and killed here (Harshit,
+ * 2026-09-02: coupons are a living feature, not legacy). See
+ * apps/admin/lib/offers.ts for the data-honesty rules this page obeys.
  */
 export default async function CouponsPage() {
   const checkAdmin = await requireAdmin();
