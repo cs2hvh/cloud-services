@@ -5,7 +5,7 @@
 // nothing left to trace it to — five were found running that way, one at
 // $120/hr since June. The row now survives a failed close so the meter stays
 // findable and re-closable.
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { destroyServer } from '@/lib/services/compute/server-lifecycle';
 
@@ -15,6 +15,15 @@ vi.mock('@/lib/billing/credits');
 vi.mock('@/lib/proxmox-utils', () => ({ removeHostRoute: vi.fn(), addHostRoute: vi.fn() }));
 vi.mock('@/lib/proxmox/on-demand-vmac', () => ({ releaseVmacForIp: vi.fn(), isRoutedPool: () => false }));
 vi.mock('@/lib/services/compute/providers/linode/client', () => ({ deleteLinodeInstance: vi.fn() }));
+// For the tests that run the REAL closeActiveBilling behind the module mock:
+// the v2 meter and the credit ledger it must never touch.
+vi.mock('@/lib/billing/meters', () => ({
+  openMeter: vi.fn().mockResolvedValue(undefined),
+  closeMeter: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock('@/lib/supabase/queries/billing', () => ({
+  Billing: { deduct: vi.fn(), save_transaction: vi.fn(), move_credit: vi.fn() },
+}));
 
 const SERVER = {
   id: 42, vmid: null, node: null, ip: '1.2.3.4', location: 'us-ord',
@@ -109,5 +118,63 @@ describe('destroyServer — billing settlement gates row deletion', () => {
     expect(closeActiveBilling).toHaveBeenCalledWith(
       expect.objectContaining({ userId: 'user-1', serviceId: 'svc-abc', serviceType: 'compute' })
     );
+  });
+});
+
+// The v1 "final prorated charge" was a double charge of the whole lifetime
+// (see closeActiveBilling in config/billing-flow.ts). These run the REAL
+// closeActiveBilling behind the module mock so the contract is checked from
+// destroyServer down: the v1 row is closed, the v2 meter is closed, and
+// nothing is deducted.
+describe('destroyServer — the real closeActiveBilling never deducts and always closes the meter', () => {
+  async function useRealCloseActiveBilling() {
+    const actual = await vi.importActual<typeof import('@/config/billing-flow')>('@/config/billing-flow');
+    const { closeActiveBilling } = await import('@/config/billing-flow');
+    vi.mocked(closeActiveBilling).mockImplementation(actual.closeActiveBilling);
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+  }
+
+  afterEach(async () => {
+    const { closeActiveBilling } = await import('@/config/billing-flow');
+    vi.mocked(closeActiveBilling).mockReset();
+  });
+
+  it('closes the compute meter and deducts nothing', async () => {
+    await useRealCloseActiveBilling();
+    const { BillingCredits } = await import('@/lib/billing/credits');
+    const { closeMeter } = await import('@/lib/billing/meters');
+    const { Billing } = await import('@/lib/supabase/queries/billing');
+    vi.mocked(BillingCredits.closeActiveCompute).mockResolvedValue(0.5); // what v1 would have charged
+    await mockDb();
+
+    const res = await destroyServer(42);
+
+    expect(res.success).toBe(true);
+    expect(BillingCredits.closeActiveCompute).toHaveBeenCalledWith({ serviceId: 'svc-abc' });
+    expect(closeMeter).toHaveBeenCalledTimes(1);
+    expect(closeMeter).toHaveBeenCalledWith('compute', 'svc-abc');
+    expect(Billing.deduct).not.toHaveBeenCalled();
+    expect(Billing.save_transaction).not.toHaveBeenCalled();
+    expect(Billing.move_credit).not.toHaveBeenCalled();
+    expect(deleted.length).toBe(1);
+  });
+
+  it('a throwing v1 close still closes the meter, does not throw, and lets the row go', async () => {
+    await useRealCloseActiveBilling();
+    const { BillingCredits } = await import('@/lib/billing/credits');
+    const { closeMeter } = await import('@/lib/billing/meters');
+    const { Billing } = await import('@/lib/supabase/queries/billing');
+    vi.mocked(BillingCredits.closeActiveCompute).mockRejectedValue(new Error('active_compute read failed'));
+    await mockDb();
+
+    const res = await destroyServer(42);
+
+    // closeActiveBilling swallows the v1 failure so the meter still closes;
+    // a meter that outlives its resource is what charged one customer $4,629.91.
+    expect(closeMeter).toHaveBeenCalledWith('compute', 'svc-abc');
+    expect(Billing.deduct).not.toHaveBeenCalled();
+    expect(res.success).toBe(true);
+    expect(res.message).toBeUndefined();
+    expect(deleted.length).toBe(1);
   });
 });

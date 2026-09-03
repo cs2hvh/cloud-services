@@ -1,7 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Billing } from '@/lib/supabase/queries/billing';
+import { closeMeter } from '@/lib/billing/meters';
 
 vi.mock('@/lib/supabase/server');
+
+// close_active_service closes the v2 meter before it touches the v1 row.
+vi.mock('@/lib/billing/meters', () => ({
+  closeMeter: vi.fn().mockResolvedValue(undefined),
+}));
 
 describe('Billing queries', () => {
   function schemaChainMock(result: { data?: any; error?: any }) {
@@ -58,8 +64,19 @@ describe('Billing queries', () => {
       expect(balance).toBe(150);
     });
 
-    it('should return 0 on error', async () => {
+    it('should throw on a read error instead of reporting $0', async () => {
+      // A balance that could not be read treated as $0 both blocks a funded
+      // customer and lets a provisioning refund vanish.
       await setupMock({ data: null, error: { message: 'not found' } });
+
+      await expect(Billing.get_balance('user-missing')).rejects.toThrow(
+        'Balance read failed for user-missing: not found'
+      );
+    });
+
+    it('should return 0 when the user has no credit row', async () => {
+      // maybeSingle: no row is honestly $0.
+      await setupMock({ data: null, error: null });
 
       const balance = await Billing.get_balance('user-missing');
       expect(balance).toBe(0);
@@ -293,23 +310,28 @@ describe('Billing queries', () => {
 
     it('should return charged: 0 when no active row found', async () => {
       const { createServiceClient } = await import('@/lib/supabase/server');
+      // The read chains .eq("service_id").eq("user_id") before maybeSingle().
+      const selectChain: any = {
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      };
+      selectChain.eq = vi.fn().mockReturnValue(selectChain);
+      const deleteUserEq = vi.fn().mockResolvedValue({ error: null });
+      const deleteServiceEq = vi.fn().mockReturnValue({ eq: deleteUserEq });
       const schemaFrom: any = {
-        select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
-          }),
-        }),
-        delete: vi.fn().mockReturnValue({
-          eq: vi.fn().mockResolvedValue({ error: null }),
-        }),
+        select: vi.fn().mockReturnValue(selectChain),
+        delete: vi.fn().mockReturnValue({ eq: deleteServiceEq }),
       };
       vi.mocked(createServiceClient).mockResolvedValue({
         schema: vi.fn().mockReturnValue({ from: vi.fn().mockReturnValue(schemaFrom) }),
       } as any);
 
       const result = await Billing.close_active_service('database', { userId: 'u1', serviceId: 's1' });
-      expect(result.charged).toBe(0);
-      expect(result.newBalance).toBeNull();
+      expect(result).toEqual({ charged: 0, newBalance: null });
+      // The v2 meter is closed whether or not a v1 row exists.
+      expect(closeMeter).toHaveBeenCalledWith('database', 's1');
+      // Stale-state cleanup still runs against the v1 table.
+      expect(deleteServiceEq).toHaveBeenCalledWith('service_id', 's1');
+      expect(deleteUserEq).toHaveBeenCalledWith('user_id', 'u1');
     });
   });
 });

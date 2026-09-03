@@ -1,8 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Billing } from "@/lib/supabase/queries/billing";
+import { closeMeter } from "@/lib/billing/meters";
 
 vi.mock("@/lib/supabase/server", () => ({
   createServiceClient: vi.fn(),
+}));
+
+// close_active_service closes the v2 meter itself, before it reads the v1 row.
+// The real closeMeter would reach for the (mocked) service client.
+vi.mock("@/lib/billing/meters", () => ({
+  closeMeter: vi.fn().mockResolvedValue(undefined),
 }));
 
 function makeCloseServiceClient(activeRow: {
@@ -28,6 +35,11 @@ function makeCloseServiceClient(activeRow: {
     eq: deleteUserEq,
   });
 
+  // Present only so the test can prove they are never touched: no arrears row
+  // is written and no credit is moved at teardown.
+  const insert = vi.fn();
+  const rpc = vi.fn();
+
   const client = {
     schema: vi.fn().mockReturnValue({
       from: vi.fn().mockReturnValue({
@@ -37,11 +49,14 @@ function makeCloseServiceClient(activeRow: {
         delete: vi.fn().mockReturnValue({
           eq: deleteServiceEq,
         }),
+        insert,
       }),
+      rpc,
     }),
+    rpc,
   };
 
-  return { client, deleteServiceEq, deleteUserEq, selectServiceEq, selectUserEq };
+  return { client, deleteServiceEq, deleteUserEq, selectServiceEq, selectUserEq, insert, rpc };
 }
 
 describe("Billing lifecycle operations", () => {
@@ -59,41 +74,66 @@ describe("Billing lifecycle operations", () => {
     vi.restoreAllMocks();
   });
 
-  it("TC-LIFECYCLE-002: service deletion should charge prorated final amount", async () => {
+  // THE V1 "FINAL PRORATED CHARGE" IS NO LONGER DEDUCTED. It was computed as
+  // hourly_rate x (now - last_billed_at), and last_billed_at was advanced only
+  // by the old cron worker, gone since 2026-08-24. At teardown it therefore
+  // resolved to the ENTIRE lifetime of the resource, every hour of which the
+  // v2 sweep had already billed. Found 2026-09-03.
+  it("TC-LIFECYCLE-002: service deletion does NOT deduct the v1 final prorated charge; it closes the v2 meter and removes the v1 row", async () => {
     const { createServiceClient } = await import("@/lib/supabase/server");
-    const { client } = makeCloseServiceClient({
-      user_id: "user-owner",
-      service_id: "svc-1",
-      hourly_rate: 0.2,
-      last_billed_at: "2026-03-23T11:30:00.000Z",
-    });
+    const { client, deleteServiceEq, deleteUserEq, selectServiceEq, insert, rpc } =
+      makeCloseServiceClient({
+        user_id: "user-owner",
+        service_id: "svc-1",
+        hourly_rate: 0.2,
+        last_billed_at: "2026-03-23T11:30:00.000Z", // v1 would have computed $0.10
+      });
     vi.mocked(createServiceClient).mockResolvedValue(client as never);
 
     const deductSpy = vi.spyOn(Billing, "deduct").mockResolvedValue(49.9 as never);
+    const moveCreditSpy = vi
+      .spyOn(Billing, "move_credit")
+      .mockResolvedValue(undefined as never);
 
     const result = await Billing.close_active_service("database", {
       userId: "request-user",
       serviceId: "svc-1",
     });
 
-    expect(deductSpy).toHaveBeenCalledTimes(1);
-    expect(deductSpy.mock.calls[0][0]).toBe("user-owner");
-    expect(deductSpy.mock.calls[0][1]).toBeCloseTo(0.1, 4);
-    expect(result.charged).toBeCloseTo(0.1, 4);
-    expect(result.newBalance).toBe(49.9);
+    // Nothing is charged, moved, or recorded as arrears.
+    expect(deductSpy).not.toHaveBeenCalled();
+    expect(moveCreditSpy).not.toHaveBeenCalled();
+    expect(insert).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalled();
+    expect(result).toEqual({ charged: 0, newBalance: null });
+
+    // The v2 meter is closed FIRST, before the v1 row is even read.
+    expect(closeMeter).toHaveBeenCalledTimes(1);
+    expect(closeMeter).toHaveBeenCalledWith("database", "svc-1");
+    expect(vi.mocked(closeMeter).mock.invocationCallOrder[0]).toBeLessThan(
+      selectServiceEq.mock.invocationCallOrder[0]
+    );
+
+    // The v1 row still goes: some provisioning paths read its presence as
+    // "already billed".
+    expect(deleteServiceEq).toHaveBeenCalledWith("service_id", "svc-1");
+    expect(deleteUserEq).toHaveBeenCalledWith("user_id", "request-user");
   });
 
-  it("TC-LIFECYCLE-003: deletion should proceed when final-charge deduction fails with failOnInsufficient=false", async () => {
+  it("TC-LIFECYCLE-003: deletion with failOnInsufficient=false still removes the v1 row and closes the meter; there is no final charge left to fail", async () => {
     const { createServiceClient } = await import("@/lib/supabase/server");
-    const { client, deleteServiceEq, deleteUserEq } = makeCloseServiceClient({
+    const { client, deleteServiceEq, deleteUserEq, insert } = makeCloseServiceClient({
       user_id: "user-owner",
       service_id: "svc-2",
       hourly_rate: 1,
-      last_billed_at: "2026-03-23T11:00:00.000Z",
+      last_billed_at: "2026-03-23T11:00:00.000Z", // v1 would have computed $1.00
     });
     vi.mocked(createServiceClient).mockResolvedValue(client as never);
 
-    vi.spyOn(Billing, "deduct").mockRejectedValueOnce(new Error("Insufficient balance"));
+    // Were the deduction still attempted, this would have been the failure.
+    const deductSpy = vi
+      .spyOn(Billing, "deduct")
+      .mockRejectedValue(new Error("Insufficient balance"));
 
     const result = await Billing.close_active_service("kubernetes", {
       userId: "request-user",
@@ -101,9 +141,35 @@ describe("Billing lifecycle operations", () => {
       failOnInsufficient: false,
     });
 
-    expect(result.charged).toBeCloseTo(1, 4);
-    expect(result.newBalance).toBeNull();
+    expect(deductSpy).not.toHaveBeenCalled();
+    expect(insert).not.toHaveBeenCalled();
+    expect(result).toEqual({ charged: 0, newBalance: null });
+    expect(closeMeter).toHaveBeenCalledWith("kubernetes", "svc-2");
     expect(deleteServiceEq).toHaveBeenCalledWith("service_id", "svc-2");
+    expect(deleteUserEq).toHaveBeenCalledWith("user_id", "request-user");
+  });
+
+  it("TC-LIFECYCLE-003b: a failing v2 meter close does not stop the v1 row from being removed", async () => {
+    const { createServiceClient } = await import("@/lib/supabase/server");
+    const { client, deleteServiceEq, deleteUserEq } = makeCloseServiceClient({
+      user_id: "user-owner",
+      service_id: "svc-3",
+      hourly_rate: 0.5,
+      last_billed_at: "2026-03-23T11:00:00.000Z",
+    });
+    vi.mocked(createServiceClient).mockResolvedValue(client as never);
+    vi.mocked(closeMeter).mockRejectedValueOnce(new Error("meter close failed"));
+    const deductSpy = vi.spyOn(Billing, "deduct").mockResolvedValue(0 as never);
+
+    const result = await Billing.close_active_service("objectspace", {
+      userId: "request-user",
+      serviceId: "svc-3",
+    });
+
+    expect(closeMeter).toHaveBeenCalledWith("objectspace", "svc-3");
+    expect(deductSpy).not.toHaveBeenCalled();
+    expect(result).toEqual({ charged: 0, newBalance: null });
+    expect(deleteServiceEq).toHaveBeenCalledWith("service_id", "svc-3");
     expect(deleteUserEq).toHaveBeenCalledWith("user_id", "request-user");
   });
 

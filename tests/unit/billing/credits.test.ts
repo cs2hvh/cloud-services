@@ -12,6 +12,9 @@ describe('BillingCredits', () => {
         from: vi.fn().mockReturnValue({
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
+              // getBalance reads with maybeSingle: a missing row is an honest $0,
+              // a read error is not.
+              maybeSingle: vi.fn().mockResolvedValue(result),
               single: vi.fn().mockResolvedValue(result),
             }),
           }),
@@ -49,8 +52,17 @@ describe('BillingCredits', () => {
       expect(balance).toBe(100);
     });
 
-    it('should return 0 when user has no credits (error)', async () => {
+    it('should throw when the balance read fails instead of reporting $0', async () => {
+      // An unreadable balance passing as $0 refuses a funded customer.
       await setupMock({ data: null, error: { message: 'not found' } });
+
+      await expect(BillingCredits.getBalance('user-missing')).rejects.toThrow(
+        'Balance read failed for user-missing: not found'
+      );
+    });
+
+    it('should return 0 when the user has no credit row', async () => {
+      await setupMock({ data: null, error: null });
 
       const balance = await BillingCredits.getBalance('user-missing');
       expect(balance).toBe(0);
@@ -94,6 +106,14 @@ describe('BillingCredits', () => {
 
       const result = await BillingCredits.hasSufficientBalance('user-1', 0);
       expect(result).toBe(true);
+    });
+
+    it('should propagate a balance read error rather than answer false', async () => {
+      await setupMock({ data: null, error: { message: 'timeout' } });
+
+      await expect(BillingCredits.hasSufficientBalance('user-1', 1)).rejects.toThrow(
+        'Balance read failed for user-1: timeout'
+      );
     });
   });
 

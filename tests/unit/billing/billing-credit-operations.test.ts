@@ -178,48 +178,51 @@ describe("Billing credit operations", () => {
     expect(client.rpc).toHaveBeenCalledTimes(2);
   });
 
+  // get_balance reads with maybeSingle: a user with no user_credits row is a
+  // null row (an honest $0); a failed read is an error and must NOT be $0.
+  function makeBalanceClient(result: {
+    data: { credit_balance: number } | null;
+    error: { message: string } | null;
+  }) {
+    return {
+      schema: vi.fn().mockReturnValue({
+        from: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockResolvedValue(result),
+            }),
+          }),
+        }),
+      }),
+    };
+  }
+
   it("TC-CREDIT-007: get_balance should return real balance for existing user and 0 for missing user", async () => {
     const { createServiceClient } = await import("@/lib/supabase/server");
 
-    const existingClient = {
-      schema: vi.fn().mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
-                data: { credit_balance: 42 },
-                error: null,
-              }),
-            }),
-          }),
-        }),
-      }),
-    };
-
-    const missingClient = {
-      schema: vi.fn().mockReturnValue({
-        from: vi.fn().mockReturnValue({
-          select: vi.fn().mockReturnValue({
-            eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
-                data: null,
-                error: { message: "not found" },
-              }),
-            }),
-          }),
-        }),
-      }),
-    };
-
     vi.mocked(createServiceClient)
-      .mockResolvedValueOnce(existingClient as never)
-      .mockResolvedValueOnce(missingClient as never);
+      .mockResolvedValueOnce(makeBalanceClient({ data: { credit_balance: 42 }, error: null }) as never)
+      .mockResolvedValueOnce(makeBalanceClient({ data: null, error: null }) as never);
 
     const existingBalance = await Billing.get_balance("user-existing");
     const missingBalance = await Billing.get_balance("user-missing");
 
     expect(existingBalance).toBe(42);
     expect(missingBalance).toBe(0);
+  });
+
+  it("TC-CREDIT-008: get_balance should throw when the read fails rather than report $0", async () => {
+    const { createServiceClient } = await import("@/lib/supabase/server");
+
+    vi.mocked(createServiceClient).mockResolvedValueOnce(
+      makeBalanceClient({ data: null, error: { message: "connection reset" } }) as never
+    );
+
+    // A $0 here would both block a funded customer and let a provisioning
+    // refund vanish.
+    await expect(Billing.get_balance("user-unreadable")).rejects.toThrow(
+      "Balance read failed for user-unreadable: connection reset"
+    );
   });
 
   it("TC-BILL-SEC-001: topup should reject negative or non-finite amounts", async () => {

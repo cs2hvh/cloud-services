@@ -2,6 +2,7 @@ import { createServiceClient } from "../server";
 import { Promocode } from "../types";
 import { resolveGraceForUserAfterTopup } from "@/lib/billing/grace/recovery";
 import { serviceLabel } from "@/lib/billing/service-label";
+import { closeMeter } from "@/lib/billing/meters";
 
 interface PromocodeRedemptionEntry {
   userId?: string;
@@ -234,8 +235,11 @@ export const Billing = {
       .from("user_credits")
       .select("credit_balance")
       .eq("user_id", userId)
-      .single();
-    if (error) return 0;
+      .maybeSingle();
+    // Prevents: a balance that could not be read being treated as $0 — which
+    // both blocks a funded customer and lets a provisioning refund vanish.
+    // maybeSingle: no row is honestly $0; a failed read or a duplicate row is not.
+    if (error) throw new Error(`Balance read failed for ${userId}: ${error.message}`);
     return (data?.credit_balance as number) ?? 0;
   },
 
@@ -305,12 +309,20 @@ export const Billing = {
       topup_credits?: number;
     };
 
-    const { data: existing } = await supabase
+    const { data: existing, error: existingError } = await supabase
       .schema("billing")
       .from("user_credits")
       .select("credit_balance")
       .eq("user_id", userId)
       .maybeSingle();
+    // Prevents: a failed read taking the INSERT branch and creating a second
+    // credits row for a user who already has one (user_credits.user_id has no
+    // unique constraint, so the database would not refuse it).
+    if (existingError) {
+      throw new Error(
+        `Top-up failed: could not read credits for ${userId}: ${existingError.message}`
+      );
+    }
 
     if (!existing) {
       console.log("user has no existing credits, creating new record");
@@ -940,6 +952,19 @@ export const Billing = {
       throw new Error(`Unknown service type: ${type}`);
     }
 
+    // Close the v2 meter FIRST, whatever the v1 row says. These five teardown
+    // paths never called closeMeter, so a deleted bucket, cluster or app left
+    // its meter open and the sweep reported PROBLEM-no-resource every hour
+    // until someone noticed. Found 2026-09-03.
+    try {
+      await closeMeter(type, params.serviceId);
+    } catch (meterErr) {
+      console.error(
+        `[Billing.close_active_service] v2 meter close failed for ${type} ${params.serviceId}:`,
+        meterErr instanceof Error ? meterErr.message : String(meterErr)
+      );
+    }
+
     console.log(`[Billing.close_active_service] Fetching active row`, {
       type,
       table,
@@ -979,78 +1004,26 @@ export const Billing = {
       return { charged: 0, newBalance: null };
     }
 
-    const hourlyRate = row?.hourly_rate as number;
-    const lastBilledAt = row?.last_billed_at as string | undefined;
-    const charge = Billing._computeProratedCharge(hourlyRate, lastBilledAt);
-
-    console.log(`[Billing.close_active_service] Computed charge`, {
-      hourlyRate,
-      lastBilledAt,
-      charge,
-    });
-
-    // Deduct credits
-    let newBalance: number | null = null;
-    let deductionApplied = false;
-    if (charge > 0) {
-      try {
-        // Charge and record together. This is a teardown, so a lost row was
-        // unrecoverable by design: the active row is deleted immediately
-        // after, taking with it the only other evidence of the period.
-        const movement = await Billing.move_credit({
-          userId: row.user_id,
-          amount: charge,
-          direction: "debit",
-          type: "usage",
-          serviceId: params.serviceId,
-          serviceType: type,
-          periodStart: lastBilledAt,
-          periodEnd: new Date().toISOString(),
-          description: `Final prorated ${serviceLabel(type)} usage charge`,
-        });
-        newBalance = movement.balance;
-        deductionApplied = true;
-        console.log(`[Billing.close_active_service] Deduction successful`, {
-          userId: params.userId,
-          charge,
-          newBalance,
-        });
-      } catch (error) {
-        if (params.failOnInsufficient) {
-          throw new Error("Insufficient balance");
-        }
-        // If not failing hard, skip deduction and proceed to cleanup.
-        newBalance = null;
-        console.warn(
-          `[Billing.close_active_service] Deduction skipped due to error`,
-          { error: error instanceof Error ? error.message : String(error) }
-        );
-        // L5: record the unpaid final charge as a 'failed' usage row (arrears)
-        // instead of silently dropping it, so the owed amount stays observable and
-        // can be settled on a later top-up rather than written off.
-        try {
-          await Billing.save_transaction({
-            userId: row.user_id,
-            amount: charge,
-            status: "failed",
-            type: "usage",
-            balanceAfter: null,
-            serviceId: params.serviceId,
-            serviceType: type,
-            periodStart: lastBilledAt,
-            periodEnd: new Date().toISOString(),
-            description: `Unpaid final prorated ${serviceLabel(type)} usage charge (insufficient balance at teardown)`,
-          });
-        } catch (txnError) {
-          console.warn(
-            "[Billing.close_active_service] Failed to record arrears transaction:",
-            txnError instanceof Error ? txnError.message : String(txnError)
-          );
-        }
-      }
+    // THE V1 "FINAL PRORATED CHARGE" IS NO LONGER DEDUCTED. It was computed as
+    // hourly_rate × (now − last_billed_at), and last_billed_at was advanced
+    // only by the old cron worker, gone since 2026-08-24. At teardown it
+    // therefore resolved to the resource's ENTIRE lifetime, every hour of
+    // which the v2 sweep had already billed. Found 2026-09-03; no teardown had
+    // run since the 2026-08-31 relaunch, so nobody was hit. The number is kept
+    // for the log so the two models can be compared, and nothing else.
+    const v1Estimate = Billing._computeProratedCharge(
+      row?.hourly_rate as number,
+      row?.last_billed_at as string | undefined
+    );
+    if (v1Estimate > 0) {
+      console.log(
+        `[Billing.close_active_service] v1 would have charged $${v1Estimate.toFixed(6)} for ` +
+        `${serviceLabel(type)} ${params.serviceId} at teardown — not deducted; the hourly sweep already billed those hours`
+      );
     }
 
-    // Remove active row to stop future accrual
+    // Remove the v1 row. A few provisioning paths still read its presence as
+    // "already billed", so it must not be left behind.
     const { error: delErr } = await supabase
       .schema("billing")
       .from(table)
@@ -1058,43 +1031,20 @@ export const Billing = {
       .eq("service_id", params.serviceId)
       .eq("user_id", params.userId);
     if (delErr) {
-      if (deductionApplied && charge > 0) {
-        try {
-          await Billing.move_credit({
-            userId: row.user_id,
-            amount: charge,
-            direction: "credit",
-            type: "refund",
-            serviceId: params.serviceId,
-            serviceType: type,
-            description: `Refund for ${type.replace("_", " ")} final charge after cleanup failure`,
-          });
-        } catch (refundError) {
-          console.error(
-            `[Billing.close_active_service] Failed to refund charge after delete error for ${type}:`,
-            refundError instanceof Error ? refundError.message : String(refundError)
-          );
-          throw new Error(
-            `Failed to delete active ${type}: ${delErr.message}. Charge refund also failed.`
-          );
-        }
-      }
       console.error(
         `[Billing.close_active_service] Supabase delete error for ${type}:`,
         delErr.message
       );
-      throw new Error(
-        `Failed to delete active ${type}: ${delErr.message}. Charge of ${charge} was refunded.`
-      );
+      throw new Error(`Failed to delete active ${type}: ${delErr.message}`);
     }
 
     console.log(`[Billing.close_active_service] Closed service successfully`, {
       type,
-      charged: charge,
-      newBalance,
+      charged: 0,
+      v1Estimate,
     });
 
-    return { charged: charge, newBalance };
+    return { charged: 0, newBalance: null };
   },
 
   // ─── Stripe Integration Helpers ─────────────────────────────────────

@@ -20,8 +20,9 @@ export const BillingCredits = {
       .from("user_credits")
       .select("credit_balance")
       .eq("user_id", userId)
-      .single();
-    if (error) return 0;
+      .maybeSingle();
+    // Prevents: an unreadable balance passing as $0 and refusing a funded customer.
+    if (error) throw new Error(`Balance read failed for ${userId}: ${error.message}`);
     return (data?.credit_balance as number) ?? 0;
   },
 

@@ -116,10 +116,25 @@ export async function postProvisionBilling({
   }
 }
 
-// closeActive: fetches the active row, computes the prorated charge, deletes
-// the row, and returns the charge amount. The row is always removed — callers
-// are deleting the resource, so the meter must not outlive it.
-// Deduction is best-effort: insufficient credits on deletion is logged, not thrown.
+// closeActive: deletes the v1 billing.active_* row and returns what the v1
+// model computed as the "final prorated charge". That number is LOGGED and
+// NOT DEDUCTED. Read the next paragraph before putting the deduction back.
+//
+// THE V1 FINAL CHARGE WAS A DOUBLE CHARGE OF THE WHOLE LIFETIME. v1 computed
+// hourly_rate × (now − last_billed_at), and last_billed_at was advanced only by
+// the old cron worker, which has been gone since 2026-08-24. So at teardown it
+// resolved to hourly_rate × (now − provision time): every hour the v2 sweep
+// had already billed, billed again in one lump. A 30-day pod would have paid
+// for 720 hours twice. Found 2026-09-03 by reading the two paths side by side;
+// no teardown had happened since the 2026-08-31 relaunch, so no customer was
+// hit — the next one would have been.
+//
+// The v1 row is still deleted, because a few provisioning paths read its
+// presence as "already billed" and would re-charge setup on every status poll
+// if it were left behind. The v2 meter is closed here too, so the sweep stops
+// at the hour that just completed. The partial final hour is deliberately not
+// billed: under-charging by up to an hour is the safe error while the sweep
+// bills only whole completed hours.
 export async function closeActiveBilling({
   userId,
   serviceId,
@@ -131,34 +146,27 @@ export async function closeActiveBilling({
   serviceType: "database" | "kubernetes" | "objectspace" | "spectrum" | "platform_apps" | "gpu_pod" | "inference_vector" | "compute" | "custom_image";
   closeActive: () => Promise<number>;
 }): Promise<void> {
-  const finalCharge = await closeActive();
+  let v1Estimate = 0;
+  try {
+    v1Estimate = await closeActive();
+  } catch (e) {
+    // A failed v1 close must not stop the v2 meter from closing below; a meter
+    // that outlives its resource is what charged one customer $4,629.91 for a
+    // deleted bucket.
+    console.error("[closeActiveBilling] v1 active row close failed:", e instanceof Error ? e.message : e);
+  }
 
-  // Close the v2 meter in the same call that closes the v1 one, for the same
-  // reason it is opened centrally: every teardown path already goes through
-  // here. A meter that outlives its resource is what charged one customer
-  // $4,629.91 for a bucket that had already been deleted, and what left five
-  // compute meters billing servers that no longer existed.
-  //
-  // Deliberately BEFORE the final-charge block below, which is best-effort and
-  // swallows its own errors — closing the meter must not depend on the last
-  // charge succeeding.
   try {
     await closeMeter(serviceType as MeteredService, serviceId);
   } catch (meterErr) {
     console.error("[closeActiveBilling] v2 meter close failed:", meterErr);
   }
 
-  if (finalCharge > 0) {
-    try {
-      const newBalance = await Billing.deduct(userId, finalCharge);
-      Billing.save_transaction({
-        userId, amount: finalCharge, status: "completed", type: "usage",
-        balanceAfter: newBalance, serviceId, serviceType,
-        description: `Final prorated ${serviceLabel(serviceType)} charge`,
-      }).catch((e) => console.warn("[closeActiveBilling] save_transaction failed:", e instanceof Error ? e.message : e));
-    } catch (e) {
-      console.warn("[closeActiveBilling] final charge failed:", e instanceof Error ? e.message : e);
-    }
+  if (v1Estimate > 0) {
+    console.log(
+      `[closeActiveBilling] v1 would have charged $${v1Estimate.toFixed(6)} for ${serviceLabel(serviceType)} ` +
+      `${serviceId} (user ${userId}) at teardown — not deducted; the hourly sweep already billed those hours`
+    );
   }
 }
 
