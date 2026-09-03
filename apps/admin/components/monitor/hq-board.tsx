@@ -559,11 +559,50 @@ export default function HqBoard() {
 
   const staleS = fetchedAt ? Math.round((Date.now() - fetchedAt) / 1000) : null;
 
+  const kpis = [
+    {
+      k: "charged 24h",
+      v: `${feed.billing.charges24hTruncated ? "≥ " : ""}${money(feed.billing.charged24h)}`,
+    },
+    {
+      k: "meter-hrs unbilled",
+      v: feed.billing.coverage === null ? "?" : String(feed.billing.coverage.missing),
+      bad: (feed.billing.coverage?.missing ?? 0) > 0,
+    },
+    { k: "open meters", v: num(feed.billing.openMeters) },
+    { k: "live prices", v: num(feed.billing.livePrices) },
+    {
+      k: "failures",
+      v: num(feed.billing.failuresUnresolved),
+      bad: (feed.billing.failuresUnresolved ?? 0) > 0,
+    },
+    { k: "users", v: num(feed.users.total) },
+  ];
+  const kpiChip = (kpi: (typeof kpis)[number]) => (
+    <span
+      key={kpi.k}
+      className={`shrink-0 rounded-md border px-2.5 py-1.5 text-[11px] backdrop-blur ${
+        kpi.bad
+          ? "border-red-500/40 bg-red-500/10 text-red-300"
+          : "border-border bg-[#111216]/90 text-white/70"
+      }`}
+    >
+      <span className="mr-1.5 uppercase tracking-wider text-white/35">{kpi.k}</span>
+      <span className="font-heading text-[12.5px] font-semibold">{kpi.v}</span>
+    </span>
+  );
+
   return (
+    <div>
+      {/* On small screens the overlays would smother the map — the KPI strip
+          moves above it as one scrollable row instead. */}
+      <div className="mb-2 flex gap-2 overflow-x-auto pb-1 md:hidden">
+        {kpis.map(kpiChip)}
+      </div>
     <div
       ref={boardRef}
       className={`flex flex-col overflow-hidden rounded-xl border border-border bg-[#0b0c0f] ${
-        isFs ? "h-screen" : "h-[calc(100vh-170px)] min-h-[560px]"
+        isFs ? "h-screen" : "h-[calc(100vh-170px)] min-h-[440px] md:min-h-[560px]"
       }`}
     >
       <div className="relative flex-1">
@@ -605,7 +644,7 @@ export default function HqBoard() {
         </div>
 
         {/* Tone legend — bottom left. The colors are a vocabulary; say it. */}
-        <div className="pointer-events-none absolute bottom-3 left-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-full border border-border bg-[#111216]/90 px-3 py-1.5">
+        <div className="pointer-events-none absolute bottom-3 left-3 hidden flex-wrap items-center gap-x-3 gap-y-1 rounded-full border border-border bg-[#111216]/90 px-3 py-1.5 md:flex">
           {(
             [
               ["ok", "healthy"],
@@ -623,39 +662,9 @@ export default function HqBoard() {
           ))}
         </div>
 
-        {/* KPI strip — top left */}
-        <div className="pointer-events-none absolute left-3 top-3 flex flex-wrap gap-2">
-          {[
-            {
-              k: "charged 24h",
-              v: `${feed.billing.charges24hTruncated ? "≥ " : ""}${money(feed.billing.charged24h)}`,
-            },
-            {
-              k: "meter-hrs unbilled",
-              v: feed.billing.coverage === null ? "?" : String(feed.billing.coverage.missing),
-              bad: (feed.billing.coverage?.missing ?? 0) > 0,
-            },
-            { k: "open meters", v: num(feed.billing.openMeters) },
-            { k: "live prices", v: num(feed.billing.livePrices) },
-            {
-              k: "failures",
-              v: num(feed.billing.failuresUnresolved),
-              bad: (feed.billing.failuresUnresolved ?? 0) > 0,
-            },
-            { k: "users", v: num(feed.users.total) },
-          ].map((kpi) => (
-            <span
-              key={kpi.k}
-              className={`rounded-md border px-2.5 py-1.5 text-[11px] backdrop-blur ${
-                kpi.bad
-                  ? "border-red-500/40 bg-red-500/10 text-red-300"
-                  : "border-border bg-[#111216]/90 text-white/70"
-              }`}
-            >
-              <span className="mr-1.5 uppercase tracking-wider text-white/35">{kpi.k}</span>
-              <span className="font-heading font-semibold text-[12.5px]">{kpi.v}</span>
-            </span>
-          ))}
+        {/* KPI strip — top left, desktop only (mobile gets the strip above) */}
+        <div className="pointer-events-none absolute left-3 top-3 hidden flex-wrap gap-2 md:flex">
+          {kpis.map(kpiChip)}
         </div>
       </div>
 
@@ -687,6 +696,7 @@ export default function HqBoard() {
           ))
         )}
       </div>
+    </div>
     </div>
   );
 }
