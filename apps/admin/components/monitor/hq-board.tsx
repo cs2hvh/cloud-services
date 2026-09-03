@@ -20,7 +20,10 @@ import "@xyflow/react/dist/style.css";
 import Link from "next/link";
 import type { HqEvent } from "@admin/app/api/admin/monitor/route";
 
-type Tone = "ok" | "warn" | "bad" | "dim" | "info";
+// "attn" (purple) is reserved for UNEXPLAINED states — deliberately unlike
+// amber (customer owes, receipted) and red (system broken): it means
+// "nobody knows yet", the only verdict that demands a human before a story.
+type Tone = "ok" | "warn" | "bad" | "dim" | "info" | "attn";
 
 interface Feed {
   ok: boolean;
@@ -41,9 +44,9 @@ interface Feed {
       expected: number;
       billed: number;
       missing: number;
+      hoursByVerdict: { arrears: number; stall: number; unexplained: number };
       worst: { service_type: string; missing: number } | null;
-      overBilled: number;
-      shape: "balance" | "stall" | "unknown";
+      windowBug: boolean;
     } | null;
     unpricedSellable: number | null;
     gpuBooks: {
@@ -73,6 +76,7 @@ const TONE_RING: Record<Tone, string> = {
   bad: "border-red-500/60",
   dim: "border-white/[0.09]",
   info: "border-[#3987e5]/55",
+  attn: "border-purple-500/60",
 };
 const TONE_DOT: Record<Tone, string> = {
   ok: "bg-emerald-400",
@@ -80,6 +84,7 @@ const TONE_DOT: Record<Tone, string> = {
   bad: "bg-red-400",
   dim: "bg-white/25",
   info: "bg-[#3987e5]",
+  attn: "bg-purple-400",
 };
 
 interface HqNodeData {
@@ -192,22 +197,22 @@ function buildGraph(f: Feed): { nodes: Node<HqNodeData>[]; edges: Edge[] } {
   const flowing = b.sweepAgeH !== null && b.sweepAgeH <= 1.5;
   const cov = b.coverage;
   // Coverage outranks recency — the sweep read green through a 12-hour gap.
-  // Broken (stall-shaped) pages someone; owed (balance-shaped) chases an
-  // invoice — amber, because the biller behaved correctly.
+  // Verdict precedence: broken (stall, red) pages someone; unexplained
+  // (purple) demands a human; arrears (amber) chases a receipted invoice.
   const covTone: Tone =
     cov === null
       ? "dim"
       : cov.open === 0
         ? "dim"
-        : cov.overBilled > 0
+        : cov.windowBug
           ? "bad"
           : cov.missing === 0
             ? "ok"
-            : cov.shape === "balance"
-              ? "warn"
-              : cov.missing <= 2
-                ? "warn"
-                : "bad";
+            : cov.hoursByVerdict.stall > 0
+              ? "bad"
+              : cov.hoursByVerdict.unexplained > 0
+                ? "attn"
+                : "warn";
   const invTone: Tone = f.billing.invariantBad === null ? "dim" : f.billing.invariantBad > 0 ? "bad" : "ok";
   const failTone: Tone = (b.failuresUnresolved ?? 0) > 0 ? "bad" : "ok";
   const mainTone: Tone = f.providers.mainApp.up ? "ok" : "bad";
@@ -329,22 +334,21 @@ function buildGraph(f: Feed): { nodes: Node<HqNodeData>[]; edges: Edge[] } {
           ? "coverage read failed"
           : cov.open === 0
             ? "0 meters examined"
-            : cov.overBilled > 0
+            : cov.windowBug
               ? // service_charges has a unique index per (service, hour), so
-                // billed > expected can only mean THIS node's window math is
-                // wrong — say so rather than accuse the data.
-                `${cov.overBilled} meter(s) billed > expected — window bug in this node, distrust it`
-              : `${cov.billed}/${cov.expected} hrs · ${cov.open} meters${
-                  cov.worst ? ` · worst: ${cov.worst.service_type} −${cov.worst.missing}h` : ""
-                }${
-                  cov.missing === 0
-                    ? ""
-                    : cov.shape === "balance"
-                      ? " · balance-shaped: customer owes, biller fine"
-                      : cov.shape === "stall"
-                        ? " · stall-shaped: every meter gapped — page billing"
-                        : ""
-                }`,
+                // billed > expected can only mean the window math is wrong —
+                // say so rather than accuse the data.
+                "billed > expected — window bug, distrust this node"
+              : cov.missing === 0
+                ? `${cov.billed}/${cov.expected} hrs · ${cov.open} meters`
+                : `${cov.billed}/${cov.expected} hrs · ${[
+                    cov.hoursByVerdict.stall > 0 && `stall ${cov.hoursByVerdict.stall}h — page billing`,
+                    cov.hoursByVerdict.unexplained > 0 &&
+                      `unexplained ${cov.hoursByVerdict.unexplained}h — human call`,
+                    cov.hoursByVerdict.arrears > 0 && `owed ${cov.hoursByVerdict.arrears}h (receipted)`,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}`,
       tone: covTone,
       wide: true,
     }),

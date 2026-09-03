@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { createServiceClient } from "@/lib/supabase/server";
 import { MAIN_APP_URL } from "@admin/lib/sections";
-import { BILLING_ACTIVE_SINCE } from "@admin/lib/pricing";
 
 export const dynamic = "force-dynamic";
 
@@ -27,8 +26,6 @@ export const dynamic = "force-dynamic";
  */
 
 const DAY_MS = 24 * 3600 * 1000;
-const HOUR_MS = 3600 * 1000;
-const COVERAGE_WINDOW_MS = 7 * DAY_MS;
 
 type Tone = "ok" | "warn" | "bad" | "dim";
 
@@ -194,98 +191,60 @@ export async function GET() {
     ? meterRows.filter((m) => (m.status === "active") !== (m.ended_at === null)).length
     : null;
 
-  // --- BILLED COVERAGE: hours elapsed vs hours actually charged, per open
-  // meter, over the last 7 days. Billed is COUNTED BY THE SERVER inside the
-  // exact same window as expected — [fromHour, floorHourNow):
-  //   * a shared upper bound, or the always-billed current hour papers over
-  //     exactly one in-window gap per meter (found in review: min-clamping
-  //     an unbounded count reported 0 missing when 1 was);
-  //   * head counts, because PostgREST caps row fetches at 1000 server-side
-  //     and a truncated fetch fails toward a false red that grows with
-  //     meter age — counts have no cap;
-  //   * no clamp: billed > expected means duplicate charges for an hour,
-  //     which must surface as an anomaly, not be floored away.
+  // --- BILLED COVERAGE via billing.meter_coverage() (service_role only) —
+  // per open meter: expected vs billed hours in the window, plus a VERDICT:
+  //   ok          nothing missing
+  //   arrears     PROVEN short — a failed usage row exists (receipt)
+  //   stall       nothing at all billed in those hours; biller was down
+  //   unexplained biller ran, this meter did not bill, no receipt. Human call.
+  // Only 'arrears' may accuse a customer. The RPC replaced per-meter head
+  // counts (no row caps, no client window math) and its verdict replaced the
+  // aggregate shape proxy — whose two-way split misfiled "biller skipped a
+  // solvent meter" as "chase the customer" on its very first live case.
   let coverage: {
     open: number;
     expected: number;
     billed: number;
     missing: number;
+    hoursByVerdict: { arrears: number; stall: number; unexplained: number };
     worst: { service_type: string; missing: number } | null;
-    overBilled: number;
-    shape: "balance" | "stall" | "unknown";
+    windowBug: boolean;
   } | null = null;
-  if (meterRows) {
-    const now = Date.now();
-    const floorHourNow = Math.floor(now / HOUR_MS) * HOUR_MS;
-    const activeSince = Date.parse(BILLING_ACTIVE_SINCE);
-    const windowFloor = now - COVERAGE_WINDOW_MS;
-    const windows = openMeterList.map((m) => {
-      const rawStart = Math.max(Date.parse(m.started_at as string), activeSince, windowFloor);
-      const startHour = Math.ceil(rawStart / HOUR_MS) * HOUR_MS;
-      return {
-        service_type: m.service_type as string,
-        service_id: m.service_id as string,
-        startHour,
-        expected: Math.max(0, Math.round((floorHourNow - startHour) / HOUR_MS)),
-      };
-    });
-    const toIso = new Date(floorHourNow).toISOString();
-    const billedCounts = await Promise.all(
-      windows.map((w) =>
-        billing
-          .from("service_charges")
-          .select("id", head)
-          .eq("service_type", w.service_type)
-          .eq("service_id", w.service_id)
-          .gte("period_start", new Date(w.startHour).toISOString())
-          .lt("period_start", toIso),
-      ),
-    );
-    if (!billedCounts.some((r) => r.error)) {
+  {
+    const covRes = await billing.rpc("meter_coverage");
+    if (!covRes.error) {
+      const rows = (covRes.data ?? []) as Array<{
+        service_type: string;
+        service_id: string;
+        expected: number | string;
+        billed: number | string;
+        missing: number | string;
+        verdict: string;
+      }>;
       let expected = 0;
       let billed = 0;
-      let overBilled = 0;
-      let gapMeters = 0;
-      let cleanMeters = 0;
+      let missing = 0;
+      const hoursByVerdict = { arrears: 0, stall: 0, unexplained: 0 };
       let worst: { service_type: string; missing: number } | null = null;
-      windows.forEach((w, i) => {
-        const b = billedCounts[i].count ?? 0;
-        expected += w.expected;
-        billed += b;
-        if (b > w.expected) overBilled += 1;
-        const miss = w.expected - b;
-        if (w.expected > 0) {
-          if (miss > 0) gapMeters += 1;
-          else cleanMeters += 1;
+      let windowBug = false;
+      for (const r of rows) {
+        const exp = Number(r.expected);
+        const bil = Number(r.billed);
+        const mis = Number(r.missing);
+        expected += exp;
+        billed += bil;
+        missing += Math.max(0, mis);
+        if (bil > exp) windowBug = true;
+        if (mis > 0) {
+          const bucket =
+            r.verdict === "arrears" ? "arrears" : r.verdict === "stall" ? "stall" : "unexplained";
+          hoursByVerdict[bucket] += mis;
+          if (worst === null || mis > worst.missing) {
+            worst = { service_type: r.service_type, missing: mis };
+          }
         }
-        if (miss > 0 && (worst === null || miss > worst.missing)) {
-          worst = { service_type: w.service_type, missing: miss };
-        }
-      });
-      // Broken and owed need opposite responses (billing-lane classification,
-      // live case: two same-user gpu_volumes refused 28h on empty balance
-      // while a funded meter billed the identical window). Aggregate proxy:
-      // a sweep stall cannot bill one meter and skip another in the same
-      // hours — gaps alongside fully-billed meters are balance-shaped. The
-      // coverage RPC will classify per-hour properly; this is the honest
-      // approximation until then.
-      const shape: "balance" | "stall" | "unknown" =
-        gapMeters === 0
-          ? "unknown"
-          : cleanMeters > 0
-            ? "balance"
-            : gapMeters > 1
-              ? "stall"
-              : "unknown";
-      coverage = {
-        open: openMeterList.length,
-        expected,
-        billed,
-        missing: Math.max(0, expected - billed),
-        worst,
-        overBilled,
-        shape,
-      };
+      }
+      coverage = { open: rows.length, expected, billed, missing, hoursByVerdict, worst, windowBug };
     }
   }
 
