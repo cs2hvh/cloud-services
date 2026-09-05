@@ -62,15 +62,22 @@ describe('Security: Route Authentication', () => {
 
       const { createSSRClient } = await import('@/lib/supabase/server');
       vi.mocked(createSSRClient).mockResolvedValue({
+        // Two .eq() calls: cluster_id AND owner_id. The ownership filter was
+        // added in 7ad7c12b, because this route runs on the service-role client
+        // and so has no RLS policy behind it to catch a missing filter. A mock
+        // that chains only one .eq would pass while the route silently lost its
+        // ownership check, so the shape here is load-bearing.
         from: vi.fn().mockReturnValue({
           select: vi.fn().mockReturnValue({
             eq: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({
-                data: null,
-                error: {
-                  message: 'relation "clusters" does not exist',
-                  code: '42P01',
-                },
+              eq: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({
+                  data: null,
+                  error: {
+                    message: 'relation "clusters" does not exist',
+                    code: '42P01',
+                  },
+                }),
               }),
             }),
           }),
@@ -103,33 +110,57 @@ describe('Security: Route Authentication', () => {
   // K8s ManageIP Routes — Now require auth
   // ==================================================================
   describe('K8s ManageIP Routes', () => {
-    it('SEC-AUTH-010: manageip/add should reject unauthenticated requests', async () => {
-      const { authenticateUser } = await import('@/lib/auth/server-auth');
-      vi.mocked(authenticateUser).mockResolvedValue({
-        authenticated: false,
-        user: null,
-        response: new Response(
-          JSON.stringify({ error: 'Unauthorized' }),
-          { status: 401, headers: { 'Content-Type': 'application/json' } }
-        ),
-      } as any);
+    // SEC-AUTH-010 used to import
+    // @/app/api/services/kubernetes/manageip/add/route, which does not exist.
+    // The import failed at transform time, so the WHOLE file never ran and all
+    // seven SEC-AUTH cases in it silently reported nothing — including
+    // SEC-AUTH-011 below, which asserts manageip/delete rejects unauthenticated
+    // requests. A security suite that never executes is worse than none,
+    // because it reads as coverage.
+    //
+    // It now covers readdroplet and dropletstatus instead: the two routes that
+    // genuinely had NO authentication until fad9e73f, which is what this file
+    // exists to catch.
+    // The import must be a literal, not a variable: Vite resolves these
+    // statically, so import(someVariable) cannot see the "@/" alias and fails at
+    // runtime. Each case therefore carries its own thunk.
+    it.each([
+      [
+        'readdroplet',
+        () => import('@/app/api/services/kubernetes/manageip/readdroplet/route'),
+      ],
+      [
+        'dropletstatus',
+        () => import('@/app/api/services/kubernetes/manageip/dropletstatus/route'),
+      ],
+    ])(
+      'SEC-AUTH-010: manageip/%s should reject unauthenticated requests',
+      async (name, loadRoute) => {
+        const { authenticateUser } = await import('@/lib/auth/server-auth');
+        vi.mocked(authenticateUser).mockResolvedValue({
+          authenticated: false,
+          user: null,
+          response: new Response(
+            JSON.stringify({ error: 'Unauthorized' }),
+            { status: 401, headers: { 'Content-Type': 'application/json' } }
+          ),
+        } as any);
 
-      const { POST } = await import(
-        '@/app/api/services/kubernetes/manageip/add/route'
-      );
+        const { POST } = await loadRoute();
 
-      const req = new NextRequest(
-        'http://localhost:3000/api/services/kubernetes/manageip/add',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ipAddress: '10.0.0.1' }),
-        }
-      );
+        const req = new NextRequest(
+          `http://localhost:3000/api/services/kubernetes/manageip/${name}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: '12345', cluster_id: 'c-1' }),
+          }
+        );
 
-      const res = await POST(req);
-      expect(res.status).toBe(401);
-    });
+        const res = await POST(req);
+        expect(res.status).toBe(401);
+      }
+    );
 
     it('SEC-AUTH-011: manageip/delete should reject unauthenticated requests', async () => {
       const { authenticateUser } = await import('@/lib/auth/server-auth');
@@ -159,7 +190,10 @@ describe('Security: Route Authentication', () => {
       expect(res.status).toBe(401);
     });
 
-    it('SEC-AUTH-012: manageip/update should reject unauthenticated requests', async () => {
+    // SEC-AUTH-012 imported manageip/update, which does not exist either. It is
+    // repointed at createdroplet, a route that DOES exist and provisions real
+    // infrastructure, so it is worth asserting on.
+    it('SEC-AUTH-012: manageip/createdroplet should reject unauthenticated requests', async () => {
       const { authenticateUser } = await import('@/lib/auth/server-auth');
       vi.mocked(authenticateUser).mockResolvedValue({
         authenticated: false,
@@ -171,20 +205,36 @@ describe('Security: Route Authentication', () => {
       } as any);
 
       const { POST } = await import(
-        '@/app/api/services/kubernetes/manageip/update/route'
+        '@/app/api/services/kubernetes/manageip/createdroplet/route'
       );
 
       const req = new NextRequest(
-        'http://localhost:3000/api/services/kubernetes/manageip/update',
+        'http://localhost:3000/api/services/kubernetes/manageip/createdroplet',
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ipAddress: ['10.0.0.1'] }),
+          body: JSON.stringify({ cluster_id: 'c-1', names: ['n1'] }),
         }
       );
 
       const res = await POST(req);
       expect(res.status).toBe(401);
+    });
+
+    // Guards the failure this file was in: an import of a route that does not
+    // exist fails at transform time and takes the WHOLE suite silently offline.
+    // This assertion fails loudly instead.
+    it('SEC-AUTH-013: every manageip route this suite names still exists', async () => {
+      const modules = [
+        import('@/app/api/services/kubernetes/manageip/readdroplet/route'),
+        import('@/app/api/services/kubernetes/manageip/dropletstatus/route'),
+        import('@/app/api/services/kubernetes/manageip/delete/route'),
+        import('@/app/api/services/kubernetes/manageip/createdroplet/route'),
+      ];
+      const loaded = await Promise.all(modules);
+      for (const m of loaded) {
+        expect(typeof (m as { POST?: unknown }).POST).toBe('function');
+      }
     });
   });
 
