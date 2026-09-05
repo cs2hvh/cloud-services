@@ -1,4 +1,4 @@
-import { createClient, createSSRClient } from "@/lib/supabase/server";
+import { createSSRClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { checkAdminAuth } from "@/lib/auth/check-admin";
 

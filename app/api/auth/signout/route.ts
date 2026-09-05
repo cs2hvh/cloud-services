@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { AuditLogService } from "@/lib/audit";
 import { getAuditContext } from "@/lib/audit/context";
 import { sanitizeAuthError, logError } from "@/lib/api/error-sanitizer";
+import { getAppBaseUrl } from "@/lib/api/get-app-base-url";
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -75,8 +76,12 @@ export async function GET(request: NextRequest) {
   if (error) logError("GET /api/auth/signout", error);
   const requested = request.nextUrl.searchParams.get("reason") ?? "";
   const reason = SIGNOUT_REASONS.has(requested) ? requested : "";
-  const url = request.nextUrl.clone();
-  url.pathname = "/signin";
-  url.search = reason ? `?error=${reason}` : "";
-  return NextResponse.redirect(url, { status: 303 });
+  // Behind nginx and Cloudflare a route handler's nextUrl carries the
+  // origin's bind address (https://0.0.0.0:3000 in production), so a redirect
+  // built from it sends the browser nowhere. getAppBaseUrl reads the
+  // forwarded host the way the OAuth callbacks do.
+  return NextResponse.redirect(
+    `${getAppBaseUrl(request)}/signin${reason ? `?error=${reason}` : ""}`,
+    { status: 303 }
+  );
 }

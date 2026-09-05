@@ -45,33 +45,35 @@ step() { printf '\n\033[1;36m▸ %s\033[0m\n' "$*"; }
 ok()   { printf '\033[1;32m✓ %s\033[0m\n' "$*"; }
 die()  { printf '\033[1;31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
 
-# PIDs listening on $PORT, on any address. Empty when nothing does.
-port_pids() { ss -ltnpH "sport = :$PORT" 2>/dev/null | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u || true; }
+# PIDs listening on $PORT, on any address, by whichever tool the host has.
+# Empty when nothing does. Three sources because the first deploy with the
+# stop-clear-start sequence (run 81) still found the OLD build answering after
+# the start: the listener survived the stop and the ss parse alone did not
+# name it.
+port_pids() {
+  {
+    ss -ltnpH "sport = :$PORT" 2>/dev/null | grep -o 'pid=[0-9]*' | cut -d= -f2
+    fuser -n tcp "$PORT" 2>/dev/null | tr ' ' '\n'
+    lsof -ti "tcp:$PORT" -sTCP:LISTEN 2>/dev/null
+  } | grep -E '^[0-9]+$' | sort -u || true
+}
 
-# The page on :$PORT must come from the build this run just made, and it must
-# be served by this unit. On 2026-09-05 a deploy went green while the site
-# kept serving the previous build: the health check only asked for a 200, and
-# a process outside the unit answered it. Next puts its build id in every
-# page as \"b\":\"<id>\" in the RSC payload; that is compared with .next/BUILD_ID.
-verify_served_build() {
-  local want got pid
-  want="$(cat .next/BUILD_ID)"
-  got="$(curl -s "$HEALTH_URL/" 2>/dev/null | grep -o '\\"b\\":\\"[A-Za-z0-9_-]*' | head -1 | sed 's/.*"//' || true)"
-  if [[ -z "$got" ]]; then
-    echo "  (no build id readable from $HEALTH_URL/ — cannot prove which build is serving)"
-  elif [[ "$got" != "$want" ]]; then
-    systemctl status "$WEB_SERVICE" --no-pager || true
-    journalctl -u "$WEB_SERVICE" -n 40 --no-pager || true
-    die "the app on :$PORT serves build $got but this deploy built $want — the OLD build is still live"
-  else
-    echo "  served build id matches BUILD_ID ($want)"
-  fi
+# The build id the app on :$PORT is serving right now, or empty. Next puts it
+# in every page as \"b\":\"<id>\" in the RSC payload.
+served_build_id() {
+  curl -s -m 10 "$HEALTH_URL/" 2>/dev/null | grep -o '\\"b\\":\\"[A-Za-z0-9_-]*' | head -1 | sed 's/.*"//' || true
+}
+
+# Whoever holds :$PORT must be inside this unit, and the unit must be active.
+verify_port_owner() {
+  local pid
   for pid in $(port_pids); do
     grep -q "$WEB_SERVICE.service" "/proc/$pid/cgroup" 2>/dev/null ||
       die "port $PORT is held by pid $pid outside $WEB_SERVICE — an unmanaged process is serving"
   done
   systemctl is-active --quiet "$WEB_SERVICE" || die "$WEB_SERVICE is not active after the restart"
 }
+
 
 cd "$APP_DIR" || die "APP_DIR not found: $APP_DIR"
 [[ -z "$BRANCH" ]] && BRANCH="$(git rev-parse --abbrev-ref HEAD)"
@@ -113,13 +115,23 @@ echo "  build OK (BUILD_ID $(cat .next/BUILD_ID))"
 # port; anything else found on it after the stop is named in the log and
 # killed.
 step "Restarting $WEB_SERVICE"
+echo "  before stop: $(systemctl show -p KillMode -p MainPID -p ActiveState "$WEB_SERVICE" 2>/dev/null | tr '\n' ' ') port owners: $(port_pids | tr '\n' ' ')"
 systemctl stop "$WEB_SERVICE" || true
-for pid in $(port_pids); do
-  echo "  port $PORT still held by pid $pid after stop: $(ps -o etime=,cmd= -p "$pid" 2>/dev/null | head -c 160)"
-  kill "$pid" 2>/dev/null || true
+# Wait for the port to be free, naming and killing whatever still holds it.
+# A stop that returns while a child keeps listening (KillMode=process, or a
+# process that was never in the unit) is exactly the case that left the old
+# build live in run 78 and again in run 81.
+for i in $(seq 1 15); do
+  held="$(port_pids)"
+  [[ -z "$held" ]] && break
+  for pid in $held; do
+    echo "  port $PORT still held by pid $pid after stop ($i): $(ps -o etime=,cmd= -p "$pid" 2>/dev/null | head -c 160)"
+    if (( i < 5 )); then kill "$pid" 2>/dev/null || true; else kill -9 "$pid" 2>/dev/null || true; fi
+  done
+  sleep 1
 done
-sleep 1
-for pid in $(port_pids); do kill -9 "$pid" 2>/dev/null || true; done
+held="$(port_pids)"
+[[ -z "$held" ]] || die "port $PORT is still held by pid(s) $held after stop and kill — the old build would keep serving; inspect by hand"
 systemctl start "$WEB_SERVICE" || die "failed to start $WEB_SERVICE"
 
 # The old billing cron ($CRON_SERVICE) must NEVER run again. It billed from
@@ -153,15 +165,36 @@ else
 fi
 
 # ── 5. health check
-step "Waiting for the app to answer on $HEALTH_URL"
-for _ in $(seq 1 30); do
-  code="$(curl -s -o /dev/null -w '%{http_code}' "$HEALTH_URL" 2>/dev/null || true)"
+# ── 5. health check: the app must answer AND serve the build we just made.
+# Up to three minutes: tsx plus a Next start of this size can take over a
+# minute, and a 200 from the previous build during that window is not health.
+want="$(cat .next/BUILD_ID)"
+got=""
+step "Waiting for the app to answer on $HEALTH_URL with BUILD_ID $want"
+for i in $(seq 1 90); do
+  code="$(curl -s -m 10 -o /dev/null -w '%{http_code}' "$HEALTH_URL" 2>/dev/null || true)"
   case "$code" in
     200|301|302|307|308)
-      verify_served_build
-      ok "Deployed: $BRANCH @ $(git rev-parse --short HEAD) — app healthy (HTTP $code), serving BUILD_ID $(cat .next/BUILD_ID)"
-      exit 0 ;;
+      got="$(served_build_id)"
+      if [[ -z "$got" ]]; then
+        echo "  (no build id readable from $HEALTH_URL/ — cannot prove which build is serving)"
+        verify_port_owner
+        ok "Deployed: $BRANCH @ $(git rev-parse --short HEAD) — app healthy (HTTP $code)"
+        exit 0
+      fi
+      if [[ "$got" == "$want" ]]; then
+        verify_port_owner
+        ok "Deployed: $BRANCH @ $(git rev-parse --short HEAD) — app healthy (HTTP $code), serving BUILD_ID $want"
+        exit 0
+      fi
+      if (( i % 10 == 0 )); then echo "  serving $got, want $want — still waiting for the new instance ($i)"; fi
+      ;;
   esac
   sleep 2
 done
+systemctl status "$WEB_SERVICE" --no-pager || true
+journalctl -u "$WEB_SERVICE" -n 40 --no-pager || true
+if [[ -n "$got" ]]; then
+  die "the app on :$PORT serves build $got but this deploy built $want — the OLD build is still live"
+fi
 die "app not responding after restart — check: journalctl -u $WEB_SERVICE -n 60"

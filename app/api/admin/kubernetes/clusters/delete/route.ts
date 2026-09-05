@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/server";
 import axios from "axios";
 import { logError, sanitizeError } from "@/lib/api/error-sanitizer";
 import { checkAdminAuth } from "@/lib/auth/check-admin";
