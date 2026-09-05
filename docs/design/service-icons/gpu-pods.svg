@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="GPU Pods">
+<defs>
+  <linearGradient id="gp-tile" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1c1c24"/><stop offset="1" stop-color="#0c0c10"/></linearGradient>
+  <radialGradient id="gp-glow" cx="32" cy="30" r="26" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#0095ff" stop-opacity="0.36"/><stop offset="1" stop-color="#0095ff" stop-opacity="0"/></radialGradient>
+  <filter id="gp-soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <filter id="gp-drop" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="2.5" stdDeviation="2.2" flood-color="#0095ff" flood-opacity="0.45"/></filter>
+  <linearGradient id="gp-card" x1="12" y1="20" x2="48" y2="46" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#2ea8ff"/><stop offset="1" stop-color="#1d4ed8"/></linearGradient>
+  <linearGradient id="gp-back" x1="16" y1="13" x2="52" y2="39" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#2757c9"/><stop offset="1" stop-color="#163b9c"/></linearGradient>
+  <linearGradient id="gp-core" x1="26" y1="28" x2="34" y2="36" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#8fd0ff"/><stop offset="1" stop-color="#0095ff"/></linearGradient>
+</defs>
+  <path d="M8 0H64V56L56 64H0V8Z" fill="url(#gp-tile)"/>
+  <path d="M8 0H64V56L56 64H0V8Z" fill="url(#gp-glow)"/>
+  <path d="M8.5 0.5H63.5V55.8L55.8 63.5H0.5V8.2Z" fill="none" stroke="#ffffff" stroke-opacity="0.10"/>
+  <path d="M9 1H63" stroke="#ffffff" stroke-opacity="0.14"/>
+  <rect x="16" y="13" width="36" height="26" rx="3" fill="url(#gp-back)" filter="url(#gp-drop)"/>
+  <rect x="16.5" y="13.5" width="35" height="25" rx="2.5" fill="none" stroke="#ffffff" stroke-opacity="0.16"/>
+  <g fill="#7fc7ff" fill-opacity="0.9">
+    <rect x="16" y="46" width="1.6" height="4.5"/><rect x="19.5" y="46" width="1.6" height="4.5"/><rect x="23" y="46" width="1.6" height="4.5"/><rect x="26.5" y="46" width="1.6" height="4.5"/>
+    <rect x="30" y="46" width="1.6" height="4.5"/><rect x="33.5" y="46" width="1.6" height="4.5"/><rect x="37" y="46" width="1.6" height="4.5"/><rect x="40.5" y="46" width="1.6" height="4.5"/>
+  </g>
+  <rect x="12" y="20" width="36" height="26" rx="3" fill="url(#gp-card)" filter="url(#gp-drop)"/>
+  <rect x="12.5" y="20.5" width="35" height="25" rx="2.5" fill="none" stroke="#ffffff" stroke-opacity="0.22"/>
+  <path d="M16 20.5H44" stroke="#ffffff" stroke-opacity="0.35" stroke-width="0.8"/>
+  <g fill="#8fd0ff" fill-opacity="0.9">
+    <rect x="15.5" y="26" width="6" height="5" rx="0.8"/><rect x="15.5" y="33" width="6" height="5" rx="0.8"/>
+    <rect x="38.5" y="26" width="6" height="5" rx="0.8"/><rect x="38.5" y="33" width="6" height="5" rx="0.8"/>
+  </g>
+  <rect x="24" y="25" width="12" height="14" rx="1.5" fill="#fafaf4" filter="url(#gp-soft)"/>
+  <rect x="26.5" y="28" width="7" height="8" rx="0.8" fill="url(#gp-core)"/>
+  <circle cx="44.5" cy="23" r="1.25" fill="#f5b324" filter="url(#gp-soft)"/>
+</svg>

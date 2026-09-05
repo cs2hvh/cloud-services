@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Compute">
+<defs>
+  <linearGradient id="cp-tile" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1c1c24"/><stop offset="1" stop-color="#0c0c10"/></linearGradient>
+  <radialGradient id="cp-glow" cx="32" cy="30" r="26" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#0095ff" stop-opacity="0.36"/><stop offset="1" stop-color="#0095ff" stop-opacity="0"/></radialGradient>
+  <filter id="cp-soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <filter id="cp-drop" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="2.5" stdDeviation="2.2" flood-color="#0095ff" flood-opacity="0.45"/></filter>
+  <linearGradient id="cp-chip" x1="17" y1="17" x2="47" y2="47" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#2ea8ff"/><stop offset="1" stop-color="#1d4ed8"/></linearGradient>
+  <linearGradient id="cp-core" x1="27" y1="27" x2="37" y2="37" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#8fd0ff"/><stop offset="1" stop-color="#0095ff"/></linearGradient>
+</defs>
+  <path d="M8 0H64V56L56 64H0V8Z" fill="url(#cp-tile)"/>
+  <path d="M8 0H64V56L56 64H0V8Z" fill="url(#cp-glow)"/>
+  <path d="M8.5 0.5H63.5V55.8L55.8 63.5H0.5V8.2Z" fill="none" stroke="#ffffff" stroke-opacity="0.10"/>
+  <path d="M9 1H63" stroke="#ffffff" stroke-opacity="0.14"/>
+  <g fill="#7fc7ff" fill-opacity="0.9">
+    <rect x="20.7" y="11.5" width="1.6" height="6.5"/><rect x="27.7" y="11.5" width="1.6" height="6.5"/><rect x="34.7" y="11.5" width="1.6" height="6.5"/><rect x="41.7" y="11.5" width="1.6" height="6.5"/>
+    <rect x="20.7" y="46" width="1.6" height="6.5"/><rect x="27.7" y="46" width="1.6" height="6.5"/><rect x="34.7" y="46" width="1.6" height="6.5"/><rect x="41.7" y="46" width="1.6" height="6.5"/>
+    <rect x="11.5" y="20.7" width="6.5" height="1.6"/><rect x="11.5" y="27.7" width="6.5" height="1.6"/><rect x="11.5" y="34.7" width="6.5" height="1.6"/><rect x="11.5" y="41.7" width="6.5" height="1.6"/>
+    <rect x="46" y="20.7" width="6.5" height="1.6"/><rect x="46" y="27.7" width="6.5" height="1.6"/><rect x="46" y="34.7" width="6.5" height="1.6"/><rect x="46" y="41.7" width="6.5" height="1.6"/>
+  </g>
+  <rect x="17" y="17" width="30" height="30" rx="4" fill="url(#cp-chip)" filter="url(#cp-drop)"/>
+  <rect x="17.5" y="17.5" width="29" height="29" rx="3.5" fill="none" stroke="#ffffff" stroke-opacity="0.22"/>
+  <path d="M21 17.5H43" stroke="#ffffff" stroke-opacity="0.35" stroke-width="0.8"/>
+  <rect x="24" y="24" width="16" height="16" rx="2" fill="#fafaf4" filter="url(#cp-soft)"/>
+  <rect x="27.5" y="27.5" width="9" height="9" rx="1" fill="url(#cp-core)"/>
+  <circle cx="43" cy="21" r="1.25" fill="#f5b324" filter="url(#cp-soft)"/>
+</svg>
