@@ -122,10 +122,23 @@ export async function POST(
     );
   }
 
+  // OWNERSHIP. This query runs on createSSRClient, which is built on
+  // SUPABASE_SERVICE_ROLE_KEY (lib/supabase/server.ts:49) and therefore bypasses
+  // RLS entirely. Until this filter existed the route authenticated the caller
+  // and then handed back ANY cluster named by body.clusterId, whole row
+  // included — kubeconfig, control_plane and workers — so one customer could
+  // read another customer's cluster-admin credentials by supplying their id.
+  //
+  // The service-role client is kept because the billing activation and
+  // notification calls below legitimately need it. The scoping is therefore
+  // explicit here rather than delegated to a policy: on a service-role client
+  // there is no policy to fall back on, which is exactly why the omission was
+  // invisible.
   const { data, error } = await supabase
     .from("clusters")
     .select("cluster_name, create_droplet, create_status, connect_status, verify_status, status, kubeconfig, node_config, control_plane, workers, owner_id, project_id")
     .eq("cluster_id", body.clusterId)
+    .eq("owner_id", auth.user.id)
     .single<Row>();
 
   if (error) {
