@@ -164,13 +164,13 @@ export default function HeroClient({
     return (
         <div className="ah-type">
             <section
-                className="ah-hero ah-hero--left relative isolate flex w-full flex-col justify-end overflow-hidden"
+                className="ah-hero ah-hero--split relative isolate flex w-full flex-col justify-end overflow-hidden"
                 aria-label="AhuraSense AI cloud"
             >
                 {/* ── background ─────────────────────────────────────────────
-                    The lattice is mirrored to sit behind the announcement
-                    plate on the LEFT (see .ah-hero--left); the vignette's
-                    falloff now shades the right, where the copy sits. */}
+                    The lattice sits where it always did, weighted behind the
+                    right half; the vignette's left falloff keeps the plate on
+                    near-black. Every layer is pointer-events-none. */}
                 {HERO_BG && (
                     <Image
                         src={HERO_BG}
@@ -191,8 +191,8 @@ export default function HeroClient({
                     {/* ── left: what is new, one item at a time ────────────── */}
                     {ads.length > 0 && <AdPlate ads={ads} seconds={adSeconds} />}
 
-                    {/* ── right: the two actions, centred against the plate ── */}
-                    <div className="flex flex-col justify-center gap-7 lg:items-start">
+                    {/* ── right: the two actions, a little below the plate's centre ── */}
+                    <div className="flex flex-col justify-center gap-7 lg:items-start lg:pt-24">
                         <div className="ah-rise-in flex flex-wrap items-center gap-5" style={{ animationDelay: ".46s" }}>
                             <div className="ah-hero-actions inline-flex shrink-0">
                                 <Link href="/signup" className="ah-hero-act">

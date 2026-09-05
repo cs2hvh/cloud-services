@@ -1231,22 +1231,10 @@ text-align: center;
 .ah-news + .ah-hero { min-height: max(400px, calc(100svh - 284px)); }
 
 /* ── hero, launch-led (2026-09-05) ──────────────────────────────
-   The announcement plate takes the LEFT of the hero and the lattice moves
-   behind it: the canvas is mirrored (its vanishing point at 71.5% becomes
-   28.5%), so its own left-to-right mask now clears the right edge, and the
-   vignette's falloff is flipped to shade the copy on the right instead. */
-.ah-hero--left .ah-hero-lattice {
-  transform: scaleX(-1);
-}
-.ah-hero--left .ah-hero-vignette {
-  background:
-    linear-gradient(180deg, rgba(7, 7, 10, 0.92) 0%, transparent 26%),
-    linear-gradient(0deg, rgba(7, 7, 10, 0.96) 0%, transparent 40%),
-    linear-gradient(270deg, rgba(7, 7, 10, 0.88) 0%, transparent 42%);
-}
-/* The hero and its rail cover the first screen: the content sits up under
-   the navbar and the rail is pinned to the foot. */
-.ah-hero--left {
+   The announcement plate on the left, the actions on the right, the lattice
+   in its original place behind the right half. The hero and its rail cover
+   the first screen: content in the middle, rail pinned to the foot. */
+.ah-hero--split {
   min-height: 100svh;
   justify-content: space-between;
 }
@@ -1254,8 +1242,8 @@ text-align: center;
 /* The announcement plate: the lattice shows through its ground. */
 .ah-ad {
   min-height: 400px;
-  /* Not a box: no border, no fill. The left zone (.ah-hero--left::before)
-     softens the lattice behind it with no edges of its own. */
+  /* Not a box: no border, no fill. It sits on the hero's plain black; the
+     lattice is weighted behind the right half. */
   border: 0;
   background: transparent;
   padding-left: 0;
@@ -1329,33 +1317,6 @@ text-align: center;
 }
 .ah-tile:hover { background: rgba(255, 255, 255, 0.06); border-color: var(--ah-ink); color: var(--ah-ink); }
 
-/* A soft blur zone over the left of the hero, behind the announcement. No
-   border and no rectangle: it fades out to the right and, on a phone, covers
-   the full width. Light on purpose; the lattice stays legible through it. */
-.ah-hero--left::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  right: auto;
-  width: 60%;
-  /* Above the lattice canvas and the vignette (both z auto, earlier in DOM
-     order), below the copy (z-index 10). Without this it sat under the
-     canvas and blurred nothing but the black ground. */
-  z-index: 1;
-  pointer-events: none;
-  background: rgba(7, 7, 10, 0.2);
-  backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
-  mask-image: linear-gradient(90deg, #000 0%, #000 62%, transparent 100%);
-  -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 62%, transparent 100%);
-}
-@media (max-width: 1023px) {
-  .ah-hero--left::before {
-    width: 100%;
-    mask-image: none;
-    -webkit-mask-image: none;
-  }
-}
 
 /* The accent word in the outlined headline line: solid blue, no stroke. */
 .ah-hero-accent {
