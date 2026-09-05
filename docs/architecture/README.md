@@ -40,3 +40,7 @@ became a free game renewal, a 404 from the cluster that became "idle", and a
 PaaS that had been debiting every hour without a ledger row and so was read as
 uncollected accrual. Every fix was the same shape: make the empty case say
 something instead of resolving to a plausible zero.
+
+## Worklogs
+
+How the system got to this state, one file per session-day, in [docs/worklog](../worklog/README.md).
