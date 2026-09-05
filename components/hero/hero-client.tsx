@@ -33,9 +33,6 @@ export type HeroAd = {
 
 export type HeroTile = { eyebrow: string; value: string; href: string; tone: HeroTone };
 
-/** Each figure is null when it could not be read, and is then not shown. */
-export type HeroStats = { models: number | null; gpus: number | null; regions: number };
-
 /**
  * Drop the supplied background render here and the CSS scaffold behind it
  * (grid + horizon + blue wash) becomes the fallback that shows through its
@@ -43,11 +40,6 @@ export type HeroStats = { models: number | null; gpus: number | null; regions: n
  * is identical either way, so swapping it in changes nothing structurally.
  */
 const HERO_BG: string | null = null;
-
-const HEADLINE: string[][] = [
-    ["Your", "cloud,"],
-    ["On", "demand."],
-];
 
 const TONE_COLOR: Record<HeroTone, string> = {
     green: "var(--ah-green)",
@@ -104,11 +96,6 @@ function AdPlate({ ads, seconds }: { ads: HeroAd[]; seconds: number }) {
                     <span className="ah-lbl" style={{ fontSize: "10px", letterSpacing: "0.16em", color: TONE_COLOR[ad.tone] }}>
                         {ad.eyebrow.toUpperCase()}
                     </span>
-                    {ads.length > 1 && (
-                        <span className="ah-lbl ml-auto" style={{ fontSize: "9.5px", letterSpacing: "0.12em", color: "var(--ah-muted)" }}>
-                            {index + 1} / {ads.length}
-                        </span>
-                    )}
                 </div>
                 <h2 key={ad.title} className="ah-ad-title m-0" style={{ color: "var(--ah-ink)" }}>
                     <span className="block">{line1}</span>
@@ -167,21 +154,13 @@ export default function HeroClient({
     adSeconds,
     tiles,
     offer,
-    stats,
 }: {
     gpus: GpuRow[];
     ads: HeroAd[];
     adSeconds: number;
     tiles: HeroTile[];
     offer: { label: string; href: string } | null;
-    stats: HeroStats;
 }) {
-    const statLine = [
-        stats.models !== null ? `${stats.models} models` : null,
-        stats.gpus !== null ? `${stats.gpus} GPU SKUs` : null,
-        `${stats.regions} regions`,
-    ].filter((s): s is string => s !== null);
-
     return (
         <div className="ah-type">
             <section
@@ -212,74 +191,28 @@ export default function HeroClient({
                     {/* ── left: what is new, one item at a time ────────────── */}
                     {ads.length > 0 && <AdPlate ads={ads} seconds={adSeconds} />}
 
-                    {/* ── right: the platform, centred against the plate ───── */}
-                    <div className="flex flex-col justify-center gap-7">
-                        <div className="flex flex-col gap-5">
-                            {/*
-                              Solid line over an outlined one. Each word is its own
-                              inline-block so it can rise independently on load.
-                            */}
-                            <h1 className="ah-hero-h1 ah-hero-h1--side m-0">
-                                <span className="block">
-                                    {HEADLINE[0].map((w, i) => (
-                                        <span key={w} className="ah-word-wrap">
-                                            <span className="ah-word" style={{ animationDelay: `${0.06 + i * 0.09}s` }}>
-                                                {w}
-                                            </span>
-                                        </span>
-                                    ))}
-                                </span>
-                                <span className="ah-hero-outline block">
-                                    {HEADLINE[1].map((w, i) => (
-                                        <span key={w} className="ah-word-wrap">
-                                            <span
-                                                className={`ah-word${i === HEADLINE[1].length - 1 ? " ah-hero-accent" : ""}`}
-                                                style={{ animationDelay: `${0.26 + i * 0.09}s` }}
-                                            >
-                                                {w}
-                                            </span>
-                                        </span>
-                                    ))}
-                                </span>
-                            </h1>
-
-                            <p className="ah-rise-in m-0 max-w-[30rem] text-[14px] leading-[1.6]" style={{ animationDelay: ".46s", color: "var(--ah-body)" }}>
-                                An OpenAI-compatible inference API, GPUs by the hour, fine-tuning, vector search,
-                                and the compute, Kubernetes and storage underneath. {stats.regions} regions, billed
-                                by the hour; idle resources cost you nothing.
-                            </p>
-
-                            <div className="ah-rise-in flex flex-wrap items-center gap-5" style={{ animationDelay: ".56s" }}>
-                                <div className="ah-hero-actions inline-flex shrink-0">
-                                    <Link href="/signup" className="ah-hero-act">
-                                        Get started
-                                        <svg viewBox="0 0 14 14" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.9" aria-hidden="true">
-                                            <path d="M3.5 10.5 10.5 3.5M5 3.5h5.5V9" />
-                                        </svg>
-                                    </Link>
-                                    <Link href="/pricing" className="ah-hero-act ah-hero-act-alt">
-                                        View pricing
-                                        <svg viewBox="0 0 20 14" width="16" height="11" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
-                                            <path d="M1 7h16M12.5 2.5 17 7l-4.5 4.5" />
-                                        </svg>
-                                    </Link>
-                                </div>
-                                {offer ? (
-                                    <Link href={offer.href} className="ah-lbl ah-offer whitespace-nowrap px-2.5 py-[5px]" style={{ fontSize: "10.5px", letterSpacing: "0.06em" }}>
-                                        {offer.label}
-                                    </Link>
-                                ) : process.env.NODE_ENV !== "production" ? (
-                                    <span className="ah-lbl ah-offer-slot whitespace-nowrap px-2.5 py-[5px]" style={{ fontSize: "10.5px", letterSpacing: "0.06em" }}>
-                                        Offer slot: set HERO_OFFER
-                                    </span>
-                                ) : null}
+                    {/* ── right: the two actions, centred against the plate ── */}
+                    <div className="flex flex-col justify-center gap-7 lg:items-start">
+                        <div className="ah-rise-in flex flex-wrap items-center gap-5" style={{ animationDelay: ".46s" }}>
+                            <div className="ah-hero-actions inline-flex shrink-0">
+                                <Link href="/signup" className="ah-hero-act">
+                                    Get started
+                                    <svg viewBox="0 0 14 14" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.9" aria-hidden="true">
+                                        <path d="M3.5 10.5 10.5 3.5M5 3.5h5.5V9" />
+                                    </svg>
+                                </Link>
+                                <Link href="/pricing" className="ah-hero-act ah-hero-act-alt">
+                                    View pricing
+                                    <svg viewBox="0 0 20 14" width="16" height="11" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+                                        <path d="M1 7h16M12.5 2.5 17 7l-4.5 4.5" />
+                                    </svg>
+                                </Link>
                             </div>
-
-                            <div className="ah-lbl ah-rise-in flex flex-wrap gap-x-[18px] gap-y-1 whitespace-nowrap" style={{ animationDelay: ".6s", fontSize: "10px", letterSpacing: "0.14em", color: "var(--ah-muted)" }}>
-                                {statLine.map((s) => (
-                                    <span key={s}>{s.toUpperCase()}</span>
-                                ))}
-                            </div>
+                            {offer && (
+                                <Link href={offer.href} className="ah-lbl ah-offer whitespace-nowrap px-2.5 py-[5px]" style={{ fontSize: "10.5px", letterSpacing: "0.06em" }}>
+                                    {offer.label}
+                                </Link>
+                            )}
                         </div>
 
                         {/* two more things worth knowing, smaller */}

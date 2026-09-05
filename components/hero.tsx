@@ -3,7 +3,6 @@
 import HeroClient, {
     type GpuRow,
     type HeroAd,
-    type HeroStats,
     type HeroTile,
 } from "./hero/hero-client";
 import { HERO_GPU_ACCENTS } from "@/lib/catalog/gpu-editorial";
@@ -13,7 +12,6 @@ import {
     HERO_ADS,
     HERO_AD_SECONDS,
     HERO_OFFER,
-    HERO_REGIONS,
     HERO_TILES,
     type HeroLive,
 } from "@/lib/marketing/hero-announcements";
@@ -38,14 +36,12 @@ import { createServiceClient } from "@/lib/supabase/server";
  */
 export async function Hero() {
     let gpus: GpuRow[] = [];
-    let gpuCount: number | null = null;
     let gpuPriceById = new Map<string, number>();
 
     try {
         const supabase = await createServiceClient();
         const catalog = await getPublicGpuCatalog(supabase);
         const byId = new Map(catalog.gpus.map((g) => [g.id, g]));
-        gpuCount = catalog.gpus.length;
         gpuPriceById = new Map(
             catalog.gpus.flatMap((g) => (g.hourlyUSD === null ? [] : [[g.id, g.hourlyUSD] as [string, number]]))
         );
@@ -70,9 +66,9 @@ export async function Hero() {
         // Render the hero without the rail rather than with invented numbers.
     }
 
-    // Live models: the count, and the set of public ids that are switched on.
+    // The set of public model ids that are switched on; this is what decides
+    // whether an announcement that names a model is shown at all.
     // inference.models.model_id is the id customers put on the wire.
-    let modelsLive: number | null = null;
     let liveModelIds: Set<string> | null = null;
     try {
         const supabase = await createServiceClient();
@@ -83,10 +79,9 @@ export async function Hero() {
             .eq("is_active", true);
         if (error) throw error;
         liveModelIds = new Set((data ?? []).map((m) => m.model_id as string));
-        modelsLive = liveModelIds.size;
     } catch (error) {
         console.error("[hero] inference.models read failed:", error);
-        // modelsLive stays null and items that require a model are dropped.
+        // Items that require a model are dropped rather than shown unverified.
     }
 
     const bareMetalCount = BARE_METAL_SKUS.length;
@@ -144,8 +139,6 @@ export async function Hero() {
         return [{ eyebrow: spec.eyebrow, value, href: spec.href, tone: spec.tone }];
     });
 
-    const stats: HeroStats = { models: modelsLive, gpus: gpuCount, regions: HERO_REGIONS };
-
     return (
         <HeroClient
             gpus={gpus}
@@ -153,7 +146,6 @@ export async function Hero() {
             adSeconds={HERO_AD_SECONDS}
             tiles={tiles}
             offer={HERO_OFFER}
-            stats={stats}
         />
     );
 }

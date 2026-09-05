@@ -1343,9 +1343,9 @@ text-align: center;
      canvas and blurred nothing but the black ground. */
   z-index: 1;
   pointer-events: none;
-  background: rgba(7, 7, 10, 0.3);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(7, 7, 10, 0.2);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
   mask-image: linear-gradient(90deg, #000 0%, #000 62%, transparent 100%);
   -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 62%, transparent 100%);
 }
