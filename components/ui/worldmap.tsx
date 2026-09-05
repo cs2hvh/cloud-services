@@ -13,11 +13,19 @@ interface LocationPoint {
 interface MapProps {
   locations?: LocationPoint[];
   dotColor?: string;
+  /**
+   * CSS mask-image applied to the dotted map ONLY (not to the pin overlay),
+   * e.g. a radial ellipse that clips the world to an oval. Pins are left
+   * unmasked so a city on the mask's edge keeps its full marker. Defaults to
+   * the soft top/bottom fade.
+   */
+  bgMask?: string;
 }
 
 export default function WorldMap({
   locations = [],
   dotColor = "#0095FF",
+  bgMask,
 }: MapProps) {
   // Build the dotted map once. dotted-map projects with Web Mercator (proj4 GOOGLE)
   // over a clipped region (lat ~ -56..71), so we MUST use its own getPin() to place
@@ -52,7 +60,8 @@ export default function WorldMap({
     >
       <Image
         src={`data:image/svg+xml;utf8,${encodeURIComponent(svgMap)}`}
-        className="h-full w-full [mask-image:linear-gradient(to_bottom,transparent,white_8%,white_92%,transparent)] pointer-events-none select-none"
+        className={`h-full w-full pointer-events-none select-none${bgMask ? "" : " [mask-image:linear-gradient(to_bottom,transparent,white_8%,white_92%,transparent)]"}`}
+        style={bgMask ? { maskImage: bgMask, WebkitMaskImage: bgMask } : undefined}
         alt="world map"
         height={height * 5}
         width={width * 5}

@@ -82,32 +82,26 @@ export default function GlobalNetworkSection() {
           </div>
         </div>
 
-        {/* Capped so the map informs rather than dominates. The map and its
-            pin overlay share one transformed box, so the tilt and the mask
-            move them together and every pin stays on its city.
-            - the elliptical mask rounds off the rectangle's empty corners
-              (Arctic and Antarctic dots) without touching any pin: the
-              furthest pins (Sydney, San Francisco, São Paulo) sit inside the
-              fully opaque zone
-            - the slight rotateX reads as the surface curving away */}
+        {/* Capped so the map informs rather than dominates.
+            - the dotted map is clipped to an OVAL (bgMask): the land dots fade
+              out along an ellipse, so the world reads as a rounded shape
+              rather than a rectangle. The oval is applied to the dots only;
+              the pin overlay is not masked, so a city on the oval's edge
+              (Sydney) keeps its full marker
+            - the map and its pins share one transformed box, so the slight
+              rotateX, which reads as the surface curving away, moves them
+              together and every pin stays on its city */}
         <div className="relative mx-auto max-w-[1120px]" style={{ perspective: "1600px" }}>
           <div
             aria-hidden="true"
             className="pointer-events-none absolute inset-0"
-            style={{ background: "radial-gradient(ellipse 48% 44% at 50% 52%, rgba(0,149,255,0.10), transparent 70%)" }}
+            style={{ background: "radial-gradient(ellipse 46% 52% at 50% 50%, rgba(0,149,255,0.12), transparent 72%)" }}
           />
-          <div
-            className="relative"
-            style={{
-              transform: "rotateX(6deg)",
-              transformOrigin: "50% 60%",
-              maskImage: "radial-gradient(ellipse 72% 80% at 50% 50%, #000 70%, transparent 100%)",
-              WebkitMaskImage: "radial-gradient(ellipse 72% 80% at 50% 50%, #000 70%, transparent 100%)",
-            }}
-          >
+          <div className="relative" style={{ transform: "rotateX(6deg)", transformOrigin: "50% 60%" }}>
             <WorldMap
               locations={LOCATIONS.map((l) => ({ lat: l.lat, lng: l.lng, label: l.city }))}
               dotColor="var(--ah-blue)"
+              bgMask="radial-gradient(ellipse 49% 62% at 50% 50%, #000 82%, transparent 100%)"
             />
           </div>
         </div>
