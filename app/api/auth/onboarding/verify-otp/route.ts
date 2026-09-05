@@ -8,12 +8,23 @@ export async function POST(request: NextRequest) {
   try {
 
     
-    const { email, otpCode } = await request.json();
+    const { email, otpCode, password } = await request.json();
     if (typeof email !== "string" || typeof otpCode !== "string" || !email || !otpCode) {
       return Response.json(
         { message: "Missing email or OTP code." },
         { status: 400 },
       );
+    }
+    // THE CODE-HOLDER'S PASSWORD WINS. Onboarding rebinds an unverified
+    // account's password to whichever submission came last, so two signups
+    // for one address inside the five-minute window could leave the account
+    // carrying one party's password while the other party held a valid code.
+    // The signup form therefore sends the password it collected along with
+    // the code, and the password is set in the same call that confirms the
+    // email. Whoever can read the mailbox decides the credential; nobody
+    // else's submission survives. Optional so an older client still verifies.
+    if (password !== undefined && (typeof password !== "string" || password.length < 6 || password.length > 100)) {
+      return Response.json({ message: "Invalid password." }, { status: 400 });
     }
 
     // Rate limiting - prevent OTP brute-force attempts
@@ -84,7 +95,7 @@ export async function POST(request: NextRequest) {
 
     const { error: updateError } = await supabase.auth.admin.updateUserById(
       user.id,
-      { email_confirm: true },
+      typeof password === "string" ? { email_confirm: true, password } : { email_confirm: true },
     );
 
     if (updateError) {
@@ -94,6 +105,10 @@ export async function POST(request: NextRequest) {
         { status: 500 },
       );
     }
+
+    // The account is confirmed; no other outstanding code for this address
+    // may confirm it again or be mistaken for a live one.
+    await OTPs.invalidate_pending(email);
 
     const emailResult = await emailService.sendTemplate({
       template: "accountCreated",

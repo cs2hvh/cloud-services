@@ -106,6 +106,10 @@ export async function POST(request: NextRequest) {
       }
 
       // If user exists but is NOT yet verified, send new OTP
+      // One live code per address: a second submission for the same email
+      // (the account's owner retrying, or someone else racing them) must not
+      // leave the earlier code valid alongside the new one.
+      await OTPs.invalidate_pending(email);
       const generatedOtp = generateSixDigitOtp();
       const expiresAt = new Date(Date.now() + 5 * 60_000); // 5 min from now
 
@@ -154,7 +158,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate OTP for the new user
+    // Generate OTP for the new user. One live code per address, as in the
+    // existing-account branch above.
+    await OTPs.invalidate_pending(email);
     const generatedOtp = generateSixDigitOtp();
     const expiresAt = new Date(Date.now() + 5 * 60_000); // 5 min from now
 

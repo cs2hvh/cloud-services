@@ -132,6 +132,9 @@ export default function SignUpMultiStep({
       const response = await api.post("/auth/onboarding/verify-otp", {
         email: pendingEmail,
         otpCode: data.pin,
+        // The password this form collected is set at confirmation, in the
+        // same call, so the person holding the code owns the credential.
+        password: signupForm.getValues("password"),
       });
 
       if (response.status === 200) {

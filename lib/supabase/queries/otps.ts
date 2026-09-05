@@ -25,6 +25,37 @@ export const OTPs = {
     }
   },
 
+  /**
+   * Mark every outstanding OTP for an email as used.
+   *
+   * Called whenever a new code is issued for the email, and again once a
+   * code is accepted. Without it, every code ever sent stays valid until it
+   * expires, so two overlapping signups for the same address (a victim's and
+   * an attacker's, minutes apart) each hold a live code for the same account
+   * and whichever is typed confirms it. One live code per address, always.
+   *
+   * Service client: public.otps has RLS enabled with no policies, so the
+   * cookie client would match no rows and report success (the bug verify()
+   * had until 2026-09-05).
+   */
+  invalidate_pending: async (email: string): Promise<boolean> => {
+    try {
+      const supabase = await createServiceClient();
+      const { error } = await supabase
+        .from("otps")
+        .update({ verified: true })
+        .eq("email", email)
+        .eq("verified", false);
+      if (error) {
+        handleQueryError("invalidating pending OTPs", error, "OTPs");
+        return false;
+      }
+      return true;
+    } catch (err) {
+      handleQueryError("invalidating pending OTPs", err, "OTPs");
+      return false;
+    }
+  },
   get_by_email: async (email: string): Promise<OTP | null> => {
     try {
       const supabase = await createClient();
