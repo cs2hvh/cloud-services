@@ -406,7 +406,13 @@ function SingleCluster({
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id: actions[counter].id }),
+            // cluster_id is what the route checks ownership against: while a
+            // node is being created the droplet is not yet in clusters.workers,
+            // so the cluster is the only durable owner anchor.
+            body: JSON.stringify({
+              id: actions[counter].id,
+              cluster_id: clusterId,
+            }),
           }
         );
 
@@ -428,6 +434,7 @@ function SingleCluster({
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               id: checkStatusData.data.action.resource_id,
+              cluster_id: clusterId,
             }),
           }
         );

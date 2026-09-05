@@ -97,7 +97,13 @@ export async function POST(req: NextRequest) {
     // const supabase = await createClient();
 
     // Forward VALIDATED data to DigitalOcean (prevents malicious payloads)
-    console.log("Admin creating database with data:", validatedData);
+    // validatedData is the admin's full creation payload. Log the shape, not
+    // the contents.
+    console.log(
+      "[adminCreateDatabase] creating:",
+      validatedData?.engine,
+      validatedData?.region
+    );
     const database = await axios.post(
       "https://api.digitalocean.com/v2/databases",
       validatedData,
@@ -111,20 +117,18 @@ export async function POST(req: NextRequest) {
 
     if (database.status === 201) {
       // Encrypt sensitive data before storing
+      // NOTHING derived from this key is logged. The three console.log calls
+      // that used to sit here printed ENCRYPTION_KEY itself, then the encrypted
+      // public and private passwords, on every admin database creation. This is
+      // the key that encrypts every other stored credential, so printing it to
+      // the application log defeated the encryption of all of them at once, and
+      // printing the ciphertext alongside it made that ciphertext plaintext.
       const encryptionKey = process.env.ENCRYPTION_KEY!;
-      console.log(
-        encryptionKey,
-        "...........encryption key in admin create database api..........."
-      );
 
       // Encrypt public connection password
       const encryptedPublicPassword = Encryption.encrypt(
         database.data.database.connection.password,
         encryptionKey
-      );
-      console.log(
-        encryptedPublicPassword,
-        "...........encrypted public password in admin create database api..........."
       );
 
       // Encrypt private connection password
@@ -133,10 +137,6 @@ export async function POST(req: NextRequest) {
         encryptionKey
       );
 
-      console.log(
-        encryptedPrivatePassword,
-        "...........encrypted private password in admin create database api..........."
-      );
 
       // Encrypt user passwords
       const encryptedUsers = database.data.database.users?.map(
@@ -174,9 +174,11 @@ export async function POST(req: NextRequest) {
         dbs: database.data.database.db_names || [],
       };
 
+      // sendData carries the encrypted connection blobs and the cluster's
+      // identifiers; log the identifier only, never the payload.
       console.log(
-        "[adminCreateDatabase] Database created successfully:",
-        sendData
+        "[adminCreateDatabase] database created:",
+        database.data?.database?.id
       );
 
       const supabase_data = await Database_Clusters.create(sendData);
