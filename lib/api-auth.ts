@@ -4,6 +4,13 @@
  */
 import { createClient, createWorkerClient } from "@/lib/supabase/server";
 import { ApiKeys } from "@/lib/supabase/queries/api_keys";
+import {
+  MFA_REQUIRED_RESPONSE,
+  SUSPENDED_RESPONSE,
+  assuranceFromAccessToken,
+  isSuspended,
+  secondFactorMissing,
+} from "@/lib/auth/assurance";
 
 export type ApiAuthResult =
   | {
@@ -66,6 +73,10 @@ export async function authenticateApiRequest(
         };
       }
 
+      // A PAT is minted by the account, so it carries the account's suspension.
+      if (await isSuspended(result.userId)) {
+        return { authenticated: false, error: SUSPENDED_RESPONSE.message, status: 403 };
+      }
       return {
         authenticated: true,
         kind: "pat",
@@ -100,6 +111,15 @@ export async function authenticateApiRequest(
 
     // TODO: Lookup user's plan from database
     // For now, default to free
+    // A Supabase access token issued by a password login is aal1. If the
+    // account has a verified factor, aal1 means the TOTP step was skipped,
+    // and this path must refuse it exactly as the cookie path does.
+    if (secondFactorMissing(user, assuranceFromAccessToken(token))) {
+      return { authenticated: false, error: MFA_REQUIRED_RESPONSE.message, status: 401 };
+    }
+    if (await isSuspended(user.id)) {
+      return { authenticated: false, error: SUSPENDED_RESPONSE.message, status: 403 };
+    }
     const plan = "free";
 
     return {

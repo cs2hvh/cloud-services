@@ -157,6 +157,11 @@ export function SignInForm() {
     const errorCode = search.get("error");
     if (!errorCode) return;
 
+    if (errorCode === "account_suspended") {
+      toast.error("This account is suspended. Contact support.");
+      return;
+    }
+
     if (errorCode === "provider_account_linked_to_another_user") {
       const provider = search.get("provider");
       const providerLabel = provider

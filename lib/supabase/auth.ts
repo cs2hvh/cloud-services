@@ -2,6 +2,7 @@ import { createClient } from "./server";
 import { createClient as createBrowserClient } from "./client";
 import { redirect } from "next/navigation";
 import { Json } from "./types";
+import { isSuspended, sessionSecondFactorMissing } from "@/lib/auth/assurance";
 
 export async function getUser() {
   const supabase = await createClient();
@@ -29,6 +30,21 @@ export async function requireAdmin(): Promise<{ ok: boolean; email?: string; use
 
   //  console.log("Checking admin for user:", email, userId);
     if (!email || !userId) {
+      return { ok: false };
+    }
+
+    // SECOND FACTOR AND SUSPENSION. This guard admits the customer-repo
+    // admin API (/api/admin/*, through requireAdmin, checkAdminAuth and
+    // requireDomainAdmin). It checked identity and policy only, so an
+    // administrator's password alone reached every one of those routes even
+    // with TOTP enrolled, and a suspended admin was still an admin. Same
+    // rules as the customer paths; see lib/auth/assurance.ts.
+    if (await sessionSecondFactorMissing(supabase, "requireAdmin")) {
+      console.warn(`User ${email} attempted admin access without completing the second factor`);
+      return { ok: false };
+    }
+    if (await isSuspended(userId)) {
+      console.warn(`Suspended user ${email} attempted admin access`);
       return { ok: false };
     }
 
@@ -110,6 +126,13 @@ export async function requireAuthProfile() {
   const profile = await getUserProfile();
   if (!profile) {
     redirect("/signin");
+  }
+  // The dashboard is the one place the profile is already in hand, so the
+  // suspend flag costs nothing to honour here. The signout route ends the
+  // session and lands on /signin with the reason; sending a signed-in user
+  // straight to /signin would bounce them back to the dashboard.
+  if (profile.suspend === true) {
+    redirect("/api/auth/signout?reason=account_suspended");
   }
   return profile;
 }

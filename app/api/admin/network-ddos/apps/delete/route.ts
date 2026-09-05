@@ -1,31 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { deleteSpectrumApp } from "@/config/spectrum-functions";
 import { logError, sanitizeError } from "@/lib/api/error-sanitizer";
+import { checkAdminAuth } from "@/lib/auth/check-admin";
 
-// Helper function to check if user is admin
-async function checkAdminAuth() {
-  const supabase = await createClient();
-  
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { authorized: false, user: null };
-  }
-
-  // Get user profile to check roles
-  const { data: profile } = await supabase
-    .from("user_profiles")
-    .select("roles")
-    .eq("id", user.id)
-    .single();
-
-  const isAdmin = profile?.roles?.includes("admin");
-
-  return { authorized: isAdmin, user };
-}
+// Admission is the shared policy in lib/auth/check-admin (requireAdmin:
+// ADMIN_EMAILS when set, otherwise user_profiles.roles, plus the second-factor
+// and suspension checks). This file used to run its own roles-only query,
+// which ignored ADMIN_EMAILS and both of those checks.
 
 export async function POST(req: NextRequest) {
   // Check authentication

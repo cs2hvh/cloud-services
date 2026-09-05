@@ -56,3 +56,27 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ message: "Signed out successfully" });
 }
+
+/**
+ * GET: end the session and land on /signin with a reason.
+ *
+ * Used by server components that discover mid-render that the session must
+ * not continue (a suspended account in requireAuthProfile). A layout cannot
+ * clear auth cookies itself, and redirecting a signed-in user to /signin only
+ * bounces them back to the dashboard, so the redirect comes here first. The
+ * reason is constrained to a known set so this cannot become an open
+ * message-injection point on the sign-in page.
+ */
+const SIGNOUT_REASONS = new Set(["account_suspended", "mfa_required", "session_expired"]);
+
+export async function GET(request: NextRequest) {
+  const supabase = await createClient();
+  const { error } = await supabase.auth.signOut();
+  if (error) logError("GET /api/auth/signout", error);
+  const requested = request.nextUrl.searchParams.get("reason") ?? "";
+  const reason = SIGNOUT_REASONS.has(requested) ? requested : "";
+  const url = request.nextUrl.clone();
+  url.pathname = "/signin";
+  url.search = reason ? `?error=${reason}` : "";
+  return NextResponse.redirect(url, { status: 303 });
+}

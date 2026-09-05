@@ -14,6 +14,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server";
+import { isSuspended, sessionSecondFactorMissing } from "@/lib/auth/assurance";
 
 /** The eight tenant tables reachable through PostgREST under `paas`. */
 export type PaasTable =
@@ -65,6 +66,11 @@ export async function getCaller(): Promise<Caller | null> {
   const client = await createClient();
   const { data, error } = await client.auth.getUser();
   if (error || !data?.user) return null;
+  // A password-only session on an MFA account is not a caller, and neither
+  // is a suspended account. Both read through the caller's own client, so
+  // this file keeps its rule of never touching the service role.
+  if (await sessionSecondFactorMissing(client, "v2/getCaller")) return null;
+  if (await isSuspended(data.user.id, client)) return null;
   return { userId: data.user.id, db: paasSchema(client) };
 }
 

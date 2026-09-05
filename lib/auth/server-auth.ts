@@ -1,6 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
+import {
+  MFA_REQUIRED_RESPONSE,
+  SUSPENDED_RESPONSE,
+  assuranceFromAccessToken,
+  isSuspended,
+  secondFactorMissing,
+} from "./assurance";
 
 /**
  * Server-side authentication middleware utility
@@ -67,6 +74,16 @@ export async function authenticateUser() {
       "[authenticateUser] assurance level unreadable, allowing:",
       aalError instanceof Error ? aalError.message : "unknown"
     );
+  }
+
+  // SUSPENSION. Written by the admin users routes, read by nothing on any
+  // request path until 2026-09-05; see lib/auth/assurance.ts.
+  if (await isSuspended(user.id)) {
+    return {
+      authenticated: false as const,
+      user: null,
+      response: NextResponse.json(SUSPENDED_RESPONSE, { status: 403 }),
+    };
   }
 
   return {
@@ -139,6 +156,26 @@ export async function authenticateUserFromHeader(req: NextRequest) {
           { message: "Invalid or expired token" },
           { status: 401 }
         ),
+      };
+    }
+
+    // The bearer path used to stop here, so a password-only access token for
+    // an MFA-enrolled account was accepted on every route that takes a token
+    // while the cookie path refused the same login. The token is a Supabase
+    // JWT that getUser() just vouched for; its `aal` claim says whether the
+    // TOTP step happened.
+    if (secondFactorMissing(user, assuranceFromAccessToken(token))) {
+      return {
+        authenticated: false as const,
+        user: null,
+        response: NextResponse.json(MFA_REQUIRED_RESPONSE, { status: 401 }),
+      };
+    }
+    if (await isSuspended(user.id)) {
+      return {
+        authenticated: false as const,
+        user: null,
+        response: NextResponse.json(SUSPENDED_RESPONSE, { status: 403 }),
       };
     }
 
