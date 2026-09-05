@@ -1241,7 +1241,7 @@ text-align: center;
 
 /* The announcement plate: the lattice shows through its ground. */
 .ah-ad {
-  min-height: 400px;
+  min-height: 480px;
   /* Not a box: no border, no fill. It sits on the hero's plain black; the
      lattice is weighted behind the right half. */
   border: 0;
@@ -1296,7 +1296,9 @@ text-align: center;
   pointer-events: none;
   animation: ah-topic-progress 7s linear both;
 }
-.ah-ad:hover .ah-ad-progress,
+/* Keyboard focus inside the plate holds the rotation; a resting pointer does
+   not, because the plate is most of the left half and a parked mouse froze
+   the news. */
 .ah-ad:focus-within .ah-ad-progress { animation-play-state: paused; }
 @media (prefers-reduced-motion: reduce) {
   .ah-ad-progress { animation: none; display: none; }
