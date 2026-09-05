@@ -206,12 +206,12 @@ export default function HeroClient({
                 <HeroLattice />
                 <span aria-hidden="true" className="ah-hero-vignette" />
 
-                <div className="relative mx-auto grid w-full max-w-[1800px] gap-8 px-6 pb-8 pt-20 sm:px-10 lg:grid-cols-[7fr_5fr] lg:gap-12 lg:px-12 lg:pb-10 lg:pt-24">
+                <div className="relative z-10 mx-auto grid w-full max-w-[1800px] gap-8 px-6 pb-8 pt-20 sm:px-10 lg:grid-cols-[7fr_5fr] lg:items-center lg:gap-12 lg:px-12 lg:pb-10 lg:pt-24">
                     {/* ── left: what is new, one item at a time ────────────── */}
                     {ads.length > 0 && <AdPlate ads={ads} seconds={adSeconds} />}
 
-                    {/* ── right: the platform ──────────────────────────────── */}
-                    <div className="flex flex-col justify-between gap-8">
+                    {/* ── right: the platform, centred against the plate ───── */}
+                    <div className="flex flex-col justify-center gap-7">
                         <div className="flex flex-col gap-5">
                             {/*
                               Solid line over an outlined one. Each word is its own
@@ -299,7 +299,7 @@ export default function HeroClient({
                 run behind it and hero and rail read as one surface rather
                 than two stacked sections. */}
             {gpus.length > 0 && (
-                <div className="ah-rail relative">
+                <div className="ah-rail relative z-10">
                     <div className="mx-auto w-full max-w-[1800px] px-6 pb-6 pt-2 sm:px-10 lg:px-12">
                         <div
                             className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[repeat(4,minmax(0,1fr))_auto]"

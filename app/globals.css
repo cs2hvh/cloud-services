@@ -1335,10 +1335,14 @@ text-align: center;
   inset: 0;
   right: auto;
   width: 60%;
+  /* Above the lattice canvas and the vignette (both z auto, earlier in DOM
+     order), below the copy (z-index 10). Without this it sat under the
+     canvas and blurred nothing but the black ground. */
+  z-index: 1;
   pointer-events: none;
-  background: rgba(7, 7, 10, 0.28);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  background: rgba(7, 7, 10, 0.34);
+  backdrop-filter: blur(11px);
+  -webkit-backdrop-filter: blur(11px);
   mask-image: linear-gradient(90deg, #000 0%, #000 62%, transparent 100%);
   -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 62%, transparent 100%);
 }
