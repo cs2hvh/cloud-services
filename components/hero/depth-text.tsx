@@ -122,7 +122,9 @@ export default function DepthText({
             stage.style.transform = getTransform(current.x, current.y);
         };
 
-        if (reducedMotion) {
+        // Static when asked to be (no pointer tracking and no orbit), and under
+        // reduced motion: one transform, no animation loop.
+        if (reducedMotion || (!canTrackPointer && !autoOrbit)) {
             stage.style.transform = getTransform(baseRotation.x, baseRotation.y);
             return undefined;
         }

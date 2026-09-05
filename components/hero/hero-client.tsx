@@ -97,9 +97,8 @@ function AdPlate({ ads, seconds }: { ads: HeroAd[]; seconds: number }) {
                         {ad.eyebrow.toUpperCase()}
                     </span>
                 </div>
-                {/* Layered 3D title that tilts toward the pointer and drifts when
-                    left alone (components/hero/depth-text.tsx). The extrusion is
-                    the brand blue; the face is the hero's cream. */}
+                {/* Layered 3D title, held still (components/hero/depth-text.tsx).
+                    The extrusion is the brand blue; the face is the hero's cream. */}
                 <h2 key={ad.title} className="ah-ad-title m-0" style={{ color: "var(--ah-ink)" }}>
                     <DepthText
                         text={ad.title}
@@ -108,7 +107,8 @@ function AdPlate({ ads, seconds }: { ads: HeroAd[]; seconds: number }) {
                         layers={16}
                         depth={1.4}
                         tilt={6}
-                        orbitSpeed={0.22}
+                        pointerTracking={false}
+                        autoOrbit={false}
                         fontSize="inherit"
                         fontWeight={700}
                         letterSpacing="-0.035em"
@@ -128,22 +128,6 @@ function AdPlate({ ads, seconds }: { ads: HeroAd[]; seconds: number }) {
                     <Link href={ad.secondary.href} className="ah-ad-act">
                         {ad.secondary.label}
                     </Link>
-                )}
-                {ads.length > 1 && (
-                    <div className="ml-auto flex items-center gap-2" role="tablist" aria-label="Announcements">
-                        {ads.map((a, i) => (
-                            <button
-                                key={a.eyebrow + i}
-                                type="button"
-                                role="tab"
-                                aria-selected={i === index}
-                                aria-label={a.eyebrow}
-                                onClick={() => setIndex(i)}
-                                className="ah-ad-dot"
-                                style={{ background: i === index ? "var(--ah-ink)" : "var(--ah-line-hi)" }}
-                            />
-                        ))}
-                    </div>
                 )}
             </div>
 
@@ -208,7 +192,7 @@ export default function HeroClient({
                     {/* ── right: the two actions, on the same line as the plate's
                         buttons: the column stretches to the plate's height and
                         its bottom padding matches the plate's (40px). ── */}
-                    <div className="flex flex-col justify-end gap-7 lg:items-end lg:self-stretch lg:pb-10">
+                    <div className="flex flex-col justify-end gap-7 lg:items-end lg:self-stretch lg:translate-y-4">
                         <div className="ah-rise-in flex flex-wrap items-center gap-5" style={{ animationDelay: ".46s" }}>
                             <div className="ah-hero-actions inline-flex shrink-0">
                                 <Link href="/signup" className="ah-hero-act">
