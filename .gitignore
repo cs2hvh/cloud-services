@@ -82,3 +82,9 @@ workers/*/test/load-result.json
 
 # Playwright writes this on an e2e auth failure — a debug artifact, not source.
 auth-failure-screenshot.png
+
+# Security findings naming live, unfixed vulnerabilities. Not for history.
+SECURITY-FINDINGS-*.md
+Scan-FINDINGS-*.md
+*FINDINGS-20*.md
+CLAUDE-SECURITY-*/
