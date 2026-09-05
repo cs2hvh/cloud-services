@@ -961,6 +961,25 @@ export const AgentApiKeys = {
   ): Promise<{ success: boolean; data?: AgentApiKeyWithRawKey; error?: string }> => {
     try {
       const db = await getAgentsDb();
+
+      // A SCOPED KEY MUST NAME AN AGENT THE ISSUER OWNS. The route passed
+      // whatever agent_id the body carried, and this insert stored it with
+      // the caller's user_id, so customer A could mint a key scoped to
+      // customer B's private agent; validate() then saw key.agent_id equal to
+      // the requested agent and let it through without ever reading who owns
+      // the agent. Ownership is checked here, at issuance, and again in
+      // validate(), so neither path relies on the other.
+      if (agent_id) {
+        const { data: agent, error: agentError } = await db
+          .from('ai_agents')
+          .select('user_id')
+          .eq('id', agent_id)
+          .single();
+        if (agentError || !agent || agent.user_id !== user_id) {
+          return { success: false, error: 'Agent not found' };
+        }
+      }
+
       const { rawKey, keyHash, keyPrefix } = generateApiKey();
 
       const insertData: AgentApiKeyInsert = {
@@ -1083,12 +1102,18 @@ export const AgentApiKeys = {
       //
       // A key now has to be either scoped to this exact agent, or owned by the
       // same user as the agent. Public agents remain open by design.
+      //
+      // 2026-09-05, second pass: a SCOPED key was still trusted on the pairing
+      // alone. Issuance had accepted any agent_id, so a key scoped to another
+      // tenant's private agent passed the equality test below and never
+      // reached the ownership read. Every key, scoped or not, now has to be
+      // owned by the agent's owner unless the agent is public; the scope test
+      // narrows a key, it never widens one.
       if (agent_id) {
-        if (key.agent_id) {
-          if (key.agent_id !== agent_id) {
-            return { valid: false, error: 'API key not authorized for this agent' };
-          }
-        } else {
+        if (key.agent_id && key.agent_id !== agent_id) {
+          return { valid: false, error: 'API key not authorized for this agent' };
+        }
+        {
           const { data: agent, error: agentError } = await db
             .from('ai_agents')
             .select('user_id, is_public')
