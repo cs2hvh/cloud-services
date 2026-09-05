@@ -165,9 +165,29 @@ export async function GET(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser();
 
     // Legacy unsigned state is only accepted when an authenticated session matches.
-    // Signed state can continue even if session cookies are stale or belong to a different tab/account.
     if (usedLegacyState && (!user || user.id !== userId)) {
       return NextResponse.redirect(`${domain}${withReturnToParam(returnTo, "error", "invalid_user")}`);
+    }
+
+    // A SIGNED state is proof that WE issued it, not proof of who is holding it.
+    // Treating it as the source of truth meant an attacker could start the OAuth
+    // flow on their own account, capture the signed state carrying THEIR user
+    // id, and get a victim to complete it: the victim authenticates to
+    // Bitbucket, and the resulting provider token is stored against the
+    // attacker's userId. The attacker then reaches the victim's repositories
+    // through their own account.
+    //
+    // So whenever a session exists, it has to agree with the state. The stale
+    // cookie case the old comment was protecting is still handled, because a
+    // request with NO session at all continues on the signed state alone; only
+    // an active session belonging to somebody else is now refused.
+    if (user && user.id !== userId) {
+      console.warn(
+        "[bitbucket/callback] state/session mismatch; refusing to bind provider token"
+      );
+      return NextResponse.redirect(
+        `${domain}${withReturnToParam(returnTo, "error", "invalid_user")}`
+      );
     }
 
     const clientId = process.env.BITBUCKET_CLIENT_ID;

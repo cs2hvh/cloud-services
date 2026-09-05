@@ -1071,9 +1071,39 @@ export const AgentApiKeys = {
         return { valid: false, error: 'API key has expired' };
       }
 
-      // Check agent scope if provided
-      if (agent_id && key.agent_id && key.agent_id !== agent_id) {
-        return { valid: false, error: 'API key not authorized for this agent' };
+      // AGENT SCOPE.
+      //
+      // This used to read `if (agent_id && key.agent_id && key.agent_id !== agent_id)`,
+      // so the whole check was skipped whenever key.agent_id was null. Those
+      // account-wide keys therefore authenticated against ANY agent belonging to
+      // ANY tenant: hold one key, name someone else's private agent id, and the
+      // request was accepted. The tenant boundary was never consulted, only the
+      // agent-to-key pairing, and a null pairing meant "no opinion" rather than
+      // "not this one".
+      //
+      // A key now has to be either scoped to this exact agent, or owned by the
+      // same user as the agent. Public agents remain open by design.
+      if (agent_id) {
+        if (key.agent_id) {
+          if (key.agent_id !== agent_id) {
+            return { valid: false, error: 'API key not authorized for this agent' };
+          }
+        } else {
+          const { data: agent, error: agentError } = await db
+            .from('ai_agents')
+            .select('user_id, is_public')
+            .eq('id', agent_id)
+            .single();
+
+          // A failed lookup is not authorization. Refuse.
+          if (agentError || !agent) {
+            return { valid: false, error: 'API key not authorized for this agent' };
+          }
+
+          if (!agent.is_public && agent.user_id !== key.user_id) {
+            return { valid: false, error: 'API key not authorized for this agent' };
+          }
+        }
       }
 
       return { valid: true, key };
