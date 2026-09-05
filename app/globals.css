@@ -1237,6 +1237,9 @@ text-align: center;
    vignette's falloff is flipped to shade the copy on the right instead. */
 .ah-hero--left .ah-hero-lattice {
   transform: scaleX(-1);
+  /* A light soft-focus on the whole lattice, rather than a hard rectangle
+     of backdrop blur under the plate. */
+  filter: blur(1.5px);
 }
 .ah-hero--left .ah-hero-vignette {
   background:
@@ -1244,19 +1247,18 @@ text-align: center;
     linear-gradient(0deg, rgba(7, 7, 10, 0.96) 0%, transparent 40%),
     linear-gradient(270deg, rgba(7, 7, 10, 0.88) 0%, transparent 42%);
 }
-/* With the bar gone and the plate carrying the height, the hero no longer
-   needs to reach the fold on its own. */
+/* The plate carries the height; the hero does not reach for the fold, so the
+   content sits up near the navbar instead of behind a field of black. */
 .ah-hero--left {
-  min-height: max(430px, calc(100svh - 188px));
+  min-height: 0;
 }
 
 /* The announcement plate: the lattice shows through its ground. */
 .ah-ad {
-  min-height: 420px;
+  min-height: 400px;
   border: 1px solid var(--ah-line-hi);
-  background: rgba(7, 7, 10, 0.5);
-  backdrop-filter: blur(10px) saturate(120%);
-  -webkit-backdrop-filter: blur(10px) saturate(120%);
+  /* No backdrop blur: the lattice stays readable through the plate. */
+  background: rgba(7, 7, 10, 0.45);
 }
 .ah-ad-title {
   font-size: clamp(2.6rem, 5.4vw, 4.6rem);

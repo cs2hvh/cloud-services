@@ -100,15 +100,11 @@ export interface HeroTileSpec {
   live?: HeroLive;
 }
 
-/** The two small tiles under the platform statement. */
+/**
+ * Small tiles under the platform statement. GPUs are deliberately not here:
+ * the rail directly below already shows them with live prices.
+ */
 export const HERO_TILES: HeroTileSpec[] = [
-  {
-    eyebrow: "GPUs",
-    label: "B300 Blackwell Ultra",
-    href: "/dashboard/services/gpu/deploy?gpu=b300-sxm6-ac-288",
-    tone: "amber",
-    live: { kind: "gpu", id: "b300-sxm6-ac-288" },
-  },
   {
     eyebrow: "Dedicated",
     label: "Dedicated servers",

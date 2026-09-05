@@ -206,7 +206,7 @@ export default function HeroClient({
                 <HeroLattice />
                 <span aria-hidden="true" className="ah-hero-vignette" />
 
-                <div className="relative mx-auto grid w-full max-w-[1800px] gap-8 px-6 pb-10 pt-24 sm:px-10 lg:grid-cols-[7fr_5fr] lg:gap-12 lg:px-12 lg:pb-12 lg:pt-28">
+                <div className="relative mx-auto grid w-full max-w-[1800px] gap-8 px-6 pb-8 pt-20 sm:px-10 lg:grid-cols-[7fr_5fr] lg:gap-12 lg:px-12 lg:pb-10 lg:pt-24">
                     {/* ── left: what is new, one item at a time ────────────── */}
                     {ads.length > 0 && <AdPlate ads={ads} seconds={adSeconds} />}
 
@@ -279,7 +279,7 @@ export default function HeroClient({
 
                         {/* two more things worth knowing, smaller */}
                         {tiles.length > 0 && (
-                            <div className="ah-rise-in grid gap-3 sm:grid-cols-2" style={{ animationDelay: ".66s" }}>
+                            <div className={`ah-rise-in grid gap-3 ${tiles.length > 1 ? "sm:grid-cols-2" : ""}`} style={{ animationDelay: ".66s" }}>
                                 {tiles.map((t) => (
                                     <Link key={t.href} href={t.href} className="ah-tile flex flex-col gap-2 p-4">
                                         <span className="ah-lbl" style={{ fontSize: "9px", letterSpacing: "0.14em", color: TONE_COLOR[t.tone] }}>
@@ -294,15 +294,16 @@ export default function HeroClient({
                         )}
                     </div>
                 </div>
-            </section>
 
-            {/* ── GPU rail — unchanged ── */}
+            {/* ── GPU rail ── inside the hero, so the lattice and the vignette
+                run behind it and hero and rail read as one surface rather
+                than two stacked sections. */}
             {gpus.length > 0 && (
-                <div style={{ background: "var(--ah-bg)" }}>
-                    <div className="mx-auto w-full max-w-[1800px] px-6 pb-4 pt-5 sm:px-10 lg:px-12">
+                <div className="ah-rail relative">
+                    <div className="mx-auto w-full max-w-[1800px] px-6 pb-6 pt-2 sm:px-10 lg:px-12">
                         <div
                             className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[repeat(4,minmax(0,1fr))_auto]"
-                            style={{ border: "1px solid var(--ah-line-hi)", background: "var(--ah-elev)" }}
+                            style={{ border: "1px solid var(--ah-line-hi)", background: "rgba(7, 7, 10, 0.55)" }}
                         >
                             {gpus.map((gpu, i) => {
                                 const s = stockLabel(gpu.stock);
@@ -316,7 +317,7 @@ export default function HeroClient({
                                         href={gpu.href}
                                         className="ah-gpu group relative px-7 py-6"
                                         style={{
-                                            background: "var(--ah-elev)",
+                                            background: "transparent",
                                             color: "var(--ah-ink)",
                                             borderRight: "1px solid var(--ah-line)",
                                         }}
@@ -365,7 +366,7 @@ export default function HeroClient({
                             <Link
                                 href="/services/gpu"
                                 className="ah-gpu-all group flex items-center justify-center gap-3 px-7 py-6 lg:flex-col lg:justify-center lg:gap-3 lg:px-8"
-                                style={{ background: "var(--ah-elev)", color: "var(--ah-ink)" }}
+                                style={{ background: "transparent", color: "var(--ah-ink)" }}
                                 aria-label="View all GPUs"
                             >
                                 <span className="ah-gpu-all-ic inline-flex h-9 w-9 items-center justify-center">
@@ -382,6 +383,7 @@ export default function HeroClient({
                     </div>
                 </div>
             )}
+            </section>
         </div>
     );
 }
