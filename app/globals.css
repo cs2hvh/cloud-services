@@ -1183,3 +1183,49 @@ text-align: center;
 @media (prefers-reduced-motion: reduce) {
   .ah-topic-progress { animation: none; display: none; }
 }
+
+/* ── hero, AI-first (2026-09-05) ─────────────────────────────────
+   The hero and its GPU rail set their own faces: Instrument Sans for the
+   display and copy, JetBrains Mono for labels and the API request. Scoped to
+   .ah-type so the rest of the site is untouched. */
+.ah-type {
+  font-family: var(--font-instrument), "Instrument Sans", "Helvetica Neue", Arial, sans-serif;
+}
+.ah-type .ah-lbl,
+.ah-type .ah-code {
+  font-family: var(--font-jetbrains), "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+
+/* What's new bar. Three curated items and, when set, one offer chip. */
+.ah-news {
+  background: #0a0a0d;
+  border-bottom: 1px solid var(--ah-line);
+}
+.ah-news-item {
+  color: var(--ah-body);
+  transition: color 0.18s ease-out;
+}
+.ah-news-item:first-child { color: var(--ah-ink); }
+.ah-news-item:hover { color: var(--ah-blue-lt); }
+.ah-offer {
+  color: var(--ah-amber);
+  border: 1px solid rgba(245, 179, 36, 0.35);
+}
+/* Development only: the empty slot where an offer would sit. */
+.ah-offer-slot {
+  color: var(--ah-muted);
+  border: 1px dashed var(--ah-line-hi);
+}
+
+/* The API card: the request itself, in the space the lattice used to own. */
+.ah-api {
+  border: 1px solid var(--ah-line-hi);
+  background: rgba(10, 10, 13, 0.82);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.ah-api-str { color: var(--ah-blue-lt); }
+.ah-api-dim { color: var(--ah-body); }
+
+/* With the bar above it, the hero gives back the bar and navbar heights so the rail still peeks above the fold. */
+.ah-news + .ah-hero { min-height: max(400px, calc(100svh - 284px)); }

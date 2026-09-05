@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Open_Sans, Nunito, Salsa, Geist_Mono, Antic_Didone, Sora } from "next/font/google";
+import { Open_Sans, Nunito, Salsa, Geist_Mono, Antic_Didone, Sora, Instrument_Sans, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "sonner";
 import { siteConfig } from "@/config/site";
@@ -39,6 +39,21 @@ const sora = Sora({
 // Mono used by the GPU deploy page (mono labels, prices, code spans).
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
+  subsets: ["latin"],
+  display: "swap",
+});
+
+// The home hero's faces (2026-09-05): Instrument Sans for display and copy,
+// JetBrains Mono for labels and the API request. Scoped to .ah-type in
+// globals.css; the rest of the site keeps Open Sans and Geist Mono.
+const instrumentSans = Instrument_Sans({
+  variable: "--font-instrument",
+  subsets: ["latin"],
+  display: "swap",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-jetbrains",
   subsets: ["latin"],
   display: "swap",
 });
@@ -110,7 +125,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className={`${openSans.variable} ${nunito.variable} ${salsa.variable} ${geistMono.variable} ${anticDidone.variable} ${sora.variable}`}>
+      <body className={`${openSans.variable} ${nunito.variable} ${salsa.variable} ${geistMono.variable} ${anticDidone.variable} ${sora.variable} ${instrumentSans.variable} ${jetbrainsMono.variable}`}>
         <OfflineBanner />
         <ConfirmProvider>{children}</ConfirmProvider>
         <Toaster
