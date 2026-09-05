@@ -97,17 +97,29 @@ jobs:
           command_timeout: 30m        # next build can take a few minutes
           script: |
             set -u
-            bash /root/deploy.sh "${{ github.event.inputs.branch || github.ref_name }}"
+            BRANCH="${{ github.event.inputs.branch || github.ref_name }}"
 
-            # ── keep the host's own copies in step with the repo ──────────────
+            # ── run the INCOMING branch's deploy.sh ───────────────────────────
             #
             # /root/deploy.sh lives OUTSIDE the repo on purpose, so `git reset`
-            # cannot touch it. The cost is that it drifts: a fix to
-            # deploy/deploy.sh never reaches the script that actually runs until
-            # somebody re-copies it by hand, and nobody does. Refreshing it here,
-            # after the pull above, closes that loop.
-            cp /root/cloud-services/deploy/deploy.sh /root/deploy.sh
+            # cannot touch it. It used to be refreshed AFTER the deploy, which
+            # meant a fix to the deploy path never ran on the deploy that
+            # shipped it. Now it is taken from origin/$BRANCH first, so the
+            # script that runs is always the one in the commit being deployed.
+            git -C /root/cloud-services fetch --prune origin "$BRANCH"
+            git -C /root/cloud-services show "origin/$BRANCH:deploy/deploy.sh" > /root/deploy.sh
             chmod +x /root/deploy.sh
+            bash /root/deploy.sh "$BRANCH" || { echo "=== deploy.sh FAILED: the previous build is still live ==="; exit 1; }
+
+            # PROVE THE HOST IS ON THE COMMIT THIS RUN IS FOR. deploy.sh prints
+            # the short sha, but nothing checked it against the branch head.
+            HEAD="$(git -C /root/cloud-services rev-parse HEAD)"
+            WANT="$(git -C /root/cloud-services rev-parse "origin/$BRANCH")"
+            if [ "$HEAD" != "$WANT" ]; then
+              echo "host is on $HEAD but origin/$BRANCH is $WANT"
+              exit 1
+            fi
+            echo "host HEAD $HEAD = origin/$BRANCH"
 
             # ── the build worker must be a managed service ────────────────────
             #

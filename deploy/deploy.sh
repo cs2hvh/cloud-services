@@ -45,6 +45,34 @@ step() { printf '\n\033[1;36m▸ %s\033[0m\n' "$*"; }
 ok()   { printf '\033[1;32m✓ %s\033[0m\n' "$*"; }
 die()  { printf '\033[1;31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
 
+# PIDs listening on $PORT, on any address. Empty when nothing does.
+port_pids() { ss -ltnpH "sport = :$PORT" 2>/dev/null | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u || true; }
+
+# The page on :$PORT must come from the build this run just made, and it must
+# be served by this unit. On 2026-09-05 a deploy went green while the site
+# kept serving the previous build: the health check only asked for a 200, and
+# a process outside the unit answered it. Next puts its build id in every
+# page as \"b\":\"<id>\" in the RSC payload; that is compared with .next/BUILD_ID.
+verify_served_build() {
+  local want got pid
+  want="$(cat .next/BUILD_ID)"
+  got="$(curl -s "$HEALTH_URL/" 2>/dev/null | grep -o '\\"b\\":\\"[A-Za-z0-9_-]*' | head -1 | sed 's/.*"//' || true)"
+  if [[ -z "$got" ]]; then
+    echo "  (no build id readable from $HEALTH_URL/ — cannot prove which build is serving)"
+  elif [[ "$got" != "$want" ]]; then
+    systemctl status "$WEB_SERVICE" --no-pager || true
+    journalctl -u "$WEB_SERVICE" -n 40 --no-pager || true
+    die "the app on :$PORT serves build $got but this deploy built $want — the OLD build is still live"
+  else
+    echo "  served build id matches BUILD_ID ($want)"
+  fi
+  for pid in $(port_pids); do
+    grep -q "$WEB_SERVICE.service" "/proc/$pid/cgroup" 2>/dev/null ||
+      die "port $PORT is held by pid $pid outside $WEB_SERVICE — an unmanaged process is serving"
+  done
+  systemctl is-active --quiet "$WEB_SERVICE" || die "$WEB_SERVICE is not active after the restart"
+}
+
 cd "$APP_DIR" || die "APP_DIR not found: $APP_DIR"
 [[ -z "$BRANCH" ]] && BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 
@@ -77,8 +105,22 @@ fi
 echo "  build OK (BUILD_ID $(cat .next/BUILD_ID))"
 
 # ── 4. restart services (brief downtime on a single instance)
+#
+# STOP, CLEAR THE PORT, START — not `systemctl restart`. A restart returns 0
+# even when the new instance then dies because something outside the unit
+# still holds :$PORT, and in that state the old process keeps answering the
+# health check (see verify_served_build). Nothing but this unit may own the
+# port; anything else found on it after the stop is named in the log and
+# killed.
 step "Restarting $WEB_SERVICE"
-systemctl restart "$WEB_SERVICE" || die "failed to restart $WEB_SERVICE"
+systemctl stop "$WEB_SERVICE" || true
+for pid in $(port_pids); do
+  echo "  port $PORT still held by pid $pid after stop: $(ps -o etime=,cmd= -p "$pid" 2>/dev/null | head -c 160)"
+  kill "$pid" 2>/dev/null || true
+done
+sleep 1
+for pid in $(port_pids); do kill -9 "$pid" 2>/dev/null || true; done
+systemctl start "$WEB_SERVICE" || die "failed to start $WEB_SERVICE"
 
 # The old billing cron ($CRON_SERVICE) must NEVER run again. It billed from
 # billing.active_* with rates that include monthly figures written into an
@@ -116,7 +158,8 @@ for _ in $(seq 1 30); do
   code="$(curl -s -o /dev/null -w '%{http_code}' "$HEALTH_URL" 2>/dev/null || true)"
   case "$code" in
     200|301|302|307|308)
-      ok "Deployed: $BRANCH @ $(git rev-parse --short HEAD) — app healthy (HTTP $code)"
+      verify_served_build
+      ok "Deployed: $BRANCH @ $(git rev-parse --short HEAD) — app healthy (HTTP $code), serving BUILD_ID $(cat .next/BUILD_ID)"
       exit 0 ;;
   esac
   sleep 2
