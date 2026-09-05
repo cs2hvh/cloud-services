@@ -19,6 +19,7 @@ import type {
 } from "../types";
 import { sendDatabaseAlertEmail, resolveUserEmail } from "./database-alert-email";
 import { resolveOwnedCluster } from "./cluster-access";
+import { providerSegment } from "./provider-path";
 
 function decryptStoredPassword(
   value: unknown,
@@ -267,7 +268,7 @@ export const userResourceOperations = {
       }
 
       const response = await axios.delete(
-        `https://api.digitalocean.com/v2/databases/${request.clusterId}/users/${request.username}`,
+        `https://api.digitalocean.com/v2/databases/${request.clusterId}/users/${providerSegment(request.username, "username")}`,
         { headers: getDigitalOceanHeaders() }
       );
 
@@ -398,7 +399,7 @@ export const userResourceOperations = {
       }
 
       const response = await axios.post(
-        `https://api.digitalocean.com/v2/databases/${request.clusterId}/users/${request.username}/reset_auth`,
+        `https://api.digitalocean.com/v2/databases/${request.clusterId}/users/${providerSegment(request.username, "username")}/reset_auth`,
         {},
         { headers: getDigitalOceanHeaders() }
       );

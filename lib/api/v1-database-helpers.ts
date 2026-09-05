@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { resolveOwnedCluster } from "@/lib/services/database/operations/cluster-access";
 import { v1ExtractId, type RouteContext } from "@/lib/api/v1-helpers";
 import { v1Error } from "@/lib/api/v1-middleware";
+import { isProviderSegment } from "@/lib/services/database/operations/provider-path";
 
 type DatabaseServiceFailure = {
   error?: string;
@@ -37,11 +38,23 @@ export async function v1ExtractStringParam(
     };
   }
 
+  let value: string;
   try {
-    return { value: decodeURIComponent(raw), error: null };
+    value = decodeURIComponent(raw);
   } catch {
-    return { value: raw, error: null };
+    value = raw;
   }
+  // A database name or username becomes a segment of the DigitalOcean URL.
+  // Refuse here, with a clear 400, what provider-path.ts would refuse deeper
+  // down: `..%2F..%2F<other-cluster>` used to climb out of the caller-owned
+  // cluster after the ownership check had already passed.
+  if ((paramName === "name" || paramName === "username") && !isProviderSegment(value)) {
+    return {
+      value: null,
+      error: v1Error("INVALID_PARAMETER", 400, `Invalid ${fieldLabel}: only letters, digits, underscore, dot and hyphen are allowed`, { field: paramName }),
+    };
+  }
+  return { value, error: null };
 }
 
 export async function v1EnsureOwnedDatabaseCluster(

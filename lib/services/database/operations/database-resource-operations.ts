@@ -27,6 +27,7 @@ import type {
 } from "../types";
 import { resolveOwnedCluster } from "./cluster-access";
 import { sendDatabaseAlertEmail, resolveUserEmail } from "./database-alert-email";
+import { providerSegment } from "./provider-path";
 
 async function listDatabasesFromProvider(
   clusterId: string,
@@ -99,7 +100,7 @@ async function retrieveDatabaseFromProvider(
 ): Promise<{ success: boolean; data?: unknown; error?: string; statusCode?: number }> {
   try {
     const response = await axios.get(
-      `https://api.digitalocean.com/v2/databases/${clusterId}/dbs/${name}`,
+      `https://api.digitalocean.com/v2/databases/${clusterId}/dbs/${providerSegment(name, "database name")}`,
       { headers: getDigitalOceanHeaders() }
     );
 
@@ -435,7 +436,7 @@ export const databaseResourceOperations = {
       }
 
       const response = await axios.delete(
-        `https://api.digitalocean.com/v2/databases/${request.clusterId}/dbs/${request.dbName}`,
+        `https://api.digitalocean.com/v2/databases/${request.clusterId}/dbs/${providerSegment(request.dbName, "database name")}`,
         { headers: getDigitalOceanHeaders() }
       );
 
@@ -531,7 +532,7 @@ export const databaseResourceOperations = {
       }
 
       const response = await axios.delete(
-        `https://api.digitalocean.com/v2/databases/${request.clusterId}/dbs/${request.dbName}`,
+        `https://api.digitalocean.com/v2/databases/${request.clusterId}/dbs/${providerSegment(request.dbName, "database name")}`,
         { headers: getDigitalOceanHeaders() }
       );
 
