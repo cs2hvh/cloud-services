@@ -1325,3 +1325,11 @@ text-align: center;
   color: var(--ah-blue-lt);
   -webkit-text-stroke: 0;
 }
+
+/* The lattice on the right: the light soft-focus kept, and the whole canvas
+   lifted a little so the cluster sits above the button line rather than on it.
+   The bottom vignette hides the strip it vacates. */
+.ah-hero--split .ah-hero-lattice {
+  filter: blur(1px);
+  transform: translateY(-6%);
+}
