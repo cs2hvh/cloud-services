@@ -161,29 +161,36 @@ export async function GET(request: NextRequest) {
     
     const supabase = await createClient();
     
-    // Check active session (if present). Signed state remains source of truth.
-    const { data: { user } } = await supabase.auth.getUser();
+    // A live session matching the state is required. The state alone is never
+    // sufficient — see the check below.
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
 
     // Legacy unsigned state is only accepted when an authenticated session matches.
     if (usedLegacyState && (!user || user.id !== userId)) {
       return NextResponse.redirect(`${domain}${withReturnToParam(returnTo, "error", "invalid_user")}`);
     }
 
-    // A SIGNED state is proof that WE issued it, not proof of who is holding it.
-    // Treating it as the source of truth meant an attacker could start the OAuth
-    // flow on their own account, capture the signed state carrying THEIR user
-    // id, and get a victim to complete it: the victim authenticates to
-    // Bitbucket, and the resulting provider token is stored against the
-    // attacker's userId. The attacker then reaches the victim's repositories
-    // through their own account.
+    // A SIGNED state proves WE issued it. It does not prove who is holding it.
     //
-    // So whenever a session exists, it has to agree with the state. The stale
-    // cookie case the old comment was protecting is still handled, because a
-    // request with NO session at all continues on the signed state alone; only
-    // an active session belonging to somebody else is now refused.
-    if (user && user.id !== userId) {
+    // An attacker starts the OAuth flow on their own account, captures the
+    // signed state carrying THEIR user id, and gets a victim to complete it. The
+    // victim authenticates to Bitbucket and the provider token is stored against
+    // the attacker's userId, who then reaches the victim's repositories from
+    // their own account.
+    //
+    // A live session matching the state is therefore REQUIRED, not merely
+    // checked when present. An earlier version of this fix refused only a
+    // mismatched session — `if (user && user.id !== userId)` — which left the
+    // real attack open: the victim most likely to fall for the link is one who
+    // is not signed in, and with `user` null the signed state still won.
+    //
+    // app/api/gitlab/callback/route.ts:95 has always had the correct shape and
+    // this now matches it. The cost is that a genuinely stale cookie fails the
+    // callback and the user reconnects, which is the right trade against binding
+    // someone else's token.
+    if (userError || !user || user.id !== userId) {
       console.warn(
-        "[bitbucket/callback] state/session mismatch; refusing to bind provider token"
+        "[bitbucket/callback] no matching session for state; refusing to bind provider token"
       );
       return NextResponse.redirect(
         `${domain}${withReturnToParam(returnTo, "error", "invalid_user")}`
