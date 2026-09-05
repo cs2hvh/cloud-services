@@ -1293,16 +1293,19 @@ text-align: center;
   transition: background 0.18s ease-out;
 }
 .ah-ad-dot:focus-visible { outline: 2px solid var(--ah-blue-lt); outline-offset: 3px; }
-/* The bar is the timer: the plate advances on its animationend. Hover holds it. */
+/* The bar is the timer: the plate advances on its animationend. Hover holds
+   it. It is deliberately NOT drawn (opacity 0, one pixel tall): the rotation
+   needs the animation to run, the page does not need to show a loading line. */
 .ah-ad-progress {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
-  height: 2px;
+  height: 1px;
   transform-origin: left center;
-  background: var(--ah-blue);
-  opacity: 0.85;
+  background: transparent;
+  opacity: 0;
+  pointer-events: none;
   animation: ah-topic-progress 7s linear both;
 }
 .ah-ad:hover .ah-ad-progress,
@@ -1340,9 +1343,9 @@ text-align: center;
      canvas and blurred nothing but the black ground. */
   z-index: 1;
   pointer-events: none;
-  background: rgba(7, 7, 10, 0.34);
-  backdrop-filter: blur(11px);
-  -webkit-backdrop-filter: blur(11px);
+  background: rgba(7, 7, 10, 0.3);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   mask-image: linear-gradient(90deg, #000 0%, #000 62%, transparent 100%);
   -webkit-mask-image: linear-gradient(90deg, #000 0%, #000 62%, transparent 100%);
 }
@@ -1352,4 +1355,10 @@ text-align: center;
     mask-image: none;
     -webkit-mask-image: none;
   }
+}
+
+/* The accent word in the outlined headline line: solid blue, no stroke. */
+.ah-hero-accent {
+  color: var(--ah-blue-lt);
+  -webkit-text-stroke: 0;
 }

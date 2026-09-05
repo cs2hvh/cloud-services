@@ -206,7 +206,9 @@ export default function HeroClient({
                 <HeroLattice />
                 <span aria-hidden="true" className="ah-hero-vignette" />
 
-                <div className="relative z-10 mx-auto grid w-full max-w-[1800px] gap-8 px-6 pb-8 pt-20 sm:px-10 lg:grid-cols-[7fr_5fr] lg:items-center lg:gap-12 lg:px-12 lg:pb-10 lg:pt-24">
+                {/* flex-1: the row takes the space between the navbar and the
+                    rail, and items-center puts both columns in the middle of it. */}
+                <div className="relative z-10 mx-auto flex-1 grid w-full max-w-[1800px] gap-8 px-6 pb-8 pt-20 sm:px-10 lg:grid-cols-[7fr_5fr] lg:items-center lg:gap-12 lg:px-12 lg:pb-10 lg:pt-24">
                     {/* ── left: what is new, one item at a time ────────────── */}
                     {ads.length > 0 && <AdPlate ads={ads} seconds={adSeconds} />}
 
@@ -230,7 +232,10 @@ export default function HeroClient({
                                 <span className="ah-hero-outline block">
                                     {HEADLINE[1].map((w, i) => (
                                         <span key={w} className="ah-word-wrap">
-                                            <span className="ah-word" style={{ animationDelay: `${0.26 + i * 0.09}s` }}>
+                                            <span
+                                                className={`ah-word${i === HEADLINE[1].length - 1 ? " ah-hero-accent" : ""}`}
+                                                style={{ animationDelay: `${0.26 + i * 0.09}s` }}
+                                            >
                                                 {w}
                                             </span>
                                         </span>

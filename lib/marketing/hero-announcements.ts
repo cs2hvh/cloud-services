@@ -101,18 +101,13 @@ export interface HeroTileSpec {
 }
 
 /**
- * Small tiles under the platform statement. GPUs are deliberately not here:
- * the rail directly below already shows them with live prices.
+ * Small tiles under the platform statement. Empty on purpose: GPUs are in
+ * the rail directly below and dedicated servers are in the plate. Add an
+ * entry here to bring one back, e.g.
+ *   { eyebrow: "Dedicated", label: "Dedicated servers", href: "/services/compute",
+ *     tone: "grey", live: { kind: "bare-metal" } }
  */
-export const HERO_TILES: HeroTileSpec[] = [
-  {
-    eyebrow: "Dedicated",
-    label: "Dedicated servers",
-    href: "/services/compute",
-    tone: "grey",
-    live: { kind: "bare-metal" },
-  },
-];
+export const HERO_TILES: HeroTileSpec[] = [];
 
 /**
  * The offer chip next to the actions. `null` renders nothing in production;
