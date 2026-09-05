@@ -60,6 +60,12 @@ function shouldApplyIpRateLimit(pathname: string): boolean {
     '/api/auth/reset-password',
     '/api/auth/verify-email',
     '/api/auth/forgot-password',
+    // Onboarding creates accounts and sends OTP email for any address supplied.
+    // Leaving it off this list meant it was the one unauthenticated,
+    // email-sending, account-creating endpoint with no IP limit at all, which
+    // makes it the cheapest way to both enumerate and to use the platform as a
+    // mail relay against arbitrary recipients.
+    '/api/auth/onboarding',
   ];
   
   return authRoutes.some(route => pathname.startsWith(route));
