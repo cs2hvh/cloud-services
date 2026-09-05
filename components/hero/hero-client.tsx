@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { PublicStock } from "@/lib/catalog/gpu";
 import type { HeroTone } from "@/lib/marketing/hero-announcements";
 import { HeroLattice } from "@/components/hero/hero-lattice";
@@ -77,15 +77,28 @@ function stockLabel(stock: PublicStock): { text: string; dot: string } | null {
 }
 
 /**
- * The announcement plate. One item at a time; the progress bar at its foot
- * IS the timer (the same pattern as the platform explorer): the bar's
- * `animationend` advances the plate, so pausing the bar on hover pauses the
- * rotation, and under prefers-reduced-motion the animation is removed, the
- * event never fires, and the plate simply stays on the first item.
+ * The announcement plate. One item at a time, advanced by a plain interval.
+ *
+ * It used to advance on the `animationend` of a CSS progress bar, the same
+ * pattern as the platform explorer. That pattern reads "no animation" as
+ * "no autoplay", which is right for a decorative bar but wrong here: under
+ * prefers-reduced-motion (Windows' "show animations" switch sets it) the bar
+ * was removed and the plate froze on its first item forever, which is how a
+ * working carousel was reported as broken. A change of content every few
+ * seconds is not motion, so the timer no longer depends on any animation.
+ * It skips ticks while the tab is hidden so a background tab does not race
+ * through the items.
  */
 function AdPlate({ ads, seconds }: { ads: HeroAd[]; seconds: number }) {
     const [index, setIndex] = useState(0);
     const advance = useCallback(() => setIndex((i) => (i + 1) % ads.length), [ads.length]);
+    useEffect(() => {
+        if (ads.length < 2) return undefined;
+        const id = window.setInterval(() => {
+            if (!document.hidden) advance();
+        }, Math.max(2, seconds) * 1000);
+        return () => window.clearInterval(id);
+    }, [ads.length, seconds, advance]);
     const ad = ads[index] ?? ads[0];
 
     return (
@@ -131,17 +144,6 @@ function AdPlate({ ads, seconds }: { ads: HeroAd[]; seconds: number }) {
                 )}
             </div>
 
-            {ads.length > 1 && (
-                <span
-                    key={index}
-                    aria-hidden="true"
-                    className="ah-ad-progress"
-                    style={{ animationDuration: `${seconds}s` }}
-                    onAnimationEnd={(e) => {
-                        if (e.animationName === "ah-topic-progress") advance();
-                    }}
-                />
-            )}
         </div>
     );
 }

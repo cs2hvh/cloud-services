@@ -1333,3 +1333,9 @@ text-align: center;
   filter: blur(1px);
   transform: translateY(-6%);
 }
+
+/* DepthText layers carry their text as a pseudo-element (see depth-text.tsx). */
+.depth-text-layer::before {
+  content: attr(data-text);
+  white-space: inherit;
+}

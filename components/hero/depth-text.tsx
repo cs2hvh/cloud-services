@@ -212,15 +212,18 @@ export default function DepthText({
     return (
         <span ref={rootRef} className={`inline-block ${className}`.trim()} style={rootStyle}>
             <span ref={stageRef} className="relative inline-grid place-items-start" style={stageStyle}>
+                {/* The depth layers draw their text from a CSS pseudo-element
+                    (content: attr(data-text)) rather than as DOM text, so the
+                    title appears once in the document for search engines,
+                    screen readers and innerText, not once per layer. */}
                 {depthLayers.map((layer) => (
                     <span
                         aria-hidden="true"
-                        className="pointer-events-none absolute inset-0 z-0 inline-block brightness-95 saturate-95"
+                        data-text={text}
+                        className="depth-text-layer pointer-events-none absolute inset-0 z-0 inline-block brightness-95 saturate-95"
                         key={layer.index}
                         style={{ ...textStyle, color: layer.color, transform: layer.transform }}
-                    >
-                        {text}
-                    </span>
+                    />
                 ))}
                 <span
                     className="relative z-10 inline-block"
