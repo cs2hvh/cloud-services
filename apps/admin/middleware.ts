@@ -87,6 +87,37 @@ export async function middleware(request: NextRequest) {
     return deny("unauthenticated");
   }
 
+  // SECOND FACTOR. A password-only session on an MFA-enrolled account is not
+  // a signed-in administrator. Read from the session JWT (no fetch); fails
+  // open on a throw so a fault of ours cannot lock every admin out. Pages go
+  // back to /signin with ?error=mfa_required, where the form shows the TOTP
+  // step for the existing session; API calls get a 401 they can act on.
+  try {
+    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (aal?.nextLevel === "aal2" && aal.currentLevel !== "aal2") {
+      if (request.nextUrl.pathname.startsWith("/api")) {
+        return NextResponse.json(
+          { error: "Two-factor authentication required", code: "mfa_required" },
+          { status: 401 },
+        );
+      }
+      const url = request.nextUrl.clone();
+      url.pathname = "/signin";
+      url.search = "";
+      url.searchParams.set("error", "mfa_required");
+      url.searchParams.set(
+        "redirectTo",
+        request.nextUrl.pathname + request.nextUrl.search,
+      );
+      return NextResponse.redirect(url);
+    }
+  } catch (aalError) {
+    console.error(
+      "[admin middleware] assurance level unreadable, allowing:",
+      aalError instanceof Error ? aalError.message : "unknown",
+    );
+  }
+
   const adminEmails = (process.env.ADMIN_EMAILS || "")
     .split(",")
     .map((s) => s.trim().toLowerCase())

@@ -32,6 +32,46 @@ export async function requireAdmin(): Promise<{ ok: boolean; email?: string; use
       return { ok: false };
     }
 
+    // SECOND FACTOR. Until 2026-09-05 this guard checked identity and policy
+    // only, so an administrator's password alone reached every admin route
+    // even with TOTP enrolled. nextLevel is "aal2" only for accounts with a
+    // verified factor, so this refuses exactly those when they have not yet
+    // presented it; accounts without MFA are unaffected. Fails OPEN if the
+    // level cannot be read (it comes from the session JWT, so a throw is a
+    // fault of ours, not evidence about the user). The sign-in form now
+    // carries the TOTP step, so a refused admin has somewhere to go.
+    try {
+      const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (aal?.nextLevel === "aal2" && aal.currentLevel !== "aal2") {
+        console.warn(`User ${email} attempted admin access without completing the second factor`);
+        return { ok: false };
+      }
+    } catch (aalError) {
+      console.error(
+        "[requireAdmin] assurance level unreadable, allowing:",
+        aalError instanceof Error ? aalError.message : "unknown"
+      );
+    }
+
+    // SUSPENSION. user_profiles.suspend is written by the users route and
+    // was read by nothing; a suspended admin stayed an admin.
+    try {
+      const { data: profile } = await supabase
+        .from("user_profiles")
+        .select("suspend")
+        .eq("id", userId)
+        .maybeSingle();
+      if ((profile as { suspend?: boolean | null } | null)?.suspend === true) {
+        console.warn(`Suspended user ${email} attempted admin access`);
+        return { ok: false };
+      }
+    } catch (suspendError) {
+      console.error(
+        "[requireAdmin] suspend flag unreadable, allowing:",
+        suspendError instanceof Error ? suspendError.message : "unknown"
+      );
+    }
+
     // Check ADMIN_EMAILS environment variable first (simple and reliable)
     const adminEmails = (process.env.ADMIN_EMAILS || "")
       .split(",")
