@@ -6,6 +6,7 @@ import { useCallback, useState } from "react";
 import type { PublicStock } from "@/lib/catalog/gpu";
 import type { HeroTone } from "@/lib/marketing/hero-announcements";
 import { HeroLattice } from "@/components/hero/hero-lattice";
+import DepthText from "@/components/hero/depth-text";
 
 export type GpuRow = {
     id: string;
@@ -86,7 +87,6 @@ function AdPlate({ ads, seconds }: { ads: HeroAd[]; seconds: number }) {
     const [index, setIndex] = useState(0);
     const advance = useCallback(() => setIndex((i) => (i + 1) % ads.length), [ads.length]);
     const ad = ads[index] ?? ads[0];
-    const [line1, line2] = ad.title.split("\n");
 
     return (
         <div className="ah-ad ah-rise-in relative flex flex-col justify-between gap-8 p-8 sm:p-10" style={{ animationDelay: ".18s" }}>
@@ -97,9 +97,23 @@ function AdPlate({ ads, seconds }: { ads: HeroAd[]; seconds: number }) {
                         {ad.eyebrow.toUpperCase()}
                     </span>
                 </div>
+                {/* Layered 3D title that tilts toward the pointer and drifts when
+                    left alone (components/hero/depth-text.tsx). The extrusion is
+                    the brand blue; the face is the hero's cream. */}
                 <h2 key={ad.title} className="ah-ad-title m-0" style={{ color: "var(--ah-ink)" }}>
-                    <span className="block">{line1}</span>
-                    {line2 && <span className="block">{line2}</span>}
+                    <DepthText
+                        text={ad.title}
+                        faceColor="#fafaf4"
+                        depthColor="#0095ff"
+                        layers={16}
+                        depth={1.4}
+                        tilt={6}
+                        orbitSpeed={0.22}
+                        fontSize="inherit"
+                        fontWeight={700}
+                        letterSpacing="-0.035em"
+                        lineHeight={0.96}
+                    />
                 </h2>
                 <p className="m-0 max-w-[30rem] text-[clamp(1rem,1.3vw,1.125rem)] leading-[1.45]" style={{ color: "var(--ah-body)" }}>
                     {ad.body}
