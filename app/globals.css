@@ -836,28 +836,56 @@ text-align: center;
   .ah-rack-slots span { animation: none !important; opacity: 0.9 !important; }
 }
 
-/* ── compute tiers ────────────────────────────────────────────────
-   Own surface + real gutters. The previous pass separated them with a
-   single shared rule, which made three choices read as one strip. */
-.ah-tier {
-  background: var(--ah-elev);
+/* ── compute plans ────────────────────────────────────────────────
+   Three plan cards in one hairline frame. The featured card steps out of
+   the frame on large screens (taller than its neighbours, ink outline, a
+   tab on its top edge); on small screens the cards stack and the featured
+   one keeps only its outline. */
+.ah-plans {
   border: 1px solid var(--ah-line);
-  transition: background 0.22s ease-out, border-color 0.22s ease-out,
-    transform 0.22s cubic-bezier(0.2, 0.7, 0.2, 1);
+  background: var(--ah-bg);
 }
-.ah-tier:hover {
-  background: #17171e;
-  border-color: var(--ah-line-hi);
-  transform: translateY(-3px);
+.ah-plan {
+  background: var(--ah-bg);
+  transition: background 0.22s ease-out;
 }
-.ah-tier[data-featured] {
-  background: #12131a;
-  border-color: rgba(0, 149, 255, 0.34);
-  box-shadow: inset 0 1px 0 rgba(0, 149, 255, 0.22);
+.ah-plan:hover { background: #121217; }
+.ah-plan + .ah-plan { border-top: 1px solid var(--ah-line); }
+.ah-plan--hi {
+  background: #0c0c10;
+  outline: 1px solid var(--ah-ink);
+  outline-offset: -1px;
 }
-.ah-tier[data-featured]:hover {
-  border-color: rgba(0, 149, 255, 0.55);
+.ah-plan--hi:hover { background: #101015; }
+@media (min-width: 1024px) {
+  .ah-plan + .ah-plan { border-top: 0; border-left: 1px solid var(--ah-line); }
+  .ah-plan--hi {
+    margin: -1.75rem 0;
+    border-left: 0 !important;
+  }
+  .ah-plan--hi + .ah-plan { border-left: 0; }
 }
+/* the tab on the featured card: an ink plate centred on the top edge */
+.ah-plan-tab {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  background: var(--ah-ink);
+  color: #0d0d11;
+  white-space: nowrap;
+}
+.ah-plan-tab-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--ah-blue);
+}
+.ah-plan-check { color: var(--ah-blue); }
 
 /* live dot on each region row */
 @keyframes ah-dot { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
