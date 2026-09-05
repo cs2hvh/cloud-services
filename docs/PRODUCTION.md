@@ -430,7 +430,8 @@ rather than an artifact of looking too early.
 | systemd units | [../deploy/systemd/README.md](../deploy/systemd/README.md) |
 | Inference deep-dives | [inference/](inference/) |
 | LKE cluster ops | [../infra/k8s/lke/README.md](../infra/k8s/lke/README.md) |
-| Compute (VPS) service | [COMPUTE_SERVICE.md](COMPUTE_SERVICE.md) |
+| Compute (VPS) service | [LINODE_COMPUTE.md](LINODE_COMPUTE.md) |
+| Compute, the dormant Proxmox/OVH era | [COMPUTE_SERVICE.md](COMPUTE_SERVICE.md) |
 | Secrets checklist | [SENSITIVE_DATA_EXPOSURE_CHECKLIST.md](SENSITIVE_DATA_EXPOSURE_CHECKLIST.md) |
 
 ---
@@ -439,10 +440,21 @@ rather than an artifact of looking too early.
 
 Do not trust these without checking:
 
-- **`README.md`** (root), last touched 2026-03-23. Describes "Jenkins-driven
-  Kubernetes deployment pipelines" as the deployment model. Jenkins is still used
-  for platform-app builds, but the platform itself deploys over SSH from
-  `.github/workflows/deploy.yml`.
-- **`docs/DEPLOYMENT_COMPLETE_GUIDE.md`**, dated May 2026, is a roadmap document
-  rather than a runbook, despite the name.
+- **`docs/COMPUTE_SERVICE.md`** describes the Proxmox/OVH era. `LINODE_COMPUTE.md`
+  supersedes it. It is kept only because those rows and routes are dormant rather
+  than removed, so it remains the sole record of code that still exists.
+- **`docs/BILLING_GRACE_AUTO_DELETE_PLAN.md`** and **`docs/GAME_SERVERS_PLAN.md`**
+  are design documents for features that have since shipped. Read the code first
+  and treat these as intent, not description.
+- **`docs/v2/`** documents the deploy v2 rebuild, which lives in a different repo
+  (`C:\cloud-app-v2`). It is filed here for historical reasons and does not
+  describe this application.
 - **`credit-system-cron/`**, a husk with no worker source. See §6.
+
+Four documents were deleted on 2026-09-05 as superseded or misleading:
+`BILLING_BEHAVIOR.md` (documented the v1 cron billing that died on 2026-08-24),
+`SESSION_PROGRESS_2026-05.md` (a May session log naming the retired
+`api.cs2hvh.com`), `PERF_BASELINE.md` (an unfilled measurement template pointing
+at plans not in the repo), and `DEPLOYMENT_COMPLETE_GUIDE.md` (a 1,052-line May
+roadmap whose name invited operators to read it as the deployment guide). They
+are in git history if any of it is wanted back.
