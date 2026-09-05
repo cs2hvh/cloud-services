@@ -11,6 +11,30 @@ import { Projects } from "@/lib/supabase/queries/projects";
 import { Spectrum_Apps } from "@/lib/supabase/queries/spectrum_apps";
 import { Platform_Apps } from "@/lib/supabase/queries/platform_apps";
 import { RunPodService } from "@/lib/services/runpod-service";
+import { createClient } from "@/lib/supabase/server";
+
+/**
+ * Compute VM count for the overview tile.
+ *
+ * The same statuses the compute page counts, so the tile and the page it links
+ * to cannot disagree. A failed read returns null rather than 0, because a
+ * zero here reads as "you have no servers" and would send someone looking for
+ * a fleet that is actually there.
+ */
+async function getServerCount(userId: string): Promise<number | null> {
+  try {
+    const supabase = await createClient();
+    const { count, error } = await supabase
+      .from("servers")
+      .select("id", { count: "exact", head: true })
+      .eq("owner_id", userId)
+      .in("status", ["provisioning", "running", "stopped", "suspended"]);
+    if (error) return null;
+    return count ?? null;
+  } catch {
+    return null;
+  }
+}
 
 const DashboardSuspense = async () => {
   const user = await getUser();
@@ -25,6 +49,7 @@ const DashboardSuspense = async () => {
     platform_apps,
     logsRaw,
     gpuResult,
+    serverCount,
   ] = await Promise.all([
     GameServers.get_by_user(user.id),
     Database_Clusters.read_all_owner_id(user.id),
@@ -34,6 +59,7 @@ const DashboardSuspense = async () => {
     Platform_Apps.list_by_owner(user.id),
     Projects.get_logs_by_user(user.id),
     RunPodService.listUserPods(user.id),
+    getServerCount(user.id),
   ]);
 
   // Don't fail the whole overview if one resource list comes back empty/null —
@@ -45,6 +71,7 @@ const DashboardSuspense = async () => {
   return (
     <Dashboard
       data={{
+        servers: serverCount ?? 0,
         game_servers: gameservers ?? [],
         database_clusters,
         kubernetes_clusters,

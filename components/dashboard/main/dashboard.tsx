@@ -151,6 +151,13 @@ function EmptyStateGlyph() {
 }
 
 interface PageProps {
+    /**
+     * Compute VMs. Counted separately from game_servers: the Servers tile used
+     * to render game_servers.length under the label "Servers" while linking to
+     * the compute page, so a customer with 3 game servers and no VMs saw
+     * "Servers 3" and landed on a page reading "No servers yet".
+     */
+    servers: number;
     game_servers: Tables<"game_servers">[];
     database_clusters: Tables<"database_clusters">[];
     kubernetes_clusters: Tables<"clusters_get">[];
@@ -176,6 +183,7 @@ const Dashboard = ({ data }: { data: PageProps }) => {
     );
 
     const totalResources =
+        data.servers +
         data.game_servers.length +
         data.database_clusters.length +
         data.kubernetes_clusters.length +
@@ -253,12 +261,18 @@ const Dashboard = ({ data }: { data: PageProps }) => {
             </header>
 
             {/* Stats strip */}
-            <section className="mb-10 border-y border-white/[0.06] grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 divide-x divide-white/[0.06]">
+            <section className="mb-10 border-y border-white/[0.06] grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 divide-x divide-white/[0.06]">
                 <StatLink
                     label="Servers"
+                    value={data.servers}
+                    glyph={<ServerGlyph />}
+                    href="/dashboard/services/compute"
+                />
+                <StatLink
+                    label="Game servers"
                     value={data.game_servers.length}
                     glyph={<ServerGlyph />}
-                    href="/dashboard/services/compute/vps"
+                    href="/dashboard/services/game"
                 />
                 <StatLink
                     label="GPU pods"
