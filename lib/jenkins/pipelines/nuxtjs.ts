@@ -19,6 +19,7 @@
 import { generateEnvSecret, generateEnvFromSection, generateRuntimeDefaultEnvYaml, generateSmartIngressApplyScript, generateBuildKitStage, resolveAppSize, generateProbeYaml, EnvVar } from './utils';
 import { generateNuxtjsDockerfileStage, getPackageManagerDetectionScript } from '../dockerfiles';
 import { generateImageScanStage, generateSecurityStages } from '../security';
+import { assertPipelineInputs } from "./inputs";
 
 export function createNuxtJsPipeline(
   name: string,
@@ -34,6 +35,8 @@ export function createNuxtJsPipeline(
   containerPort?: number,
   healthcheckPath?: string,
 ): string {
+  // Refuse anything a shell would interpret before it reaches the sh block below.
+  assertPipelineInputs(gitUrl, branch);
   const domain = `${name}.${appDomain}`;
   const appName = `${name}-app`;
   const serviceName = `${name}-service`;

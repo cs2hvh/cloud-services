@@ -11,6 +11,7 @@
  */
 import { generateEnvSecret, generateEnvFromSection, generateSmartIngressApplyScript, generateBuildKitStage, resolveAppSize, generateProbeYaml, EnvVar } from './utils';
 import { generateSecurityStages, generateImageScanStage } from '../security';
+import { assertPipelineInputs } from "./inputs";
 
 export function createDockerfilePipeline(
   name: string,
@@ -26,6 +27,8 @@ export function createDockerfilePipeline(
   containerPort: number = 3000, // Default port, can be overridden
   healthcheckPath?: string,
 ): string {
+  // Refuse anything a shell would interpret before it reaches the sh block below.
+  assertPipelineInputs(gitUrl, branch);
   const domain = `${name}.${appDomain}`;
   const appName = `${name}-app`;
   const serviceName = `${name}-service`;

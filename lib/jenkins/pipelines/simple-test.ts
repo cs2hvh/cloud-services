@@ -1,3 +1,4 @@
+import { assertPipelineInputs } from "./inputs";
 /**
  * Simple Test Pipeline - No Docker, No Kubernetes
  * Just clones repo and runs basic commands to test Jenkins setup
@@ -7,6 +8,8 @@ export function createSimpleTestPipeline(
   gitUrl: string,
   branch: string,
 ): string {
+  // Refuse anything a shell would interpret before it reaches the sh block below.
+  assertPipelineInputs(gitUrl, branch);
   // Remove token from URL for display purposes (keep only clean URL for metadata)
   // Handle GitHub (https://token@github.com/), GitLab (https://oauth2:token@gitlab.com/), and Bitbucket (https://x-token-auth:token@bitbucket.org/) formats
   const cleanUrl = gitUrl
