@@ -51,11 +51,13 @@ export interface HeroAdSpec {
  *     requiresModel: "openai/gpt-6-astra",
  *   },
  */
+// Titles are plain product statements (what, and that it is available now),
+// not taglines. Two short lines each.
 export const HERO_ADS: HeroAdSpec[] = [
   {
     eyebrow: "New on the API",
-    title: "GLM-5.3\non the API.",
-    body: "Drop-in on any OpenAI SDK. Same key, same endpoint, one model id.",
+    title: "GLM-5.3\nlive now.",
+    body: "Available on the inference API. OpenAI-compatible, one model id.",
     primary: { label: "Try it in the playground", href: "/dashboard/services/inference" },
     secondary: { label: "See all models", href: "/services/inference" },
     tone: "green",
@@ -63,8 +65,8 @@ export const HERO_ADS: HeroAdSpec[] = [
   },
   {
     eyebrow: "GPUs",
-    title: "B300 Blackwell Ultra,\nby the hour.",
-    body: "288 GB HBM3e per GPU, up to eight per pod, no commitment.",
+    title: "B300 GPUs\navailable.",
+    body: "Blackwell Ultra, 288 GB HBM3e per GPU, billed by the hour.",
     primary: { label: "Deploy a pod", href: "/dashboard/services/gpu/deploy?gpu=b300-sxm6-ac-288" },
     secondary: { label: "All GPUs", href: "/services/gpu" },
     tone: "amber",
@@ -72,16 +74,16 @@ export const HERO_ADS: HeroAdSpec[] = [
   },
   {
     eyebrow: "Fine-tuning",
-    title: "Your data,\nyour model.",
-    body: "Fine-tune an open model on your dataset and serve it on the same API, on GPUs we run.",
+    title: "Host models\non our GPUs.",
+    body: "Fine-tune an open model on your data and serve it on the same API.",
     primary: { label: "Start a fine-tune", href: "/dashboard/services/inference/fine-tuning" },
     secondary: { label: "How it works", href: "/services/inference" },
     tone: "grey",
   },
   {
     eyebrow: "Dedicated",
-    title: "Bare metal,\nsingle tenant.",
-    body: "AMD and Intel machines with full root access.",
+    title: "Dedicated servers\navailable.",
+    body: "AMD and Intel, single tenant, full root access.",
     primary: { label: "See the lineup", href: "/services/compute" },
     tone: "grey",
     live: { kind: "bare-metal" },
