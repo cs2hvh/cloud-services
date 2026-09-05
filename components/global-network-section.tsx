@@ -82,9 +82,29 @@ export default function GlobalNetworkSection() {
           </div>
         </div>
 
-        {/* capped so the map informs rather than dominates */}
-        <div className="relative mx-auto max-w-[980px]">
-          <div className="relative">
+        {/* Capped so the map informs rather than dominates. The map and its
+            pin overlay share one transformed box, so the tilt and the mask
+            move them together and every pin stays on its city.
+            - the elliptical mask rounds off the rectangle's empty corners
+              (Arctic and Antarctic dots) without touching any pin: the
+              furthest pins (Sydney, San Francisco, São Paulo) sit inside the
+              fully opaque zone
+            - the slight rotateX reads as the surface curving away */}
+        <div className="relative mx-auto max-w-[1120px]" style={{ perspective: "1600px" }}>
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0"
+            style={{ background: "radial-gradient(ellipse 48% 44% at 50% 52%, rgba(0,149,255,0.10), transparent 70%)" }}
+          />
+          <div
+            className="relative"
+            style={{
+              transform: "rotateX(6deg)",
+              transformOrigin: "50% 60%",
+              maskImage: "radial-gradient(ellipse 72% 80% at 50% 50%, #000 70%, transparent 100%)",
+              WebkitMaskImage: "radial-gradient(ellipse 72% 80% at 50% 50%, #000 70%, transparent 100%)",
+            }}
+          >
             <WorldMap
               locations={LOCATIONS.map((l) => ({ lat: l.lat, lng: l.lng, label: l.city }))}
               dotColor="var(--ah-blue)"
