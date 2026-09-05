@@ -54,8 +54,9 @@ Non-merge commits on `dev`, in order. Migration versions are as applied.
 | `7db30090` | Architecture docs 00 to 07 rewritten to the afternoon's state. |
 | `140a48e9` | The sweep bills GPU pods from the frozen `gpu_hourly_usd` through the `gpu_pod/*` passthrough, with `fixedUnits: 1`. |
 | `c082498a` | The registry comment for that entry corrected; see §7. |
+| (2026-09-05) | Migration `20260905053835`: `meter_coverage()` judged the hour that had just closed before the :10 sweep had its turn, so every healthy meter read `stall` for the first ten minutes of each hour (the compute lane saw six at 18:06 UTC on 09-03). The newest hour judged is now the one that closed at least 75 minutes ago. Applied; verified `ok:5` over 6 hours at 05:38 UTC. |
 
-Merged from the compute lane: `3da3cd1a`, `8d7b5d25`, `75b428fe`.
+Merged from the compute lane: `3da3cd1a`, `8d7b5d25`, `75b428fe`, `0a546c31` (its worklog).
 
 Working files worth knowing about: `scripts/ops/call-internal-route.ts` (what
 the renewal timers run), `scripts/ci/migration-drift.ts`,
