@@ -194,7 +194,7 @@ export default function HeroClient({
                     {/* ── right: the two actions, on the same line as the plate's
                         buttons: the column stretches to the plate's height and
                         its bottom padding matches the plate's (40px). ── */}
-                    <div className="flex flex-col justify-end gap-7 lg:items-start lg:self-stretch lg:pb-10">
+                    <div className="flex flex-col justify-end gap-7 lg:items-end lg:self-stretch lg:pb-10">
                         <div className="ah-rise-in flex flex-wrap items-center gap-5" style={{ animationDelay: ".46s" }}>
                             <div className="ah-hero-actions inline-flex shrink-0">
                                 <Link href="/signup" className="ah-hero-act">
