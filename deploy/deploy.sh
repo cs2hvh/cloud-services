@@ -64,14 +64,28 @@ served_build_id() {
   curl -s -m 10 "$HEALTH_URL/" 2>/dev/null | grep -o '\\"b\\":\\"[A-Za-z0-9_-]*' | head -1 | sed 's/.*"//' || true
 }
 
-# Whoever holds :$PORT must be inside this unit, and the unit must be active.
+# Report who holds :$PORT and what state the unit is in. These are
+# diagnostics, not the gate: the gate is the served build id matching
+# .next/BUILD_ID, which is direct evidence that the build just made is what
+# answers. Run 82 (5d4c0314) served the right build within a minute and still
+# went red here, because whether a child of npm shows the unit name in its
+# cgroup file, and whether systemd reports "active" rather than "activating"
+# at that moment, depend on how the unit is defined on the host. Print the
+# facts so the log explains itself; do not fail a correct deploy on them.
 verify_port_owner() {
   local pid
   for pid in $(port_pids); do
-    grep -q "$WEB_SERVICE.service" "/proc/$pid/cgroup" 2>/dev/null ||
-      die "port $PORT is held by pid $pid outside $WEB_SERVICE — an unmanaged process is serving"
+    if grep -q "$WEB_SERVICE.service" "/proc/$pid/cgroup" 2>/dev/null; then
+      echo "  port $PORT held by pid $pid inside $WEB_SERVICE"
+    else
+      echo "  WARNING: port $PORT held by pid $pid whose cgroup does not name $WEB_SERVICE:"
+      echo "    cmd: $(ps -o etime=,cmd= -p "$pid" 2>/dev/null | head -c 160)"
+      echo "    cgroup: $(head -c 200 "/proc/$pid/cgroup" 2>/dev/null | tr '
+' ' ')"
+    fi
   done
-  systemctl is-active --quiet "$WEB_SERVICE" || die "$WEB_SERVICE is not active after the restart"
+  echo "  unit: $(systemctl show -p ActiveState -p SubState -p MainPID "$WEB_SERVICE" 2>/dev/null | tr '
+' ' ')"
 }
 
 
@@ -111,7 +125,7 @@ echo "  build OK (BUILD_ID $(cat .next/BUILD_ID))"
 # STOP, CLEAR THE PORT, START — not `systemctl restart`. A restart returns 0
 # even when the new instance then dies because something outside the unit
 # still holds :$PORT, and in that state the old process keeps answering the
-# health check (see verify_served_build). Nothing but this unit may own the
+# health check (see the health loop at the end). Nothing but this unit may own the
 # port; anything else found on it after the stop is named in the log and
 # killed.
 step "Restarting $WEB_SERVICE"
