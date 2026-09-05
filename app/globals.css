@@ -1323,3 +1323,9 @@ text-align: center;
   color: var(--ah-blue-lt);
   -webkit-text-stroke: 0;
 }
+
+/* A very light soft-focus on the lattice itself (it is weighted behind the
+   right half), so the cubes read as depth rather than wire. */
+.ah-hero--split .ah-hero-lattice {
+  filter: blur(1px);
+}

@@ -187,12 +187,14 @@ export default function HeroClient({
 
                 {/* flex-1: the row takes the space between the navbar and the
                     rail, and items-center puts both columns in the middle of it. */}
-                <div className="relative z-10 mx-auto flex-1 grid w-full max-w-[1800px] gap-8 px-6 pb-8 pt-20 sm:px-10 lg:grid-cols-[7fr_5fr] lg:items-center lg:gap-12 lg:px-12 lg:pb-10 lg:pt-24">
+                <div className="relative z-10 mx-auto flex-1 grid w-full max-w-[1800px] content-center gap-8 px-6 pb-8 pt-20 sm:px-10 lg:grid-cols-[7fr_5fr] lg:items-center lg:gap-12 lg:px-12 lg:pb-10 lg:pt-24">
                     {/* ── left: what is new, one item at a time ────────────── */}
                     {ads.length > 0 && <AdPlate ads={ads} seconds={adSeconds} />}
 
-                    {/* ── right: the two actions, a little below the plate's centre ── */}
-                    <div className="flex flex-col justify-center gap-7 lg:items-start lg:pt-24">
+                    {/* ── right: the two actions, on the same line as the plate's
+                        buttons: the column stretches to the plate's height and
+                        its bottom padding matches the plate's (40px). ── */}
+                    <div className="flex flex-col justify-end gap-7 lg:items-start lg:self-stretch lg:pb-10">
                         <div className="ah-rise-in flex flex-wrap items-center gap-5" style={{ animationDelay: ".46s" }}>
                             <div className="ah-hero-actions inline-flex shrink-0">
                                 <Link href="/signup" className="ah-hero-act">
