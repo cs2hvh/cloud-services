@@ -14,6 +14,43 @@ import { NextResponse, type NextRequest } from "next/server";
  * configured in Supabase dashboard under Authentication > Settings.
  * The refresh token is valid for much longer (default 7 days).
  */
+/**
+ * user_profiles.suspend for the session's own user, read through the cookie
+ * client (RLS lets a user read their own row) and remembered for a minute per
+ * isolate, so the check costs one query per user per minute rather than one
+ * per request. Unreadable means not suspended: a read failure is not evidence
+ * about the user. A suspension therefore takes effect within a minute, which
+ * matches the revocation window elsewhere on the platform.
+ */
+const SUSPEND_CACHE_MS = 60_000;
+const suspendCache = new Map<string, { suspended: boolean; until: number }>();
+
+async function isSuspended(
+  supabase: ReturnType<typeof createServerClient>,
+  userId: string
+): Promise<boolean> {
+  const now = Date.now();
+  const cached = suspendCache.get(userId);
+  if (cached && cached.until > now) return cached.suspended;
+  let suspended = false;
+  try {
+    const { data, error } = await supabase
+      .from("user_profiles")
+      .select("suspend")
+      .eq("id", userId)
+      .maybeSingle();
+    if (!error) suspended = (data as { suspend?: boolean | null } | null)?.suspend === true;
+  } catch (readError) {
+    console.log(
+      "[Supabase Middleware] suspend flag unreadable, allowing:",
+      readError instanceof Error ? readError.message : "unknown"
+    );
+  }
+  if (suspendCache.size > 10_000) suspendCache.clear();
+  suspendCache.set(userId, { suspended, until: now + SUSPEND_CACHE_MS });
+  return suspended;
+}
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
@@ -99,23 +136,61 @@ export async function updateSession(request: NextRequest) {
   // Fails OPEN if the level cannot be read: this runs on every request to a
   // protected route, and a throw here would otherwise redirect every MFA user to
   // signin in a loop. The API-side check in authenticateUser is the second layer.
-  if (user && isProtectedRoute) {
+  // EVERY cookie-authenticated API route, not only the dashboard. 77 routes
+  // under /api call supabase.auth.getUser() themselves instead of the shared
+  // helper, so a check that lives only in the helper never runs for them
+  // (the GPU pod list and provision routes were the local validation's
+  // example). This is the one place every request passes through, so the
+  // second-factor and suspension decisions are made here for all of them.
+  // /api/auth stays out: the MFA challenge, sign-out and recovery must stay
+  // reachable from a half-authenticated or suspended session.
+  const isCookieApiRoute =
+    request.nextUrl.pathname.startsWith("/api") &&
+    !request.nextUrl.pathname.startsWith("/api/auth");
+
+  if (user && (isProtectedRoute || isCookieApiRoute)) {
+    let secondFactorMissing = false;
     try {
       const { data: aal } =
         await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-
-      if (aal?.nextLevel === "aal2" && aal.currentLevel !== "aal2") {
-        const url = request.nextUrl.clone();
-        url.pathname = "/signin";
-        url.searchParams.set("mfa", "required");
-        url.searchParams.set("redirectTo", request.nextUrl.pathname);
-        return NextResponse.redirect(url);
-      }
+      secondFactorMissing = aal?.nextLevel === "aal2" && aal.currentLevel !== "aal2";
     } catch (aalError) {
+      // Read from the session JWT, not fetched: a throw means the library or
+      // token shape is wrong, not that the user is unauthorised. Fail open
+      // rather than lock every MFA user out on a fault of ours.
       console.log(
         "[Supabase Middleware] assurance level unreadable, allowing:",
         aalError instanceof Error ? aalError.message : "unknown"
       );
+    }
+
+    if (secondFactorMissing) {
+      if (isCookieApiRoute) {
+        return NextResponse.json(
+          { message: "Two-factor authentication required", code: "mfa_required" },
+          { status: 401 }
+        );
+      }
+      const url = request.nextUrl.clone();
+      url.pathname = "/signin";
+      url.searchParams.set("mfa", "required");
+      url.searchParams.set("redirectTo", request.nextUrl.pathname);
+      return NextResponse.redirect(url);
+    }
+
+    if (await isSuspended(supabase, user.id)) {
+      if (isCookieApiRoute) {
+        return NextResponse.json(
+          { message: "This account is suspended. Contact support.", code: "account_suspended" },
+          { status: 403 }
+        );
+      }
+      // The signout route ends the session and lands on /signin with the
+      // reason; sending a signed-in user to /signin would bounce them back.
+      const url = request.nextUrl.clone();
+      url.pathname = "/api/auth/signout";
+      url.search = "?reason=account_suspended";
+      return NextResponse.redirect(url);
     }
   }
 
