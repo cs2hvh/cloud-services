@@ -27,6 +27,48 @@ export async function authenticateUser() {
     };
   }
 
+  // SECOND FACTOR. Enrolling TOTP used to protect nothing on the server:
+  // /api/auth/signin/email calls signInWithPassword, which mints a full aal1
+  // session cookie, and then merely RETURNS whether the account has a verified
+  // factor. The TOTP step was a client-side redirect, so anyone holding just the
+  // password could skip it and use the session directly against every API route.
+  // No server code checked assurance level anywhere except /api/auth/mfa/status,
+  // which only reports it.
+  //
+  // nextLevel is what this account is entitled to reach: it is "aal2" only when
+  // a verified factor exists. So this refuses precisely the accounts that
+  // enrolled a factor and have not yet presented it, and leaves accounts without
+  // MFA untouched.
+  //
+  // Deliberately fail-OPEN if the call itself throws. The assurance level is
+  // read from the session JWT rather than fetched, so a throw here means
+  // something is wrong with the library or the token shape, and turning that
+  // into a platform-wide lockout of every MFA user is a worse outcome than the
+  // window it leaves. A definite aal1-where-aal2-is-required is still refused.
+  try {
+    const { data: aal } =
+      await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+
+    if (aal?.nextLevel === "aal2" && aal.currentLevel !== "aal2") {
+      return {
+        authenticated: false as const,
+        user: null,
+        response: NextResponse.json(
+          {
+            message: "Two-factor authentication required",
+            code: "mfa_required",
+          },
+          { status: 401 }
+        ),
+      };
+    }
+  } catch (aalError) {
+    console.error(
+      "[authenticateUser] assurance level unreadable, allowing:",
+      aalError instanceof Error ? aalError.message : "unknown"
+    );
+  }
+
   return {
     authenticated: true as const,
     user,

@@ -89,6 +89,36 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // A password-only session on an MFA account is not a signed-in session.
+  // signInWithPassword issues an aal1 cookie before the TOTP step, and the step
+  // itself was enforced only in the browser, so navigating straight to
+  // /dashboard skipped it entirely. nextLevel is "aal2" only for accounts with a
+  // verified factor, so this turns away exactly those, and accounts without MFA
+  // are unaffected.
+  //
+  // Fails OPEN if the level cannot be read: this runs on every request to a
+  // protected route, and a throw here would otherwise redirect every MFA user to
+  // signin in a loop. The API-side check in authenticateUser is the second layer.
+  if (user && isProtectedRoute) {
+    try {
+      const { data: aal } =
+        await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+
+      if (aal?.nextLevel === "aal2" && aal.currentLevel !== "aal2") {
+        const url = request.nextUrl.clone();
+        url.pathname = "/signin";
+        url.searchParams.set("mfa", "required");
+        url.searchParams.set("redirectTo", request.nextUrl.pathname);
+        return NextResponse.redirect(url);
+      }
+    } catch (aalError) {
+      console.log(
+        "[Supabase Middleware] assurance level unreadable, allowing:",
+        aalError instanceof Error ? aalError.message : "unknown"
+      );
+    }
+  }
+
   // IMPORTANT: You *must* return the supabaseResponse object as it is. If you're
   // creating a new response object with NextResponse.next() make sure to:
   // 1. Pass the request in it, like so: NextResponse.next({ request })
