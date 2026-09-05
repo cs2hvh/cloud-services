@@ -130,8 +130,12 @@ backupsHourly = backups list price × markup_pct  (add-on; floor does NOT apply)
    (`billing.active_compute` keyed by `servers.billing_service_id`) and
    refunds the transient 1 h hold. If meter registration fails the instance is
    torn down — nothing runs unmetered.
-4. **Meter** — the credit cron (`credit-system-cron/cron-worker.js`) charges
-   `hourly_rate × elapsed` against `active_compute` every run.
+4. **Meter** — the hourly billing sweep (`scripts/billing/sweep.ts`, systemd
+   timer `ahura-billing-sweep` at `*:10`) charges the hour that has just
+   completed against `active_compute`, at the rate frozen on
+   `servers.hourly_cost` when the server was created. Price changes are not
+   retroactive. This replaced `credit-system-cron/cron-worker.js`, which died on
+   2026-08-24; see [PRODUCTION.md §6](PRODUCTION.md).
 5. **Grace** — on empty balance the shared grace flow applies (7-day
    non-payment window), after which…
 6. **Destroy** — `destroyServer` (user delete or grace expiry): delete the

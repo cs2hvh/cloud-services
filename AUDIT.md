@@ -8,6 +8,32 @@
 
 ---
 
+## STATUS AS OF 2026-09-05
+
+This audit was written on 2026-06-10 and parts of it have since been fixed. It
+was left in a state where a reader could not tell which half still applied, so
+every critical finding was re-checked against the live database and working tree
+on 2026-09-05. Do not act on any finding below without reading this block first.
+
+| Finding | Status | Evidence |
+|---|---|---|
+| **C1** secrets committed to the repo | **PARTIALLY FIXED. The dangerous half is still open.** | `public/.env`, `.envsdsd` and `.env.local` are gone from the working tree and tracked by nothing, so remediation step 2 is done. **Steps 1, 3 and 4 are not.** The keys were never rotated and remain readable in git history, which means they are still compromised: `SUPABASE_SERVICE_ROLE_KEY`, `ENCRYPTION_KEY`, `KUBE_CONFIG_STRING` and the rest. Deleting the files did nothing for anyone who already has the history. |
+| **C2** RLS off, `anon` holds CRUD on 8 `public` tables | **FIXED 2026-09-03.** | Migration `20260903195000_lock_down_the_eight_open_tables_and_dead_functions.sql`. Verified 2026-09-05: all eight of `proxmox_hosts`, `public_ip_pools`, `public_ip_pool_ips`, `domain_purchase_requests`, `domain_operations`, `proxmox_templates`, `database_types`, `platform_resource_mutation_locks` report `relrowsecurity = true` with `anon` SELECT revoked. |
+| **C3** credentials encrypted with the leaked `ENCRYPTION_KEY` | **STILL OPEN, and follows from C1.** | Rotating `ENCRYPTION_KEY` requires re-encrypting everything it protects. The Proxmox host credentials it covers are still stored under the leaked key. |
+
+**The single most important outstanding item in this document is credential
+rotation.** It was described as "do today" on 2026-06-10 and had not been done
+87 days later. Table C2 being green does not reduce it: an unrotated
+`service_role` key bypasses RLS entirely, so the lockdown that closed C2 is
+worth much less while C1 stays open.
+
+Findings below C3 have not been individually re-verified. Treat their status as
+unknown rather than as stated.
+
+---
+
+---
+
 ## Severity summary
 
 | # | Severity | Finding | Status |

@@ -354,7 +354,7 @@ timers ④.
 Six keys were committed to git history and, as of 2026-09-05, have **not** been
 rotated. They include `SUPABASE_SERVICE_ROLE_KEY` and `ENCRYPTION_KEY`. Rotating
 them is outstanding work, not a completed step. See
-[SENSITIVE_DATA_EXPOSURE_CHECKLIST.md](SENSITIVE_DATA_EXPOSURE_CHECKLIST.md).
+the C1 status block in [../AUDIT.md](../AUDIT.md).
 
 ---
 
@@ -431,30 +431,34 @@ rather than an artifact of looking too early.
 | Inference deep-dives | [inference/](inference/) |
 | LKE cluster ops | [../infra/k8s/lke/README.md](../infra/k8s/lke/README.md) |
 | Compute (VPS) service | [LINODE_COMPUTE.md](LINODE_COMPUTE.md) |
-| Compute, the dormant Proxmox/OVH era | [COMPUTE_SERVICE.md](COMPUTE_SERVICE.md) |
 | Secrets checklist | [SENSITIVE_DATA_EXPOSURE_CHECKLIST.md](SENSITIVE_DATA_EXPOSURE_CHECKLIST.md) |
 
 ---
 
 ## 16. Known-stale neighbours
 
-Do not trust these without checking:
+Every remaining document in `docs/` was checked on 2026-09-05 for whether it
+still describes the billing system that actually runs. Two carry a caveat:
 
-- **`docs/COMPUTE_SERVICE.md`** describes the Proxmox/OVH era. `LINODE_COMPUTE.md`
-  supersedes it. It is kept only because those rows and routes are dormant rather
-  than removed, so it remains the sole record of code that still exists.
-- **`docs/BILLING_GRACE_AUTO_DELETE_PLAN.md`** and **`docs/GAME_SERVERS_PLAN.md`**
-  are design documents for features that have since shipped. Read the code first
-  and treat these as intent, not description.
+- **`AUDIT.md`** (root) is from 2026-06-10 and is half fixed. It now opens with a
+  verified status block saying which findings closed and which did not. C2 is
+  closed; **C1, credential rotation, is still open and is the most important
+  outstanding item in this repository.**
 - **`docs/v2/`** documents the deploy v2 rebuild, which lives in a different repo
   (`C:\cloud-app-v2`). It is filed here for historical reasons and does not
-  describe this application.
+  describe this application. It should be moved.
 - **`credit-system-cron/`**, a husk with no worker source. See §6.
 
-Four documents were deleted on 2026-09-05 as superseded or misleading:
-`BILLING_BEHAVIOR.md` (documented the v1 cron billing that died on 2026-08-24),
-`SESSION_PROGRESS_2026-05.md` (a May session log naming the retired
-`api.cs2hvh.com`), `PERF_BASELINE.md` (an unfilled measurement template pointing
-at plans not in the repo), and `DEPLOYMENT_COMPLETE_GUIDE.md` (a 1,052-line May
-roadmap whose name invited operators to read it as the deployment guide). They
-are in git history if any of it is wanted back.
+Seven documents were deleted on 2026-09-05. Four were superseded or misnamed:
+`BILLING_BEHAVIOR.md`, `SESSION_PROGRESS_2026-05.md`, `PERF_BASELINE.md` and
+`DEPLOYMENT_COMPLETE_GUIDE.md`. Three more were removed because their mechanism
+was the dead v1 cron rather than a passing mention of it, so they contradicted
+§6 in a way no caveat could fix: `COMPUTE_SERVICE.md` (five references,
+including its architecture diagram), `BILLING_GRACE_AUTO_DELETE_PLAN.md` (the
+grace lifecycle described as `cron-worker.js` every 5 minutes via
+`bill_service_cycle_atomic`) and `GAME_SERVERS_PLAN.md` (whose implementation
+steps instruct the reader to register a table in the credit-system-cron repo).
+All are in git history.
+
+`LINODE_COMPUTE.md` had one such reference and was corrected rather than
+deleted, since the rest of it is current.
