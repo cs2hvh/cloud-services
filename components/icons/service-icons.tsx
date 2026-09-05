@@ -25,38 +25,6 @@ function frame(size: number, title: string, rest: Omit<ServiceIconProps, "size" 
     } as const;
 }
 
-/** Compute. */
-export function ComputeIcon({ size = 40, title = "Compute", ...rest }: ServiceIconProps) {
-    return (
-        <svg {...frame(size, title, rest)}>
-        <defs>
-          <linearGradient id="cp-tile" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#1c1c24"/><stop offset="1" stopColor="#0c0c10"/></linearGradient>
-          <radialGradient id="cp-glow" cx="32" cy="30" r="26" gradientUnits="userSpaceOnUse"><stop offset="0" stopColor="#0095ff" stopOpacity="0.36"/><stop offset="1" stopColor="#0095ff" stopOpacity="0"/></radialGradient>
-          <filter id="cp-soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-          <filter id="cp-drop" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="2.5" stdDeviation="2.2" floodColor="#0095ff" floodOpacity="0.45"/></filter>
-          <linearGradient id="cp-chip" x1="17" y1="17" x2="47" y2="47" gradientUnits="userSpaceOnUse"><stop offset="0" stopColor="#2ea8ff"/><stop offset="1" stopColor="#1d4ed8"/></linearGradient>
-          <linearGradient id="cp-core" x1="27" y1="27" x2="37" y2="37" gradientUnits="userSpaceOnUse"><stop offset="0" stopColor="#8fd0ff"/><stop offset="1" stopColor="#0095ff"/></linearGradient>
-        </defs>
-          <path d="M8 0H64V56L56 64H0V8Z" fill="url(#cp-tile)"/>
-          <path d="M8 0H64V56L56 64H0V8Z" fill="url(#cp-glow)"/>
-          <path d="M8.5 0.5H63.5V55.8L55.8 63.5H0.5V8.2Z" fill="none" stroke="#ffffff" strokeOpacity="0.10"/>
-          <path d="M9 1H63" stroke="#ffffff" strokeOpacity="0.14"/>
-          <g fill="#7fc7ff" fillOpacity="0.9">
-            <rect x="20.7" y="11.5" width="1.6" height="6.5"/><rect x="27.7" y="11.5" width="1.6" height="6.5"/><rect x="34.7" y="11.5" width="1.6" height="6.5"/><rect x="41.7" y="11.5" width="1.6" height="6.5"/>
-            <rect x="20.7" y="46" width="1.6" height="6.5"/><rect x="27.7" y="46" width="1.6" height="6.5"/><rect x="34.7" y="46" width="1.6" height="6.5"/><rect x="41.7" y="46" width="1.6" height="6.5"/>
-            <rect x="11.5" y="20.7" width="6.5" height="1.6"/><rect x="11.5" y="27.7" width="6.5" height="1.6"/><rect x="11.5" y="34.7" width="6.5" height="1.6"/><rect x="11.5" y="41.7" width="6.5" height="1.6"/>
-            <rect x="46" y="20.7" width="6.5" height="1.6"/><rect x="46" y="27.7" width="6.5" height="1.6"/><rect x="46" y="34.7" width="6.5" height="1.6"/><rect x="46" y="41.7" width="6.5" height="1.6"/>
-          </g>
-          <rect x="17" y="17" width="30" height="30" rx="4" fill="url(#cp-chip)" filter="url(#cp-drop)"/>
-          <rect x="17.5" y="17.5" width="29" height="29" rx="3.5" fill="none" stroke="#ffffff" strokeOpacity="0.22"/>
-          <path d="M21 17.5H43" stroke="#ffffff" strokeOpacity="0.35" strokeWidth="0.8"/>
-          <rect x="24" y="24" width="16" height="16" rx="2" fill="#fafaf4" filter="url(#cp-soft)"/>
-          <rect x="27.5" y="27.5" width="9" height="9" rx="1" fill="url(#cp-core)"/>
-          <circle cx="43" cy="21" r="1.25" fill="#f5b324" filter="url(#cp-soft)"/>
-        </svg>
-    );
-}
-
 /** GPU Pods. */
 export function GpuPodsIcon({ size = 40, title = "GPU Pods", ...rest }: ServiceIconProps) {
     return (
@@ -90,6 +58,72 @@ export function GpuPodsIcon({ size = 40, title = "GPU Pods", ...rest }: ServiceI
           <rect x="24" y="25" width="12" height="14" rx="1.5" fill="#fafaf4" filter="url(#gp-soft)"/>
           <rect x="26.5" y="28" width="7" height="8" rx="0.8" fill="url(#gp-core)"/>
           <circle cx="44.5" cy="23" r="1.25" fill="#f5b324" filter="url(#gp-soft)"/>
+        </svg>
+    );
+}
+
+/** Compute. */
+export function ComputeIcon({ size = 40, title = "Compute", ...rest }: ServiceIconProps) {
+    return (
+        <svg {...frame(size, title, rest)}>
+        <defs>
+          <linearGradient id="cp-tile" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#1c1c24"/><stop offset="1" stopColor="#0c0c10"/></linearGradient>
+          <radialGradient id="cp-glow" cx="32" cy="30" r="26" gradientUnits="userSpaceOnUse"><stop offset="0" stopColor="#0095ff" stopOpacity="0.36"/><stop offset="1" stopColor="#0095ff" stopOpacity="0"/></radialGradient>
+          <filter id="cp-soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          <filter id="cp-drop" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="2.5" stdDeviation="2.2" floodColor="#0095ff" floodOpacity="0.45"/></filter>
+          <linearGradient id="cp-chip" x1="17" y1="17" x2="47" y2="47" gradientUnits="userSpaceOnUse"><stop offset="0" stopColor="#2ea8ff"/><stop offset="1" stopColor="#1d4ed8"/></linearGradient>
+          <linearGradient id="cp-core" x1="27" y1="27" x2="37" y2="37" gradientUnits="userSpaceOnUse"><stop offset="0" stopColor="#8fd0ff"/><stop offset="1" stopColor="#0095ff"/></linearGradient>
+        </defs>
+          <path d="M8 0H64V56L56 64H0V8Z" fill="url(#cp-tile)"/>
+          <path d="M8 0H64V56L56 64H0V8Z" fill="url(#cp-glow)"/>
+          <path d="M8.5 0.5H63.5V55.8L55.8 63.5H0.5V8.2Z" fill="none" stroke="#ffffff" strokeOpacity="0.10"/>
+          <path d="M9 1H63" stroke="#ffffff" strokeOpacity="0.14"/>
+          <g fill="#7fc7ff" fillOpacity="0.9">
+            <rect x="20.7" y="11.5" width="1.6" height="6.5"/><rect x="27.7" y="11.5" width="1.6" height="6.5"/><rect x="34.7" y="11.5" width="1.6" height="6.5"/><rect x="41.7" y="11.5" width="1.6" height="6.5"/>
+            <rect x="20.7" y="46" width="1.6" height="6.5"/><rect x="27.7" y="46" width="1.6" height="6.5"/><rect x="34.7" y="46" width="1.6" height="6.5"/><rect x="41.7" y="46" width="1.6" height="6.5"/>
+            <rect x="11.5" y="20.7" width="6.5" height="1.6"/><rect x="11.5" y="27.7" width="6.5" height="1.6"/><rect x="11.5" y="34.7" width="6.5" height="1.6"/><rect x="11.5" y="41.7" width="6.5" height="1.6"/>
+            <rect x="46" y="20.7" width="6.5" height="1.6"/><rect x="46" y="27.7" width="6.5" height="1.6"/><rect x="46" y="34.7" width="6.5" height="1.6"/><rect x="46" y="41.7" width="6.5" height="1.6"/>
+          </g>
+          <rect x="17" y="17" width="30" height="30" rx="4" fill="url(#cp-chip)" filter="url(#cp-drop)"/>
+          <rect x="17.5" y="17.5" width="29" height="29" rx="3.5" fill="none" stroke="#ffffff" strokeOpacity="0.22"/>
+          <path d="M21 17.5H43" stroke="#ffffff" strokeOpacity="0.35" strokeWidth="0.8"/>
+          <rect x="24" y="24" width="16" height="16" rx="2" fill="#fafaf4" filter="url(#cp-soft)"/>
+          <rect x="27.5" y="27.5" width="9" height="9" rx="1" fill="url(#cp-core)"/>
+          <circle cx="43" cy="21" r="1.25" fill="#f5b324" filter="url(#cp-soft)"/>
+        </svg>
+    );
+}
+
+/** Inference. */
+export function InferenceIcon({ size = 40, title = "Inference", ...rest }: ServiceIconProps) {
+    return (
+        <svg {...frame(size, title, rest)}>
+        <defs>
+          <linearGradient id="inf-tile" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#1c1c24"/><stop offset="1" stopColor="#0c0c10"/></linearGradient>
+          <radialGradient id="inf-glow" cx="32" cy="30" r="26" gradientUnits="userSpaceOnUse"><stop offset="0" stopColor="#0095ff" stopOpacity="0.36"/><stop offset="1" stopColor="#0095ff" stopOpacity="0"/></radialGradient>
+          <filter id="inf-soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="1.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          <filter id="inf-drop" x="-50%" y="-50%" width="200%" height="200%"><feDropShadow dx="0" dy="2.5" stdDeviation="2.2" floodColor="#0095ff" floodOpacity="0.45"/></filter>
+          <linearGradient id="inf-chip" x1="21" y1="20" x2="43" y2="44" gradientUnits="userSpaceOnUse"><stop offset="0" stopColor="#2ea8ff"/><stop offset="1" stopColor="#1d4ed8"/></linearGradient>
+          <linearGradient id="inf-core" x1="28.5" y1="28.5" x2="35.5" y2="35.5" gradientUnits="userSpaceOnUse"><stop offset="0" stopColor="#8fd0ff"/><stop offset="1" stopColor="#0095ff"/></linearGradient>
+        </defs>
+          <path d="M8 0H64V56L56 64H0V8Z" fill="url(#inf-tile)"/>
+          <path d="M8 0H64V56L56 64H0V8Z" fill="url(#inf-glow)"/>
+          <path d="M8.5 0.5H63.5V55.8L55.8 63.5H0.5V8.2Z" fill="none" stroke="#ffffff" strokeOpacity="0.10"/>
+          <path d="M9 1H63" stroke="#ffffff" strokeOpacity="0.14"/>
+          <g fill="none" stroke="#8fd0ff" strokeOpacity="0.95" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M17 21C14 21 14 23 14 25V29C14 31 12.5 32 11.8 32C12.5 32 14 33 14 35V39C14 41 14 43 17 43"/>
+            <path d="M47 21C50 21 50 23 50 25V29C50 31 51.5 32 52.2 32C51.5 32 50 33 50 35V39C50 41 50 43 47 43"/>
+          </g>
+          <g fill="#7fc7ff" fillOpacity="0.9">
+            <rect x="25.2" y="14.5" width="1.6" height="6"/><rect x="31.2" y="14.5" width="1.6" height="6"/><rect x="37.2" y="14.5" width="1.6" height="6"/>
+            <rect x="25.2" y="43.5" width="1.6" height="6"/><rect x="31.2" y="43.5" width="1.6" height="6"/><rect x="37.2" y="43.5" width="1.6" height="6"/>
+          </g>
+          <rect x="21" y="20" width="22" height="24" rx="3" fill="url(#inf-chip)" filter="url(#inf-drop)"/>
+          <rect x="21.5" y="20.5" width="21" height="23" rx="2.5" fill="none" stroke="#ffffff" strokeOpacity="0.22"/>
+          <path d="M24.5 20.5H39.5" stroke="#ffffff" strokeOpacity="0.35" strokeWidth="0.8"/>
+          <rect x="26" y="26" width="12" height="12" rx="1.5" fill="#fafaf4" filter="url(#inf-soft)"/>
+          <rect x="28.5" y="28.5" width="7" height="7" rx="0.8" fill="url(#inf-core)"/>
+          <circle cx="40" cy="23.5" r="1.25" fill="#f5b324" filter="url(#inf-soft)"/>
         </svg>
     );
 }

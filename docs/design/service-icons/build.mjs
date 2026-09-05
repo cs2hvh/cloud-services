@@ -84,9 +84,34 @@ const gpuPods = `
   <rect x="26.5" y="28" width="7" height="8" rx="0.8" fill="url(#gp-core)"/>
   <circle cx="44.5" cy="23" r="1.25" fill="#f5b324" filter="url(#gp-soft)"/>`;
 
+/**
+ * Inference: a model package between two braces, one endpoint called from
+ * code. Pins top and bottom only, so the braces have room at the sides.
+ */
+const inference = `
+<defs>${plate("inf")}
+  <linearGradient id="inf-chip" x1="21" y1="20" x2="43" y2="44" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#2ea8ff"/><stop offset="1" stop-color="#1d4ed8"/></linearGradient>
+  <linearGradient id="inf-core" x1="28.5" y1="28.5" x2="35.5" y2="35.5" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#8fd0ff"/><stop offset="1" stop-color="#0095ff"/></linearGradient>
+</defs>${plateBody("inf")}
+  <g fill="none" stroke="#8fd0ff" stroke-opacity="0.95" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M17 21C14 21 14 23 14 25V29C14 31 12.5 32 11.8 32C12.5 32 14 33 14 35V39C14 41 14 43 17 43"/>
+    <path d="M47 21C50 21 50 23 50 25V29C50 31 51.5 32 52.2 32C51.5 32 50 33 50 35V39C50 41 50 43 47 43"/>
+  </g>
+  <g fill="#7fc7ff" fill-opacity="0.9">
+    <rect x="25.2" y="14.5" width="1.6" height="6"/><rect x="31.2" y="14.5" width="1.6" height="6"/><rect x="37.2" y="14.5" width="1.6" height="6"/>
+    <rect x="25.2" y="43.5" width="1.6" height="6"/><rect x="31.2" y="43.5" width="1.6" height="6"/><rect x="37.2" y="43.5" width="1.6" height="6"/>
+  </g>
+  <rect x="21" y="20" width="22" height="24" rx="3" fill="url(#inf-chip)" filter="url(#inf-drop)"/>
+  <rect x="21.5" y="20.5" width="21" height="23" rx="2.5" fill="none" stroke="#ffffff" stroke-opacity="0.22"/>
+  <path d="M24.5 20.5H39.5" stroke="#ffffff" stroke-opacity="0.35" stroke-width="0.8"/>
+  <rect x="26" y="26" width="12" height="12" rx="1.5" fill="#fafaf4" filter="url(#inf-soft)"/>
+  <rect x="28.5" y="28.5" width="7" height="7" rx="0.8" fill="url(#inf-core)"/>
+  <circle cx="40" cy="23.5" r="1.25" fill="#f5b324" filter="url(#inf-soft)"/>`;
+
 const ICONS = {
-  compute: { body: compute, name: "Compute", component: "ComputeIcon" },
   "gpu-pods": { body: gpuPods, name: "GPU Pods", component: "GpuPodsIcon" },
+  compute: { body: compute, name: "Compute", component: "ComputeIcon" },
+  inference: { body: inference, name: "Inference", component: "InferenceIcon" },
 };
 
 const svgFile = (key) =>
@@ -291,7 +316,11 @@ out(
   join(here, "Compute.dc.html"),
   dc("Compute", 1040, 700, sheet("compute", "02", "A processor package, pins on all four sides, a lit core. Shared, VDS and bare metal all sit under it.", "Shared, VDS and bare metal servers."))
 );
-out(join(here, "Family.dc.html"), dc("Service icons, side by side", 520, 420, familyInner));
+out(
+  join(here, "Inference.dc.html"),
+  dc("Inference", 1040, 700, sheet("inference", "03", "A model package between two braces: one endpoint, called from code. Pins top and bottom only, so the braces have the sides.", "Claude, GPT, Kimi and more on one endpoint."))
+);
+out(join(here, "Family.dc.html"), dc("Service icons, side by side", 640, 420, familyInner));
 out(
   join(here, "canvas.json"),
   JSON.stringify(
@@ -299,7 +328,8 @@ out(
       artboards: [
         { file: "Main.dc.html", x: 0, y: 0, w: 1040, h: 700, title: "GPU Pods" },
         { file: "Compute.dc.html", x: 0, y: 860, w: 1040, h: 700, title: "Compute" },
-        { file: "Family.dc.html", x: 1160, y: 0, w: 520, h: 420, title: "Side by side" },
+        { file: "Inference.dc.html", x: 0, y: 1720, w: 1040, h: 700, title: "Inference" },
+        { file: "Family.dc.html", x: 1160, y: 0, w: 640, h: 420, title: "Side by side" },
       ],
       annotations: [
         {
@@ -307,7 +337,7 @@ out(
           x: 1160,
           y: 560,
           w: 300,
-          text: "How the family stays related.\nSame plate, same blue ramp, same lit core, one amber LED each; only the package changes. Next up, in the same language: a rack face for bare metal, a die with brackets for the inference API, a stacked platter for storage.",
+          text: "How the family stays related.\nSame plate, same blue ramp, same lit core, one amber LED each; only the package changes. Next up, in the same language: a rack face for bare metal, a stacked platter for storage, a shard of the lattice for Kubernetes.",
         },
       ],
       launch: { view: "canvas" },
