@@ -1229,3 +1229,96 @@ text-align: center;
 
 /* With the bar above it, the hero gives back the bar and navbar heights so the rail still peeks above the fold. */
 .ah-news + .ah-hero { min-height: max(400px, calc(100svh - 284px)); }
+
+/* ── hero, launch-led (2026-09-05) ──────────────────────────────
+   The announcement plate takes the LEFT of the hero and the lattice moves
+   behind it: the canvas is mirrored (its vanishing point at 71.5% becomes
+   28.5%), so its own left-to-right mask now clears the right edge, and the
+   vignette's falloff is flipped to shade the copy on the right instead. */
+.ah-hero--left .ah-hero-lattice {
+  transform: scaleX(-1);
+}
+.ah-hero--left .ah-hero-vignette {
+  background:
+    linear-gradient(180deg, rgba(7, 7, 10, 0.92) 0%, transparent 26%),
+    linear-gradient(0deg, rgba(7, 7, 10, 0.96) 0%, transparent 40%),
+    linear-gradient(270deg, rgba(7, 7, 10, 0.88) 0%, transparent 42%);
+}
+/* With the bar gone and the plate carrying the height, the hero no longer
+   needs to reach the fold on its own. */
+.ah-hero--left {
+  min-height: max(430px, calc(100svh - 188px));
+}
+
+/* The announcement plate: the lattice shows through its ground. */
+.ah-ad {
+  min-height: 420px;
+  border: 1px solid var(--ah-line-hi);
+  background: rgba(7, 7, 10, 0.5);
+  backdrop-filter: blur(10px) saturate(120%);
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
+}
+.ah-ad-title {
+  font-size: clamp(2.6rem, 5.4vw, 4.6rem);
+  font-weight: 700;
+  line-height: 0.96;
+  letter-spacing: -0.035em;
+  text-transform: uppercase;
+  animation: ah-rise-in 0.6s cubic-bezier(0.16, 0.84, 0.24, 1) both;
+}
+.ah-ad-act {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 1.3rem;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--ah-ink);
+  border: 1px solid var(--ah-line-hi);
+  white-space: nowrap;
+  transition: background 0.18s ease-out, color 0.18s ease-out, transform 0.2s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.ah-ad-act:hover { background: rgba(255, 255, 255, 0.06); color: var(--ah-ink); }
+.ah-ad-act-primary { background: var(--ah-ink); color: #07070a; border-color: var(--ah-ink); }
+.ah-ad-act-primary:hover { background: var(--ah-blue); color: #fff; border-color: var(--ah-blue); transform: translateY(-2px); }
+.ah-ad-dot {
+  width: 22px;
+  height: 3px;
+  padding: 0;
+  border: 0;
+  cursor: pointer;
+  transition: background 0.18s ease-out;
+}
+.ah-ad-dot:focus-visible { outline: 2px solid var(--ah-blue-lt); outline-offset: 3px; }
+/* The bar is the timer: the plate advances on its animationend. Hover holds it. */
+.ah-ad-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  transform-origin: left center;
+  background: var(--ah-blue);
+  opacity: 0.85;
+  animation: ah-topic-progress 7s linear both;
+}
+.ah-ad:hover .ah-ad-progress,
+.ah-ad:focus-within .ah-ad-progress { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) {
+  .ah-ad-progress { animation: none; display: none; }
+  .ah-ad-title { animation: none; }
+}
+
+/* The headline beside the plate is smaller than the full-width one. */
+.ah-hero-h1--side {
+  font-size: clamp(2.2rem, 3.6vw, 3.4rem);
+}
+
+/* The two small tiles under the platform statement. */
+.ah-tile {
+  border: 1px solid var(--ah-line-hi);
+  background: rgba(7, 7, 10, 0.55);
+  color: var(--ah-ink);
+  transition: background 0.18s ease-out, border-color 0.18s ease-out;
+}
+.ah-tile:hover { background: rgba(255, 255, 255, 0.06); border-color: var(--ah-ink); color: var(--ah-ink); }
