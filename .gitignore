@@ -88,3 +88,7 @@ SECURITY-FINDINGS-*.md
 Scan-FINDINGS-*.md
 *FINDINGS-20*.md
 CLAUDE-SECURITY-*/
+
+# Holds a plaintext host credential inside an allowlisted command.
+# Local-only; must never be committed. Rotate the credential it names.
+.claude/settings.local.json

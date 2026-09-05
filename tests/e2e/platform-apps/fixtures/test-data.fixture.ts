@@ -427,9 +427,14 @@ export const mockSampleRuntimeLogs = `
 /**
  * E2E Test User Credentials (from env or defaults)
  */
+// Read from the environment, like testAdmin below already did. The password
+// here was previously hardcoded with no env fallback despite the comment above
+// claiming otherwise, and it followed the same pattern as other real
+// credentials in this project, so it should be treated as live and rotated
+// rather than assumed to be a throwaway.
 export const testUser = {
-  email:  'pankajsoni93444@gmail.com',
-  password:'Pankaj11@',
+  email: process.env.E2E_TEST_USER_EMAIL || 'pankajsoni93444@gmail.com',
+  password: process.env.E2E_TEST_USER_PASSWORD || 'set-E2E_TEST_USER_PASSWORD',
 };
 
 export const testAdmin = {
