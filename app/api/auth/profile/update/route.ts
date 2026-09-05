@@ -8,7 +8,13 @@ type UpdateBody = {
   userName?: string;
   profilePic?: string;
   phone?: string;
-  password?: string;
+  // NO password field, deliberately. It used to be accepted here and passed
+  // straight to supabase.auth.updateUser with no proof of the CURRENT password,
+  // so any live session could silently reset the account's password — including
+  // a session obtained some other way, such as the password-only sessions the
+  // MFA bypass used to allow.
+  // app/api/auth/profile/change-password/route.ts is the intended path: it
+  // re-authenticates with signInWithPassword before changing anything.
 };
 
 export async function PUT(req: NextRequest) {
@@ -27,7 +33,7 @@ export async function PUT(req: NextRequest) {
 
     const body: UpdateBody = await req.json();
 
-    const { displayName, userName, profilePic, phone, password } = body;
+    const { displayName, userName, profilePic, phone } = body;
 
     // Build update payload
     // (user_metadata lives under `data` in updateUser)
@@ -62,10 +68,9 @@ export async function PUT(req: NextRequest) {
 
     // Nothing to update?
     const hasMetadata = Object.keys(metadata).length > 0;
-    const hasPassword = typeof password === "string" && password.length > 0;
     const hasPhone = typeof phone === "string" && phone.length > 0;
 
-    if (!hasMetadata && !hasPassword && !hasPhone) {
+    if (!hasMetadata && !hasPhone) {
       return NextResponse.json(
         { error: "No valid fields to update." },
         { status: 400 },
@@ -75,12 +80,10 @@ export async function PUT(req: NextRequest) {
     // Compose attributes for a single updateUser call
     const attrs: {
       data?: Record<string, unknown>;
-      password?: string;
       phone?: string;
     } = {};
 
     if (hasMetadata) attrs.data = metadata;
-    if (hasPassword) attrs.password = password;
     if (hasPhone) attrs.phone = phone;
 
     const { data: updated, error: updErr } =

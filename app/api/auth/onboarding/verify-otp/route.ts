@@ -66,8 +66,10 @@ export async function POST(request: NextRequest) {
     const { data: authUsers } = await supabase.auth.admin.listUsers();
     const user = authUsers.users.find((u) => u.email === email);
 
-
-    console.log(user,".............user12345");
+    // The console.log(user, ...) that stood here printed the whole Supabase auth
+    // user on every verification: identifiers, email, phone, app and user
+    // metadata, and the full list of enrolled MFA factors, into the application
+    // log.
 
     if (!user) {
       return Response.json({ message: "User not found." }, { status: 404 });

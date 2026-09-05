@@ -49,18 +49,47 @@ export const OTPs = {
     }
   },
 
+  /**
+   * Mark an OTP as used.
+   *
+   * This ran on createClient(), the ANON-key cookie client. public.otps has RLS
+   * enabled with ZERO policies, so that client matches no rows: the UPDATE
+   * silently affected nothing, Postgres returned no error, and this function
+   * reported success. The OTP was therefore never invalidated and stayed
+   * replayable until it expired.
+   *
+   * A write that quietly changes nothing is the worst shape for this: the caller
+   * sees `true` and moves on, so nothing anywhere reports a problem.
+   *
+   * Fixed by using the service client, which is what every other write in this
+   * file already uses, and by confirming a row actually changed rather than
+   * trusting the absence of an error.
+   */
   verify: async (id: number): Promise<boolean> => {
     try {
-      const supabase = await createClient();
-      const { error } = await supabase
+      const supabase = await createServiceClient();
+      const { data, error } = await supabase
         .from("otps")
         .update({ verified: true })
-        .eq("id", id);
+        .eq("id", id)
+        .select("id");
 
       if (error) {
         handleQueryError("verifying OTP", error, "OTPs");
         return false;
       }
+
+      // No error and no row is not success. Report it rather than returning
+      // true for a write that did nothing.
+      if (!data || data.length === 0) {
+        handleQueryError(
+          "verifying OTP",
+          new Error(`no OTP row updated for id ${id}`),
+          "OTPs"
+        );
+        return false;
+      }
+
       return true;
     } catch (err) {
       handleQueryError("verifying OTP", err, "OTPs");
