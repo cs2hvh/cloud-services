@@ -12,24 +12,33 @@
 
 export type HeroTone = "green" | "amber" | "grey";
 
-export type HeroLive = { kind: "gpu"; id: string } | { kind: "bare-metal" };
+export type HeroLive =
+  | { kind: "gpu"; id: string }
+  /** Several GPUs at once: "B300 $7.89, H200 SXM $3.59 per GPU-hour". */
+  | { kind: "gpus"; ids: string[] }
+  | { kind: "bare-metal" };
 
 export interface HeroAdSpec {
   /** Small mono label above the title, e.g. "New on the API". */
   eyebrow: string;
   /** Two short lines; `\n` breaks the line. Uppercase, large. */
   title: string;
-  /** One sentence. For `live` items the resolved figure is appended. */
+  /**
+   * One sentence. For `live` items the resolved figure is appended. The token
+   * `{models}` is replaced with the live count of public models; an item
+   * that uses it is dropped if the count cannot be read.
+   */
   body: string;
   primary: { label: string; href: string };
   secondary?: { label: string; href: string };
   tone: HeroTone;
-  /** Show only while this public model id is live in inference.models. */
-  requiresModel?: string;
+  /** Show only while every one of these public model ids is live in inference.models. */
+  requiresModel?: string | string[];
   /**
    * Append a live figure to `body`:
-   *   { kind: "gpu", id }    → " From $X.XX/hr."  from the public GPU catalog
-   *   { kind: "bare-metal" } → " N configurations from $X/mo."
+   *   { kind: "gpu", id }     → " From $X.XX/hr."  from the public GPU catalog
+   *   { kind: "gpus", ids }   → " B300 $7.89, H200 SXM $3.59 per GPU-hour."
+   *   { kind: "bare-metal" }  → " N configurations from $X/mo."
    */
   live?: HeroLive;
 }
@@ -51,38 +60,43 @@ export interface HeroAdSpec {
  *     requiresModel: "openai/gpt-6-astra",
  *   },
  */
-// Titles are plain product statements (what, and that it is available now),
-// not taglines. Two short lines each.
+// Each item states one thing the platform offers today, in as few words as
+// it takes, and every number in it is read from the catalogs at render time.
+// Titles are two lines of two or three words; the body is one short sentence.
+// (The title is set at up to 5.2rem in a ~1000px column: a line longer than
+// ~16 characters wraps to a third line at 1900px wide.) The plate is for the
+// AI products; the cloud underneath (VMs, Kubernetes, databases) has its own
+// sections further down the page. Order is display order; newest first.
 export const HERO_ADS: HeroAdSpec[] = [
   {
-    eyebrow: "New on the API",
-    title: "GLM-5.3\nlive now.",
-    body: "Available on the inference API. OpenAI-compatible, one model id.",
-    primary: { label: "Try it in the playground", href: "/dashboard/services/inference" },
-    secondary: { label: "See all models", href: "/services/inference" },
+    eyebrow: "Inference API",
+    title: "GLM-5.3\nis live.",
+    body: "{models} models on one OpenAI-compatible endpoint, one key, up to 1M context.",
+    primary: { label: "Open the playground", href: "/dashboard/services/inference" },
+    secondary: { label: "All models", href: "/services/inference" },
     tone: "green",
     requiresModel: "zhipu/glm-5.3",
   },
   {
-    eyebrow: "GPUs",
-    title: "B300 GPUs\navailable.",
-    body: "Blackwell Ultra, 288 GB HBM3e per GPU, billed by the hour.",
-    primary: { label: "Deploy a pod", href: "/dashboard/services/gpu/deploy?gpu=b300-sxm6-ac-288" },
+    eyebrow: "GPU cloud",
+    title: "B300 and H200\navailable.",
+    body: "Blackwell and Hopper pods, 1 to 8 GPUs, no commitment.",
+    primary: { label: "Deploy a pod", href: "/dashboard/services/gpu/deploy" },
     secondary: { label: "All GPUs", href: "/services/gpu" },
     tone: "amber",
-    live: { kind: "gpu", id: "b300-sxm6-ac-288" },
+    live: { kind: "gpus", ids: ["b300-sxm6-ac-288", "h200-141"] },
   },
   {
-    eyebrow: "Fine-tuning",
-    title: "Host models\non our GPUs.",
-    body: "Fine-tune an open model on your data and serve it on the same API.",
+    eyebrow: "Fine-tuning and deployments",
+    title: "Your model,\nour GPUs.",
+    body: "Fine-tune on our GPUs or deploy any Hugging Face or Docker model, served on the same API.",
     primary: { label: "Start a fine-tune", href: "/dashboard/services/inference/fine-tuning" },
-    secondary: { label: "How it works", href: "/services/inference" },
+    secondary: { label: "Deploy a model", href: "/dashboard/services/inference/deployments" },
     tone: "grey",
   },
   {
-    eyebrow: "Dedicated",
-    title: "Dedicated servers\navailable.",
+    eyebrow: "Bare metal",
+    title: "Dedicated\nservers.",
     body: "AMD and Intel, single tenant, full root access.",
     primary: { label: "See the lineup", href: "/services/compute" },
     tone: "grey",

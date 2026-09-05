@@ -24,7 +24,7 @@ import { createServiceClient } from "@/lib/supabase/server";
  * - the GPU rail, the B300 plate and tile: the shared GPU catalog, the same
  *   resale function a pod is billed by
  * - the dedicated-server count and floor: lib/catalog/bare-metal
- * - "N models": inference.models where is_active, which is also what decides
+ * - "N models": public rows of inference.models (is_active, no org), which also decide
  *   whether an announcement that names a model is shown at all
  *
  * A figure that cannot be read is left OUT, never invented: the rail renders
@@ -37,6 +37,7 @@ import { createServiceClient } from "@/lib/supabase/server";
 export async function Hero() {
     let gpus: GpuRow[] = [];
     let gpuPriceById = new Map<string, number>();
+    let gpuNameById = new Map<string, string>();
 
     try {
         const supabase = await createServiceClient();
@@ -45,6 +46,8 @@ export async function Hero() {
         gpuPriceById = new Map(
             catalog.gpus.flatMap((g) => (g.hourlyUSD === null ? [] : [[g.id, g.hourlyUSD] as [string, number]]))
         );
+        // Catalog names arrive as "H200 SXM (141 GB)"; the plate quotes the bare name.
+        gpuNameById = new Map(catalog.gpus.map((g) => [g.id, g.name.replace(/\s*\(\s*\d+\s*GB\s*\)\s*$/i, "").trim()]));
 
         gpus = HERO_GPU_ACCENTS.flatMap((accent) => {
             const live = byId.get(accent.id);
@@ -67,7 +70,9 @@ export async function Hero() {
     }
 
     // The set of public model ids that are switched on; this is what decides
-    // whether an announcement that names a model is shown at all.
+    // whether an announcement that names a model is shown at all, and what
+    // "{models}" counts. It must agree with CATALOG_MODEL_COUNT on the
+    // inference page (29 on 2026-09-05).
     // inference.models.model_id is the id customers put on the wire.
     let liveModelIds: Set<string> | null = null;
     try {
@@ -76,7 +81,10 @@ export async function Hero() {
             .schema("inference")
             .from("models")
             .select("model_id")
-            .eq("is_active", true);
+            .eq("is_active", true)
+            // org_id is set on a customer fine-tune (ahura/phi-4:ft-…), which
+            // is private to that org; the public catalog is the rows without one.
+            .is("org_id", null);
         if (error) throw error;
         liveModelIds = new Set((data ?? []).map((m) => m.model_id as string));
     } catch (error) {
@@ -94,6 +102,17 @@ export async function Hero() {
             if (price === undefined) return null;
             return forBody ? ` From $${price.toFixed(2)}/hr.` : ` from $${price.toFixed(2)}/hr`;
         }
+        if (live.kind === "gpus") {
+            // Quote every requested GPU that has a live price; a GPU with none
+            // is left out, and if none has one the item is dropped.
+            const quoted = live.ids.flatMap((id) => {
+                const price = gpuPriceById.get(id);
+                const name = gpuNameById.get(id);
+                return price === undefined || !name ? [] : [`${name} $${price.toFixed(2)}`];
+            });
+            if (quoted.length === 0) return null;
+            return forBody ? ` ${quoted.join(", ")} per GPU-hour.` : ` ${quoted.join(", ")}/hr`;
+        }
         if (bareMetalFloor === null) return null;
         return forBody
             ? ` ${bareMetalCount} configurations from $${bareMetalFloor}/mo.`
@@ -102,19 +121,28 @@ export async function Hero() {
 
     const ads: HeroAd[] = HERO_ADS.flatMap((spec) => {
         if (spec.requiresModel) {
-            if (!liveModelIds?.has(spec.requiresModel)) {
-                console.error(`[hero] plate item "${spec.eyebrow}" dropped: model ${spec.requiresModel} is not live`);
+            const required = Array.isArray(spec.requiresModel) ? spec.requiresModel : [spec.requiresModel];
+            const missing = required.filter((id) => !liveModelIds?.has(id));
+            if (missing.length > 0) {
+                console.error(`[hero] plate item "${spec.eyebrow}" dropped: not live: ${missing.join(", ")}`);
                 return [];
             }
         }
         let body = spec.body;
+        if (body.includes("{models}")) {
+            if (!liveModelIds || liveModelIds.size === 0) {
+                console.error(`[hero] plate item "${spec.eyebrow}" dropped: model count unavailable`);
+                return [];
+            }
+            body = body.replaceAll("{models}", String(liveModelIds.size));
+        }
         if (spec.live) {
             const suffix = resolveLive(spec.live, true);
             if (suffix === null) {
                 console.error(`[hero] plate item "${spec.eyebrow}" dropped: live figure unavailable`);
                 return [];
             }
-            body = spec.body + suffix;
+            body = body + suffix;
         }
         return [{
             eyebrow: spec.eyebrow,
