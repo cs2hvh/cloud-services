@@ -15,7 +15,13 @@ import type { MiddlewareHandler } from "hono";
 import { createClient } from "@supabase/supabase-js";
 import type { AuthContext, Env, HonoVariables } from "../types.ts";
 
-const KEY_CACHE_TTL_SECONDS = 300; // 5 min
+// Revocation is a soft flag in Postgres (api_keys.revoked_at) and nothing
+// purges this cache, so a revoked key keeps working for one TTL. Five minutes
+// was the original value; sixty seconds bounds the window at the cost of one
+// lookup_api_key RPC per key per minute per colo, which is cheap at current
+// volume. Purging on revoke would need a KV write from the app; until then this
+// TTL IS the revocation SLA, and the revoke route's comment should agree.
+const KEY_CACHE_TTL_SECONDS = 60;
 
 export const authMiddleware: MiddlewareHandler<{
   Bindings: Env;

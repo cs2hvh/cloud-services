@@ -152,7 +152,7 @@ export async function DELETE(
 
   // Soft revoke (set revoked_at). The edge gateway's lookup_api_key RPC
   // filters out revoked rows, so existing in-flight requests fail on
-  // their next auth check. KV cache TTL (5 min) means the revocation
+  // their next auth check. KV cache TTL (60 s, workers/inference/src/middleware/auth.ts) means the revocation
   // propagates within minutes.
   const { error, count } = await supabase
     .schema("inference")
