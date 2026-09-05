@@ -3,7 +3,7 @@ import { siteConfig } from "@/config/site";
 import { Hero } from "@/components/hero";
 import { ClosingCta } from "@/components/home/closing-cta";
 import { ComputeSection } from "@/components/compute-section";
-import { ModelsShowcase } from "@/components/home/models-showcase";
+import InferenceModelsSection from "@/components/services/inference-models-section";
 import GlobalNetworkSection from "@/components/global-network-section";
 import HomePopup from "@/components/home-popup";
 import { PlatformExplorer } from "@/components/home/platform-explorer";
@@ -145,7 +145,7 @@ export default function Home() {
         <ClustersBand />
 
         {/* Model catalog — same component the /services/inference page renders */}
-        <ModelsShowcase />
+        <InferenceModelsSection variant="home" />
 
         {/* Compute lineup — VPS / Dedicated / Bare Metal */}
         <ComputeSection />

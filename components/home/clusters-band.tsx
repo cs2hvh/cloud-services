@@ -11,8 +11,9 @@ import Link from "next/link";
  *
  * ONE SCREEN. Until 2026-09-05 this band ran to ~1280px at 1900×900: a
  * headline row, then a benefits grid and the spec card stacked beneath it.
- * It is now three columns in one row (pitch, benefits, spec sheet) with
- * tighter vertical rhythm, and fits a 900px viewport with room to spare.
+ * It is now three columns in one row (pitch, benefits, spec sheet), and the
+ * section is exactly one viewport tall (minus the fixed navbar) with the row
+ * centred in it, so scrolling to it shows a full cream screen.
  *
  * The shared `components/clusters-section.tsx` is still used by the GPU service
  * page and is deliberately left alone; this is a homepage-only variant.
@@ -55,10 +56,11 @@ function Chevron() {
 export function ClustersBand() {
     return (
         <section
-            className="ah-band-light px-6 py-14 sm:px-10 lg:px-12 lg:py-16"
+            className="ah-band-light flex items-center px-6 py-14 sm:px-10 lg:px-12 lg:py-16"
+            style={{ minHeight: "calc(100svh - 56px)" }}
             aria-labelledby="clusters-heading"
         >
-            <div className="mx-auto max-w-[1704px]">
+            <div className="mx-auto w-full max-w-[1704px]">
                 <div className="grid gap-10 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_minmax(0,0.95fr)] lg:gap-12">
                     {/* ── pitch ── */}
                     <div className="flex flex-col gap-6">
