@@ -118,19 +118,25 @@ export async function DELETE(request: Request, { params }: Params) {
     );
   }
 
-  const { data: updated, error: updateError } = await caller.db
-    .from("installations")
-    .update({ deleted_at: new Date().toISOString() })
-    .eq("provider", provider)
-    .eq("external_id", id)
-    .is("deleted_at", null)
-    .select("external_id");
+  // THE RPC, NOT AN UPDATE. authenticated has never held UPDATE on
+  // paas.installations (20260827022831: repointing one is a takeover), so the
+  // direct update this route shipped with was refused with 42501 on every
+  // call and disconnect returned 500 for everyone (F5, 2026-09-06). The
+  // designed path existed the whole time: paas.unlink_installation is
+  // SECURITY DEFINER, re-checks admin on the row's own team, and soft-deletes.
+  const { data: unlinked, error: unlinkError } = await caller.db.rpc("unlink_installation", {
+    p_provider: provider,
+    p_external_id: id,
+  });
 
-  if (updateError) {
-    console.error("[v2/git/installations/:id] unlink failed:", updateError);
+  if (unlinkError) {
+    // insufficient_privilege: the caller can see the row but does not
+    // administer its team. "Not found" rather than confirming it exists.
+    if (unlinkError.code === "42501") return notFound("Connection");
+    console.error("[v2/git/installations/:id] unlink failed:", unlinkError);
     return apiError("internal", "Could not disconnect that account.", 500);
   }
-  if (!updated || updated.length === 0) return notFound("Connection");
+  if (unlinked !== true) return notFound("Connection");
 
   // WHAT WE DID AND DID NOT REVOKE, per provider. Saying only 'disconnected'
   // would imply we revoked something on the provider that we did not touch —

@@ -153,9 +153,9 @@ The local validation harness (2026-09-05, at `ba965da4`) re-ran the original cod
 - Push `feat/separate-admin-panel` (admin MFA + TOTP sign-in) and run the wrangler deploy for the inference worker.
 
 **Code, prioritized:**
-1. `paas.aliases_write` (any member can claim any hostname under the platform zone via PostgREST) and `paas.installations_connect` (ownership of a GitHub App installation is a provider fact). Both need an RPC, not a policy.
+1. ~~`paas.aliases_write` and `paas.installations_connect`~~ Closed 2026-09-06, see §11.
 2. About 30 `createSSRClient` call sites not yet audited (`createssrclient-audit.md`). Lower risk than first feared (§3), except on any route that skips authentication.
-3. Leads from the scan not yet examined by anyone: domain-service ownership confusion, Spectrum cross-tenant listing and hostname claims, inference API-key and BYOK routes with no org-role check, admin routes gated on roles only in `app/api/admin/proxmox/hosts`, the unauthenticated object-storage bucket check (SSRF), Proxmox credentials stored in cleartext and sent with TLS verification disabled, plaintext OAuth token fallback.
+3. Leads from the scan not yet examined by anyone: domain-service ownership confusion, inference API-key and BYOK routes with no org-role check, Proxmox credentials stored in cleartext and sent with TLS verification disabled, plaintext OAuth token fallback. (Spectrum listing, the proxmox admin route and the bucket check were examined on 09-06: the first two hold, the third is closed in §11.)
 4. Deferred by the validation harness: the fail-open policy when the assurance level cannot be read (deliberate, documented), and concurrent OTP variants that need a real database to test.
 5. Retire the old PaaS create route once Deploy v2 is the only door; zero platform apps exist.
 
@@ -168,6 +168,24 @@ The local validation harness (2026-09-05, at `ba965da4`) re-ran the original cod
 - **Adding a route:** use a guard from §3, never `supabase.auth.getUser()` directly; if it must use a service-role client, write the ownership filter in the query and say so in a comment.
 - **Adding a credential path:** call `secondFactorMissing` / `isSuspended` from `lib/auth/assurance.ts`; do not reimplement either decision.
 - **Tests to run after touching auth:** `npx vitest run tests/unit/security tests/integration/api/security app/api/v2/_lib/boundary.test.ts`.
+
+---
+
+## 11. The 2026-09-06 live test, and what closed it
+
+A second scan (`SECURITY-FINDINGS-2026-09-06-deep-auth-scan.md`, gitignored) was run as a signed-in customer with no privileges against production, build `QVO9L3wH1plwJEFa9kKcC`. Four of its five findings were exploited live; one was disproved.
+
+| # | What was proven | Closed by |
+|---|---|---|
+| F1 | A customer JWT inserted `fallback.ahurasense.com` (the Cloudflare for SaaS fallback origin) into `paas.aliases` through PostgREST: 201. `aliases_write` checked project membership and nothing about the hostname; the reserved list ran only in the deploy path. | Migration `20260906065300`: `authenticated` loses INSERT/UPDATE/DELETE on aliases and `aliases_write` is dropped. The three product writes are now SECURITY DEFINER functions (`alias_point`, `alias_attach_domain`, `alias_release`) that re-check membership and accept only their one change; a custom alias must be a domain the project already claimed and never under a platform zone. The reserved set is mirrored into `paas.reserved_labels` and a trigger refuses reserved, protocol, apex or two-deep hostnames for every role. `tests/unit/security/paas-reserved-labels.test.ts` keeps the SQL seed and `RESERVED_LABELS` identical. |
+| F2 | A customer JWT inserted installation `999999999` on its own team: 201, no ownership proof. GitHub installation ids are enumerable and the row is the authorization every git route reads. | Migration `20260906065400`: the INSERT grant and `installations_connect` go; `paas.link_installation` (client-callable, same hole through a different door) loses its `authenticated` grant. Linking is `paas.link_installation_verified`, executable by `service_role` only and taking the acting user, reached only through `lib/paas/installations/link.ts` after the callback proved ownership with the provider. `lib/paas/boundary.test.ts` allowlists exactly the four callbacks that run a proof. The probe row was soft-deleted by operator SQL. |
+| F3 | The inference schema: not exploitable, every read 403. The live grants had been revoked by hand and no migration recorded it, so a rebuild from the folder would reopen cross-tenant reads of audit_log, usage, api_keys and orgs. | Migration `20260906065500` records the state: RLS on every inference table and partition, no client grants on tables, sequences, functions or the schema, and default privileges that give future objects nothing. Service role keeps everything. |
+| F4 | `GET /api/services/object-storage/check-bucket` with no login: 200, a seven-region `HeadBucket` sweep under the platform's Spaces keys, no rate limit. The `region` parameter also became the S3 endpoint host unvalidated. | The route now requires `authenticateUser()`, allows twenty calls per user per minute, validates the name as a bucket name and the region against the seven known regions. |
+| F5 | `DELETE /api/v2/git/installations/{id}` returned 500 for everyone: the route updated the table directly, which the 2026-08-27 hardening had already forbidden, so a row planted through F2 could not be removed by its victim. | The route calls `paas.unlink_installation`, the SECURITY DEFINER function that existed for it all along. |
+
+Also confirmed working on the live system by that test: RLS read scoping on `paas.projects`, `aliases` and `teams`; `public.api_keys` denied; the sign-in audit row.
+
+**Migration and deploy order matters here.** The three migrations were applied to the live database before the code that uses the RPCs was deployed. Between the two, promote/rollback, custom-domain attach and release, project-delete alias release and git connect fail closed (404 or `link_refused`); nothing is lost and the reconcilers are unaffected. The password of the test account used for the live run is the operator's to rotate.
 
 ---
 

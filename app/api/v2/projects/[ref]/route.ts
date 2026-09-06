@@ -255,11 +255,7 @@ export async function DELETE(_request: Request, { params }: Params) {
   // Aliases are released BEFORE the workload goes, which is the order
   // project-teardown uses: a name that is still claimed while its Ingress is
   // gone is a hostname nobody can re-register and nothing answers.
-  const released = await caller.db
-    .from("aliases")
-    .update({ released_at: new Date().toISOString() })
-    .eq("project_id", projectId)
-    .is("released_at", null);
+  const released = await caller.db.rpc("alias_release", { p_project_id: projectId });
   if (released.error) {
     console.error("[v2/projects/:ref] releasing aliases failed:", released.error);
   }

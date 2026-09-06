@@ -2,7 +2,8 @@
  * GET /api/v2/git/callback?installation_id=&setup_action=&state=
  *
  * Where GitHub returns after an App installation. Binds the installation to a
- * team by calling paas.link_installation().
+ * team through lib/paas/installations/link.ts, the only path that may write
+ * one, after proving below that the installation is the caller's.
  *
  * This is the only moment both facts are known at once — which installation
  * GitHub just created, and who is installing it — which is exactly why
@@ -12,8 +13,8 @@
  * Two independent locks, neither sufficient alone:
  *  1. the one-time nonce cookie set by ../connect, proving the round trip
  *     started here rather than at a URL someone was sent;
- *  2. paas.link_installation(), which requires ADMIN on the target team and
- *     refuses an installation already held by another team.
+ *  2. paas.link_installation_verified(), which requires ADMIN on the target
+ *     team and refuses an installation already held by another team.
  *
  * The nonce is consumed whatever the outcome. A state that can be replayed is
  * not a defence.
@@ -25,6 +26,7 @@ import { listInstallations } from "@/lib/paas/github/app.ts";
 import { getCaller } from "../../_lib/auth";
 import { STATE_COOKIE } from "../../_lib/git-state";
 import { provesInstallationOwnership } from "@/lib/paas/github/ownership";
+import { linkVerifiedInstallation } from "@/lib/paas/installations/link";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -149,9 +151,12 @@ export async function GET(request: Request) {
     return back("error", "ownership_unproven");
   }
 
-  // The RPC is SECURITY DEFINER and enforces admin-on-team itself. It also
-  // refuses an installation already held by another team, which is what stops
-  // two teams both authorizing tokens for each other's repositories.
+  // The write runs with the service role, through the one helper allowed to,
+  // BECAUSE the proof above is what authorizes it: until 2026-09-06 a client
+  // could call the link function from PostgREST with any installation id and
+  // skip the proof entirely. The function still enforces admin-on-team itself
+  // and refuses an installation already held by another team, which is what
+  // stops two teams both authorizing tokens for each other's repositories.
   // Provider and external id, not an installation id. The bigint overload was
   // dropped rather than left callable: a Bitbucket workspace uuid has no bigint
   // to live in, and an overload that silently accepts only GitHub is worse than
@@ -161,12 +166,13 @@ export async function GET(request: Request) {
   // are minted per request from a private key, so there is nothing durable to
   // store. The RPC coalesces absent token arguments onto the stored ones, so
   // this call cannot un-credential a connection either.
-  const { error } = await caller.db.rpc("link_installation", {
-    p_provider: "github",
-    p_external_id: String(installationId),
-    p_team_ref: teamRef,
-    p_account_login: accountLogin,
-    p_account_type: accountType,
+  const { error } = await linkVerifiedInstallation({
+    userId: caller.userId,
+    provider: "github",
+    externalId: String(installationId),
+    teamRef,
+    accountLogin,
+    accountType,
   });
 
   if (error) {

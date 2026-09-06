@@ -23,11 +23,15 @@ export type PaasTable =
   | "projects"
   | "environments"
   | "deployments"
+  // SELECT only for `authenticated` since 2026-09-06. Writes go through
+  // paas.alias_point(), alias_attach_domain() and alias_release(); a
+  // table-level write let any member claim any hostname.
   | "aliases"
   | "domains"
   | "env_vars"
-  // SELECT only for `authenticated`; writes go through
-  // paas.link_installation(), which requires admin on the target team.
+  // SELECT only for `authenticated`. Writes go through
+  // lib/paas/installations/link.ts (service role, after the callback route
+  // proved ownership with the provider); nothing a client can call inserts one.
   | "installations";
 
 export interface Caller {

@@ -14,8 +14,11 @@
  *
  * ON THE ELEVATED CALL AT THE END OF PATCH:
  *
- * The authorization decision and the tenant write both go through RLS, as
- * everywhere else in this directory. Only the cluster convergence is elevated,
+ * The authorization decision goes through RLS and the tenant write goes
+ * through paas.alias_point(), a SECURITY DEFINER function that re-checks the
+ * same membership (since 2026-09-06 authenticated holds no write grant on
+ * paas.aliases at all: a table-level write let any member claim any hostname).
+ * Only the cluster convergence is elevated,
  * and it uses reconcileProjectByRef() rather than promoteAndConverge() on
  * purpose — the latter would also perform the alias write with the service
  * role, moving a tenant-scoped write outside RLS, which is exactly the v1
@@ -216,17 +219,32 @@ export async function PATCH(request: Request, { params }: Params) {
     );
   }
 
+  // THE WRITE IS AN RPC, NOT AN UPDATE. paas.alias_point moves exactly one
+  // alias of the caller's project to exactly one ready deployment of the same
+  // project, and re-checks every condition read above itself. The reads above
+  // exist for the error messages; the function is the authority.
+  const pointed = await caller.db.rpc("alias_point", {
+    p_alias_ref: (aliasRow as { ref: string }).ref,
+    p_deployment_ref: deployment.ref,
+  });
+  if (pointed.error) {
+    const mapped = fromPostgrestError(pointed.error);
+    if (mapped) return mapped;
+    if (pointed.error.code === "P0002") return notFound("Alias");
+    console.error("[v2/aliases] promote failed:", pointed.error);
+    return apiError("internal", "Could not update the alias.", 500);
+  }
+
   const { data, error } = await caller.db
     .from("aliases")
-    .update({ deployment_id: deployment.id })
-    .eq("id", (aliasRow as { id: string }).id)
     .select(ALIAS_COLUMNS)
+    .eq("id", (aliasRow as { id: string }).id)
     .maybeSingle();
 
   if (error) {
     const mapped = fromPostgrestError(error);
     if (mapped) return mapped;
-    console.error("[v2/aliases] promote failed:", error);
+    console.error("[v2/aliases] re-read after promote failed:", error);
     return apiError("internal", "Could not update the alias.", 500);
   }
   if (!data) return notFound("Alias");

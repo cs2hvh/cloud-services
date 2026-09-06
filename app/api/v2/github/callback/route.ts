@@ -47,6 +47,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { listInstallations } from "@/lib/paas/github/app";
 import { provesInstallationOwnership } from "@/lib/paas/github/ownership";
+import { linkVerifiedInstallation } from "@/lib/paas/installations/link";
 import { unauthenticated, invalid, notFound, conflict, apiError } from "../../_lib/http";
 
 export const dynamic = "force-dynamic";
@@ -147,21 +148,19 @@ export async function GET(req: Request) {
     return back(DASHBOARD, { connected: match.account?.login ?? String(installationId) });
   }
 
-  const { error: writeError } = await supabase
-    .schema("paas")
-    .from("installations")
-    .insert({
-      // provider and external_id are the identity now, and both are NOT NULL
-      // with no default — omitting them raises 23502 on every connect.
-      // installation_id stays in step while the deprecated column exists.
-      provider: "github",
-      external_id: String(installationId),
-      installation_id: installationId,
-      team_id: team.id,
-      account_login: match.account?.login ?? String(installationId),
-      account_type: match.account?.type ?? null,
-      installed_by: user.id,
-    });
+  // Through the one helper that may write a connection: authenticated lost
+  // INSERT on paas.installations on 2026-09-06 because the table-level write
+  // let any customer claim any installation id. The ownership proof above is
+  // what authorizes this call; a blank account login is refused by the helper
+  // because it would mean no proof ran.
+  const { error: writeError } = await linkVerifiedInstallation({
+    userId: user.id,
+    provider: "github",
+    externalId: String(installationId),
+    teamRef: team.ref,
+    accountLogin: match.account?.login ?? "",
+    accountType: match.account?.type ?? null,
+  });
 
   if (writeError) {
     // A unique violation means another team already holds it. Refusing is the

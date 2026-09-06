@@ -117,6 +117,17 @@ export const FORBIDDEN = {
     violating: 'import { projects } from "@/lib/paas/db";',
     innocent: 'import { operatorView } from "@/lib/paas/telemetry/operator";',
   },
+  // lib/paas/installations/link.ts writes a git connection with the service
+  // role AFTER the route proved, with the provider, that the installation is
+  // the caller's. RLS cannot see providers, so the proof cannot live in a
+  // policy; and a client-callable definer function was itself the hole
+  // (2026-09-06). The four callback routes are the only places a proof runs.
+  verifiedInstallationLink: {
+    name: "verified installation link (service role)",
+    test: (src: string) => /from\s+["'][^"']*lib\/paas\/installations\/link(\.ts)?["']/.test(src),
+    violating: 'import { linkVerifiedInstallation } from "@/lib/paas/installations/link";',
+    innocent: 'import { callerInstallations } from "../../_lib/scope";',
+  },
   tenantWriteViaReconciler: {
     name: "promoteAndConverge",
     test: (src: string) => /\bpromoteAndConverge\b/.test(src),
@@ -191,6 +202,62 @@ test("no request handler imports the service-role database client", () => {
       "data. If a route genuinely has no requesting user, add it to " +
       "SERVICE_ROLE_ALLOWED with the reason.",
   );
+});
+
+const VERIFIED_LINK_ALLOWED: Array<{ path: string; why: string }> = [
+  {
+    path: "app/api/v2/git/callback/route.ts",
+    why:
+      "The GitHub App install callback. Before the write it reads the " +
+      "installation's account from the App and requires the signed-in user's " +
+      "GitHub identity (auth.identities, not user_metadata) to be that account " +
+      "(lib/paas/github/ownership.ts). That proof is what authorizes the link.",
+  },
+  {
+    path: "app/api/v2/github/callback/route.ts",
+    why:
+      "The GitHub OAuth sign-in callback carrying an installation. Same proof " +
+      "as git/callback: the installation's account must equal the caller's " +
+      "GitHub login as GitHub asserted it at sign-in; org installs are refused.",
+  },
+  {
+    path: "app/api/v2/gitlab/callback/route.ts",
+    why:
+      "The GitLab OAuth callback. The token GitLab just issued to this browser " +
+      "is exchanged and its identity read; the external id and account come " +
+      "from that token, and the token itself is stored in the same call.",
+  },
+  {
+    path: "app/api/v2/bitbucket/callback/route.ts",
+    why:
+      "The Bitbucket OAuth callback. Same as GitLab: the workspace is read from " +
+      "the token Bitbucket just issued, and the token is stored with the link.",
+  },
+];
+
+test("only a route that proved ownership with the provider may link an installation", () => {
+  const allowed = new Set(VERIFIED_LINK_ALLOWED.map((a) => a.path));
+  const offenders = scanTree(join(REPO, "app"), FORBIDDEN.verifiedInstallationLink.test, { allowed, base: REPO });
+  assert.deepEqual(
+    offenders,
+    [],
+    `These write a git connection without a provider-side ownership proof:\n  ${offenders.join("\n  ")}\n\n` +
+      "linkVerifiedInstallation runs with the service role and trusts its " +
+      "caller to have proved, with GitHub/GitLab/Bitbucket, that the " +
+      "installation belongs to the signed-in user. If a new route genuinely " +
+      "runs such a proof, add it to VERIFIED_LINK_ALLOWED with the reason.",
+  );
+  for (const a of VERIFIED_LINK_ALLOWED) {
+    assert.ok(a.why.length > 80, `${a.path} needs a real justification, not a note`);
+  }
+  const present = new Set(appFiles().map(rel));
+  for (const a of VERIFIED_LINK_ALLOWED) {
+    assert.ok(present.has(a.path), `${a.path} is allowlisted but does not exist`);
+    assert.ok(
+      FORBIDDEN.verifiedInstallationLink.test(stripComments(readFileSync(join(REPO, a.path), "utf8"))),
+      `${a.path} is allowlisted but no longer imports the helper: remove it`,
+    );
+  }
 });
 
 test("no request handler performs a tenant-scoped write through the reconciler", () => {

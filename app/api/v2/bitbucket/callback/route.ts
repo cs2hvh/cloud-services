@@ -29,6 +29,7 @@ import { createClient } from "@/lib/supabase/server";
 import { providerConfig, bitbucketOauth } from "@/lib/paas/providers/config";
 import { verifyState, parseTokenResponse, bitbucketIdentity } from "@/lib/paas/providers/oauth";
 import { encryptConnectionToken } from "@/lib/paas/providers/credentials";
+import { linkVerifiedInstallation } from "@/lib/paas/installations/link";
 import { unauthenticated, invalid, notFound, conflict, apiError } from "../../_lib/http";
 
 export const dynamic = "force-dynamic";
@@ -136,19 +137,24 @@ export async function GET(req: Request) {
     ? encryptConnectionToken("bitbucket", identity.externalId, "refresh", tokens.refreshToken)
     : null;
 
-  const { error: writeError } = await supabase.schema("paas").rpc("link_installation", {
-    p_provider: "bitbucket",
-    p_external_id: identity.externalId,
-    p_team_ref: team.ref,
-    p_account_login: identity.accountLogin,
-    p_account_type: identity.accountType,
+  // Through the one helper that may write a connection (service role, after
+  // the proof: the token Bitbucket just issued to this browser is what named
+  // the workspace). authenticated lost every client-callable way to insert
+  // one on 2026-09-06.
+  const { error: writeError } = await linkVerifiedInstallation({
+    userId: user.id,
+    provider: "bitbucket",
+    externalId: identity.externalId,
+    teamRef: team.ref,
+    accountLogin: identity.accountLogin,
+    accountType: identity.accountType,
     // The slug is stored for display only — the UUID is the identity, because a
     // slug is renameable and a connection keyed on one silently detaches.
-    p_metadata: { workspaceSlug: identity.accountLogin },
-    p_access_token_ct: `\\x${access.tokenCt.toString("hex")}`,
-    p_refresh_token_ct: refresh ? `\\x${refresh.tokenCt.toString("hex")}` : null,
-    p_token_dek_id: access.dekId,
-    p_token_expires_at: tokens.expiresAt,
+    metadata: { workspaceSlug: identity.accountLogin },
+    accessTokenCt: `\\x${access.tokenCt.toString("hex")}`,
+    refreshTokenCt: refresh ? `\\x${refresh.tokenCt.toString("hex")}` : null,
+    tokenDekId: access.dekId,
+    tokenExpiresAt: tokens.expiresAt,
   });
 
   if (writeError) {

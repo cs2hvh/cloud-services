@@ -3,7 +3,21 @@ import { GET } from '@/app/api/services/object-storage/check-bucket/route';
 
 vi.mock('@aws-sdk/client-s3');
 vi.mock('@/lib/aws/s3-client');
+vi.mock('@/lib/auth/server-auth', () => ({
+  authenticateUser: vi.fn(),
+}));
+vi.mock('@/lib/cooldown/userbased', () => ({
+  limitByUser: vi.fn(),
+}));
 
+/**
+ * Until 2026-09-06 this route had no guard at all (F4 of the live pentest):
+ * anyone on the internet made the server sign HeadBucket requests with the
+ * platform's Spaces credentials across seven regions for any name, unlimited,
+ * and the `region` parameter went straight into the S3 endpoint host. The first
+ * three groups below pin the guard, the limiter and the two validations; the
+ * rest is the original probing behaviour, now behind them.
+ */
 describe('GET /api/services/object-storage/check-bucket', () => {
   const baseUrl = 'http://localhost:3000/api/services/object-storage/check-bucket';
 
@@ -21,6 +35,44 @@ describe('GET /api/services/object-storage/check-bucket', () => {
     mockSend = vi.fn();
     const { createS3ClientFromAccessKey } = await import('@/lib/aws/s3-client');
     vi.mocked(createS3ClientFromAccessKey).mockReturnValue({ send: mockSend } as any);
+
+    const { authenticateUser } = await import('@/lib/auth/server-auth');
+    vi.mocked(authenticateUser).mockResolvedValue({
+      authenticated: true,
+      user: { id: 'user-1' },
+    } as any);
+
+    const { limitByUser } = await import('@/lib/cooldown/userbased');
+    vi.mocked(limitByUser).mockResolvedValue({ allowed: true, remaining: 19 });
+  });
+
+  // ============================================
+  // Authentication (F4)
+  // ============================================
+  describe('Authentication', () => {
+    it('TC-OBJ-084: should return 401 and touch no S3 client without a session', async () => {
+      const { authenticateUser } = await import('@/lib/auth/server-auth');
+      vi.mocked(authenticateUser).mockResolvedValue({
+        authenticated: false,
+        user: null,
+        response: new Response(JSON.stringify({ message: 'Unauthorized' }), { status: 401 }),
+      } as any);
+
+      const { createS3ClientFromAccessKey } = await import('@/lib/aws/s3-client');
+      const response = await GET(createRequest({ name: 'my-bucket' }) as any);
+      expect(response.status).toBe(401);
+      expect(createS3ClientFromAccessKey).not.toHaveBeenCalled();
+    });
+
+    it('TC-OBJ-085: should return 429 when the per-user budget is spent', async () => {
+      const { limitByUser } = await import('@/lib/cooldown/userbased');
+      vi.mocked(limitByUser).mockResolvedValue({ allowed: false, retryAfterSec: 30, remaining: 0 });
+
+      const { createS3ClientFromAccessKey } = await import('@/lib/aws/s3-client');
+      const response = await GET(createRequest({ name: 'my-bucket' }) as any);
+      expect(response.status).toBe(429);
+      expect(createS3ClientFromAccessKey).not.toHaveBeenCalled();
+    });
   });
 
   // ============================================
@@ -37,6 +89,25 @@ describe('GET /api/services/object-storage/check-bucket', () => {
     it('TC-OBJ-075: should return 400 when name is empty/whitespace', async () => {
       const response = await GET(createRequest({ name: '   ' }) as any);
       expect(response.status).toBe(400);
+    });
+
+    it('TC-OBJ-086: should return 400 for a name that is not a bucket name', async () => {
+      // A name is a hostname label in a virtual-hosted request; this is not one.
+      const { createS3ClientFromAccessKey } = await import('@/lib/aws/s3-client');
+      const response = await GET(createRequest({ name: 'Not A Bucket/../x' }) as any);
+      expect(response.status).toBe(400);
+      expect(createS3ClientFromAccessKey).not.toHaveBeenCalled();
+    });
+
+    it('TC-OBJ-087: should return 400 for a region that is not one of ours', async () => {
+      // The region became the S3 endpoint host unvalidated; a crafted value
+      // pointed the signed request at a host of the caller's choosing.
+      const { createS3ClientFromAccessKey } = await import('@/lib/aws/s3-client');
+      const response = await GET(
+        createRequest({ name: 'my-bucket', region: 'attacker.example/?x=' }) as any
+      );
+      expect(response.status).toBe(400);
+      expect(createS3ClientFromAccessKey).not.toHaveBeenCalled();
     });
   });
 
@@ -130,7 +201,7 @@ describe('GET /api/services/object-storage/check-bucket', () => {
       expect(response.status).toBe(200);
       const data = await response.json();
       expect(data.exists).toBe(true);
-      expect(data.error).toContain('Timeout');
+      expect(data.error).toContain('Failed to check');
     });
   });
 

@@ -63,34 +63,20 @@ async function ensureAliasFor(
   projectId: string,
   hostname: string,
 ) {
-  const host = hostname.toLowerCase();
-
-  const { data: production } = await caller.db
-    .from("aliases")
-    .select("deployment_id")
-    .eq("project_id", projectId)
-    .eq("kind", "production")
-    .is("released_at", null)
-    .maybeSingle();
-
-  const deploymentId = (production as { deployment_id: string | null } | null)?.deployment_id ?? null;
-
-  const { data: existing } = await caller.db
-    .from("aliases")
-    .select("id")
-    .eq("project_id", projectId)
-    .eq("hostname", host)
-    .maybeSingle();
-
-  if (existing) {
-    await caller.db
-      .from("aliases")
-      .update({ released_at: null, deployment_id: deploymentId })
-      .eq("id", (existing as { id: string }).id);
-  } else {
-    await caller.db
-      .from("aliases")
-      .insert({ project_id: projectId, hostname: host, kind: "custom", deployment_id: deploymentId });
+  // An RPC since 2026-09-06: authenticated no longer holds INSERT or UPDATE
+  // on paas.aliases, because a table-level write let any member claim any
+  // hostname. paas.alias_attach_domain accepts only a hostname this project
+  // has already claimed in paas.domains, refuses anything under a platform
+  // zone, and does the un-release-or-insert itself.
+  const { error } = await caller.db.rpc("alias_attach_domain", {
+    p_project_id: projectId,
+    p_hostname: hostname.toLowerCase(),
+  });
+  if (error) {
+    // Logged, not raised: the domain claim is durable and the reconciliation
+    // loop retries the alias. A 23505 here means another live project holds
+    // the name, which the domains unique index should already have refused.
+    console.error("[v2/domains] alias attach failed:", JSON.stringify(error).slice(0, 300));
   }
 }
 
@@ -363,15 +349,14 @@ export async function DELETE(request: Request, { params }: Params) {
 
   // Release the routing alias too, or the Ingress survives the domain and the
   // hostname keeps resolving to an app its owner believes they detached.
-  try {
-    await caller.db
-      .from("aliases")
-      .update({ released_at: new Date().toISOString() })
-      .eq("project_id", project.id)
-      .eq("hostname", removedDomain.toLowerCase())
-      .is("released_at", null);
-  } catch (e) {
-    console.error("[v2/domains] alias release failed:", (e as Error).message.slice(0, 160));
+  {
+    const released = await caller.db.rpc("alias_release", {
+      p_project_id: project.id,
+      p_hostname: removedDomain.toLowerCase(),
+    });
+    if (released.error) {
+      console.error("[v2/domains] alias release failed:", JSON.stringify(released.error).slice(0, 160));
+    }
   }
 
   try {
