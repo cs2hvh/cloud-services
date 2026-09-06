@@ -129,23 +129,47 @@ echo "  build OK (BUILD_ID $(cat .next/BUILD_ID))"
 # port; anything else found on it after the stop is named in the log and
 # killed.
 step "Restarting $WEB_SERVICE"
-echo "  before stop: $(systemctl show -p KillMode -p MainPID -p ActiveState "$WEB_SERVICE" 2>/dev/null | tr '\n' ' ') port owners: $(port_pids | tr '\n' ' ')"
+# DIAGNOSTICS FIRST. Runs 81 to 83 (2026-09-05) each ended with the new build
+# live and the run red: for minutes after the start, something kept answering
+# :$PORT with the previous build, and it was not a process this script could
+# see or kill through ss/fuser/lsof. The log is the only place that can name
+# it, so the unit definition, every listener on the port and every app-like
+# process are printed before anything is stopped.
+echo "  unit: $(systemctl show -p ExecStart -p KillMode -p MainPID -p ActiveState -p SubState -p NRestarts "$WEB_SERVICE" 2>/dev/null | tr '\n' ' ' | head -c 700)"
+echo "  listeners on :$PORT before stop:"
+ss -ltnp "sport = :$PORT" 2>/dev/null | tail -n +2 | sed 's/^/    /' || true
+echo "  app-like processes before stop:"
+ps -eo pid,ppid,etime,cmd 2>/dev/null | grep -E "tsx server\.ts|next start|next-server|pm2|docker-proxy|containerd-shim" | grep -v grep | sed 's/^/    /' | head -12 || true
+
 systemctl stop "$WEB_SERVICE" || true
-# Wait for the port to be free, naming and killing whatever still holds it.
-# A stop that returns while a child keeps listening (KillMode=process, or a
-# process that was never in the unit) is exactly the case that left the old
-# build live in run 78 and again in run 81.
-for i in $(seq 1 15); do
+
+# Clear the port of the APP ONLY. A listener whose command line does not look
+# like this app (nginx, docker-proxy, a tunnel) is named and left alone: the
+# health gate below decides whether the deploy is good, not a kill.
+is_app_process() {
+  local cmd
+  cmd="$(ps -o cmd= -p "$1" 2>/dev/null || true)"
+  [[ "$cmd" =~ (tsx[[:space:]]+server\.ts|next[[:space:]]+start|next-server|node[[:space:]].*server\.(ts|js)) ]]
+}
+for i in $(seq 1 30); do
   held="$(port_pids)"
   [[ -z "$held" ]] && break
+  app_held=""
   for pid in $held; do
-    echo "  port $PORT still held by pid $pid after stop ($i): $(ps -o etime=,cmd= -p "$pid" 2>/dev/null | head -c 160)"
-    if (( i < 5 )); then kill "$pid" 2>/dev/null || true; else kill -9 "$pid" 2>/dev/null || true; fi
+    cmd="$(ps -o etime=,cmd= -p "$pid" 2>/dev/null | head -c 160)"
+    if is_app_process "$pid"; then
+      app_held="$app_held $pid"
+      echo "  port $PORT still held by app pid $pid after stop ($i): $cmd"
+      if (( i < 5 )); then kill "$pid" 2>/dev/null || true; else kill -9 "$pid" 2>/dev/null || true; fi
+    else
+      echo "  port $PORT held by NON-app pid $pid, left alone: $cmd"
+      echo "    cgroup: $(head -c 200 "/proc/$pid/cgroup" 2>/dev/null | tr '\n' ' ')"
+    fi
   done
+  [[ -z "$app_held" ]] && break
   sleep 1
 done
-held="$(port_pids)"
-[[ -z "$held" ]] || die "port $PORT is still held by pid(s) $held after stop and kill — the old build would keep serving; inspect by hand"
+
 systemctl start "$WEB_SERVICE" || die "failed to start $WEB_SERVICE"
 
 # The old billing cron ($CRON_SERVICE) must NEVER run again. It billed from
@@ -178,14 +202,19 @@ else
   echo "   Install: cp deploy/systemd/$WORKER_SERVICE.service /etc/systemd/system/ && systemctl daemon-reload && systemctl enable --now $WORKER_SERVICE)"
 fi
 
-# ── 5. health check
 # ── 5. health check: the app must answer AND serve the build we just made.
-# Up to three minutes: tsx plus a Next start of this size can take over a
-# minute, and a 200 from the previous build during that window is not health.
+#
+# The gate is the build id in the served page equalling .next/BUILD_ID. The
+# window is ten minutes: on 2026-09-05 the handover to the new build took
+# between three and twelve minutes on three consecutive deploys, for a reason
+# the diagnostics above exist to name. Every thirty seconds the log records the
+# HTTP code, the served build id, the unit's state and restart count, and the
+# tail of its journal, so a crash loop or a lingering old process is visible
+# in the run output rather than inferred afterwards.
 want="$(cat .next/BUILD_ID)"
 got=""
-step "Waiting for the app to answer on $HEALTH_URL with BUILD_ID $want"
-for i in $(seq 1 90); do
+step "Waiting for the app to answer on $HEALTH_URL with BUILD_ID $want (up to 10 minutes)"
+for i in $(seq 1 300); do
   code="$(curl -s -m 10 -o /dev/null -w '%{http_code}' "$HEALTH_URL" 2>/dev/null || true)"
   case "$code" in
     200|301|302|307|308)
@@ -193,22 +222,27 @@ for i in $(seq 1 90); do
       if [[ -z "$got" ]]; then
         echo "  (no build id readable from $HEALTH_URL/ — cannot prove which build is serving)"
         verify_port_owner
-        ok "Deployed: $BRANCH @ $(git rev-parse --short HEAD) — app healthy (HTTP $code)"
+        ok "Deployed: $BRANCH @ $(git rev-parse --short HEAD) — app healthy (HTTP $code) after $((i * 2))s"
         exit 0
       fi
       if [[ "$got" == "$want" ]]; then
         verify_port_owner
-        ok "Deployed: $BRANCH @ $(git rev-parse --short HEAD) — app healthy (HTTP $code), serving BUILD_ID $want"
+        ok "Deployed: $BRANCH @ $(git rev-parse --short HEAD) — app healthy (HTTP $code), serving BUILD_ID $want after $((i * 2))s"
         exit 0
       fi
-      if (( i % 10 == 0 )); then echo "  serving $got, want $want — still waiting for the new instance ($i)"; fi
       ;;
   esac
+  if (( i % 15 == 0 )); then
+    echo "  t+$((i * 2))s: http=$code serving=$got want=$want"
+    echo "    unit: $(systemctl show -p ActiveState -p SubState -p MainPID -p NRestarts "$WEB_SERVICE" 2>/dev/null | tr '\n' ' ')"
+    echo "    listeners: $(ss -ltnp "sport = :$PORT" 2>/dev/null | tail -n +2 | tr -s ' ' | tr '\n' ';' | head -c 300)"
+    journalctl -u "$WEB_SERVICE" -n 3 --no-pager -o cat 2>/dev/null | sed 's/^/    journal: /' | head -c 600 || true
+  fi
   sleep 2
 done
 systemctl status "$WEB_SERVICE" --no-pager || true
 journalctl -u "$WEB_SERVICE" -n 40 --no-pager || true
 if [[ -n "$got" ]]; then
-  die "the app on :$PORT serves build $got but this deploy built $want — the OLD build is still live"
+  die "the app on :$PORT serves build $got but this deploy built $want — the OLD build is still live after 10 minutes"
 fi
 die "app not responding after restart — check: journalctl -u $WEB_SERVICE -n 60"
