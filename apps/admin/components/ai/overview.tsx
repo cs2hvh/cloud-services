@@ -32,6 +32,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PageHeader } from "@admin/components/page-header";
+import { AiTabs } from "@admin/components/ai/ai-tabs";
 import { StatCard } from "@admin/components/stat-card";
 import { ChartCard, ChartTooltip } from "@admin/components/chart-card";
 import { SERIES, CHROME, STATUS, axisProps } from "@admin/lib/chart-theme";
@@ -128,6 +129,7 @@ export function AiOverview() {
           </>
         }
       />
+      <AiTabs />
 
       {/* Health strip */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">

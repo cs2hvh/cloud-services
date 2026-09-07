@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@admin/components/page-header";
+import { AiTabs } from "@admin/components/ai/ai-tabs";
 import { StatCard } from "@admin/components/stat-card";
 import { STATUS } from "@admin/lib/chart-theme";
 
@@ -172,6 +173,7 @@ export function AiWorkloads() {
           </>
         }
       />
+      <AiTabs />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatCard

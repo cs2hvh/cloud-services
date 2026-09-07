@@ -32,6 +32,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { PageHeader } from "@admin/components/page-header";
+import { AiTabs } from "@admin/components/ai/ai-tabs";
 
 type Pricing = {
   input_cents_per_mtok?: number;
@@ -197,6 +198,7 @@ export function AiModelsTable() {
           </Button>
         }
       />
+      <AiTabs />
 
       <div className="rounded-xl border border-border bg-card">
         <div className="flex flex-wrap items-center gap-2 border-b border-border p-3">
