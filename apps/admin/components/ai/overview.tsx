@@ -61,7 +61,7 @@ type Overview = {
 
 type Health = {
   gateway: { ok: boolean; latencyMs?: number; detail?: string; url?: string };
-  upstream: { ok: boolean; latencyMs?: number; detail?: string };
+  upstream: { ok: boolean; unknown?: boolean; latencyMs?: number; detail?: string };
   database: { ok: boolean; latencyMs?: number; detail?: string };
 };
 
@@ -314,10 +314,18 @@ function HealthCard({
   extra,
 }: {
   label: string;
-  check?: { ok: boolean; detail?: string };
+  check?: { ok: boolean; unknown?: boolean; detail?: string };
   extra?: string;
 }) {
-  const color = !check ? STATUS.neutral : check.ok ? STATUS.good : STATUS.critical;
+  // Unknown is its own state: a probe this host cannot run must not wear the
+  // same red as a probe that ran and failed.
+  const color = !check
+    ? STATUS.neutral
+    : check.unknown
+      ? STATUS.neutral
+      : check.ok
+        ? STATUS.good
+        : STATUS.critical;
   return (
     <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3">
       <span className="relative flex h-2.5 w-2.5">
@@ -333,7 +341,13 @@ function HealthCard({
       <div className="min-w-0 flex-1">
         <div className="text-sm font-medium">{label}</div>
         <div className="truncate text-xs text-muted-foreground">
-          {check ? (check.ok ? (check.detail ?? "operational") : (check.detail ?? "down")) : "checking…"}
+          {check
+            ? check.unknown
+              ? (check.detail ?? "not checkable from here")
+              : check.ok
+                ? (check.detail ?? "operational")
+                : (check.detail ?? "down")
+            : "checking…"}
         </div>
       </div>
       {extra && (

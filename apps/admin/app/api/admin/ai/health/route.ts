@@ -6,6 +6,10 @@ export const dynamic = "force-dynamic";
 
 type Check = {
   ok: boolean;
+  /** True when this host cannot perform the probe at all — rendered as
+   *  UNKNOWN, never as a failure. The panel not holding a credential is a
+   *  fact about the panel, not about the platform. */
+  unknown?: boolean;
   latencyMs?: number;
   detail?: string;
 };
@@ -41,8 +45,13 @@ async function timedFetch(
 
 /**
  * Platform health for the inference service: gateway edge, upstream
- * provider (Wokey), and the control-plane database. Mirrors the operator
- * branch of the main app's diagnostics page, minus org scoping.
+ * provider (Wokey), and the control-plane database.
+ *
+ * The upstream probe needs WOKEY_PLATFORM_KEY in THIS process. The panel is
+ * a separate deployment whose .env is a first-run copy of the main app's, so
+ * a key added to the gateway later is simply absent here — which says
+ * nothing about whether the upstream is healthy. That case reports
+ * `unknown: true` and renders grey; only a real failed call is red.
  */
 export async function GET() {
   const admin = await requireAdmin();
@@ -112,7 +121,12 @@ export async function GET() {
             ? `${upstreamModels ?? "?"} models listed`
             : `auth/reachability failed (${upstreamRes.status ?? "timeout"})`,
         }
-      : { ok: false, detail: "WOKEY_PLATFORM_KEY not configured" },
+      : {
+          ok: false,
+          unknown: true,
+          detail:
+            "not checkable from the panel — WOKEY_PLATFORM_KEY is not in this host's environment",
+        },
     database: dbCheck,
   });
 }

@@ -225,7 +225,19 @@ export function AiRoutingView() {
               ) : (
                 (feed?.providers ?? []).map((p) => (
                   <tr key={p.name} className="transition-colors hover:bg-white/[0.02]">
-                    <td className="px-4 py-2.5 font-medium">{p.name}</td>
+                    <td className="px-4 py-2.5">
+                      <span className="font-medium">{p.name}</span>
+                      {/* Active models with no enabled route and no traffic
+                          means the catalog advertises what the gateway
+                          cannot currently serve — worth saying on the row. */}
+                      {(p.models?.active ?? 0) > 0 &&
+                        (p.routes?.enabled ?? 0) === 0 &&
+                        (p.traffic?.requests ?? 0) === 0 && (
+                          <span className="ml-2 inline-flex rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-300">
+                            {p.models?.active} models listed · never served
+                          </span>
+                        )}
+                    </td>
                     <td className="px-4 py-2.5 text-[12px] text-muted-foreground">
                       {p.models ? `${p.models.active} active / ${p.models.total}` : "—"}
                     </td>
