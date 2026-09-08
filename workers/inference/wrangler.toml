@@ -18,6 +18,13 @@ compatibility_flags = ["nodejs_compat"]
 # ───────────────────────────────────────────────────────────────
 routes = [
   { pattern = "api.ahurasense.com/v1/*", zone_name = "ahurasense.com" },
+  # Second brand (2026-09-08): the same gateway, keys, catalog and billing
+  # answering on Vani's hostname. A Workers custom domain rather than a
+  # zone route so Cloudflare creates the DNS record and certificate itself;
+  # it takes the whole hostname, which is fine, the host exists for the API.
+  # The wire still says AhuraSense (ahu_live_ keys, X-Ahura-* headers,
+  # owned_by) until the host-aware branding pass lands.
+  { pattern = "api.vani.ai", custom_domain = true },
 ]
 
 # ───────────────────────────────────────────────────────────────
