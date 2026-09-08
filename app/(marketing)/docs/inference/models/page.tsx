@@ -22,9 +22,10 @@ export const metadata = docsMetadata({
   path: "/docs/inference/models",
 });
 
-// The table below is read from the catalog. Re-render at most every five
-// minutes so a price or a new model shows up without a deploy.
-export const revalidate = 300;
+// The table below is read from the catalog, the same inference.models rows
+// the admin panel edits and the gateway bills from. Re-render at most once a
+// minute so a price set in the panel is on this page within a minute.
+export const revalidate = 60;
 
 const HREF = "/docs/inference/models";
 

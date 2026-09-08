@@ -24,9 +24,9 @@ export const metadata = docsMetadata({
   path: "/docs/inference",
 });
 
-// The model list below is read from the catalog; refresh at most every five
-// minutes so a new model or price shows up without a deploy.
-export const revalidate = 300;
+// The model list below is read from the catalog, the same rows the admin
+// panel edits; refresh at most once a minute so a change is here within one.
+export const revalidate = 60;
 
 const HREF = "/docs/inference";
 
