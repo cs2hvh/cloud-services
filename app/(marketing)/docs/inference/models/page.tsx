@@ -40,7 +40,7 @@ export default function ModelsPage() {
       <H2>Model ids</H2>
       <P>
         Ids are namespaced by vendor, <C>anthropic/claude-sonnet-5</C>,{" "}
-        <C>openai/gpt-5.5</C>, <C>zhipu/glm-5.3-flash</C>, and are used exactly as listed,
+        <C>openai/gpt-5.5</C>, <C>zhipu/glm-5.3-flash-uncensored</C>, and are used exactly as listed,
         including case. A request naming an id that is not in the catalog, or not in your key’s
         allowlist, is refused before anything is billed.
       </P>

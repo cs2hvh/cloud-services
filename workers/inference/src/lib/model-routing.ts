@@ -15,7 +15,7 @@
  *                                              Phase 10)
  *
  * ENDPOINTS, 2026-09-07. The first model Wokey does not carry,
- * zhipu/glm-5.3-flash, is two RunPod vLLM pods behind one bearer key. That
+ * zhipu/glm-5.3-flash-uncensored, is two RunPod pods behind one bearer key. That
  * needed three things the single serving_url column could not express: more
  * than one URL per model, a credential per URL, and a served-model-name that
  * is not "adapter". inference.serving_endpoints carries all three. The key is

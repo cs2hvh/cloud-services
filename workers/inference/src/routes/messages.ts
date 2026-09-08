@@ -342,7 +342,7 @@ export const messagesShim: Handler<{
       : openaiBody;
 
   // A model we serve ourselves goes to its own endpoints, never to Wokey:
-  // Wokey has not heard of zhipu/glm-5.3-flash and would 404 it. The answer is
+  // the upstream has not heard of zhipu/glm-5.3-flash-uncensored and would 404 it. The answer is
   // OpenAI-shaped either way, so everything below this branch is unchanged.
   let upstream: Response;
   if (messagesRouting && messagesRouting.serving_type !== "proxy") {
