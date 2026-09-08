@@ -37,6 +37,8 @@ interface Call {
   url: string;
   authorization: string | undefined;
   model: unknown;
+  /** Present only when the outgoing body carried stream_options. */
+  streamOptions?: unknown;
 }
 
 /** A fetch that answers per URL and records what it was sent. */
@@ -44,10 +46,12 @@ function fakeFetch(answers: Record<string, () => Response | Error>, calls: Call[
   return (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const headers = init?.headers as Record<string, string>;
+    const body = JSON.parse(String(init?.body)) as { model: unknown; stream_options?: unknown };
     calls.push({
       url,
       authorization: headers?.authorization,
-      model: (JSON.parse(String(init?.body)) as { model: unknown }).model,
+      model: body.model,
+      ...(body.stream_options !== undefined ? { streamOptions: body.stream_options } : {}),
     });
     const base = Object.keys(answers).find((k) => url.startsWith(k));
     const answer = base ? answers[base]!() : new Error(`no answer for ${url}`);
@@ -234,6 +238,31 @@ describe("forwardToEndpoints", () => {
 
     expect(calls).toEqual([
       { url: "https://ft.ahura.svc:8000/v1/chat/completions", authorization: undefined, model: "adapter" },
+    ]);
+  });
+
+  it("asks a streaming call for usage, keeping any stream_options the caller sent", async () => {
+    // SGLang and vLLM send no usage chunk unless asked; without this the
+    // streamed request is billed as zero tokens.
+    const calls: Call[] = [];
+    const fetchImpl = fakeFetch({ "https://one.example/v1": () => new Response("", { status: 200 }) }, calls);
+    const r = routing({
+      endpoints: [{ id: "1", baseUrl: "https://one.example/v1", apiKeyCt: null, servedModelName: null, weight: 1 }],
+    });
+
+    await forwardToEndpoints({ env: { BYOK_DEK: dek() }, routing: r, body: { model: "m", stream: true }, fetchImpl });
+    await forwardToEndpoints({
+      env: { BYOK_DEK: dek() },
+      routing: r,
+      body: { model: "m", stream: true, stream_options: { chunk_size: 4 } },
+      fetchImpl,
+    });
+    await forwardToEndpoints({ env: { BYOK_DEK: dek() }, routing: r, body: { model: "m", stream: false }, fetchImpl });
+
+    expect(calls.map((c) => c.streamOptions)).toEqual([
+      { include_usage: true },
+      { chunk_size: 4, include_usage: true },
+      undefined,
     ]);
   });
 

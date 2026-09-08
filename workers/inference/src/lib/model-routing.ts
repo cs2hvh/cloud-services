@@ -192,7 +192,19 @@ export async function forwardToManaged(opts: {
   // (e.g. "ahura/phi-4:ft-abc12345") wouldn't pass vLLM's --served-model-name
   // check unless the operator explicitly set --served-model-name to that
   // value at container start.
-  const outgoing = { ...opts.body, model: opts.servedModelName };
+  const outgoing: Record<string, unknown> = { ...opts.body, model: opts.servedModelName };
+  // ASK FOR USAGE ON A STREAM. Wokey puts a usage object in the last chunk
+  // unasked; vLLM and SGLang do so only when stream_options.include_usage is
+  // set. Without it the first streamed request to GLM-5.3 Flash was recorded
+  // with null tokens and billed nothing (2026-09-08), which is the shape of
+  // billing gap this codebase keeps finding.
+  if (outgoing.stream === true) {
+    const given =
+      outgoing.stream_options && typeof outgoing.stream_options === "object"
+        ? (outgoing.stream_options as Record<string, unknown>)
+        : {};
+    outgoing.stream_options = { ...given, include_usage: true };
+  }
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (opts.apiKey) headers.authorization = `Bearer ${opts.apiKey}`;
 
