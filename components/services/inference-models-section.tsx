@@ -67,7 +67,7 @@ function Shell({ isHome, children }: { isHome: boolean; children: React.ReactNod
 // card led with "Vision".
 const CARDS: ModelCard[] = [
   { provider: "Anthropic", model: "claude-opus-5",         meta: "Frontier · Tools · 1M context", accent: "#d97706" },
-  { provider: "OpenAI",    model: "gpt-5.6-sol",           meta: "Frontier · Tools · 1M context", accent: "#10a37f" },
+  { provider: "OpenAI",    model: "gpt-6-astra",           meta: "Frontier · Tools · 1M context", accent: "#10a37f" },
   { provider: "xAI",       model: "grok-4.6",              meta: "Reasoning · Tools · 500k",      accent: "#a3a3a3" },
   { provider: "Moonshot",  model: "kimi-k3",               meta: "Open weights · Tools · 1M",     accent: "#6366f1" },
   { provider: "Zhipu",     model: "glm-5.3",               meta: "Open weights · Tools · 1M",     accent: "#14b8a6" },
@@ -85,7 +85,7 @@ const CARDS: ModelCard[] = [
   { provider: "OpenAI",    model: "gpt-5.3-codex",         meta: "Code · Tools · 400k",           accent: "#10a37f" },
   { provider: "DeepSeek",  model: "deepseek-v4-flash",     meta: "Fast · Open weights · 1M",      accent: "#7c3aed" },
   { provider: "ByteDance", model: "doubao-seed-2.1-turbo", meta: "Fast · Tools · 256k",           accent: "#06b6d4" },
-  { provider: "Anthropic", model: "claude-sonnet-4.6",     meta: "Balanced · Tools · 1M context", accent: "#d97706" },
+  { provider: "Anthropic", model: "claude-fable-5.1",      meta: "Frontier · Tools · 1M context", accent: "#d97706" },
 ];
 
 /**
@@ -134,7 +134,7 @@ const COLUMNS: Array<{ from: number; cards: ModelCard[]; durationS: number; reve
  * wrong: it undersells the platform and it means this file has stopped
  * tracking reality, which is the same defect as overselling it.
  */
-export const CATALOG_MODEL_COUNT = 30;
+export const CATALOG_MODEL_COUNT = 31;
 export const CATALOG_PROVIDER_COUNT = 8;
 
 /**
