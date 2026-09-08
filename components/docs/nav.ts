@@ -83,6 +83,11 @@ export const INFERENCE_DOCS: DocsNavGroup[] = [
         description: "JSON mode and how to get reliably parseable answers.",
       },
       {
+        title: "Reasoning effort",
+        href: "/docs/inference/reasoning",
+        description: "How much a hosted model thinks before it answers, from none to unbounded, and what it costs.",
+      },
+      {
         title: "Caching",
         href: "/docs/inference/caching",
         description: "The exact-match response cache: when it applies, how to control it, what it costs.",

@@ -31,6 +31,7 @@ import {
 } from "../lib/wokey.ts";
 import { lookupCache, shouldCacheMessages, writeCache } from "../lib/cache.ts";
 import { forwardToEndpoints, hasManagedTarget, lookupModelRouting } from "../lib/model-routing.ts";
+import { reasoningControlsFromAnthropic, type AnthropicReasoningFields } from "../lib/reasoning.ts";
 import {
   extractEmbeddableText,
   lookupSemanticCache,
@@ -354,10 +355,14 @@ export const messagesShim: Handler<{
       );
     }
     try {
+      // Anthropic spells reasoning as `thinking` and `output_config.effort`;
+      // the pods take reasoning_effort / thinking_budget / enable_thinking.
+      // Translated here, for hosted models only: the translation only knows
+      // what our pods accept, and a partner backend would refuse the fields.
       const managed = await forwardToEndpoints({
         env: c.env,
         routing: messagesRouting,
-        body: openaiBody,
+        body: { ...openaiBody, ...reasoningControlsFromAnthropic(req as AnthropicReasoningFields) },
         signal: c.req.raw.signal,
       });
       upstream = managed.response;

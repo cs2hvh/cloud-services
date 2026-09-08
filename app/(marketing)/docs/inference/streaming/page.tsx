@@ -119,7 +119,8 @@ data: [DONE]`}</Code>
       <Callout kind="warn" title="A small max_tokens can return an empty answer">
         With <C>max_tokens: 64</C>, a reasoning model may spend all 64 tokens thinking and return{" "}
         <C>content: &quot;&quot;</C> with <C>finish_reason: &quot;length&quot;</C>. Give
-        reasoning models a few hundred tokens of headroom, or leave <C>max_tokens</C> unset.
+        reasoning models a few hundred tokens of headroom, leave <C>max_tokens</C> unset, or on
+        hosted models set a <A href="/docs/inference/reasoning">reasoning effort</A>.
       </Callout>
 
       <H2>Timeouts</H2>

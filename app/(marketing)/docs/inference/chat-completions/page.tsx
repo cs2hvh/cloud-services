@@ -144,6 +144,17 @@ console.log(completion.choices[0].message.content);`,
               </>
             ),
           },
+          {
+            name: "reasoning_effort",
+            type: "string",
+            children: (
+              <>
+                How much a hosted model thinks before it answers: <C>none</C>, <C>low</C>,{" "}
+                <C>medium</C>, <C>high</C> or <C>max</C>. Passed through to partner models.
+                See <A href="/docs/inference/reasoning">Reasoning effort</A>.
+              </>
+            ),
+          },
           { name: "n", type: "integer, 1 to 8", defaultValue: "1", children: <>How many alternative completions to generate. Each is billed.</> },
           { name: "stop", type: "string or array", children: <>Up to four sequences at which generation stops.</> },
           { name: "presence_penalty", type: "number, -2 to 2", children: <>Positive values push the model toward new topics.</> },
