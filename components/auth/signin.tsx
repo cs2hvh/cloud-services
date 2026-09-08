@@ -57,14 +57,25 @@ const onBtnLeave = (e: React.MouseEvent<HTMLButtonElement>) => {
     "0 12px 34px -10px rgba(0,149,255,0.6), inset 0 1px 0 rgba(255,255,255,0.28)";
 };
 
-export function SignInForm() {
+export function SignInForm({
+  /**
+   * Start in the second-factor step. The sign-in page sets this when the
+   * middleware sent a password-only session here with ?mfa=required: the
+   * user has a session already, so there is no password to ask for, only
+   * the code. The effect below reads the assurance level and shows the
+   * TOTP form, then returns to `redirectTo`.
+   */
+  mfaRequired = false,
+}: {
+  mfaRequired?: boolean;
+} = {}) {
   const router = useRouter();
   const search = useSearchParams();
 
   const [isLoading, setIsLoading] = React.useState(false);
   const [rememberMe, setRememberMe] = React.useState(true);
 
-  const [twofaRequired, setTwofaRequired] = React.useState(false);
+  const [twofaRequired, setTwofaRequired] = React.useState(mfaRequired);
   const [otpCode, setOtpCode] = React.useState("");
   const [twofaError, setTwofaError] = React.useState("");
   const [twofaBusy, setTwofaBusy] = React.useState(false);

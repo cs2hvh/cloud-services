@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Code, CodeTabs } from "@/components/docs/code";
+import { ModelsList } from "@/components/docs/models-table";
 import {
   A,
   C,
@@ -21,6 +22,10 @@ export const metadata: Metadata = {
   description:
     "One OpenAI-compatible endpoint for frontier and open-source models, with an Anthropic-compatible route, streaming, tool calling and per-key controls.",
 };
+
+// The model list below is read from the catalog; refresh at most every five
+// minutes so a new model or price shows up without a deploy.
+export const revalidate = 300;
 
 const HREF = "/docs/inference";
 
@@ -141,6 +146,16 @@ console.log(completion.choices[0].message.content);`,
         different spelling from the id you sent. The <C>X-Ahura-Model</C> response header always
         carries the catalog id you asked for, and it is the id your usage is recorded under.
       </Callout>
+
+      <H2>Available models</H2>
+      <P>
+        The public catalog, live. Prices are input / output per million tokens; models marked{" "}
+        <Strong>hosted</Strong> run on AhuraSense GPU infrastructure. Context windows,
+        capabilities and cached-input rates are on the{" "}
+        <A href="/docs/inference/models">Models</A> page, and <C>GET /v1/models</C> returns the
+        same list to your code.
+      </P>
+      <ModelsList />
 
       <H2>What happens to a request</H2>
       <P>Every call passes through the same steps, in this order, at the edge closest to you:</P>

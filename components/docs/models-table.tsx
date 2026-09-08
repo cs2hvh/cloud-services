@@ -69,11 +69,48 @@ export async function ModelsTable() {
   );
 }
 
+/**
+ * The compact form for the overview: every public chat model as name, id and
+ * price, so a reader sees what is on offer before reading a word about
+ * parameters. Same source and cadence as the full table.
+ */
+export async function ModelsList() {
+  const rows = await loadCatalog();
+  if (!rows) {
+    return (
+      <p className="my-4 text-[14.5px] text-[var(--ah-body)]">
+        The catalog could not be loaded right now. <C>GET /v1/models</C> always has the current list.
+      </p>
+    );
+  }
+  const chat = rows.filter((r) => r.modality === "chat");
+  return (
+    <div className="my-4 grid gap-px overflow-hidden border border-[var(--ah-line)] bg-[var(--ah-line)] sm:grid-cols-2">
+      {chat.map((r) => (
+        <div key={r.model_id} className="flex items-start justify-between gap-3 bg-[#0E0F0F] px-3 py-2.5">
+          <div className="min-w-0">
+            <p className="truncate text-[14px] text-[var(--ah-ink)]">
+              {r.display_name}
+              {r.serving_type !== "proxy" ? <span className="ah-lbl ml-2 text-[var(--ah-green)]">hosted</span> : null}
+            </p>
+            <code className="block truncate font-[family-name:var(--font-geist-mono)] text-[11.5px] text-[var(--ah-body)]">
+              {r.model_id}
+            </code>
+          </div>
+          <p className="ah-lbl shrink-0 pt-0.5 text-right normal-case">
+            {usd(r.pricing?.input_cents_per_mtok)} / {usd(r.pricing?.output_cents_per_mtok)}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function Section({ title, rows }: { title: string; rows: Row[] }) {
   return (
     <div>
       <p className="ah-lbl mb-2">{title}</p>
-      <div className="overflow-x-auto border border-[var(--ah-line)]">
+      <div className="ah-scroll overflow-x-auto border border-[var(--ah-line)]">
         <table className="w-full min-w-[720px] border-collapse text-[13.5px]">
           <thead>
             <tr className="bg-white/[0.03]">

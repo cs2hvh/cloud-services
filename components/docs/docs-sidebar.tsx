@@ -42,9 +42,10 @@ export function DocsSidebar({ groups }: { groups: DocsNavGroup[] }) {
                     <Link
                       href={it.href}
                       onClick={() => setOpen(false)}
+                      aria-current={active ? "page" : undefined}
                       className={`-ml-px block border-l py-1 pl-3 text-[13.5px] leading-snug transition-colors ${
                         active
-                          ? "border-[var(--ah-blue)] text-[var(--ah-ink)]"
+                          ? "border-[var(--ah-blue)] bg-[rgba(0,149,255,0.06)] text-[var(--ah-ink)]"
                           : "border-transparent text-[var(--ah-body)] hover:border-[var(--ah-line-hi)] hover:text-[var(--ah-ink)]"
                       }`}
                     >

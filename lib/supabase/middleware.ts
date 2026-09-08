@@ -144,9 +144,12 @@ export async function updateSession(request: NextRequest) {
   // second-factor and suspension decisions are made here for all of them.
   // /api/auth stays out: the MFA challenge, sign-out and recovery must stay
   // reachable from a half-authenticated or suspended session.
+  // "/api/" with the slash: "/api" alone also matched /api-docs and /api-doc,
+  // the public API reference pages, and answered them with a 401 JSON body
+  // for any MFA account whose session was password-only.
   const isCookieApiRoute =
-    request.nextUrl.pathname.startsWith("/api") &&
-    !request.nextUrl.pathname.startsWith("/api/auth");
+    request.nextUrl.pathname.startsWith("/api/") &&
+    !request.nextUrl.pathname.startsWith("/api/auth/");
 
   if (user && (isProtectedRoute || isCookieApiRoute)) {
     let secondFactorMissing = false;

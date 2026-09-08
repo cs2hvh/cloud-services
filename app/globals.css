@@ -1367,3 +1367,40 @@ text-align: center;
   content: attr(data-text);
   white-space: inherit;
 }
+
+/* ── developer docs (2026-09-08) ─────────────────────────────────
+   The docs are dark, so the browser's own scrollbars must be too. Nothing
+   on the site declares a colour scheme, so the page scrollbar rendered light
+   against the dark ground. color-scheme on the root, scoped to while a docs
+   page is mounted, fixes the page bar; .ah-scroll is the thin bar for code
+   blocks, tables and the sidebar. */
+html:has(.ah-docs) {
+  color-scheme: dark;
+  scrollbar-color: #2b2b33 #0e0f0f;
+}
+.ah-docs .ah-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+.ah-docs .ah-scroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.ah-docs .ah-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.ah-docs .ah-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 4px;
+}
+.ah-docs .ah-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+.ah-docs ::selection {
+  background: rgba(0, 149, 255, 0.35);
+  color: var(--ah-ink);
+}
+/* Anchored headings land below the fixed navbar. */
+.ah-docs [id] {
+  scroll-margin-top: 6.5rem;
+}

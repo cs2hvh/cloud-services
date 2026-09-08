@@ -69,7 +69,7 @@ function Frame({
         <div className="flex min-w-0 items-center gap-1">{header}</div>
         <CopyButton text={code} />
       </div>
-      <pre className="overflow-x-auto px-4 py-3.5 font-[family-name:var(--font-geist-mono)] text-[12.5px] leading-[1.7] text-[var(--ah-body)]">
+      <pre className="ah-scroll overflow-x-auto px-4 py-3.5 font-[family-name:var(--font-geist-mono)] text-[12.5px] leading-[1.7] text-[var(--ah-body)] sm:text-[13px]">
         <code>
           <Highlighted code={code} lang={lang} />
         </code>

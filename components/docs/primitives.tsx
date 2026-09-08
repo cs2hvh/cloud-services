@@ -9,7 +9,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { flattenDocs } from "./nav";
+import { INFERENCE_DOCS, flattenDocs } from "./nav";
 
 export function DocPage({
   href,
@@ -25,10 +25,25 @@ export function DocPage({
   lede: ReactNode;
   children: ReactNode;
 }) {
+  const group = INFERENCE_DOCS.find((g) => g.items.some((i) => i.href === href));
   return (
     <article className="min-w-0">
       <header className="mb-10 border-b border-[var(--ah-line)] pb-8">
-        <p className="ah-lbl mb-3">{eyebrow}</p>
+        <nav aria-label="Breadcrumb" className="ah-lbl mb-4 flex flex-wrap items-center gap-2">
+          <Link href="/docs" className="hover:text-[var(--ah-ink)]">
+            Docs
+          </Link>
+          <span aria-hidden>/</span>
+          <Link href="/docs/inference" className="hover:text-[var(--ah-ink)]">
+            {eyebrow}
+          </Link>
+          {group ? (
+            <>
+              <span aria-hidden>/</span>
+              <span>{group.label}</span>
+            </>
+          ) : null}
+        </nav>
         <h1 className="text-[clamp(28px,3.4vw,38px)] font-semibold leading-[1.15] tracking-[-0.01em] text-[var(--ah-ink)]">
           {title}
         </h1>
@@ -36,6 +51,13 @@ export function DocPage({
       </header>
       <div className="space-y-5">{children}</div>
       <NextPrev href={href} />
+      <p className="mt-8 text-[13px] text-[var(--ah-muted)]">
+        Something missing or wrong on this page?{" "}
+        <Link href="/contact" className="text-[var(--ah-body)] underline decoration-[var(--ah-line-hi)] underline-offset-[3px] hover:text-[var(--ah-ink)]">
+          Tell us
+        </Link>
+        , and quote the page title.
+      </p>
     </article>
   );
 }
@@ -166,7 +188,7 @@ export function Params({ items }: { items: ParamItem[] }) {
 
 export function Table({ head, rows }: { head: ReactNode[]; rows: ReactNode[][] }) {
   return (
-    <div className="my-4 overflow-x-auto border border-[var(--ah-line)]">
+    <div className="ah-scroll my-4 overflow-x-auto border border-[var(--ah-line)]">
       <table className="w-full min-w-[520px] border-collapse text-[14px]">
         <thead>
           <tr className="bg-white/[0.03]">
