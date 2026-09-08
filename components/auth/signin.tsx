@@ -57,6 +57,46 @@ const onBtnLeave = (e: React.MouseEvent<HTMLButtonElement>) => {
     "0 12px 34px -10px rgba(0,149,255,0.6), inset 0 1px 0 rgba(255,255,255,0.28)";
 };
 
+const SANSATION: React.CSSProperties = { fontFamily: "'Sansation', system-ui, sans-serif" };
+
+/**
+ * The card every step of sign-in lives in: brand, a heading line, a blurb,
+ * then the step's own content. The password form and the second-factor step
+ * share it so the two read as one flow rather than two products.
+ */
+function CardShell({
+  heading,
+  blurb,
+  children,
+}: {
+  heading: React.ReactNode;
+  blurb: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="relative mx-auto mt-3 sm:mt-0 w-full max-w-[420px] overflow-hidden rounded-[18px] border border-white/[0.10] bg-[#101116]/95 px-7 py-10 shadow-[0_40px_120px_-30px_rgba(0,0,0,0.9),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-[24px] sm:px-10 sm:py-12">
+      {/* Ambient accent glow */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-28 left-1/2 h-56 w-[150%] -translate-x-1/2 blur-3xl"
+        style={{ background: "radial-gradient(closest-side, rgba(0,149,255,0.18), transparent)" }}
+      />
+      <div className="relative z-10">
+        <div className="mx-auto mb-1 text-center pt-2 pb-1">
+          <h1 style={SANSATION} className="inline-block cursor-pointer text-[24px] leading-[27px] font-bold text-white transition-transform duration-300 ease-out will-change-transform hover:-translate-y-1.5 hover:scale-[1.04]">
+            Ahura<span className="text-[#2f8af5]">Sense</span>
+          </h1>
+          <p className="mt-3 text-[14px] leading-[16px] text-white">
+            <span style={SANSATION} className="block text-[14px] leading-[18px] font-normal">{heading}</span>
+            <span className="block text-[14px] leading-[16px] text-white/90">{blurb}</span>
+          </p>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export function SignInForm({
   /**
    * Start in the second-factor step. The sign-in page sets this when the
@@ -82,6 +122,9 @@ export function SignInForm({
   const [twofaReady, setTwofaReady] = React.useState(false);
   const [needsMfa, setNeedsMfa] = React.useState(false);
   const [factorId, setFactorId] = React.useState("");
+  const [sessionEmail, setSessionEmail] = React.useState<string | null>(null);
+  const twofaFormRef = React.useRef<HTMLFormElement>(null);
+  const codeRef = React.useRef<HTMLInputElement>(null);
 
   const supabase = React.useMemo(() => createClient(), []);
 
@@ -208,6 +251,10 @@ export function SignInForm({
 
       if (data.nextLevel === "aal2") {
         setNeedsMfa(true);
+        // Shown on the card so the person knows which account the code is
+        // for, and can leave if it is not theirs.
+        const who = await supabase.auth.getUser();
+        if (!cancelled) setSessionEmail(who.data.user?.email ?? null);
         const factors = await supabase.auth.mfa.listFactors();
         if (factors.error) {
           setTwofaError(factors.error.message);
@@ -235,6 +282,13 @@ export function SignInForm({
       cancelled = true;
     };
   }, [twofaRequired, supabase, router, nextPath]);
+
+  // Focus the code field once it exists. Not autoFocus: the field is mounted
+  // by state, after the assurance check, and autoFocus only fires on the first
+  // render of a page.
+  React.useEffect(() => {
+    if (twofaRequired && twofaReady && needsMfa) codeRef.current?.focus();
+  }, [twofaRequired, twofaReady, needsMfa]);
 
   const onSubmit2fa = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -275,9 +329,14 @@ export function SignInForm({
   if (twofaRequired) {
     if (!twofaReady) {
       return (
-        <div className="mx-auto w-full max-w-md rounded-md border border-white/20 bg-[#11131b]/90 p-6 text-sm text-white/80 backdrop-blur-md">
-          Checking your session...
-        </div>
+        <CardShell heading="Two-factor verification" blurb="Checking your session…">
+          <div className="flex flex-col items-center justify-center py-14">
+            <div className="relative h-12 w-12">
+              <div className="absolute inset-0 rounded-full border-2 border-white/10" />
+              <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-[#2f8af5] animate-spin" />
+            </div>
+          </div>
+        </CardShell>
       );
     }
 
@@ -286,33 +345,64 @@ export function SignInForm({
     }
 
     return (
-      <div className="mx-auto w-full max-w-md rounded-md border border-white/20 bg-[#11131b]/90 p-6 shadow-xl backdrop-blur-md">
-        <h1 className="mb-2 text-xl font-semibold text-white">Two-Factor Verification</h1>
-        <p className="mb-4 text-sm text-white/80">
-          Enter the 6-digit code from your authenticator app.
-        </p>
-
-        <form onSubmit={onSubmit2fa} className="space-y-3">
+      <CardShell
+        heading="Two-factor verification"
+        blurb={
+          sessionEmail ? (
+            <>
+              Signed in as <span className="text-white">{sessionEmail}</span>
+            </>
+          ) : (
+            "One more step to finish signing in."
+          )
+        }
+      >
+        <form
+          ref={twofaFormRef}
+          onSubmit={onSubmit2fa}
+          className="mx-auto mt-8 w-full max-w-[340px] space-y-4"
+        >
           <div>
-            <Label htmlFor="code" className="text-white">Authentication Code</Label>
-            <div className={inputShellClass}>
+            <Label htmlFor="code" className="text-base font-normal text-white">
+              Authentication code
+            </Label>
+            <p className="mt-1 text-[12.5px] leading-[1.5] text-white/55">
+              The 6-digit code from your authenticator app. It changes every 30 seconds.
+            </p>
+            <div className={`${inputShellClass} mt-3`}>
               <Input
                 id="code"
+                ref={codeRef}
                 inputMode="numeric"
+                pattern="[0-9]*"
                 autoComplete="one-time-code"
-                placeholder="123456"
+                placeholder="••••••"
                 value={otpCode}
+                disabled={twofaBusy}
                 onChange={(e) => {
                   const v = e.target.value.replace(/\D/g, "").slice(0, 6);
                   setOtpCode(v);
+                  setTwofaError("");
+                  // Six digits is the whole answer; submit without a second
+                  // gesture, the way authenticator prompts elsewhere behave.
+                  if (v.length === 6 && !twofaBusy) {
+                    requestAnimationFrame(() => twofaFormRef.current?.requestSubmit());
+                  }
                 }}
                 maxLength={6}
-                className={glass.field}
+                className={`${glass.field} text-center text-[22px] font-semibold tracking-[0.45em] tabular-nums placeholder:tracking-[0.3em] placeholder:text-white/25`}
               />
             </div>
           </div>
 
-          {twofaError && <p className="text-sm text-red-400">{twofaError}</p>}
+          {twofaError && (
+            <p
+              role="alert"
+              className="rounded-[8px] border border-red-400/30 bg-red-500/10 px-3 py-2 text-[13px] leading-snug text-red-300"
+            >
+              {twofaError}
+            </p>
+          )}
 
           <button
             type="submit"
@@ -322,31 +412,40 @@ export function SignInForm({
             onMouseEnter={onBtnEnter}
             onMouseLeave={onBtnLeave}
           >
-            {twofaBusy ? "Verifying..." : "Verify"}
+            {twofaBusy ? "Verifying…" : "Verify and continue"}
           </button>
         </form>
-      </div>
+
+        <div className="mx-auto mt-6 w-full max-w-[340px] space-y-2 text-center text-[12.5px] leading-[1.5] text-white/55">
+          <p>
+            Lost your device?{" "}
+            <Link href="/contact" className="text-[#00a2ff] hover:text-[#53beff]">
+              Contact support
+            </Link>{" "}
+            to recover your account.
+          </p>
+          <p>
+            <a
+              href="/api/auth/signout"
+              className="text-white/70 underline decoration-white/30 underline-offset-[3px] hover:text-white"
+            >
+              Use a different account
+            </a>
+          </p>
+        </div>
+      </CardShell>
     );
   }
 
   return (
-    <div className="relative mx-auto mt-3 sm:mt-0 w-full max-w-[420px] overflow-hidden rounded-[18px] border border-white/[0.10] bg-[#101116]/95 px-7 py-10 shadow-[0_40px_120px_-30px_rgba(0,0,0,0.9),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-[24px] sm:px-10 sm:py-12">
-      {/* Ambient accent glow */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -top-28 left-1/2 h-56 w-[150%] -translate-x-1/2 blur-3xl"
-        style={{ background: "radial-gradient(closest-side, rgba(0,149,255,0.18), transparent)" }}
-      />
-      <div className="relative z-10">
-      {/* Branding — always visible */}
-      <div className="mx-auto mb-1 text-center pt-2 pb-1">
-        <h1 style={{ fontFamily: "'Sansation', system-ui, sans-serif" }} className="inline-block cursor-pointer text-[24px] leading-[27px] font-bold text-white transition-transform duration-300 ease-out will-change-transform hover:-translate-y-1.5 hover:scale-[1.04]">Ahura<span className="text-[#2f8af5]">Sense</span></h1>
-        <p className="mt-3 text-[14px] leading-[16px] text-white">
-          <span style={{ fontFamily: "'Sansation', system-ui, sans-serif" }} className="block text-[14px] leading-[18px] font-normal">Sign in to Ahura<span className="text-[#2f8af5]">Sense</span> Cloud</span>
-          <span className="block  text-[14px] leading-[16px] text-white/90">Welcome back! Please Log in to continue.</span>
-        </p>
-      </div>
-
+    <CardShell
+      heading={
+        <>
+          Sign in to Ahura<span className="text-[#2f8af5]">Sense</span> Cloud
+        </>
+      }
+      blurb="Welcome back! Please Log in to continue."
+    >
       {/* Loading overlay — replaces form */}
       {isLoading ? (
         <div className="flex flex-col items-center justify-center py-14 gap-5">
@@ -463,7 +562,6 @@ export function SignInForm({
           </p>
         </>
       )}
-      </div>
-    </div>
+    </CardShell>
   );
 }
