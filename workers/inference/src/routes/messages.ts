@@ -30,7 +30,7 @@ import {
   streamPassthrough,
 } from "../lib/wokey.ts";
 import { lookupCache, shouldCacheMessages, writeCache } from "../lib/cache.ts";
-import { lookupModelRouting } from "../lib/model-routing.ts";
+import { forwardToEndpoints, hasManagedTarget, lookupModelRouting } from "../lib/model-routing.ts";
 import {
   extractEmbeddableText,
   lookupSemanticCache,
@@ -341,13 +341,65 @@ export const messagesShim: Handler<{
       ? { ...openaiBody, model: messagesRouting.upstream_model_id }
       : openaiBody;
 
-  const upstream = await forwardJson({
-    env: c.env,
-    body: upstreamBody,
-    upstreamKey,
-    path: "/chat/completions",
-    signal: c.req.raw.signal,
-  });
+  // A model we serve ourselves goes to its own endpoints, never to Wokey:
+  // Wokey has not heard of zhipu/glm-5.3-flash and would 404 it. The answer is
+  // OpenAI-shaped either way, so everything below this branch is unchanged.
+  let upstream: Response;
+  if (messagesRouting && messagesRouting.serving_type !== "proxy") {
+    if (messagesRouting.endpoints_error || !hasManagedTarget(messagesRouting)) {
+      c.header("Retry-After", "5");
+      return c.json(
+        anthropicError("api_error", `Model "${normalizedModel}" is not available right now.`, requestId),
+        503
+      );
+    }
+    try {
+      const managed = await forwardToEndpoints({
+        env: c.env,
+        routing: messagesRouting,
+        body: openaiBody,
+        signal: c.req.raw.signal,
+      });
+      upstream = managed.response;
+      if (managed.attempts.length > 0) {
+        console.warn(
+          JSON.stringify({
+            level: "warn",
+            message: "managed endpoint failed over",
+            requestId,
+            model: normalizedModel,
+            attempts: managed.attempts,
+            servedFrom: managed.baseUrl,
+            route: "messages",
+          })
+        );
+      }
+    } catch (err) {
+      console.error(
+        JSON.stringify({
+          level: "error",
+          message: "every serving endpoint failed",
+          requestId,
+          model: normalizedModel,
+          detail: err instanceof Error ? err.message : String(err),
+          route: "messages",
+        })
+      );
+      c.header("Retry-After", "10");
+      return c.json(
+        anthropicError("overloaded_error", "Serving instance is warming up. Retry in a few seconds.", requestId),
+        503
+      );
+    }
+  } else {
+    upstream = await forwardJson({
+      env: c.env,
+      body: upstreamBody,
+      upstreamKey,
+      path: "/chat/completions",
+      signal: c.req.raw.signal,
+    });
+  }
 
   if (!upstream.ok) {
     // Sanitised, not passed through — the upstream's own error prose names

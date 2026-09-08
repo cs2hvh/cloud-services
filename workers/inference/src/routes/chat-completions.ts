@@ -30,7 +30,8 @@ import {
 } from "../lib/semantic-cache.ts";
 import {
   lookupModelRouting,
-  forwardToManaged,
+  forwardToEndpoints,
+  hasManagedTarget,
   extendServingPodIdle,
 } from "../lib/model-routing.ts";
 import {
@@ -283,7 +284,22 @@ export const chatCompletions: Handler<{
   //   • serving_url NULL → self-serve only (Phase 10). User runs vLLM on
   //                        their own GPU pod. Return a redirect message.
   if (routing && (routing.serving_type === "runpod_ft" || routing.serving_type === "runpod_byo")) {
-    if (!routing.serving_url) {
+    if (routing.endpoints_error) {
+      // The endpoint table could not be read. Not "self-serve": a model that
+      // has endpoints must not be described as an adapter because one query
+      // failed. Retryable, and says so.
+      c.header("Retry-After", "5");
+      return c.json(
+        errorBody(
+          `Model "${effectiveModel}" is temporarily unavailable. Retry in a few seconds.`,
+          "service_unavailable",
+          "model_unavailable",
+          requestId
+        ),
+        503
+      );
+    }
+    if (!hasManagedTarget(routing)) {
       return c.json(
         errorBody(
           `Model "${effectiveModel}" is a private adapter. Serve it on a GPU pod you control ` +
@@ -297,19 +313,36 @@ export const chatCompletions: Handler<{
       );
     }
 
-    // Managed path — forward directly to the AhuraCloud-operated vLLM URL.
-    // The cache + guardrail already ran above; preset rewrite already
-    // applied. Pass the body as-is (with model rewritten to vLLM's
-    // served-model-name inside forwardToManaged).
-    const servedName = routing.served_model_name ?? "adapter";
+    // Managed path — the model's own endpoints (inference.serving_endpoints,
+    // weighted, with failover) or the legacy single serving_url. The cache +
+    // guardrail already ran above; preset rewrite already applied. Pass the
+    // body as-is (model rewritten to the served-model-name inside).
     let upstream: Response;
+    let servedFrom: string;
     try {
-      upstream = await forwardToManaged({
-        servingUrl: routing.serving_url,
+      const managed = await forwardToEndpoints({
+        env: c.env,
+        routing,
         body: outgoingBody,
-        servedModelName: servedName,
         signal: c.req.raw.signal,
       });
+      upstream = managed.response;
+      servedFrom = managed.baseUrl;
+      if (managed.attempts.length > 0) {
+        // A replica was skipped. Worth a line even though the customer got an
+        // answer: a pod that is always skipped is a pod nobody is paying
+        // attention to.
+        console.warn(
+          JSON.stringify({
+            level: "warn",
+            message: "managed endpoint failed over",
+            requestId,
+            model: effectiveModel,
+            attempts: managed.attempts,
+            servedFrom,
+          })
+        );
+      }
     } catch (err) {
       // Network-level failure (DNS, connection refused, TLS, etc.) —
       // most common cause is the pod still warming up (or just torn
@@ -333,7 +366,15 @@ export const chatCompletions: Handler<{
         ),
         503
       );
-      void msg;
+      console.error(
+        JSON.stringify({
+          level: "error",
+          message: "every serving endpoint failed",
+          requestId,
+          model: effectiveModel,
+          detail: msg,
+        })
+      );
     }
     c.header("X-Ahura-Routing", "managed");
 
@@ -376,7 +417,7 @@ export const chatCompletions: Handler<{
     // Successful managed call — extend the pod's idle deadline so the
     // watchdog doesn't reap it while it's actively being used. Fire-and-
     // forget; never block the customer response on this.
-    c.executionCtx.waitUntil(extendServingPodIdle(c.env, routing.serving_url));
+    c.executionCtx.waitUntil(extendServingPodIdle(c.env, servedFrom));
 
     // Stream OR non-stream — passthrough body unchanged. vLLM's openai-server
     // emits usage in both shapes; we read it the same way the OpenRouter
