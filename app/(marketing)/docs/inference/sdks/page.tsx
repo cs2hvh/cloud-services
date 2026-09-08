@@ -1,12 +1,13 @@
-import type { Metadata } from "next";
 import { Code } from "@/components/docs/code";
+import { docsMetadata } from "@/components/docs/metadata";
 import { A, C, Callout, DocPage, H2, H3, P } from "@/components/docs/primitives";
 
-export const metadata: Metadata = {
+export const metadata = docsMetadata({
   title: "SDKs & frameworks — Inference API — AhuraSense Docs",
   description:
     "Use the AhuraSense inference API from the OpenAI and Anthropic SDKs, LangChain, the Vercel AI SDK, or plain HTTP.",
-};
+  path: "/docs/inference/sdks",
+});
 
 const HREF = "/docs/inference/sdks";
 

@@ -1,12 +1,13 @@
-import type { Metadata } from "next";
 import { Code } from "@/components/docs/code";
+import { docsMetadata } from "@/components/docs/metadata";
 import { A, C, Callout, DocPage, H2, Li, P, Table, Ul } from "@/components/docs/primitives";
 
-export const metadata: Metadata = {
+export const metadata = docsMetadata({
   title: "Caching — Inference API — AhuraSense Docs",
   description:
     "The AhuraSense inference API response cache: which requests it applies to, the headers that control it, and how cached answers are billed.",
-};
+  path: "/docs/inference/caching",
+});
 
 const HREF = "/docs/inference/caching";
 

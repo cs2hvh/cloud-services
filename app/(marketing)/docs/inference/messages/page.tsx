@@ -1,5 +1,5 @@
-import type { Metadata } from "next";
 import { Code, CodeTabs } from "@/components/docs/code";
+import { docsMetadata } from "@/components/docs/metadata";
 import {
   A,
   C,
@@ -14,11 +14,12 @@ import {
   Ul,
 } from "@/components/docs/primitives";
 
-export const metadata: Metadata = {
+export const metadata = docsMetadata({
   title: "Messages — Inference API — AhuraSense Docs",
   description:
     "Reference for POST /v1/messages, the Anthropic-compatible endpoint on the AhuraSense inference API.",
-};
+  path: "/docs/inference/messages",
+});
 
 const HREF = "/docs/inference/messages";
 

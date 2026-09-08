@@ -1,5 +1,5 @@
-import type { Metadata } from "next";
 import { Code, CodeTabs } from "@/components/docs/code";
+import { docsMetadata } from "@/components/docs/metadata";
 import { ModelsList } from "@/components/docs/models-table";
 import {
   A,
@@ -17,11 +17,12 @@ import {
   Ul,
 } from "@/components/docs/primitives";
 
-export const metadata: Metadata = {
-  title: "Inference API — Overview — AhuraSense Docs",
+export const metadata = docsMetadata({
+  title: "Overview — Inference API — AhuraSense Docs",
   description:
     "One OpenAI-compatible endpoint for frontier and open-source models, with an Anthropic-compatible route, streaming, tool calling and per-key controls.",
-};
+  path: "/docs/inference",
+});
 
 // The model list below is read from the catalog; refresh at most every five
 // minutes so a new model or price shows up without a deploy.

@@ -1,11 +1,12 @@
-import type { Metadata } from "next";
+import { docsMetadata } from "@/components/docs/metadata";
 import { A, C, Callout, DocPage, H2, Li, P, Table, Ul } from "@/components/docs/primitives";
 
-export const metadata: Metadata = {
+export const metadata = docsMetadata({
   title: "Privacy & data retention — Inference API — AhuraSense Docs",
   description:
     "What the AhuraSense inference API stores per request, how zero data retention keys change that, and how keys and secrets are protected.",
-};
+  path: "/docs/inference/privacy",
+});
 
 const HREF = "/docs/inference/privacy";
 

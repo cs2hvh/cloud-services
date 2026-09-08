@@ -78,7 +78,7 @@ const CARDS: ModelCard[] = [
   { provider: "xAI",       model: "grok-4.5",              meta: "Reasoning · Tools · 500k",      accent: "#a3a3a3" },
   { provider: "Moonshot",  model: "kimi-k2.7-code",        meta: "Code · Open weights · 256k",    accent: "#6366f1" },
   { provider: "MiniMax",   model: "minimax-m3",            meta: "Open weights · Tools · 1M",     accent: "#f43f5e" },
-  { provider: "Anthropic", model: "claude-opus-4.8",       meta: "Frontier · Tools · 1M context", accent: "#d97706" },
+  { provider: "Zhipu",     model: "glm-5.3-flash",         meta: "Uncensored · Hosted · 1M",      accent: "#14b8a6" },
 
   { provider: "Anthropic", model: "claude-haiku-4.5",      meta: "Fast · Tools · 200k",           accent: "#d97706" },
   { provider: "OpenAI",    model: "gpt-5.4-mini",          meta: "Fast · Tools · 400k",           accent: "#10a37f" },
@@ -134,7 +134,7 @@ const COLUMNS: Array<{ from: number; cards: ModelCard[]; durationS: number; reve
  * wrong: it undersells the platform and it means this file has stopped
  * tracking reality, which is the same defect as overselling it.
  */
-export const CATALOG_MODEL_COUNT = 29;
+export const CATALOG_MODEL_COUNT = 30;
 export const CATALOG_PROVIDER_COUNT = 8;
 
 /**

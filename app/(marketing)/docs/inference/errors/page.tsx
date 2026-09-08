@@ -1,12 +1,13 @@
-import type { Metadata } from "next";
 import { Code } from "@/components/docs/code";
+import { docsMetadata } from "@/components/docs/metadata";
 import { A, C, Callout, DocPage, H2, P, Table } from "@/components/docs/primitives";
 
-export const metadata: Metadata = {
+export const metadata = docsMetadata({
   title: "Errors — Inference API — AhuraSense Docs",
   description:
     "The AhuraSense inference API error envelope and every error code, with the HTTP status and what to do about each.",
-};
+  path: "/docs/inference/errors",
+});
 
 const HREF = "/docs/inference/errors";
 

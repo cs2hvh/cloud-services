@@ -1,12 +1,13 @@
-import type { Metadata } from "next";
 import { Code } from "@/components/docs/code";
+import { docsMetadata } from "@/components/docs/metadata";
 import { A, C, Callout, DocPage, H2, Li, P, Ul } from "@/components/docs/primitives";
 
-export const metadata: Metadata = {
+export const metadata = docsMetadata({
   title: "Structured outputs — Inference API — AhuraSense Docs",
   description:
     "Getting reliably parseable JSON from the AhuraSense inference API: JSON mode, schemas, and the prompt habits that make them work.",
-};
+  path: "/docs/inference/structured-outputs",
+});
 
 const HREF = "/docs/inference/structured-outputs";
 

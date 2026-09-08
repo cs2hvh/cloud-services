@@ -1,12 +1,13 @@
-import type { Metadata } from "next";
 import { Code } from "@/components/docs/code";
+import { docsMetadata } from "@/components/docs/metadata";
 import { C, Callout, DocPage, H2, Li, P, Table, Ul } from "@/components/docs/primitives";
 
-export const metadata: Metadata = {
+export const metadata = docsMetadata({
   title: "Guardrails — Inference API — AhuraSense Docs",
   description:
     "Prompt-injection detection on the AhuraSense inference API: the warn, block and off policies, the response header, and what the detector looks for.",
-};
+  path: "/docs/inference/guardrails",
+});
 
 const HREF = "/docs/inference/guardrails";
 

@@ -1,12 +1,13 @@
-import type { Metadata } from "next";
 import { Code } from "@/components/docs/code";
+import { docsMetadata } from "@/components/docs/metadata";
 import { A, C, Callout, DocPage, H2, Li, P, Table, Ul } from "@/components/docs/primitives";
 
-export const metadata: Metadata = {
+export const metadata = docsMetadata({
   title: "Rate limits & spend caps — Inference API — AhuraSense Docs",
   description:
     "Requests per minute, burst, and monthly hard caps on the AhuraSense inference API, and the exact responses when you reach them.",
-};
+  path: "/docs/inference/limits",
+});
 
 const HREF = "/docs/inference/limits";
 

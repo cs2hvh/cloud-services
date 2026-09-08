@@ -1,12 +1,13 @@
-import type { Metadata } from "next";
 import { Code, CodeTabs } from "@/components/docs/code";
+import { docsMetadata } from "@/components/docs/metadata";
 import { A, C, Callout, DocPage, H2, Li, P, Ul } from "@/components/docs/primitives";
 
-export const metadata: Metadata = {
+export const metadata = docsMetadata({
   title: "Streaming — Inference API — AhuraSense Docs",
   description:
     "Streaming responses from the AhuraSense inference API: the server-sent event format, usage on a stream, cancellation, and reasoning tokens.",
-};
+  path: "/docs/inference/streaming",
+});
 
 const HREF = "/docs/inference/streaming";
 

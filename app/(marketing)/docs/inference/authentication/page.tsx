@@ -1,5 +1,5 @@
-import type { Metadata } from "next";
 import { Code } from "@/components/docs/code";
+import { docsMetadata } from "@/components/docs/metadata";
 import {
   A,
   C,
@@ -14,11 +14,12 @@ import {
   Ul,
 } from "@/components/docs/primitives";
 
-export const metadata: Metadata = {
+export const metadata = docsMetadata({
   title: "Authentication — Inference API — AhuraSense Docs",
   description:
     "API keys for the AhuraSense inference API: the header, what a key can be restricted to, revocation, and the request and response headers.",
-};
+  path: "/docs/inference/authentication",
+});
 
 const HREF = "/docs/inference/authentication";
 

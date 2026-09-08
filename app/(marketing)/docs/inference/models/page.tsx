@@ -1,5 +1,5 @@
-import type { Metadata } from "next";
 import { Code } from "@/components/docs/code";
+import { docsMetadata } from "@/components/docs/metadata";
 import { ModelsTable } from "@/components/docs/models-table";
 import {
   A,
@@ -15,11 +15,12 @@ import {
   Ul,
 } from "@/components/docs/primitives";
 
-export const metadata: Metadata = {
+export const metadata = docsMetadata({
   title: "Models — Inference API — AhuraSense Docs",
   description:
     "The live AhuraSense model catalog: ids, context windows, capabilities and per-token prices, and the GET /v1/models endpoint.",
-};
+  path: "/docs/inference/models",
+});
 
 // The table below is read from the catalog. Re-render at most every five
 // minutes so a price or a new model shows up without a deploy.

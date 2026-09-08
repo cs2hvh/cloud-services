@@ -1,13 +1,14 @@
-import type { Metadata } from "next";
 import Link from "next/link";
+import { docsMetadata } from "@/components/docs/metadata";
 import { Cards } from "@/components/docs/primitives";
 import { INFERENCE_DOCS } from "@/components/docs/nav";
 
-export const metadata: Metadata = {
-  title: "Documentation — AhuraSense Cloud",
+export const metadata = docsMetadata({
+  title: "Documentation — Developer docs — AhuraSense Cloud",
   description:
     "Developer documentation for the AhuraSense inference API and the cloud platform API.",
-};
+  path: "/docs",
+});
 
 // Every "View documentation" link on the marketing site lands here.
 export default function DocsHome() {

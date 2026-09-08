@@ -1,12 +1,13 @@
-import type { Metadata } from "next";
 import { Code, CodeTabs } from "@/components/docs/code";
+import { docsMetadata } from "@/components/docs/metadata";
 import { A, C, Callout, DocPage, H2, Li, Ol, P, Ul } from "@/components/docs/primitives";
 
-export const metadata: Metadata = {
+export const metadata = docsMetadata({
   title: "Tool calling — Inference API — AhuraSense Docs",
   description:
     "Function calling on the AhuraSense inference API in the OpenAI tool format: define tools, read the model's calls, return results, and stream them.",
-};
+  path: "/docs/inference/tool-calling",
+});
 
 const HREF = "/docs/inference/tool-calling";
 
