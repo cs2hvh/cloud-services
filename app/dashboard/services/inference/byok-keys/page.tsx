@@ -72,7 +72,10 @@ interface ByokKey {
 // work. 'openrouter' is absent deliberately: it is no longer an upstream, and
 // offering it would let someone add a key that silently never gets used.
 const PROVIDERS = [
-  { value: 'wokey', label: 'Wokey — all models (recommended)' },
+  // The partner is not named in the UI: which backend serves the catalog is
+  // not a customer-facing fact. The value stays 'wokey' because the gateway
+  // matches on it.
+  { value: 'wokey', label: 'Routing partner — all models (recommended)' },
   { value: 'openai', label: 'OpenAI (not yet routed)' },
   { value: 'anthropic', label: 'Anthropic (not yet routed)' },
   { value: 'google', label: 'Google (not yet routed)' },
@@ -197,7 +200,7 @@ export default function ByokKeysPage() {
         <StatCell
           label="Routable keys"
           value={String(routableCount)}
-          hint="Wokey · active upstream"
+          hint="Routing partner · active"
           accent={routableCount > 0 ? ACCENT : undefined}
         />
         <StatCell
@@ -240,7 +243,7 @@ export default function ByokKeysPage() {
                 </span>
               </div>
               <div className={`${MONO} text-[11.5px] uppercase tracking-[0.04em] text-white/75`}>
-                {k.provider}
+                {k.provider === 'wokey' ? 'routing partner' : k.provider}
               </div>
               <div className={`${MONO} text-[11.5px] text-white/55 tabular-nums truncate`}>{k.preview}</div>
               <div className="inline-flex flex-col items-start gap-0.5">
@@ -282,7 +285,7 @@ export default function ByokKeysPage() {
       ) : (
         <EmptyState
           title="No BYOK keys yet"
-          description="Add a provider key to route requests through your own account. Add a Wokey key — it covers every model in the catalog."
+          description="Add a provider key to route requests through your own account. A routing-partner key covers every model in the catalog."
           action={
             <PrimaryButton onClick={() => setCreateOpen(true)}>
               <Plus className="h-3.5 w-3.5" />
@@ -300,7 +303,7 @@ export default function ByokKeysPage() {
         />
         <NoteCard
           title="Validated at create"
-          body="Wokey keys are verified with a 1-token completion before storage, since the provider exposes no key-introspection endpoint. Failed verifications surface in the status column and block BYOK billing until resolved."
+          body="Routing-partner keys are verified with a 1-token completion before storage. Failed verifications surface in the status column and block BYOK billing until resolved."
         />
       </section>
 
@@ -320,7 +323,7 @@ export default function ByokKeysPage() {
               <Input
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="my-wokey-key"
+                placeholder="my-provider-key"
                 className="bg-white/[0.02] border-white/[0.08]"
               />
             </Field>
@@ -341,7 +344,7 @@ export default function ByokKeysPage() {
                 type="password"
                 value={form.api_key}
                 onChange={(e) => setForm({ ...form, api_key: e.target.value })}
-                placeholder={form.provider === 'wokey' ? 'wk-…' : 'sk-…'}
+                placeholder="…"
                 className="bg-white/[0.02] border-white/[0.08] font-mono"
               />
               <p className={`${MONO} mt-1 text-[10.5px] text-white/40`}>

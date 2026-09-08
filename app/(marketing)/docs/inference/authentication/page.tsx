@@ -108,8 +108,8 @@ x-api-key: ahu_live_…`}</Code>
           <C>allowed_models</C> is <C>null</C> when the key may call every model.
         </Li>
         <Li>
-          <C>billing</C> is <C>platform</C> unless the request carried{" "}
-          <C>X-Ahura-Billing: byok</C>. See <A href="/docs/inference/byok">Bring your own key</A>.
+          <C>billing</C> is how the request is charged: <C>platform</C>, against your AhuraSense
+          balance.
         </Li>
         <Li>
           <C>spent_cents</C> is the organization’s month-to-date spend, across all its keys.
@@ -122,8 +122,6 @@ x-api-key: ahu_live_…`}</Code>
         head={["Header", "Values", "Purpose"]}
         rows={[
           [<C key="1">X-Ahura-Request-Id</C>, "any string", "Your own correlation id. Echoed back; we generate one when absent."],
-          [<C key="2">X-Ahura-Billing</C>, <><C>platform</C> | <C>byok</C></>, <>Bill upstream usage to your own provider key. <A href="/docs/inference/byok">BYOK</A>.</>],
-          [<C key="3">X-Ahura-BYOK-Provider</C>, "provider name", "Which stored provider key to use with BYOK billing."],
           [<C key="4">X-Ahura-Preset</C>, "preset name", <>Use a named default model. <A href="/docs/inference/presets">Presets</A>.</>],
           [<C key="5">X-Ahura-Guardrail</C>, <><C>off</C> | <C>warn</C> | <C>block</C></>, <>Prompt-injection policy for this request. <A href="/docs/inference/guardrails">Guardrails</A>.</>],
           [<C key="6">X-Ahura-Cache</C>, <><C>off</C> | <C>aggressive</C></>, <>Skip or widen the response cache. <A href="/docs/inference/caching">Caching</A>.</>],
@@ -138,7 +136,7 @@ x-api-key: ahu_live_…`}</Code>
         rows={[
           [<C key="1">X-Ahura-Request-Id</C>, "The request id. Quote it in support requests."],
           [<C key="2">X-Ahura-Model</C>, "The catalog id that served the request and that usage is recorded under."],
-          [<C key="3">X-Ahura-Billing</C>, <><C>platform</C> or <C>byok</C>.</>],
+          [<C key="3">X-Ahura-Billing</C>, <>How the request was charged: <C>platform</C>.</>],
           [<C key="4">X-Ahura-Routing</C>, <><C>managed</C> when the model runs on AhuraSense GPU infrastructure rather than a partner backend. Absent otherwise.</>],
           [<C key="5">X-Ahura-Cache</C>, <><C>hit</C>, <C>miss</C>, <C>bypass</C>, <C>streaming-skipped</C> or <C>non-deterministic</C>.</>],
           [<C key="6">X-Ahura-Cache-Age</C>, "Seconds since a cached answer was produced. Only on hits."],

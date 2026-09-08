@@ -210,9 +210,6 @@ console.log(completion.choices[0].message.content);`,
           <Strong>Presets</Strong>: named default models you switch without a deploy.
         </Li>
         <Li>
-          <Strong>Bring your own key</Strong>: bill upstream usage to your own provider account.
-        </Li>
-        <Li>
           <Strong>Usage and audit</Strong>: per-key and per-model spend, latency percentiles, a CSV
           export, and an audit trail of every change to your account.
         </Li>

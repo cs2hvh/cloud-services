@@ -97,11 +97,6 @@ export const INFERENCE_DOCS: DocsNavGroup[] = [
         href: "/docs/inference/presets",
         description: "Named model defaults you can switch without redeploying.",
       },
-      {
-        title: "Bring your own key",
-        href: "/docs/inference/byok",
-        description: "Bill upstream usage to your own provider account.",
-      },
     ],
   },
   {

@@ -39,7 +39,6 @@ cost = 400 × 1.00/1M + 800 × 0.10/1M + 300 × 5.00/1M
       <Ul>
         <Li>Prices are on the <A href="/docs/inference/models">Models</A> page and in <C>GET /v1/models</C>. A change applies to requests after it, never retroactively.</Li>
         <Li>Requests that end in an error are not charged. A cancelled stream is charged for the tokens generated.</Li>
-        <Li>With <A href="/docs/inference/byok">BYOK</A> billing, the platform charge is zero and the provider bills you directly.</Li>
         <Li>The <C>off_peak</C> field on a model is reserved for time-of-day discounts; it is <C>null</C> on every model today.</Li>
       </Ul>
 
@@ -58,7 +57,7 @@ cost = 400 × 1.00/1M + 800 × 0.10/1M + 300 × 5.00/1M
           [<C key="5">cost_cents</C>, "What was charged."],
           [<C key="6">status</C>, <><C>success</C>, or an error class such as <C>error_rate_limit</C> or <C>error_upstream</C>.</>],
           [<C key="7">latency_ms</C>, "Time from request receipt to the last byte of the response."],
-          [<C key="8">billed_to</C>, <><C>platform</C> or <C>byok</C>.</>],
+          [<C key="8">billed_to</C>, <>How the request was charged: <C>platform</C>.</>],
           [<C key="9">cache_kind</C>, <><C>none</C> or <C>l1</C>.</>],
         ]}
       />

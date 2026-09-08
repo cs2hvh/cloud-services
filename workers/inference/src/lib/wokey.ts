@@ -177,11 +177,14 @@ export async function resolveUpstreamKey(
   // customer may pre-load a key for a provider we intend to route to later —
   // they are just not forwardable today.
   if (provider !== ROUTABLE_BYOK_PROVIDER) {
+    // The message reaches the caller verbatim, so it must not name the
+    // upstream: which backend serves the catalog is not a customer-facing
+    // fact. The default provider is the routable one, so "drop the header" is
+    // the complete instruction.
     throw new Error(
-      `BYOK is not available for provider '${provider}'. This gateway routes ` +
-        `all traffic through a single upstream, so only a '${ROUTABLE_BYOK_PROVIDER}' ` +
-        `key can be used. Remove the X-Ahura-BYOK-Provider header to use your ` +
-        `'${ROUTABLE_BYOK_PROVIDER}' key, or switch to platform billing.`
+      `BYOK is not available for provider '${provider}'. Remove the ` +
+        `X-Ahura-BYOK-Provider header to use the key stored for the platform's ` +
+        `routing partner, or switch to platform billing.`
     );
   }
 

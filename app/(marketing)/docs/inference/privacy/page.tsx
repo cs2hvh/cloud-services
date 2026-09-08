@@ -24,7 +24,7 @@ export default function PrivacyPage() {
           ["Usage record: token counts, model, key, status, latency, cost, request id", "Kept", "Billing and your usage dashboard"],
           ["Cached response body, for eligible non-streamed requests", "Up to the cache TTL, at most 1 hour", "Serving repeats from the cache"],
           ["Guardrail match: pattern id and a short excerpt, on a match only", "Audit log", "Explaining a flagged or blocked request"],
-          ["Audit events for changes to keys, presets, BYOK keys and settings", "Kept", "Accountability for your account"],
+          ["Audit events for changes to keys, presets and settings", "Kept", "Accountability for your account"],
         ]}
       />
       <P>

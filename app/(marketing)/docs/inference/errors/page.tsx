@@ -42,7 +42,6 @@ export default function ErrorsPage() {
           ["400", <C key="3">model_required</C>, "No model, and no preset that supplies one.", "Send a model id."],
           ["400", <C key="4">preset_not_found</C>, "X-Ahura-Preset names a preset your organization does not have.", "Check the name in the dashboard."],
           ["400", <C key="5">guardrail_blocked</C>, "The guardrail was set to block and a critical pattern matched.", <>Review the prompt; see <A href="/docs/inference/guardrails">Guardrails</A>.</>],
-          ["400", <C key="6">byok_unavailable</C>, "BYOK billing was requested but no usable stored key exists for that provider.", "Add the key in the dashboard or drop the header."],
           ["400", <C key="7">self_serve_model</C>, "A private adapter that is not being served anywhere.", "Start a serving pod for it from the dashboard."],
           ["401", <C key="8">invalid_api_key</C>, "Missing, malformed, unknown, revoked or expired key, or a request from outside the key's IP allowlist.", "Check the key and where you are calling from."],
           ["402", <C key="9">hard_cap_reached</C>, "This key's monthly hard cap is spent.", "Raise the cap on the API keys page, or use another key."],
