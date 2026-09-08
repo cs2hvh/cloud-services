@@ -26,7 +26,8 @@ const FOOTER_LINKS = [
     heading: "Resources",
     links: [
       { label: "Resources Hub", href: "/resources" },
-      { label: "API Reference", href: "/api-docs" },
+      { label: "Inference API docs", href: "/docs/inference" },
+      { label: "Cloud API reference", href: "/api-docs" },
       { label: "Pricing", href: "/pricing" },
       { label: "Changelog", href: "/changelog" },
     ],

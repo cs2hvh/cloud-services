@@ -52,7 +52,7 @@ const InferencePage = () => {
     <main className="bg-[#0E0F0F]">
       <InferenceHeroSection
         primaryAction={{ label: "Create API key", href: "/signup" }}
-        secondaryAction={{ label: "View documentation", href: "/api-docs" }}
+        secondaryAction={{ label: "View documentation", href: "/docs/inference" }}
       />
       <InferenceModelsSection />
       <InferencePrivateHostingSection />

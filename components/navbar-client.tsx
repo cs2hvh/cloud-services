@@ -186,6 +186,23 @@ const AI_LABS_GROUPS: AiLabsGroup[] = [
       },
     ],
   },
+  {
+    label: "Resources",
+    items: [
+      {
+        label: "Inference API docs",
+        desc: "Base URL, authentication, every endpoint and parameter, streaming, tools, errors",
+        href: "/docs/inference",
+        tags: ["Reference", "Quickstart", "SDKs"],
+      },
+      {
+        label: "Model catalog",
+        desc: "Every model with context window, capabilities and per-token price",
+        href: "/docs/inference/models",
+        tags: ["Prices", "Capabilities"],
+      },
+    ],
+  },
 ];
 
 
@@ -314,7 +331,7 @@ export function NavbarClient({ initialUser }: NavbarClientProps) {
   const navLinks = [
     { href: "/pricing", label: "Pricing" },
     // { href: "/resources", label: "Resources" },
-    { href: "/api-docs", label: "Docs" },
+    { href: "/docs", label: "Docs" },
   ];
 
   return (

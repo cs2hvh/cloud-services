@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { siteConfig } from "@/config/site";
+import { flattenDocs } from "@/components/docs/nav";
 
 const BASE = siteConfig.url;
 
@@ -105,5 +106,17 @@ export default function sitemap(): MetadataRoute.Sitemap {
     },
   ];
 
-  return staticPages;
+  // Developer docs: the home plus every page the sidebar lists, from the one
+  // config that drives the sidebar, so a new page cannot be left out here.
+  const docsPages: MetadataRoute.Sitemap = [
+    { url: `${BASE}/docs`, lastModified: now, changeFrequency: "weekly", priority: 0.8 },
+    ...flattenDocs().map((d) => ({
+      url: `${BASE}${d.href}`,
+      lastModified: now,
+      changeFrequency: "weekly" as const,
+      priority: 0.7,
+    })),
+  ];
+
+  return [...staticPages, ...docsPages];
 }

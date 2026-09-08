@@ -77,11 +77,11 @@ export const listModels: Handler<{
       id: m.model_id,
       object: "model",
       created: 0,
-      owned_by: m.org_id
-        ? "ahura-private"
-        : m.serving_type === "proxy"
-          ? "wokey"
-          : "ahura",
+      // "ahura" for the whole public catalog. This used to name the partner
+      // backend for proxied models, which told every caller who serves what;
+      // the vendor is already in the id's namespace, and which backend serves
+      // a model is ours to change without customers noticing.
+      owned_by: m.org_id ? "ahura-private" : "ahura",
       display_name: m.display_name,
       description: m.description,
       modality: m.modality,
