@@ -67,7 +67,7 @@ x-api-key: ahu_live_…`}</Code>
           [<Strong key="d">Rate limit</Strong>, "Requests per minute for this key. Default 600.", <><C>429 rate_limit_exceeded</C></>],
           [<Strong key="e">Monthly hard cap</Strong>, "Spend in the calendar month at which requests stop.", <><C>402 hard_cap_reached</C></>],
           [<Strong key="f">Monthly budget</Strong>, "A soft figure shown against spend in the dashboard. Never blocks.", "Alerts only"],
-          [<Strong key="g">Zero data retention</Strong>, "Prompts and completions are never stored; the cache is skipped.", <A href="/docs/inference/privacy">Privacy</A>],
+          [<Strong key="g">Zero data retention</Strong>, "Prompts and completions are never stored; the cache is skipped.", <A key="g-link" href="/docs/inference/privacy">Privacy</A>],
         ]}
       />
       <P>
@@ -85,7 +85,7 @@ x-api-key: ahu_live_…`}</Code>
       <H2 id="inspect-a-key">Inspect a key</H2>
       <Endpoint method="GET" path="/v1/key" />
       <P>
-        Returns the calling key's scope and this month's spend for its organization. Useful for
+        Returns the calling key’s scope and this month’s spend for its organization. Useful for
         a health check at startup, or to show a customer their remaining budget.
       </P>
       <Code lang="bash" title="request">{`curl https://api.ahurasense.com/v1/key \\
@@ -112,7 +112,7 @@ x-api-key: ahu_live_…`}</Code>
           <C>X-Ahura-Billing: byok</C>. See <A href="/docs/inference/byok">Bring your own key</A>.
         </Li>
         <Li>
-          <C>spent_cents</C> is the organization's month-to-date spend, across all its keys.
+          <C>spent_cents</C> is the organization’s month-to-date spend, across all its keys.
         </Li>
       </Ul>
 
@@ -128,7 +128,7 @@ x-api-key: ahu_live_…`}</Code>
           [<C key="5">X-Ahura-Guardrail</C>, <><C>off</C> | <C>warn</C> | <C>block</C></>, <>Prompt-injection policy for this request. <A href="/docs/inference/guardrails">Guardrails</A>.</>],
           [<C key="6">X-Ahura-Cache</C>, <><C>off</C> | <C>aggressive</C></>, <>Skip or widen the response cache. <A href="/docs/inference/caching">Caching</A>.</>],
           [<C key="7">X-Ahura-Cache-TTL</C>, "60 to 3600", "Seconds a cached answer stays valid."],
-          [<C key="8">Cache-Control</C>, <C>no-cache</C>, "Standard way to skip the cache."],
+          [<C key="8">Cache-Control</C>, <C key="8-value">no-cache</C>, "Standard way to skip the cache."],
         ]}
       />
 

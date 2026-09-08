@@ -159,7 +159,7 @@ console.log(completion.choices[0].message.content);`,
         </Li>
         <Li>
           <Strong>Validation and routing.</Strong> The body is checked, the model is resolved
-          (directly or through a <A href="/docs/inference/presets">preset</A>), and the key's
+          (directly or through a <A href="/docs/inference/presets">preset</A>), and the key’s
           model allowlist is applied.
         </Li>
         <Li>
@@ -171,7 +171,7 @@ console.log(completion.choices[0].message.content);`,
           exact-match cache. <A href="/docs/inference/caching">Caching</A>.
         </Li>
         <Li>
-          <Strong>The model.</Strong> The request is forwarded to the model's serving backend and
+          <Strong>The model.</Strong> The request is forwarded to the model’s serving backend and
           the answer is streamed or returned to you unchanged.
         </Li>
       </Ol>

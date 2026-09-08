@@ -30,7 +30,7 @@ export default function PresetsPage() {
       <H2>Use it</H2>
       <P>
         Send the name in <C>X-Ahura-Preset</C>. When the header is present, <C>model</C> in the
-        body becomes optional; the preset's model is used. If the body does name a model, the body
+        body becomes optional; the preset’s model is used. If the body does name a model, the body
         wins.
       </P>
       <Code lang="bash" title="curl">{`curl https://api.ahurasense.com/v1/chat/completions \\
@@ -53,7 +53,7 @@ export default function PresetsPage() {
         Preset definitions are cached at the edge for up to five minutes, so a change in the
         dashboard reaches every request within that window. An unknown name returns{" "}
         <C>400 preset_not_found</C>. Presets belong to your organization; every key in it can use
-        them, subject to the key's own model allowlist.
+        them, subject to the key’s own model allowlist.
       </P>
 
       <Callout kind="warn" title="Fallback chains and provider preferences are not applied">

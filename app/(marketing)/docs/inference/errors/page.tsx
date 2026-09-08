@@ -29,7 +29,7 @@ export default function ErrorsPage() {
 }`}</Code>
       <P>
         <C>request_id</C> matches the <C>X-Ahura-Request-Id</C> header and the usage record.
-        Errors from the Anthropic-compatible route use Anthropic's envelope instead, with the same
+        Errors from the Anthropic-compatible route use Anthropic’s envelope instead, with the same
         status codes.
       </P>
 

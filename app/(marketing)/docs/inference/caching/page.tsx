@@ -32,7 +32,7 @@ export default function CachingPage() {
         The cache key is a hash of <C>model</C>, <C>messages</C>, <C>tools</C>,{" "}
         <C>tool_choice</C>, <C>response_format</C>, <C>max_tokens</C>, <C>temperature</C>,{" "}
         <C>top_p</C> and <C>seed</C>. Anything else in the body, including <C>user</C>, is not
-        part of it. Entries are scoped to your organization; another customer's identical request
+        part of it. Entries are scoped to your organization; another customer’s identical request
         never sees your answer.
       </P>
 
@@ -68,7 +68,7 @@ export default function CachingPage() {
       <H2>Billing</H2>
       <P>
         A hit is recorded as a request whose prompt tokens were all cached, so the prompt is billed
-        at the model's <C>cached_cents_per_mtok</C> rate rather than the input rate; the completion
+        at the model’s <C>cached_cents_per_mtok</C> rate rather than the input rate; the completion
         is billed at the output rate as usual. The usage row carries <C>cache_kind: l1</C> so you
         can see the effect per key on the{" "}
         <A href="/dashboard/services/inference/usage">usage page</A>.

@@ -93,7 +93,7 @@ console.log(completion.choices[0].message.content);`,
             children: (
               <>
                 A catalog id from <A href="/docs/inference/models">Models</A>. Optional only when
-                the request carries <C>X-Ahura-Preset</C>, in which case the preset's model is used.
+                the request carries <C>X-Ahura-Preset</C>, in which case the preset’s model is used.
               </>
             ),
           },
@@ -212,7 +212,7 @@ console.log(completion.choices[0].message.content);`,
           [<C key="1">choices[].message</C>, <>The assistant turn. Carries <C>tool_calls</C> instead of <C>content</C> when the model decided to call a tool.</>],
           [<C key="2">choices[].finish_reason</C>, <><C>stop</C>, <C>length</C> (hit <C>max_tokens</C>), <C>tool_calls</C>, or <C>content_filter</C>.</>],
           [<C key="3">usage</C>, <>Token counts the request is billed on. Some backends add <C>prompt_tokens_details.cached_tokens</C> or a <C>reasoning_tokens</C> count.</>],
-          [<C key="4">model</C>, <>The backend's own spelling of the model. Use the <C>X-Ahura-Model</C> header for the catalog id.</>],
+          [<C key="4">model</C>, <>The backend’s own spelling of the model. Use the <C>X-Ahura-Model</C> header for the catalog id.</>],
         ]}
       />
 
@@ -227,10 +227,10 @@ console.log(completion.choices[0].message.content);`,
 
       <H2>Multimodal content</H2>
       <P>
-        A <C>user</C> message's <C>content</C> may be an array of parts. Text parts are{" "}
+        A <C>user</C> message’s <C>content</C> may be an array of parts. Text parts are{" "}
         <C>{`{"type":"text","text":"…"}`}</C>; image parts are{" "}
         <C>{`{"type":"image_url","image_url":{"url":"…"}}`}</C> with an <C>https</C> URL or a{" "}
-        <C>data:</C> URI. Check the model's <C>vision</C> capability first; a model without it
+        <C>data:</C> URI. Check the model’s <C>vision</C> capability first; a model without it
         will refuse or ignore the image.
       </P>
 
@@ -242,7 +242,7 @@ console.log(completion.choices[0].message.content);`,
       <Ul>
         <Li><C>400 invalid_request</C>: the body failed validation; the message names the field.</Li>
         <Li><C>400 model_required</C>: no <C>model</C> and no preset that supplies one.</Li>
-        <Li><C>403 model_not_allowed</C>: the key's allowlist does not include this model.</Li>
+        <Li><C>403 model_not_allowed</C>: the key’s allowlist does not include this model.</Li>
         <Li><C>404 model_not_found</C>: not a catalog id.</Li>
         <Li><C>503 model_unavailable</C>: the model is in the catalog but switched off.</Li>
       </Ul>

@@ -39,7 +39,7 @@ export default function ModelsPage() {
       <P>
         Ids are namespaced by vendor, <C>anthropic/claude-sonnet-5</C>,{" "}
         <C>openai/gpt-5.5</C>, <C>zhipu/glm-5.3-flash</C>, and are used exactly as listed,
-        including case. A request naming an id that is not in the catalog, or not in your key's
+        including case. A request naming an id that is not in the catalog, or not in your key’s
         allowlist, is refused before anything is billed.
       </P>
       <P>
@@ -51,7 +51,7 @@ export default function ModelsPage() {
       <Endpoint method="GET" path="/v1/models" />
       <P>
         Returns every active model your key can call: the public catalog plus any models private
-        to your organization, such as your own fine-tuned adapters. The shape is OpenAI's list
+        to your organization, such as your own fine-tuned adapters. The shape is OpenAI’s list
         shape with extra fields per entry.
       </P>
       <Code lang="bash" title="request">{`curl https://api.ahurasense.com/v1/models \\

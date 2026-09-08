@@ -28,7 +28,7 @@ export default function MessagesPage() {
       href={HREF}
       eyebrow="API reference"
       title="Messages"
-      lede="An Anthropic Messages API endpoint, for code written against the Anthropic SDK. The gateway translates to the model's native protocol and back, so any chat model in the catalog can be called this way, not only Anthropic's."
+      lede="An Anthropic Messages API endpoint, for code written against the Anthropic SDK. The gateway translates to the model's native protocol and back, so any chat model in the catalog can be called this way, not only Anthropic’s."
     >
       <Endpoint method="POST" path="/v1/messages" />
 
@@ -91,7 +91,7 @@ const message = await client.messages.create({
 
       <Params
         items={[
-          { name: "model", type: "string", required: true, children: <>A catalog id. Any chat model works, not only Anthropic's.</> },
+          { name: "model", type: "string", required: true, children: <>A catalog id. Any chat model works, not only Anthropic’s.</> },
           { name: "max_tokens", type: "integer", required: true, children: <>Upper bound on generated tokens, reasoning included on models that reason.</> },
           {
             name: "messages",
@@ -107,7 +107,7 @@ const message = await client.messages.create({
           },
           { name: "system", type: "string or array", children: <>The system prompt, as a string or text blocks.</> },
           { name: "stream", type: "boolean", defaultValue: "false", children: <>Anthropic-style event stream. See below.</> },
-          { name: "temperature", type: "number, 0 to 1", children: <>Anthropic's range. Mapped onto the model unchanged.</> },
+          { name: "temperature", type: "number, 0 to 1", children: <>Anthropic’s range. Mapped onto the model unchanged.</> },
           { name: "top_p", type: "number, 0 to 1", children: <>Nucleus sampling.</> },
           { name: "top_k", type: "integer", children: <>Passed through where the model supports it.</> },
           { name: "stop_sequences", type: "array of strings", children: <>Sequences at which generation stops.</> },
@@ -135,14 +135,14 @@ const message = await client.messages.create({
   }
 }`}</Code>
       <P>
-        Errors use Anthropic's envelope, <C>{`{"type":"error","error":{"type":"…","message":"…"}}`}</C>,
+        Errors use Anthropic’s envelope, <C>{`{"type":"error","error":{"type":"…","message":"…"}}`}</C>,
         with the same status codes as the rest of the API. <C>X-Ahura-Request-Id</C> is on every
         response.
       </P>
 
       <H2>Streaming</H2>
       <P>
-        With <C>stream: true</C> the response is a stream of named events in Anthropic's order:
+        With <C>stream: true</C> the response is a stream of named events in Anthropic’s order:
       </P>
       <Table
         head={["Event", "Carries"]}
@@ -155,9 +155,9 @@ const message = await client.messages.create({
           [<C key="6">message_stop</C>, "End of the message."],
         ]}
       />
-      <P>The Anthropic SDKs' streaming helpers consume this without changes.</P>
+      <P>The Anthropic SDKs’ streaming helpers consume this without changes.</P>
 
-      <H2>Differences from Anthropic's API</H2>
+      <H2>Differences from Anthropic’s API</H2>
       <Ul>
         <Li>Tool use in a stream arrives as text deltas; tool calls are not streamed as structured blocks. Non-streaming tool use is passed through.</Li>
         <Li><C>cache_control</C> hints on content blocks are accepted and ignored.</Li>

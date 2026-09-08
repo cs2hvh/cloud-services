@@ -21,7 +21,7 @@ export default function LimitsPage() {
       <H2>Rate limits</H2>
       <P>
         Each key has a requests-per-minute limit, 600 unless you change it, enforced with a token
-        bucket at the edge. The bucket holds about six seconds of the key's rate, with a floor of
+        bucket at the edge. The bucket holds about six seconds of the key’s rate, with a floor of
         ten requests, so short bursts above the average pass and sustained traffic is held to the
         rate.
       </P>
@@ -53,13 +53,13 @@ export default function LimitsPage() {
 
       <H2>Spend caps</H2>
       <P>
-        A hard cap is a monthly amount in your organization's billing currency at which requests
+        A hard cap is a monthly amount in your organization’s billing currency at which requests
         stop. It can be set on a key, on the organization, or both; whichever is reached first
         applies. Spend counts from the first of the calendar month, UTC, and resets on the next.
       </P>
       <Code lang="json" title="402">{`{
   "error": {
-    "message": "Reached this API key's monthly hard cap of 100.00 USD for 2026-09. Raise this key's cap on the API Keys page, or use a different key.",
+    "message": "Reached this API key’s monthly hard cap of 100.00 USD for 2026-09. Raise this key’s cap on the API Keys page, or use a different key.",
     "type": "billing_error",
     "code": "hard_cap_reached",
     "scope": "key",
@@ -69,8 +69,8 @@ export default function LimitsPage() {
   }
 }`}</Code>
       <Ul>
-        <Li><C>hard_cap_reached</C>: the key's own cap. Raise it under <A href="/dashboard/services/inference/api-keys">API keys</A>.</Li>
-        <Li><C>org_hard_cap_reached</C>: the organization's cap. Raise it under <A href="/dashboard/services/inference/settings">Inference settings</A>.</Li>
+        <Li><C>hard_cap_reached</C>: the key’s own cap. Raise it under <A href="/dashboard/services/inference/api-keys">API keys</A>.</Li>
+        <Li><C>org_hard_cap_reached</C>: the organization’s cap. Raise it under <A href="/dashboard/services/inference/settings">Inference settings</A>.</Li>
       </Ul>
       <P>
         A monthly budget is the softer sibling: a figure the dashboard shows spend against and
@@ -78,7 +78,7 @@ export default function LimitsPage() {
         a hard cap at the number you could not explain.
       </P>
       <P>
-        <C>GET /v1/key</C> returns the calling key's caps and the month's spend, so a service can
+        <C>GET /v1/key</C> returns the calling key’s caps and the month’s spend, so a service can
         check its own headroom at startup. See{" "}
         <A href="/docs/inference/authentication#inspect-a-key">Authentication</A>.
       </P>

@@ -123,13 +123,13 @@ data: [DONE]`}</Code>
 
       <H2>Timeouts</H2>
       <P>
-        A streamed response can stay open for as long as the model generates. Set your client's
+        A streamed response can stay open for as long as the model generates. Set your client’s
         read timeout with that in mind; the SDK defaults are fine. If nothing has arrived after
         the connection opened, the model is still working on the first token, not stalled: the
         headers only tell you the request was accepted.
       </P>
       <P>
-        The Anthropic-compatible route streams too, with Anthropic's event names; see{" "}
+        The Anthropic-compatible route streams too, with Anthropic’s event names; see{" "}
         <A href="/docs/inference/messages#streaming">Messages</A>.
       </P>
     </DocPage>
