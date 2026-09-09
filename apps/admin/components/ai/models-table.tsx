@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Search, RefreshCw, Pencil, Star } from "lucide-react";
+import { ArrowLeft, Search, RefreshCw, Pencil, Plus, Server, Star } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/axios/axios";
 import { Input } from "@/components/ui/input";
@@ -33,6 +33,10 @@ import {
 } from "@/components/ui/dialog";
 import { PageHeader } from "@admin/components/page-header";
 import { AiTabs } from "@admin/components/ai/ai-tabs";
+import {
+  EndpointsDialog,
+  NewHostedModelDialog,
+} from "@admin/components/ai/hosted-model-dialogs";
 
 type Pricing = {
   input_cents_per_mtok?: number;
@@ -46,6 +50,7 @@ type ModelRow = {
   display_name: string | null;
   modality: string;
   serving_type: string;
+  upstream_provider: string | null;
   upstream_model_id: string | null;
   org_id: string | null;
   pricing: Pricing;
@@ -92,6 +97,8 @@ export function AiModelsTable() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [editing, setEditing] = useState<ModelRow | null>(null);
   const [draft, setDraft] = useState({ input: "", output: "", cached: "" });
+  const [creating, setCreating] = useState(false);
+  const [endpointsFor, setEndpointsFor] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -191,11 +198,16 @@ export function AiModelsTable() {
         title="Model catalog"
         description="Customer pricing, upstream cost basis and availability for every gateway model."
         actions={
-          <Button asChild size="sm" variant="outline">
-            <Link href="/ai">
-              <ArrowLeft className="mr-2 h-3.5 w-3.5" /> AI Labs overview
-            </Link>
-          </Button>
+          <>
+            <Button size="sm" onClick={() => setCreating(true)}>
+              <Plus className="mr-1.5 h-3.5 w-3.5" /> New hosted model
+            </Button>
+            <Button asChild size="sm" variant="outline">
+              <Link href="/ai">
+                <ArrowLeft className="mr-2 h-3.5 w-3.5" /> AI Labs overview
+              </Link>
+            </Button>
+          </>
         }
       />
       <AiTabs />
@@ -324,15 +336,32 @@ export function AiModelsTable() {
                     />
                   </TableCell>
                   <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0"
-                      onClick={() => openPricing(m)}
-                      disabled={busyId === m.id}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
+                    <div className="flex items-center justify-end gap-1">
+                      {/* Self-served models are the only ones with pods to
+                          manage; proxy models route through a partner. */}
+                      {m.serving_type === "runpod_byo" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                          title="Serving endpoints"
+                          onClick={() => setEndpointsFor(m.model_id)}
+                          disabled={busyId === m.id}
+                        >
+                          <Server className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0"
+                        title="Pricing"
+                        onClick={() => openPricing(m)}
+                        disabled={busyId === m.id}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -340,6 +369,15 @@ export function AiModelsTable() {
           </Table>
         </div>
       </div>
+
+      <NewHostedModelDialog
+        open={creating}
+        onClose={(created) => {
+          setCreating(false);
+          if (created) void load();
+        }}
+      />
+      <EndpointsDialog modelId={endpointsFor} onClose={() => setEndpointsFor(null)} />
 
       <Dialog open={!!editing} onOpenChange={(open) => !open && setEditing(null)}>
         <DialogContent className="max-w-sm">
