@@ -84,7 +84,7 @@ export default function ReasoningPage() {
         spelling, <C>{`"chat_template_kwargs": {"reasoning_effort": "high"}`}</C>, is accepted too.
       </P>
       <P>
-        Not every hosted model has five distinct levels. <C>qwen/qwen3.8-flash-next</C> folds the
+        Not every hosted model has five distinct levels. <C>qwen/qwen3.8-flash-next-uncensored</C> folds the
         ladder into three: <C>high</C>, <C>max</C> and <C>xhigh</C> all mean its deepest mode,
         which is also its default; <C>low</C> and <C>minimal</C> both mean low; <C>medium</C> and{" "}
         <C>none</C> are as above. Sending any value is always safe; a model without a matching
