@@ -134,7 +134,7 @@ const COLUMNS: Array<{ from: number; cards: ModelCard[]; durationS: number; reve
  * wrong: it undersells the platform and it means this file has stopped
  * tracking reality, which is the same defect as overselling it.
  */
-export const CATALOG_MODEL_COUNT = 31;
+export const CATALOG_MODEL_COUNT = 32;
 export const CATALOG_PROVIDER_COUNT = 8;
 
 /**
