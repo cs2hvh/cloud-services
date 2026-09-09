@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Cpu, RefreshCw, Route as RouteIcon, Server, Zap } from "lucide-react";
+import { AlertTriangle, Cpu, RefreshCw, Route as RouteIcon, Server, Zap } from "lucide-react";
 import api from "@/lib/axios/axios";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,6 +40,13 @@ type Provider = {
 type Feed = {
   days: number;
   truncated: boolean;
+  attribution: {
+    basis: string;
+    unmappedRequests: number;
+    mislabeledRequests: number;
+    totalRequests: number;
+    recordedProviders: string[];
+  };
   providers: Provider[];
   servingTypes: { type: string; count: number }[];
   runpod: {
@@ -196,11 +203,33 @@ export function AiRoutingView() {
             Upstream providers
           </h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Configured routes vs traffic actually served. A provider with routes
-            and no traffic is idle capacity; traffic under no configured route
-            means requests are running somewhere the catalog does not describe.
+            Requests are attributed by the model catalog — which upstream each
+            model_id belongs to — not by the provider stamped on the usage row.
           </p>
         </div>
+        {feed && feed.attribution.mislabeledRequests > 0 && (
+          <div className="mx-4 mt-3 flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-200">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              {feed.attribution.mislabeledRequests.toLocaleString()} of{" "}
+              {feed.attribution.totalRequests.toLocaleString()} usage rows record a
+              provider that does not match the model&apos;s catalog entry
+              {feed.attribution.recordedProviders.length === 1 && (
+                <> — every row is stamped &ldquo;{feed.attribution.recordedProviders[0]}&rdquo;</>
+              )}
+              . The table below attributes by catalog; the stamped column is a
+              gateway-side bug and should not be used for billing attribution
+              until it is fixed.
+              {feed.attribution.unmappedRequests > 0 && (
+                <>
+                  {" "}
+                  A further {feed.attribution.unmappedRequests.toLocaleString()} rows
+                  name a model that is not in the catalog at all.
+                </>
+              )}
+            </span>
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full min-w-[880px] text-left text-[13px]">
             <thead>

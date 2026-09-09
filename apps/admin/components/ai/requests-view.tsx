@@ -35,6 +35,7 @@ type Row = {
   model: string | null;
   modelLabel: string | null;
   provider: string | null;
+  catalogProvider: string | null;
   modality: string | null;
   status: string;
   errorCode: string | null;
@@ -429,9 +430,11 @@ export function AiRequestsView() {
                         </td>
                         <td className="px-4 py-2.5">
                           <span className="font-medium">{r.modelLabel ?? "—"}</span>
-                          {r.provider && (
+                          {/* The catalog's provider, not the stamped one:
+                              usage.provider is a constant today. */}
+                          {r.catalogProvider && (
                             <span className="ml-1.5 text-[11px] text-muted-foreground">
-                              via {r.provider}
+                              via {r.catalogProvider}
                             </span>
                           )}
                         </td>
@@ -475,6 +478,10 @@ export function AiRequestsView() {
                                 v={`${r.key?.label ?? "—"}${r.key?.revoked ? " (revoked)" : ""}`}
                               />
                               <Detail k="Modality" v={r.modality ?? "—"} />
+                              <Detail
+                                k="Provider (catalog / stamped)"
+                                v={`${r.catalogProvider ?? "not in catalog"} / ${r.provider ?? "—"}`}
+                              />
                               <Detail k="Billed to" v={r.billedTo ?? "—"} />
                               <Detail k="Cache" v={r.cacheKind ?? "none"} />
                               <Detail

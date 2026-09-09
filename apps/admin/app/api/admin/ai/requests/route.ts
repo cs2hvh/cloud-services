@@ -121,7 +121,7 @@ export async function GET(request: Request) {
       inference
         .from("api_keys")
         .select("id, name, key_prefix, key_last_four, org_id, revoked_at"),
-      inference.from("models").select("model_id, display_name, modality"),
+      inference.from("models").select("model_id, display_name, modality, upstream_provider"),
     ]);
 
     if (rowsRes.error) {
@@ -210,6 +210,16 @@ export async function GET(request: Request) {
         ],
       ),
     );
+    // The catalog's provider is the checkable one; usage.provider is a
+    // gateway-written constant today (see the routing route's note).
+    const providerOfModel = new Map<string, string | null>(
+      (modelsRes.data ?? []).map(
+        (m: { model_id: string; upstream_provider: string | null }) => [
+          m.model_id,
+          m.upstream_provider,
+        ],
+      ),
+    );
     const modelLabel = new Map<string, string>(
       (modelsRes.data ?? []).map(
         (m: { model_id: string; display_name: string | null }) => [
@@ -237,6 +247,7 @@ export async function GET(request: Request) {
           ? (modelLabel.get(r.model_id) ?? r.model_id)
           : null,
         provider: r.provider,
+        catalogProvider: r.model_id ? (providerOfModel.get(r.model_id) ?? null) : null,
         modality: r.modality,
         status: r.status,
         errorCode: r.error_code,

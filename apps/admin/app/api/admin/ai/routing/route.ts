@@ -9,12 +9,12 @@ export const dynamic = "force-dynamic";
  * the per-model route table, and the RunPod GPU footprint — fine-tune jobs,
  * their serving pods, and always-on deployments.
  *
- * Two provider dimensions exist and they are not the same thing, so they
- * are reported separately rather than merged:
- *   - models.upstream_provider — where a model is CONFIGURED to run;
- *   - usage.provider — where a request ACTUALLY ran.
- * A configured route with no traffic and a provider serving traffic under
- * no configured route are both real states, and each is worth seeing.
+ * Traffic is attributed by joining usage.model_id to the catalog, NOT by
+ * usage.provider. That column is written by the gateway as a constant
+ * today — every row reads "openrouter", including requests served by our
+ * own pods — so grouping by it credits the wrong upstream. The catalog
+ * mapping is checkable; the column is reported alongside as a discrepancy
+ * count so the gap is visible rather than silently corrected.
  */
 
 const PAGE_CAP = 1000;
@@ -77,6 +77,8 @@ export async function GET(request: Request) {
       );
     }
 
+    const models = (modelsRes.data ?? []) as Record<string, unknown>[];
+
     // ---- actual traffic by provider, paged with declared budget ----
     type U = {
       provider: string | null;
@@ -120,9 +122,36 @@ export async function GET(request: Request) {
       latencySum: 0,
       latencyN: 0,
     });
+    // Traffic is attributed through the CATALOG (models.upstream_provider),
+    // not through usage.provider. The recorded column is written by the
+    // gateway and is currently a constant — every row says "openrouter",
+    // including the 1.7k that ran on our own pods — so grouping by it
+    // reports a provider that did not serve the request. The catalog knows
+    // which upstream a model_id belongs to, and that is checkable.
+    const providerOfModel = new Map<string, string>(
+      models.map((m) => [
+        m.model_id as string,
+        (m.upstream_provider as string | null) ?? "(none)",
+      ]),
+    );
     const byProvider = new Map<string, Roll>();
+    let unmappedRequests = 0;
+    let mislabeledRequests = 0;
     for (const u of usage) {
-      const key = u.provider ?? "(unrecorded)";
+      const catalogProvider = u.model_id
+        ? providerOfModel.get(u.model_id)
+        : undefined;
+      // A model id with no catalog row cannot be attributed to anyone —
+      // counted separately rather than filed under a guess.
+      if (!catalogProvider) unmappedRequests += 1;
+      if (
+        catalogProvider &&
+        u.provider &&
+        u.provider !== catalogProvider
+      ) {
+        mislabeledRequests += 1;
+      }
+      const key = catalogProvider ?? "(model not in catalog)";
       const r = byProvider.get(key) ?? blank();
       r.requests += 1;
       if (u.status !== "success") r.errors += 1;
@@ -134,6 +163,9 @@ export async function GET(request: Request) {
       }
       byProvider.set(key, r);
     }
+    const recordedProviders = [
+      ...new Set(usage.map((u) => u.provider).filter((v): v is string => Boolean(v))),
+    ];
 
     const orgOf = new Map<string, string>(
       (orgsRes.data ?? []).map(
@@ -142,7 +174,6 @@ export async function GET(request: Request) {
     );
 
     // ---- configured surface ----
-    const models = (modelsRes.data ?? []) as Record<string, unknown>[];
     const configuredByProvider = new Map<string, { total: number; active: number }>();
     for (const m of models) {
       const p = (m.upstream_provider as string | null) ?? "(none)";
@@ -225,6 +256,15 @@ export async function GET(request: Request) {
     return NextResponse.json({
       days,
       truncated,
+      // How traffic was attributed, and how far the recorded column drifts
+      // from it — so the table's numbers can be trusted or challenged.
+      attribution: {
+        basis: "catalog",
+        unmappedRequests,
+        mislabeledRequests,
+        totalRequests: usage.length,
+        recordedProviders,
+      },
       providers,
       servingTypes: [...servingTypes.entries()].map(([type, count]) => ({
         type,
