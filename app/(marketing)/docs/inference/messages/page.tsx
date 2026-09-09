@@ -161,6 +161,12 @@ const message = await client.messages.create({
       <H2>Differences from Anthropic’s API</H2>
       <Ul>
         <Li>Tool use in a stream arrives as text deltas; tool calls are not streamed as structured blocks. Non-streaming tool use is passed through.</Li>
+        <Li>
+          <C>thinking</C> and <C>output_config.effort</C> are honoured on hosted models:{" "}
+          <C>{`{"type": "disabled"}`}</C> turns reasoning off, <C>budget_tokens</C> caps it, and{" "}
+          <C>effort</C> picks a level. See <A href="/docs/inference/reasoning">Reasoning effort</A>.
+          On partner-served models these fields are not forwarded.
+        </Li>
         <Li><C>cache_control</C> hints on content blocks are accepted and ignored.</Li>
         <Li>Images must be base64 sources; URL sources are not translated.</Li>
         <Li>Container and code-execution tools are not available.</Li>

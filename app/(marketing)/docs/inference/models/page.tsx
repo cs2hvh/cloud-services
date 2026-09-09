@@ -109,15 +109,41 @@ export default function ModelsPage() {
       <P>
         Most catalog models are served by partner backends. Some run on AhuraSense GPU
         infrastructure; the table marks them <Strong>hosted</Strong>, and responses from them
-        carry <C>X-Ahura-Routing: managed</C>. Two things differ for hosted models:
+        carry <C>X-Ahura-Routing: managed</C>. Today these are the uncensored builds: the same
+        open weights, served without the vendor’s refusal tuning.
       </P>
+      <Table
+        head={["Model", "Id", "Context", "Notes"]}
+        rows={[
+          [
+            "Z.AI / GLM 5.3 Flash Uncensored",
+            <C key="g">zhipu/glm-5.3-flash-uncensored</C>,
+            "1,048,576",
+            <>Five-level <A href="/docs/inference/reasoning">reasoning ladder</A>; unbounded thinking by default. Two replicas with failover.</>,
+          ],
+          [
+            "Qwen / Qwen3.8 Flash Next Uncensored",
+            <C key="q">qwen/qwen3.8-flash-next-uncensored</C>,
+            "262,144",
+            <>Three-level reasoning ladder. Reports prompt-cache hits, billed at the cached rate.</>,
+          ],
+        ]}
+      />
+      <P>Things that differ for hosted models:</P>
       <Ul>
         <Li>
-          The response cache does not apply to them; every request reaches the model.
+          Reasoning is under your control: <C>reasoning_effort</C>, an exact thinking budget, or
+          none at all. See <A href="/docs/inference/reasoning">Reasoning effort</A>.
+        </Li>
+        <Li>
+          The gateway’s response cache does not apply to them; every request reaches the model.
         </Li>
         <Li>
           If every replica is starting up, the gateway returns <C>503 instance_warming_up</C>{" "}
           with <C>Retry-After: 10</C>. Retry, and the request goes through.
+        </Li>
+        <Li>
+          They run on AhuraSense infrastructure end to end; no partner receives the prompt.
         </Li>
       </Ul>
 

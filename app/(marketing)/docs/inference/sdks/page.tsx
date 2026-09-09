@@ -117,6 +117,48 @@ const { text } = await generateText({
   prompt: "Hello",
 });`}</Code>
 
+      <H2>OpenCode</H2>
+      <P>
+        OpenCode takes custom OpenAI-compatible providers from <C>opencode.json</C>, in the
+        project or under <C>~/.config/opencode/</C>. The <C>models</C> block is the list its picker
+        shows; <C>name</C> is the label, the key is the catalog id it sends. Keep the API key in
+        an environment variable, as below, so the file can live in a repository.
+      </P>
+      <Code lang="json" title="opencode.json">{`{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "ahurasense": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "AhuraSense",
+      "options": {
+        "baseURL": "https://api.ahurasense.com/v1",
+        "apiKey": "{env:AHURA_API_KEY}"
+      },
+      "models": {
+        "anthropic/claude-sonnet-5": {
+          "name": "Claude Sonnet 5",
+          "limit": { "context": 1000000, "output": 128000 }
+        },
+        "zhipu/glm-5.3-flash-uncensored": {
+          "name": "Z.AI / GLM 5.3 Flash Uncensored",
+          "limit": { "context": 1048576, "output": 131072 }
+        },
+        "qwen/qwen3.8-flash-next-uncensored": {
+          "name": "Qwen / Qwen3.8 Flash Next Uncensored",
+          "limit": { "context": 262144, "output": 65536 }
+        }
+      }
+    }
+  },
+  "model": "ahurasense/anthropic/claude-sonnet-5"
+}`}</Code>
+      <P>
+        Switch models inside OpenCode with <C>/models</C>, or start it with{" "}
+        <C>opencode -m ahurasense/zhipu/glm-5.3-flash-uncensored</C>. OpenCode sends{" "}
+        <C>reasoning_effort</C> when you set a reasoning level, which the hosted models honour
+        directly.
+      </P>
+
       <H2>Plain HTTP</H2>
       <P>
         Anything that can send JSON over HTTPS works. The request and response shapes are on the{" "}
