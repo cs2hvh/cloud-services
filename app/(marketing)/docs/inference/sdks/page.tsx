@@ -139,6 +139,10 @@ const { text } = await generateText({
           "name": "Claude Sonnet 5",
           "limit": { "context": 1000000, "output": 128000 }
         },
+        "zhipu/glm-5.3-uncensored": {
+          "name": "Z.AI / GLM 5.3 Uncensored",
+          "limit": { "context": 1048576, "output": 131072 }
+        },
         "zhipu/glm-5.3-flash-uncensored": {
           "name": "Z.AI / GLM 5.3 Flash Uncensored",
           "limit": { "context": 1048576, "output": 131072 }

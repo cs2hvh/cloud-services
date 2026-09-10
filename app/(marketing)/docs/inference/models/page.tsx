@@ -122,6 +122,12 @@ export default function ModelsPage() {
             <>Five-level <A href="/docs/inference/reasoning">reasoning ladder</A>; unbounded thinking by default. Two replicas with failover.</>,
           ],
           [
+            "Z.AI / GLM 5.3 Uncensored",
+            <C key="g2">zhipu/glm-5.3-uncensored</C>,
+            "1,048,576",
+            <>The full GLM 5.3. Three-level reasoning ladder.</>,
+          ],
+          [
             "Qwen / Qwen3.8 Flash Next Uncensored",
             <C key="q">qwen/qwen3.8-flash-next-uncensored</C>,
             "262,144",

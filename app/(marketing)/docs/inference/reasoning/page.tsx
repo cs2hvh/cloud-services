@@ -87,8 +87,10 @@ export default function ReasoningPage() {
         Not every hosted model has five distinct levels. <C>qwen/qwen3.8-flash-next-uncensored</C> folds the
         ladder into three: <C>high</C>, <C>max</C> and <C>xhigh</C> all mean its deepest mode,
         which is also its default; <C>low</C> and <C>minimal</C> both mean low; <C>medium</C> and{" "}
-        <C>none</C> are as above. Sending any value is always safe; a model without a matching
-        level uses its nearest.
+        <C>none</C> are as above. <C>zhipu/glm-5.3-uncensored</C> has three as well: <C>none</C>{" "}
+        is off, <C>minimal</C> and <C>low</C> think briefly, and everything else is its deep
+        mode; on this model prefer <C>low</C> over <C>none</C> for the shortest clean answer.
+        Sending any value is always safe; a model without a matching level uses its nearest.
       </P>
 
       <H2>An exact budget</H2>
