@@ -11,17 +11,13 @@
  */
 import { createClient } from "@supabase/supabase-js";
 import type { Env, UsageEvent } from "../types.ts";
-
-interface ModelPricing {
-  input_cents_per_mtok?: number;
-  output_cents_per_mtok?: number;
-  cached_cents_per_mtok?: number;
-}
-
-interface ModelOffPeak {
-  window_utc?: string;   // "HH:MM-HH:MM"
-  discount_pct?: number;
-}
+// The same off-peak arithmetic GET /v1/models quotes from, so the price we
+// publish and the price we charge cannot drift apart.
+import {
+  activeDiscountPct,
+  type ModelOffPeak,
+  type ModelPricing,
+} from "../lib/pricing.ts";
 
 /**
  * Written to usage.error_code when a SUCCESSFUL request could not be priced
@@ -253,34 +249,10 @@ export function computeCost(
 
   const rawCents = rateCost(event, info.pricing);
 
-  let discountPct = 0;
-  let isOffPeak = false;
-  const op = info.off_peak;
-  if (op?.window_utc && op?.discount_pct) {
-    const occurredAt = new Date(event.occurredAt);
-    const mins = occurredAt.getUTCHours() * 60 + occurredAt.getUTCMinutes();
-    const [startStr, endStr] = op.window_utc.split("-");
-    if (startStr && endStr) {
-      const [sh, sm] = startStr.split(":").map((s) => Number.parseInt(s, 10));
-      const [eh, em] = endStr.split(":").map((s) => Number.parseInt(s, 10));
-      if (
-        Number.isFinite(sh) && Number.isFinite(sm) &&
-        Number.isFinite(eh) && Number.isFinite(em)
-      ) {
-        const startMins = (sh ?? 0) * 60 + (sm ?? 0);
-        const endMins = (eh ?? 0) * 60 + (em ?? 0);
-        // Window may wrap midnight (start > end) — handle both
-        const inWindow =
-          startMins <= endMins
-            ? mins >= startMins && mins < endMins
-            : mins >= startMins || mins < endMins;
-        if (inWindow) {
-          discountPct = op.discount_pct;
-          isOffPeak = true;
-        }
-      }
-    }
-  }
+  // Window may wrap midnight; an unparseable window is no discount. Shared
+  // with the catalog endpoint so both answer the same question the same way.
+  const discountPct = activeDiscountPct(info.off_peak, new Date(event.occurredAt));
+  const isOffPeak = discountPct > 0;
 
   const finalCents = Math.ceil(rawCents * (1 - discountPct / 100));
 

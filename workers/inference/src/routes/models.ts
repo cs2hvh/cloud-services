@@ -12,6 +12,11 @@
 import type { Handler } from "hono";
 import { createClient } from "@supabase/supabase-js";
 import type { Env, HonoVariables } from "../types.ts";
+import {
+  publicPrices,
+  type ModelOffPeak,
+  type ModelPricing,
+} from "../lib/pricing.ts";
 
 interface ModelRow {
   model_id: string;
@@ -71,6 +76,10 @@ export const listModels: Handler<{
     );
   }
 
+  // One clock for the whole response: two models sharing a discount window
+  // must not disagree about whether it is open.
+  const now = new Date();
+
   return c.json({
     object: "list",
     data: (data ?? []).map((m) => ({
@@ -87,6 +96,15 @@ export const listModels: Handler<{
       modality: m.modality,
       capabilities: m.capabilities,
       pricing: m.pricing,
+      // What we charge, in the unit customers quote: dollars per million
+      // tokens, in and out, plus the discounted pair when a model has an
+      // off-peak window. Never what a backend charges us — upstream_pricing
+      // is not selected above and must not be.
+      prices: publicPrices(
+        m.pricing as ModelPricing | null,
+        m.off_peak as ModelOffPeak | null,
+        now
+      ),
       off_peak: m.off_peak,
       featured: m.is_featured,
     })),

@@ -82,6 +82,17 @@ export default function ModelsPage() {
         "cached_cents_per_mtok": 10,
         "output_cents_per_mtok": 500
       },
+      "prices": {
+        "currency": "USD",
+        "unit": "per_million_tokens",
+        "input": 1,
+        "cached_input": 0.1,
+        "output": 5,
+        "discount": null,
+        "effective_input": 1,
+        "effective_cached_input": 0.1,
+        "effective_output": 5
+      },
       "off_peak": null,
       "featured": true
     }
@@ -95,7 +106,8 @@ export default function ModelsPage() {
           [<C key="3">modality</C>, <><C>chat</C> today. Other modalities appear here as they are added.</>],
           [<C key="4">capabilities</C>, <>What the model supports. <C>context_window</C> and <C>max_output</C> are in tokens.</>],
           [<C key="5">pricing</C>, <>Cents per million tokens, for input, cached input and output. <A href="/docs/inference/pricing">Pricing & usage</A>.</>],
-          [<C key="6">off_peak</C>, <>Reserved for a discount window; <C>null</C> means the price applies at all hours.</>],
+          [<C key="5b">prices</C>, <>The same rates in dollars per million tokens, plus the discounted rates when a model has a discount window. Described below.</>],
+          [<C key="6">off_peak</C>, <>The raw discount window behind <C>prices.discount</C>; <C>null</C> means the price applies at all hours.</>],
           [<C key="7">featured</C>, "A model we recommend starting with."],
         ]}
       />
@@ -104,6 +116,27 @@ export default function ModelsPage() {
         <C>tools</C> before sending a function-calling request, or on{" "}
         <C>context_window</C> before sending a long document.
       </Callout>
+
+      <H2>Prices in the response</H2>
+      <P>
+        <C>pricing</C> is the raw catalog block, in cents per million tokens. <C>prices</C> is the
+        same money in the unit people quote, dollars per million tokens, with the discounted rates
+        worked out for you:
+      </P>
+      <Table
+        head={["Field", "Meaning"]}
+        rows={[
+          [<C key="1">input</C>, "Dollars per million prompt tokens."],
+          [<C key="2">output</C>, "Dollars per million generated tokens, reasoning tokens included."],
+          [<C key="3">cached_input</C>, <>Dollars per million prompt tokens served from cache. A model that publishes no cached rate bills cached tokens at the input rate, and this field says so rather than reading <C>null</C>.</>],
+          [<C key="4">discount</C>, <><C>null</C> unless the model has a discount window. Otherwise the percent, the window in UTC, whether it is open at the moment of the request, and the three discounted rates.</>],
+          [<C key="5">effective_input, effective_cached_input, effective_output</C>, "What a request sent right now is billed at: the discounted rates inside an open window, the list rates outside one."],
+        ]}
+      />
+      <P>
+        A rate the catalog does not publish is <C>null</C>, never <C>0</C>. Prices are what you pay;
+        what a serving backend charges us is not in this response and is not published anywhere.
+      </P>
 
       <H2>Hosted models</H2>
       <P>

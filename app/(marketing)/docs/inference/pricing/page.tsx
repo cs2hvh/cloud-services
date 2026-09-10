@@ -40,7 +40,7 @@ cost = 400 × 1.00/1M + 800 × 0.10/1M + 300 × 5.00/1M
       <Ul>
         <Li>Prices are on the <A href="/docs/inference/models">Models</A> page and in <C>GET /v1/models</C>. A change applies to requests after it, never retroactively.</Li>
         <Li>Requests that end in an error are not charged. A cancelled stream is charged for the tokens generated.</Li>
-        <Li>The <C>off_peak</C> field on a model is reserved for time-of-day discounts; it is <C>null</C> on every model today.</Li>
+        <Li>The <C>off_peak</C> field on a model carries a time-of-day discount window; it is <C>null</C> on every model today. When one is set, <C>prices.discount</C> on the same model gives the discounted rates and says whether the window is open right now.</Li>
       </Ul>
 
       <H2>What a usage record contains</H2>
