@@ -40,13 +40,18 @@ export default function ModelsPage() {
       <H2>Model ids</H2>
       <P>
         Ids are namespaced by vendor, <C>anthropic/claude-sonnet-5</C>,{" "}
-        <C>openai/gpt-5.5</C>, <C>zhipu/glm-5.3-flash-uncensored</C>, and are used exactly as listed,
+        <C>openai/gpt-5.5</C>, <C>zhipu/glm-5.3-flash-derisked</C>, and are used exactly as listed,
         including case. A request naming an id that is not in the catalog, or not in your key’s
         allowlist, is refused before anything is billed.
       </P>
       <P>
         Ids are stable. When a vendor renames a model upstream, the catalog id you integrated
-        against keeps working.
+        against keeps working. On the rare occasion we rename a catalog id ourselves, the old one
+        becomes an alias and keeps resolving to the same model, so nothing you have deployed has
+        to change. Each entry lists its retired ids in <C>aliases</C>, and a request that uses one
+        is answered normally, with <C>X-Ahura-Model</C> and your usage record carrying the current
+        id. <C>zhipu/glm-5.3-flash-uncensored</C> is an alias of{" "}
+        <C>zhipu/glm-5.3-flash-derisked</C> for this reason.
       </P>
 
       <H2>List models</H2>
@@ -94,7 +99,8 @@ export default function ModelsPage() {
         "effective_output": 5
       },
       "off_peak": null,
-      "featured": true
+      "featured": true,
+      "aliases": []
     }
   ]
 }`}</Code>
@@ -109,6 +115,7 @@ export default function ModelsPage() {
           [<C key="5b">prices</C>, <>The same rates in dollars per million tokens, plus the discounted rates when a model has a discount window. Described below.</>],
           [<C key="6">off_peak</C>, <>The raw discount window behind <C>prices.discount</C>; <C>null</C> means the price applies at all hours.</>],
           [<C key="7">featured</C>, "A model we recommend starting with."],
+          [<C key="8">aliases</C>, <>Retired ids that still resolve to this model. Usually empty.</>],
         ]}
       />
       <Callout kind="tip" title="Select by capability, not by name">
@@ -149,8 +156,8 @@ export default function ModelsPage() {
         head={["Model", "Id", "Context", "Notes"]}
         rows={[
           [
-            "Z.AI / GLM 5.3 Flash Uncensored",
-            <C key="g">zhipu/glm-5.3-flash-uncensored</C>,
+            "Z.AI / GLM 5.3 Flash Derisked",
+            <C key="g">zhipu/glm-5.3-flash-derisked</C>,
             "1,048,576",
             <>Five-level <A href="/docs/inference/reasoning">reasoning ladder</A>; unbounded thinking by default. Two replicas with failover.</>,
           ],

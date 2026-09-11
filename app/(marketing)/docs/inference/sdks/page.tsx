@@ -143,8 +143,8 @@ const { text } = await generateText({
           "name": "Z.AI / GLM 5.3 Uncensored",
           "limit": { "context": 1048576, "output": 131072 }
         },
-        "zhipu/glm-5.3-flash-uncensored": {
-          "name": "Z.AI / GLM 5.3 Flash Uncensored",
+        "zhipu/glm-5.3-flash-derisked": {
+          "name": "Z.AI / GLM 5.3 Flash Derisked",
           "limit": { "context": 1048576, "output": 131072 }
         },
         "qwen/qwen3.8-flash-next-uncensored": {
@@ -158,7 +158,7 @@ const { text } = await generateText({
 }`}</Code>
       <P>
         Switch models inside OpenCode with <C>/models</C>, or start it with{" "}
-        <C>opencode -m ahurasense/zhipu/glm-5.3-flash-uncensored</C>. OpenCode sends{" "}
+        <C>opencode -m ahurasense/zhipu/glm-5.3-flash-derisked</C>. OpenCode sends{" "}
         <C>reasoning_effort</C> when you set a reasoning level, which the hosted models honour
         directly.
       </P>

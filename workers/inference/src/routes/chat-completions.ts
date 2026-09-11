@@ -22,6 +22,7 @@ import {
   streamPassthrough,
 } from "../lib/wokey.ts";
 import { applyPreset, presetRoutingIsDegraded, resolvePreset } from "../lib/presets.ts";
+import { resolveModelId } from "../lib/aliases.ts";
 import { lookupCache, shouldCache, writeCache } from "../lib/cache.ts";
 import {
   extractEmbeddableText,
@@ -151,8 +152,8 @@ export const chatCompletions: Handler<{
     }
   }
 
-  const effectiveModel = req.model ?? presetConfig?.models[0];
-  if (!effectiveModel) {
+  const requestedModel = req.model ?? presetConfig?.models[0];
+  if (!requestedModel) {
     return c.json(
       errorBody(
         "Request must specify `model` (or use X-Ahura-Preset with a preset that defines models)",
@@ -164,15 +165,22 @@ export const chatCompletions: Handler<{
     );
   }
 
-  // 3. Scope check — does this key allow this model?
+  // 2b. A retired id resolves to the model it became, so everything below —
+  //     the allowlist, routing, the headers, the usage record — sees one id.
+  const effectiveModel = await resolveModelId(c.env, requestedModel);
+
+  // 3. Scope check — does this key allow this model? An allowlist written
+  //     before a rename names the old id, one written after names the new
+  //     one, and both must keep working, so either spelling passes.
   if (
     auth.allowedModels &&
     auth.allowedModels.length > 0 &&
-    !auth.allowedModels.includes(effectiveModel)
+    !auth.allowedModels.includes(effectiveModel) &&
+    !auth.allowedModels.includes(requestedModel)
   ) {
     return c.json(
       errorBody(
-        `Model "${effectiveModel}" is not allowed for this API key`,
+        `Model "${requestedModel}" is not allowed for this API key`,
         "invalid_request_error",
         "model_not_allowed",
         requestId

@@ -145,7 +145,9 @@ console.log(completion.choices[0].message.content);`,
       <Callout kind="note" title="Which model answered">
         The <C>model</C> field in the body is whatever the serving backend reports and can use a
         different spelling from the id you sent. The <C>X-Ahura-Model</C> response header always
-        carries the catalog id you asked for, and it is the id your usage is recorded under.
+        carries the catalog id, and it is the id your usage is recorded under. It matches what you
+        sent unless you used a retired id, in which case it is the current one that id{" "}
+        <A href="/docs/inference/models#model-ids">resolves to</A>.
       </Callout>
 
       <H2>Available models</H2>
@@ -158,7 +160,7 @@ console.log(completion.choices[0].message.content);`,
       </P>
       <ModelsList />
       <Callout kind="note" title="Hosted, uncensored models">
-        <C>zhipu/glm-5.3-uncensored</C>, <C>zhipu/glm-5.3-flash-uncensored</C> and{" "}
+        <C>zhipu/glm-5.3-uncensored</C>, <C>zhipu/glm-5.3-flash-derisked</C> and{" "}
         <C>qwen/qwen3.8-flash-next-uncensored</C> run on AhuraSense GPU infrastructure without vendor refusal tuning, with{" "}
         <A href="/docs/inference/reasoning">reasoning effort</A> under your control. Every other
         model is served by a partner backend with the vendor’s own behaviour.

@@ -17,6 +17,7 @@ import {
   type ModelOffPeak,
   type ModelPricing,
 } from "../lib/pricing.ts";
+import { aliasesByModel } from "../lib/aliases.ts";
 
 interface ModelRow {
   model_id: string;
@@ -80,6 +81,10 @@ export const listModels: Handler<{
   // must not disagree about whether it is open.
   const now = new Date();
 
+  // Retired ids that still route here, so a client can see that the id it has
+  // hard-coded is an old spelling and what it became.
+  const aliases = await aliasesByModel(c.env);
+
   return c.json({
     object: "list",
     data: (data ?? []).map((m) => ({
@@ -107,6 +112,7 @@ export const listModels: Handler<{
       ),
       off_peak: m.off_peak,
       featured: m.is_featured,
+      aliases: aliases.get(m.model_id) ?? [],
     })),
   });
 };

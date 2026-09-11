@@ -31,6 +31,7 @@ import {
 } from "../lib/wokey.ts";
 import { lookupCache, shouldCacheMessages, writeCache } from "../lib/cache.ts";
 import { forwardToEndpoints, hasManagedTarget, lookupModelRouting } from "../lib/model-routing.ts";
+import { resolveModelId } from "../lib/aliases.ts";
 import { reasoningControlsFromAnthropic, type AnthropicReasoningFields } from "../lib/reasoning.ts";
 import {
   extractEmbeddableText,
@@ -137,21 +138,23 @@ export const messagesShim: Handler<{
   }
   const req = parsed.data;
 
-  // 2. Normalize model id — accept bare "claude-haiku-4.5" or full "anthropic/claude-haiku-4.5"
-  const normalizedModel = req.model.includes("/")
-    ? req.model
-    : `anthropic/${req.model}`;
+  // 2. Normalize model id — accept bare "claude-haiku-4.5" or full "anthropic/claude-haiku-4.5",
+  //    then resolve a retired id to the model it became (see lib/aliases.ts).
+  const requestedModel = req.model.includes("/") ? req.model : `anthropic/${req.model}`;
+  const normalizedModel = await resolveModelId(c.env, requestedModel);
 
-  // 3. Scope check
+  // 3. Scope check — either spelling passes, so an allowlist written before a
+  //    rename and one written after both keep working.
   if (
     auth.allowedModels &&
     auth.allowedModels.length > 0 &&
-    !auth.allowedModels.includes(normalizedModel)
+    !auth.allowedModels.includes(normalizedModel) &&
+    !auth.allowedModels.includes(requestedModel)
   ) {
     return c.json(
       anthropicError(
         "permission_error",
-        `Model "${normalizedModel}" is not allowed for this API key`,
+        `Model "${requestedModel}" is not allowed for this API key`,
         requestId
       ),
       403
@@ -343,7 +346,7 @@ export const messagesShim: Handler<{
       : openaiBody;
 
   // A model we serve ourselves goes to its own endpoints, never to Wokey:
-  // the upstream has not heard of zhipu/glm-5.3-flash-uncensored and would 404 it. The answer is
+  // the upstream has not heard of zhipu/glm-5.3-flash-derisked and would 404 it. The answer is
   // OpenAI-shaped either way, so everything below this branch is unchanged.
   let upstream: Response;
   if (messagesRouting && messagesRouting.serving_type !== "proxy") {
