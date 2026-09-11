@@ -37,13 +37,19 @@ export default function ReasoningPage() {
       <Table
         head={["Value", "Behaviour", "Thinking tokens on a hard prompt"]}
         rows={[
-          [<><C>none</C> / <C>minimal</C> / <C>off</C></>, "Answers immediately, no reasoning.", "1"],
-          [<C key="l">low</C>, "Rarely thinks.", "1"],
+          [<><C>none</C> / <C>minimal</C></>, "Answers immediately, no reasoning.", "1"],
+          [<C key="l">low</C>, "Thinks briefly, with no ceiling.", "1,222"],
           [<C key="m">medium</C>, "Thinks, capped at 1,024 tokens.", "1,025"],
           [<C key="h">high</C>, "Thinks, capped at 4,096 tokens.", "4,097"],
-          [<><C>xhigh</C> / <C>max</C> / nothing sent</>, "Unbounded thinking. The default.", "6,023"],
+          [<><C>xhigh</C> / <C>max</C> / nothing sent</>, "Unbounded thinking. The default.", "4,698 – 9,003"],
         ]}
       />
+      <Callout kind="note" title="low is not a cap; medium is">
+        <C>low</C> has no ceiling, so on a hard prompt it can and does spend more than{" "}
+        <C>medium</C>, which stops at 1,024. If what you want is a bound on cost and latency, ask
+        for <C>medium</C>, not <C>low</C>. Those seven values are the whole set: anything else,{" "}
+        <C>off</C> included, is rejected with <C>400</C>.
+      </Callout>
       <CodeTabs
         tabs={[
           {

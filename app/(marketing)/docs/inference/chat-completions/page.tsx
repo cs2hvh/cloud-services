@@ -149,9 +149,10 @@ console.log(completion.choices[0].message.content);`,
             type: "string",
             children: (
               <>
-                How much a hosted model thinks before it answers: <C>none</C>, <C>low</C>,{" "}
-                <C>medium</C>, <C>high</C> or <C>max</C>. Passed through to partner models.
-                See <A href="/docs/inference/reasoning">Reasoning effort</A>.
+                How much a hosted model thinks before it answers: <C>none</C>, <C>minimal</C>,{" "}
+                <C>low</C>, <C>medium</C>, <C>high</C>, <C>xhigh</C> or <C>max</C>. Any other
+                value is rejected with <C>400</C>. Passed through to partner models. See{" "}
+                <A href="/docs/inference/reasoning">Reasoning effort</A>.
               </>
             ),
           },
