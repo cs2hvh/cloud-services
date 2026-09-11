@@ -10,6 +10,7 @@ import {
   Li,
   P,
   Params,
+  Strong,
   Table,
   Ul,
 } from "@/components/docs/primitives";
@@ -112,8 +113,8 @@ const message = await client.messages.create({
           { name: "top_p", type: "number, 0 to 1", children: <>Nucleus sampling.</> },
           { name: "top_k", type: "integer", children: <>Passed through where the model supports it.</> },
           { name: "stop_sequences", type: "array of strings", children: <>Sequences at which generation stops.</> },
-          { name: "tools", type: "array", children: <>Anthropic tool definitions, passed through.</> },
-          { name: "tool_choice", type: "object", children: <>Anthropic tool choice, passed through.</> },
+          { name: "tools", type: "array", children: <>Accepted but not translated, so tool calling does not work on this route. See below.</> },
+          { name: "tool_choice", type: "object", children: <>Accepted but not translated. See below.</> },
           { name: "metadata.user_id", type: "string", children: <>Your identifier for the end user.</> },
         ]}
       />
@@ -160,7 +161,14 @@ const message = await client.messages.create({
 
       <H2>Differences from Anthropic’s API</H2>
       <Ul>
-        <Li>Tool use in a stream arrives as text deltas; tool calls are not streamed as structured blocks. Non-streaming tool use is passed through.</Li>
+        <Li>
+          <Strong>Tool use does not work on this route.</Strong> Anthropic tool definitions are
+          forwarded without being converted to the wire format the backends expect: hosted models
+          reject the request with <C>400</C>, and partner models answer as though no tool were
+          offered. A tool call the model does make is not returned as a <C>tool_use</C> block
+          either. Use <A href="/docs/inference/chat-completions">Chat completions</A> for anything
+          agentic; tool calling there is complete, on every model.
+        </Li>
         <Li>
           <C>thinking</C> and <C>output_config.effort</C> are honoured on hosted models:{" "}
           <C>{`{"type": "disabled"}`}</C> turns reasoning off, <C>budget_tokens</C> caps it, and{" "}

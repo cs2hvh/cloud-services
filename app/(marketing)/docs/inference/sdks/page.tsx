@@ -87,8 +87,11 @@ const message = await client.messages.create({
   messages: [{ role: "user", content: "Hello" }],
 });
 console.log(message.content[0].type === "text" ? message.content[0].text : "");`}</Code>
-      <Callout kind="note" title="What the Messages route does not do yet">
-        Tool use is streamed as text deltas only, and <C>cache_control</C> hints are ignored. See{" "}
+      <Callout kind="warn" title="Tool calling needs the Chat Completions route">
+        The Messages route does not translate Anthropic tool definitions, so tool calling does not
+        work through it on any model. Plain chat, streaming and reasoning controls all work. If
+        your code calls tools, point it at <A href="/docs/inference/chat-completions">Chat
+        completions</A> with the OpenAI SDK instead. <C>cache_control</C> hints are ignored. See{" "}
         <A href="/docs/inference/messages">Messages</A>.
       </Callout>
 
