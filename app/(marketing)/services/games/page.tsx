@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 
 import GamesServicePage from "@/components/services/games-service-page";
 import ServicesHomeSectionFive from "@/components/serviceshome/section-5";
@@ -11,7 +12,10 @@ export const metadata: Metadata = {
 
 export const revalidate = 300;
 
+// Hidden with Game Servers (hv, 2026-09-14). The page and its components are
+// untouched; this route simply 404s so it cannot be reached or indexed.
 const GamesHome = () => {
+  notFound();
   return (
     <main className="bg-[#08090b]">
       <GamesServicePage />

@@ -577,12 +577,10 @@ export function AppSidebar({ projects, user }: AppSidebarProps) {
                             expanded={gpuExpanded}
                             onToggle={() => setGpuExpanded((p) => !p)}
                         />
-                        <GroupRow
-                            group={gameGroup}
-                            pathname={pathname}
-                            expanded={gameExpanded}
-                            onToggle={() => setGameExpanded((p) => !p)}
-                        />
+                        {/* Game Servers hidden from the customer dashboard (hv, 2026-09-14).
+                            The service, its pages and its API all still exist and still work —
+                            only the way in from the sidebar is gone. Restore by re-rendering
+                            `gameGroup` here; the group definition above is kept for that. */}
                         {/* A.I. Labs brought up — grouped with the other compute/AI verticals */}
                         <GroupRow group={inferenceGroup} pathname={pathname} expanded={inferenceExpanded} onToggle={() => setInferenceExpanded((p) => !p)} />
                         {/* Core managed services: Database, Application Deploy, Kubernetes */}

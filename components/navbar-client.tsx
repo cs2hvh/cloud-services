@@ -42,11 +42,12 @@ const SOLUTIONS: SolutionItem[] = [
     desc: "Build and scale online stores",
     href: "/solutions/ecommerce",
   },
-  {
-    label: "Game Development & Hosting",
-    desc: "Low-latency multiplayer infrastructure",
-    href: "/solutions/game-dev",
-  },
+  // Hidden alongside Game Servers (hv, 2026-09-14) — the solutions page still exists.
+  // {
+  //   label: "Game Development & Hosting",
+  //   desc: "Low-latency multiplayer infrastructure",
+  //   href: "/solutions/game-dev",
+  // },
   {
     label: "Database-Driven Applications",
     desc: "High-performance data infrastructure",
@@ -101,12 +102,14 @@ const PRODUCTS: SolutionItem[] = [
     href: "/services/app-deployment",
     tags: ["Docker", "CI/CD", "Auto Deploy", "GitHub", "GitLab"],
   },
-  {
-    label: "Game Servers",
-    desc: "DDoS-protected game hosting, online in a minute",
-    href: "/services/games",
-    tags: ["Minecraft", "Rust", "CS2", "FiveM"],
-  },
+  // Game Servers hidden from the public navigation (hv, 2026-09-14).
+  // The service page and its code are untouched; only this menu entry is gone.
+  // {
+  //   label: "Game Servers",
+  //   desc: "DDoS-protected game hosting, online in a minute",
+  //   href: "/services/games",
+  //   tags: ["Minecraft", "Rust", "CS2", "FiveM"],
+  // },
   {
     label: "Domains",
     desc: "Register, transfer, and manage domains",

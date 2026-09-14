@@ -268,12 +268,16 @@ const Dashboard = ({ data }: { data: PageProps }) => {
                     glyph={<ServerGlyph />}
                     href="/dashboard/services/compute"
                 />
+                {/* Game servers tile hidden from the dashboard (hv, 2026-09-14).
+                    The data is still fetched and still counted in totalResources,
+                    so an existing customer's resource count stays correct — only the
+                    way in is gone. Restore by uncommenting.
                 <StatLink
                     label="Game servers"
                     value={data.game_servers.length}
                     glyph={<ServerGlyph />}
                     href="/dashboard/services/game"
-                />
+                /> */}
                 <StatLink
                     label="GPU pods"
                     value={data.gpu_pods.length}
