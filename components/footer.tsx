@@ -41,7 +41,7 @@ const FOOTER_LINKS = [
       { label: "Kubernetes", href: "/services/kubernetes" },
       { label: "Object Storage", href: "/services/object-storage" },
       { label: "App Deploy", href: "/services/app-deployment" },
-      { label: "Game Servers", href: "/services/games" },
+      // Hidden with Game Servers (hv, 2026-09-14): { label: "Game Servers", href: "/services/games" },
     ],
   },
   {

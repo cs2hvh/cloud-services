@@ -28,12 +28,14 @@ const SOLUTIONS = [
         subtitle: "Scalable Storefronts",
         href: "/solutions/ecommerce",
     },
-    {
-        icon: assetUrl("/solution/secondsection/Game%20Controller.svg"),
-        title: "Game Development",
-        subtitle: "Low-Latency Servers",
-        href: "/solutions/game-dev",
-    },
+    // Hidden with Game Servers (hv, 2026-09-14) — it linked to /solutions/game-dev,
+    // which now 404s. Restore together with that page.
+    // {
+    // icon: assetUrl("/solution/secondsection/Game%20Controller.svg"),
+    // title: "Game Development",
+    // subtitle: "Low-Latency Servers",
+    // href: "/solutions/game-dev",
+    // },
     {
         icon: assetUrl("/solution/secondsection/Database.svg"),
         title: "Database Applications",

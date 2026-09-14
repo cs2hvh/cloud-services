@@ -60,14 +60,16 @@ const SOLUTION_CARDS: SolutionCardData[] = [
         products: ["Compute", "Database", "Security", "Object Storage"],
         href: "/solutions/ecommerce",
     },
-    {
-        title: "Game Development",
-        description: "Low-latency servers, scalable backends, and storage for assets and telemetry.",
-        icon: assetUrl("/solution/secondsection/Game%20Controller.svg"),
-        outcomes: ["Low ping", "Burst scale", "Operational visibility"],
-        products: ["Compute", "Kubernetes", "Object Storage", "Security"],
-        href: "/solutions/game-dev",
-    },
+    // Hidden with Game Servers (hv, 2026-09-14) — it linked to /solutions/game-dev,
+    // which now 404s. Restore together with that page.
+    // {
+    // title: "Game Development",
+    // description: "Low-latency servers, scalable backends, and storage for assets and telemetry.",
+    // icon: assetUrl("/solution/secondsection/Game%20Controller.svg"),
+    // outcomes: ["Low ping", "Burst scale", "Operational visibility"],
+    // products: ["Compute", "Kubernetes", "Object Storage", "Security"],
+    // href: "/solutions/game-dev",
+    // },
     {
         title: "Database-Driven Applications",
         description: "Build data-heavy apps with managed databases and secure networking.",

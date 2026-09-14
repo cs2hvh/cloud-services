@@ -27,7 +27,8 @@ const ProjectResourcesSuspense = async ({ projectId }: PageProps) => {
 
   return (
     <div className="space-y-8 p-6">
-      <GameServerGrid data={gameservers}  />
+      {/* Game servers hidden from the project view (hv, 2026-09-14) — data still fetched above.
+      <GameServerGrid data={gameservers}  /> */}
       <KubernetesGrid data={clusters}  />
       <DbClusterGrid data={db_clusters}  />
       <SpectrumAppGrid data={spectrum_apps}  />
