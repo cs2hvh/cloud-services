@@ -101,11 +101,12 @@ export default function ReasoningPage() {
         on one hard prompt with a 9,000-token allowance, <C>minimal</C>, <C>medium</C>,{" "}
         <C>xhigh</C>, <C>max</C> and sending nothing at all each spent the entire allowance
         thinking and came back truncated, with <C>finish_reason: length</C> and no usable answer.{" "}
-        <C>high</C> spent 8,020. Only <C>low</C> finished on its own, at 2,264 thinking tokens. <C>none</C> does
-        switch the thinking off, but the answer itself still ran to the limit. Until that is fixed
-        on our side, use <C>low</C> on this model, or set an explicit{" "}
-        <C>custom_params.thinking_budget</C>, and give it room in <C>max_tokens</C>. The flash
-        model, where the table was measured, is unaffected.
+        <C>high</C> spent 8,020. Only <C>low</C> finished on its own, at 2,264 thinking tokens.{" "}
+        <C>none</C> is worse than useless here: the model still reasons, but as plain text at the
+        start of the visible answer, so a one-word question comes back as a sentence of monologue
+        with the word at the end. <C>custom_params.thinking_budget</C> is ignored on this model as
+        well. Until that is fixed on our side, use <C>low</C> and nothing else, and give it room in{" "}
+        <C>max_tokens</C>. The flash model, where the table was measured, is unaffected.
       </Callout>
 
       <H2>An exact budget</H2>

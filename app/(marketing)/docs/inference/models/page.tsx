@@ -165,7 +165,7 @@ export default function ModelsPage() {
             "Z.AI / GLM 5.3 Derisked",
             <C key="g2">zhipu/glm-5.3-derisked</C>,
             "1,048,576",
-            <>The full GLM 5.3. Thinks hard by default: use <C>low</C> or a thinking budget, and see the <A href="/docs/inference/reasoning">caveat on its ladder</A>. Carries about 660 tokens of system template on every request.</>,
+            <>The full GLM 5.3. Thinks hard by default: send <C>reasoning_effort: low</C>, and see the <A href="/docs/inference/reasoning">caveat on its ladder</A>. Carries about 660 tokens of system template on every request, and does not report prompt-cache hits, so a repeated prefix bills at the input rate.</>,
           ],
           [
             "Qwen / Qwen3.8 Flash Next Uncensored",
