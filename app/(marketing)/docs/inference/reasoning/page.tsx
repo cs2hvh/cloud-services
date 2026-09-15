@@ -93,11 +93,20 @@ export default function ReasoningPage() {
         Not every hosted model has five distinct levels. <C>qwen/qwen3.8-flash-next-uncensored</C> folds the
         ladder into three: <C>high</C>, <C>max</C> and <C>xhigh</C> all mean its deepest mode,
         which is also its default; <C>low</C> and <C>minimal</C> both mean low; <C>medium</C> and{" "}
-        <C>none</C> are as above. <C>zhipu/glm-5.3-uncensored</C> has three as well: <C>none</C>{" "}
-        is off, <C>minimal</C> and <C>low</C> think briefly, and everything else is its deep
-        mode; on this model prefer <C>low</C> over <C>none</C> for the shortest clean answer.
-        Sending any value is always safe; a model without a matching level uses its nearest.
+        <C>none</C> are as above. Sending any value is always safe; a model without a matching
+        level uses its nearest.
       </P>
+      <Callout kind="warn" title="The caps do not hold on zhipu/glm-5.3-derisked">
+        On the full GLM 5.3 the levels above <C>low</C> do not stop where the table says. Measured
+        on one hard prompt with a 9,000-token allowance, <C>minimal</C>, <C>medium</C>,{" "}
+        <C>xhigh</C>, <C>max</C> and sending nothing at all each spent the entire allowance
+        thinking and came back truncated, with <C>finish_reason: length</C> and no usable answer.{" "}
+        <C>high</C> spent 8,020. Only <C>low</C> finished on its own, at 2,264 thinking tokens. <C>none</C> does
+        switch the thinking off, but the answer itself still ran to the limit. Until that is fixed
+        on our side, use <C>low</C> on this model, or set an explicit{" "}
+        <C>custom_params.thinking_budget</C>, and give it room in <C>max_tokens</C>. The flash
+        model, where the table was measured, is unaffected.
+      </Callout>
 
       <H2>An exact budget</H2>
       <P>

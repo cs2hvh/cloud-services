@@ -162,10 +162,10 @@ export default function ModelsPage() {
             <>Five-level <A href="/docs/inference/reasoning">reasoning ladder</A>; unbounded thinking by default. Two replicas with failover.</>,
           ],
           [
-            "Z.AI / GLM 5.3 Uncensored",
-            <C key="g2">zhipu/glm-5.3-uncensored</C>,
+            "Z.AI / GLM 5.3 Derisked",
+            <C key="g2">zhipu/glm-5.3-derisked</C>,
             "1,048,576",
-            <>The full GLM 5.3. Three-level reasoning ladder.</>,
+            <>The full GLM 5.3. Thinks hard by default: use <C>low</C> or a thinking budget, and see the <A href="/docs/inference/reasoning">caveat on its ladder</A>. Carries about 660 tokens of system template on every request.</>,
           ],
           [
             "Qwen / Qwen3.8 Flash Next Uncensored",
