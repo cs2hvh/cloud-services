@@ -155,6 +155,18 @@ server {
     server_name $HOSTNAME_FQDN;
     ssl_certificate     $CERT;
     ssl_certificate_key $KEY;
+
+    # Header room. Supabase stores the session as CHUNKED cookies, and a
+    # browser that has signed in repeatedly (or holds cookies scoped to the
+    # parent domain as well) can send well past nginx's 8k default for one
+    # header line. nginx then refuses the request at the door and the edge
+    # reports 502/520 — which reads as "the panel is down" while the panel is
+    # perfectly healthy and answers the identical request from curl. That
+    # cost an administrator a day of access on 2026-09-16; reproduced at
+    # ~16KB of cookies, fine at 8KB.
+    large_client_header_buffers 8 32k;
+    client_header_buffer_size 16k;
+
     location / {
         proxy_pass http://127.0.0.1:$PORT;
         proxy_http_version 1.1;
@@ -164,11 +176,16 @@ server {
         proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
+        proxy_buffer_size 32k;
+        proxy_buffers 8 32k;
+        proxy_busy_buffers_size 64k;
     }
 }
 server {
     listen 80;
     server_name $HOSTNAME_FQDN;
+    large_client_header_buffers 8 32k;
+    client_header_buffer_size 16k;
     location / {
         proxy_pass http://127.0.0.1:$PORT;
         proxy_http_version 1.1;
