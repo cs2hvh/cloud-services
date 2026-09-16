@@ -63,6 +63,7 @@ type Health = {
   gateway: { ok: boolean; latencyMs?: number; detail?: string; url?: string };
   upstream: { ok: boolean; unknown?: boolean; latencyMs?: number; detail?: string };
   database: { ok: boolean; latencyMs?: number; detail?: string };
+  pods: { ok: boolean; unknown?: boolean; detail?: string };
 };
 
 const money = (n: number) =>
@@ -132,7 +133,7 @@ export function AiOverview() {
       <AiTabs />
 
       {/* Health strip */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <HealthCard
           label="Gateway edge"
           check={health?.gateway}
@@ -142,6 +143,10 @@ export function AiOverview() {
           label="Upstream (Wokey)"
           check={health?.upstream}
           extra={health?.upstream?.latencyMs ? `${health.upstream.latencyMs} ms` : undefined}
+        />
+        <HealthCard
+          label="Hosted pods"
+          check={health?.pods}
         />
         <HealthCard
           label="Control plane DB"

@@ -67,7 +67,7 @@ export async function GET() {
   const wokeyBase = process.env.WOKEY_BASE_URL || "https://api.wokey.ai/v1";
   const wokeyKey = process.env.WOKEY_PLATFORM_KEY;
 
-  const [gatewayRes, upstreamRes, dbCheck] = await Promise.all([
+  const [gatewayRes, upstreamRes, podCheck, dbCheck] = await Promise.all([
     timedFetch(`${gatewayBase}/health`, {}, 5000),
     wokeyKey
       ? timedFetch(
@@ -76,6 +76,73 @@ export async function GET() {
           7000,
         )
       : Promise.resolve(null),
+    // Hosted pods: read what the gateway's own prober wrote. A model whose
+    // only pod is dead is the outage that went three days unnoticed, so it
+    // belongs on the same strip as the gateway and the database.
+    (async (): Promise<Check & { detail: string }> => {
+      try {
+        const supabase = await createServiceClient();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data, error } = await (supabase as any)
+          .schema("inference")
+          .from("endpoint_health")
+          .select("model_id, enabled, ok, checked_at");
+        if (error) return { ok: false, unknown: true, detail: "pod health unreadable" };
+        const rows = (data ?? []) as {
+          model_id: string;
+          enabled: boolean;
+          ok: boolean;
+          checked_at: string;
+        }[];
+        if (rows.length === 0) {
+          return { ok: false, unknown: true, detail: "no pods are being probed" };
+        }
+        const newest = rows.reduce(
+          (m, r) => (r.checked_at > m ? r.checked_at : m),
+          rows[0].checked_at,
+        );
+        const ageSec = Math.round((Date.now() - Date.parse(newest)) / 1000);
+        if (ageSec > 180) {
+          return {
+            ok: false,
+            unknown: true,
+            detail: `probe stale (${Math.round(ageSec / 60)}m) — status unknown`,
+          };
+        }
+        const byModel = new Map<string, { live: number; up: number }>();
+        for (const r of rows) {
+          if (!r.enabled) continue;
+          const e = byModel.get(r.model_id) ?? { live: 0, up: 0 };
+          e.live += 1;
+          if (r.ok) e.up += 1;
+          byModel.set(r.model_id, e);
+        }
+        const down = [...byModel.entries()].filter(([, v]) => v.up === 0);
+        const degraded = [...byModel.entries()].filter(
+          ([, v]) => v.up > 0 && v.up < v.live,
+        );
+        const live = rows.filter((r) => r.enabled);
+        if (down.length > 0) {
+          return {
+            ok: false,
+            detail: `${down.length} model(s) down: ${down.map(([m]) => m).join(", ")}`,
+          };
+        }
+        return {
+          ok: true,
+          detail:
+            degraded.length > 0
+              ? `${live.filter((r) => r.ok).length}/${live.length} pods up · ${degraded.length} model(s) degraded`
+              : `${live.filter((r) => r.ok).length}/${live.length} pods up`,
+        };
+      } catch (e) {
+        return {
+          ok: false,
+          unknown: true,
+          detail: e instanceof Error ? e.message : "failed",
+        };
+      }
+    })(),
     (async (): Promise<Check> => {
       const start = Date.now();
       try {
@@ -128,5 +195,6 @@ export async function GET() {
             "not checkable from the panel — WOKEY_PLATFORM_KEY is not in this host's environment",
         },
     database: dbCheck,
+    pods: podCheck,
   });
 }
