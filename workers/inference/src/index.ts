@@ -31,6 +31,7 @@ import { keyInfo } from "./routes/key.ts";
 import { messagesShim } from "./routes/messages.ts";
 import { handleUsageBatch } from "./consumers/usage.ts";
 import { handleAuditBatch } from "./consumers/audit.ts";
+import { runEndpointHealthSweep } from "./lib/endpoint-health.ts";
 
 const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
 
@@ -194,6 +195,11 @@ export default {
    * most are Redis-single-flighted, so over-firing is safe.
    */
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+    // Every minute: is each hosted pod up and serving the name we route to?
+    // The flash pods were dead for three days in September before anyone
+    // looked; this is what looks. Results land in inference.endpoint_health
+    // for the admin panel. See lib/endpoint-health.ts.
+    ctx.waitUntil(runEndpointHealthSweep(env, event));
     ctx.waitUntil(runServingPodWatchdog(env, event));
     const minuteOfHour = new Date(event.scheduledTime).getUTCMinutes();
     // Fine-tuning watchdog every 5 min: reaps orphaned FT jobs (stale
