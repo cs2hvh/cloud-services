@@ -27,6 +27,21 @@ function isPublicPath(pathname: string) {
 }
 
 export async function middleware(request: NextRequest) {
+  // PUBLIC PATHS SHORT-CIRCUIT FIRST, BEFORE ANY SUPABASE WORK.
+  //
+  // This check used to sit AFTER getUser(), so loading the sign-in page or
+  // posting credentials first made the server validate — and try to refresh —
+  // whatever session the browser already had. A browser holding a stale or
+  // broken session therefore had to survive a token refresh before it was
+  // allowed to sign in again, and when that refresh was slow or failed the
+  // request came back 502. The one thing a locked-out administrator does to
+  // recover was gated on the thing that was broken (2026-09-16).
+  //
+  // Signing in must never depend on an existing session.
+  if (isPublicPath(request.nextUrl.pathname)) {
+    return NextResponse.next({ request });
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -58,12 +73,18 @@ export async function middleware(request: NextRequest) {
   );
 
   // Refreshes the session when needed; refreshed cookies flow into `response`.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (isPublicPath(request.nextUrl.pathname)) {
-    return response;
+  // A throw here (Supabase unreachable, a corrupt cookie) must not 502 the
+  // panel: treat it as "not signed in" so the visitor lands on the sign-in
+  // page, which no longer needs Supabase to render.
+  let user: { id: string; email?: string } | null = null;
+  try {
+    const result = await supabase.auth.getUser();
+    user = result.data.user;
+  } catch (authError) {
+    console.error(
+      "[admin middleware] session unreadable, treating as signed out:",
+      authError instanceof Error ? authError.message : "unknown",
+    );
   }
 
   const deny = (reason: "unauthenticated" | "forbidden") => {
