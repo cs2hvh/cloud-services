@@ -73,6 +73,18 @@ const PRODUCTS: SolutionItem[] = [
     tags: ["VPS", "Dedicated CPU", "Shared CPU", "Cloud Servers"],
   },
   {
+    label: "Dedicated Servers",
+    desc: "Single-tenant bare metal with full root access",
+    href: "/services/dedicated-servers",
+    tags: ["Bare metal", "Xeon", "EPYC", "Ryzen", "IPMI"],
+  },
+  {
+    label: "Server Catalog",
+    desc: "Compare every dedicated server by country, CPU, memory, and price",
+    href: "/services/dedicated-servers/catalog",
+    tags: ["Compare", "Filter", "Search"],
+  },
+  {
     label: "GPU Instances",
     desc: "High-performance GPU acceleration for AI/ML",
     href: "/services/gpu",

@@ -606,10 +606,17 @@ export default function ComputePricingSection({
                 </>
               )}
             </p>
+            {/*
+              Bare metal goes to the public catalog, not the dashboard one.
+              This is a marketing page: a logged-out visitor comparing bare-metal
+              prices clicked "Explore the full lineup" and landed on the sign-in
+              wall. The VPS lineup has no public equivalent, so it still links
+              into the dashboard.
+            */}
             <Link
               href={
                 isBareMetalCategory
-                  ? "/dashboard/services/compute/bare-metal"
+                  ? "/services/dedicated-servers/catalog"
                   : "/dashboard/services/compute/vps"
               }
               className="group inline-flex w-fit items-center gap-2 border border-white/[0.14] px-4 py-2.5 text-[12.5px] font-medium text-white transition-colors hover:border-[#0095FF] hover:bg-[#0095FF]/[0.08]"
