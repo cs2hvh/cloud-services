@@ -2,15 +2,16 @@
 
 import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 
 export function SignOutButton() {
   const router = useRouter();
 
+  // Same-origin, like sign-in: the server clears the session cookies. Signing
+  // out must not depend on the browser reaching a third-party domain — being
+  // unable to LEAVE a session is worse than being unable to enter one.
   const handleSignOut = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
+    await fetch("/api/auth/signout", { method: "POST" }).catch(() => null);
     router.replace("/signin");
     router.refresh();
   };

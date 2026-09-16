@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ShieldCheck, Loader2 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,15 +12,42 @@ const FORBIDDEN_MSG =
 
 const MFA_MSG = "Enter the code from your authenticator app to finish signing in.";
 
-type BrowserClient = ReturnType<typeof createClient>;
+const NETWORK_MSG =
+  "Could not reach the panel. Check your connection and try again.";
 
-/** The verified TOTP factor id when the session still owes a second factor, else null. */
-async function pendingTotpFactor(supabase: BrowserClient): Promise<string | null> {
-  const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-  if (!(aal?.nextLevel === "aal2" && aal.currentLevel !== "aal2")) return null;
-  const { data: factors } = await supabase.auth.mfa.listFactors();
-  const totp = factors?.totp?.find((f) => f.status === "verified") ?? factors?.totp?.[0];
-  return totp?.id ?? null;
+/**
+ * SAME-ORIGIN AUTH. This form talks only to /api/auth/* on this host; the
+ * server performs the Supabase calls and sets the session cookies.
+ *
+ * It used to call Supabase from the browser, which quietly made "can this
+ * person administer the platform?" depend on whether their network allowed a
+ * third-party domain. On 2026-09-15 that failed for real — the login POST was
+ * reset in transit while the panel itself loaded fine, surfacing only as
+ * "Failed to fetch". One domain now, and a server-side fault says so instead
+ * of impersonating a bad password.
+ */
+
+/** POST JSON to our own origin, normalising transport failure into a message. */
+async function post<T>(
+  url: string,
+  body: unknown,
+): Promise<{ data: T | null; error: string | null }> {
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = (await res.json().catch(() => null)) as
+      | (T & { error?: string })
+      | null;
+    if (!res.ok || !data) {
+      return { data: null, error: data?.error ?? `Sign-in failed (${res.status})` };
+    }
+    return { data, error: null };
+  } catch {
+    return { data: null, error: NETWORK_MSG };
+  }
 }
 
 export function SignInForm({
@@ -41,11 +67,8 @@ export function SignInForm({
 
   // SECOND FACTOR. The middleware and requireAdmin refuse a password-only
   // session on an MFA-enrolled account (2026-09-05). This form is where that
-  // session completes the step: after the password, ask Supabase what level
-  // the account is entitled to; if it is aal2 and we are at aal1, show the
-  // code field and verify against the account's TOTP factor before probing
-  // the gate and navigating. Without this step the enforcement would have
-  // been a lockout for every enrolled administrator.
+  // session completes the step: the sign-in response says whether a factor is
+  // still owed, and the code is verified server-side before probing the gate.
   const [factorId, setFactorId] = useState<string | null>(null);
   const [code, setCode] = useState("");
 
@@ -59,16 +82,21 @@ export function SignInForm({
     if (error === "forbidden") {
       setSubmitting(false);
       setFormError(FORBIDDEN_MSG);
-      void createClient().auth.signOut();
+      void fetch("/api/auth/signout", { method: "POST" }).catch(() => null);
     }
-    // The middleware sent a password-only session here to finish MFA: pick
-    // up that session and go straight to the code step.
+    // The middleware sent a password-only session here to finish MFA: ask the
+    // server which factor that session owes and go straight to the code step.
     if (error === "mfa_required") {
       void (async () => {
-        const id = await pendingTotpFactor(createClient());
-        if (id) {
-          setFactorId(id);
-          setFormError(MFA_MSG);
+        try {
+          const res = await fetch("/api/auth/mfa");
+          const data = (await res.json()) as { factorId: string | null };
+          if (data.factorId) {
+            setFactorId(data.factorId);
+            setFormError(MFA_MSG);
+          }
+        } catch {
+          setFormError(NETWORK_MSG);
         }
         setSubmitting(false);
       })();
@@ -76,7 +104,7 @@ export function SignInForm({
   }, [error]);
 
   /** Probe the gate, then navigate. Shared by the password and the TOTP steps. */
-  async function finishSignIn(supabase: BrowserClient) {
+  async function finishSignIn() {
     // Probe the gate BEFORE navigating: an admin gets 200 for "/", anyone
     // else gets the middleware's redirect (opaque under redirect:"manual").
     // Refusing here keeps the form responsive on every attempt instead of
@@ -88,7 +116,7 @@ export function SignInForm({
       (probe.status >= 300 && probe.status < 400) ||
       probe.status === 0;
     if (refused) {
-      await supabase.auth.signOut();
+      await fetch("/api/auth/signout", { method: "POST" }).catch(() => null);
       setFormError(FORBIDDEN_MSG);
       setSubmitting(false);
       return;
@@ -103,27 +131,25 @@ export function SignInForm({
     setSubmitting(true);
     setFormError(null);
 
-    const supabase = createClient();
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    const { data, error: signInError } = await post<{
+      mfaRequired: boolean;
+      factorId?: string;
+    }>("/api/auth/signin", { email, password });
 
-    if (signInError) {
-      setFormError(signInError.message);
+    if (signInError || !data) {
+      setFormError(signInError ?? "Sign-in failed");
       setSubmitting(false);
       return;
     }
 
-    const id = await pendingTotpFactor(supabase);
-    if (id) {
-      setFactorId(id);
+    if (data.mfaRequired && data.factorId) {
+      setFactorId(data.factorId);
       setFormError(MFA_MSG);
       setSubmitting(false);
       return;
     }
 
-    await finishSignIn(supabase);
+    await finishSignIn();
   };
 
   const handleVerifyCode = async (e: React.FormEvent) => {
@@ -132,18 +158,17 @@ export function SignInForm({
     setSubmitting(true);
     setFormError(null);
 
-    const supabase = createClient();
-    const { error: verifyError } = await supabase.auth.mfa.challengeAndVerify({
+    const { error: verifyError } = await post<{ ok: boolean }>("/api/auth/mfa", {
       factorId,
       code: code.trim(),
     });
     if (verifyError) {
-      setFormError(verifyError.message);
+      setFormError(verifyError);
       setSubmitting(false);
       return;
     }
 
-    await finishSignIn(supabase);
+    await finishSignIn();
   };
 
   return (

@@ -14,7 +14,11 @@ import { NextResponse, type NextRequest } from "next/server";
  * wins when set, otherwise the user_profiles.roles column decides.
  */
 
-const PUBLIC_PATHS = ["/signin"];
+// /api/auth/* is the panel's own sign-in path — it must be reachable by a
+// request that is not yet authenticated, which is the whole point of it.
+// Those routes throttle themselves (lib/auth-throttle.ts); everything else
+// stays denied by default.
+const PUBLIC_PATHS = ["/signin", "/api/auth"];
 
 function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.some(
