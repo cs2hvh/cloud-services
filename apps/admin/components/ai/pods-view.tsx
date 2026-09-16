@@ -47,7 +47,8 @@ type Endpoint = {
 
 type ModelGroup = {
   modelId: string;
-  status: "healthy" | "degraded" | "down" | "no_enabled_endpoint";
+  modelActive: boolean;
+  status: "healthy" | "degraded" | "down" | "no_enabled_endpoint" | "parked";
   enabledEndpoints: number;
   okEndpoints: number;
   stagedEndpoints: number;
@@ -66,8 +67,10 @@ type Feed = {
     endpoints: number;
     enabled: number;
     up: number;
+    parkedEndpoints: number;
     modelsDown: number;
     modelsDegraded: number;
+    modelsParked: number;
   };
   alerts: { endpointId: string; modelId: string; label: string | null; text: string }[];
   models: ModelGroup[];
@@ -99,6 +102,13 @@ const MODEL_STATUS: Record<
   no_enabled_endpoint: {
     label: "no enabled pod",
     cls: "border-red-500/60 bg-red-500/15 text-red-300",
+  },
+  // Delisted in the catalog: unroutable, so its pods cannot be failing
+  // anyone. Grey, never red — a parked model that shouts DOWN forever is
+  // how operators learn to ignore red.
+  parked: {
+    label: "delisted",
+    cls: "border-white/[0.15] bg-white/[0.04] text-white/50",
   },
 };
 
@@ -227,16 +237,24 @@ export function AiPodsView() {
 
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatCard
-          label="Pods up"
+          label="Pods serving"
           value={t ? `${t.up} / ${t.enabled}` : "—"}
-          hint={t ? `${t.endpoints - t.enabled} staged (not counted)` : undefined}
+          hint={
+            t
+              ? `${t.endpoints - t.enabled - t.parkedEndpoints} staged · ${t.parkedEndpoints} on delisted models`
+              : undefined
+          }
           icon={Server}
           tone={t && t.up < t.enabled ? "critical" : "good"}
         />
         <StatCard
           label="Models down"
           value={t ? t.modelsDown : "—"}
-          hint="no enabled pod serving"
+          hint={
+            t && t.modelsParked > 0
+              ? `${t.modelsParked} delisted model(s) excluded`
+              : "no enabled pod serving"
+          }
           tone={t && t.modelsDown > 0 ? "critical" : "good"}
         />
         <StatCard
@@ -271,8 +289,14 @@ export function AiPodsView() {
                     <span className={`${MONO} text-[13px] font-medium`}>{m.modelId}</span>
                   </div>
                   <span className="text-xs text-muted-foreground">
-                    {m.okEndpoints}/{m.enabledEndpoints} pods serving
-                    {m.stagedEndpoints > 0 && ` · ${m.stagedEndpoints} staged`}
+                    {m.modelActive ? (
+                      <>
+                        {m.okEndpoints}/{m.enabledEndpoints} pods serving
+                        {m.stagedEndpoints > 0 && ` · ${m.stagedEndpoints} staged`}
+                      </>
+                    ) : (
+                      "not listed in the catalog — no request can reach it"
+                    )}
                   </span>
                 </div>
 
@@ -284,14 +308,22 @@ export function AiPodsView() {
                           <div className="flex flex-wrap items-center gap-2">
                             <span
                               className={`inline-flex rounded border px-1.5 py-0.5 text-[10.5px] font-semibold ${
-                                !ep.enabled
+                                !m.modelActive || !ep.enabled
                                   ? "border-white/[0.15] bg-white/[0.04] text-white/50"
                                   : ep.ok
                                     ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
                                     : "border-red-500/50 bg-red-500/15 text-red-300"
                               }`}
                             >
-                              {!ep.enabled ? "STAGED" : ep.ok ? "UP" : "DOWN"}
+                              {!m.modelActive
+                                ? ep.ok
+                                  ? "UP"
+                                  : "OFFLINE"
+                                : !ep.enabled
+                                  ? "STAGED"
+                                  : ep.ok
+                                    ? "UP"
+                                    : "DOWN"}
                             </span>
                             <span className="text-[13px] font-medium">
                               {ep.label ?? "(unlabelled pod)"}
@@ -357,7 +389,9 @@ export function AiPodsView() {
         and never contacts a pod or holds a pod key. A pod counts as serving
         only when it answers 200 <em>and</em> lists the model name we route to
         it. Staged (disabled) pods are probed so they are visible the moment
-        they come up, but they do not count against a model&apos;s health.
+        they come up, but they do not count against a model&apos;s health —
+        and neither do pods belonging to a delisted model, which no request
+        can reach.
         Uptime percentages are exact probe counts; the strip marks the
         half-hours that contained a failure.
       </p>

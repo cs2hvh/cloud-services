@@ -83,11 +83,20 @@ export async function GET() {
       try {
         const supabase = await createServiceClient();
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data, error } = await (supabase as any)
-          .schema("inference")
-          .from("endpoint_health")
-          .select("model_id, enabled, ok, checked_at");
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const inf = (supabase as any).schema("inference");
+        const [{ data, error }, modelsRes] = await Promise.all([
+          inf.from("endpoint_health").select("model_id, enabled, ok, checked_at"),
+          inf.from("models").select("model_id, is_active"),
+        ]);
         if (error) return { ok: false, unknown: true, detail: "pod health unreadable" };
+        // A delisted model is unroutable — its dead pod is housekeeping, not
+        // an outage, and must not colour this card red.
+        const active = new Map<string, boolean>(
+          ((modelsRes.data ?? []) as { model_id: string; is_active: boolean }[]).map(
+            (m) => [m.model_id, m.is_active],
+          ),
+        );
         const rows = (data ?? []) as {
           model_id: string;
           enabled: boolean;
@@ -112,6 +121,7 @@ export async function GET() {
         const byModel = new Map<string, { live: number; up: number }>();
         for (const r of rows) {
           if (!r.enabled) continue;
+          if (!(active.get(r.model_id) ?? false)) continue;
           const e = byModel.get(r.model_id) ?? { live: 0, up: 0 };
           e.live += 1;
           if (r.ok) e.up += 1;
@@ -121,11 +131,22 @@ export async function GET() {
         const degraded = [...byModel.entries()].filter(
           ([, v]) => v.up > 0 && v.up < v.live,
         );
-        const live = rows.filter((r) => r.enabled);
+        const live = rows.filter(
+          (r) => r.enabled && (active.get(r.model_id) ?? false),
+        );
         if (down.length > 0) {
           return {
             ok: false,
             detail: `${down.length} model(s) down: ${down.map(([m]) => m).join(", ")}`,
+          };
+        }
+        // Zero routable pods is not health — say what it is rather than
+        // reporting a confident "0/0 up".
+        if (live.length === 0) {
+          return {
+            ok: false,
+            unknown: true,
+            detail: "no pod belongs to a listed model",
           };
         }
         return {

@@ -90,7 +90,7 @@ export async function GET(request: Request) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const inference = (supabase as any).schema("inference");
 
-    const [healthRes, endpointsRes] = await Promise.all([
+    const [healthRes, endpointsRes, modelsRes] = await Promise.all([
       inference
         .from("endpoint_health")
         .select(
@@ -104,6 +104,10 @@ export async function GET(request: Request) {
       inference
         .from("serving_endpoints")
         .select("id, served_model_name, weight"),
+      // A DELISTED model is unroutable: no customer request can reach it, so
+      // its dead pod is housekeeping, not an outage. Without this join a
+      // parked model shouts DOWN forever and teaches operators to ignore red.
+      inference.from("models").select("model_id, is_active"),
     ]);
 
     if (healthRes.error) {
@@ -118,6 +122,11 @@ export async function GET(request: Request) {
     const sentName = new Map<string, string | null>(
       ((endpointsRes.data ?? []) as { id: string; served_model_name: string | null }[]).map(
         (e) => [e.id, e.served_model_name],
+      ),
+    );
+    const modelActive = new Map<string, boolean>(
+      ((modelsRes.data ?? []) as { model_id: string; is_active: boolean }[]).map(
+        (m) => [m.model_id, m.is_active],
       ),
     );
     const weightOf = new Map<string, number>(
@@ -185,6 +194,7 @@ export async function GET(request: Request) {
         return {
           endpointId: r.endpoint_id,
           modelId: r.model_id,
+          modelActive: modelActive.get(r.model_id) ?? false,
           baseUrl: r.base_url,
           label: r.label,
           enabled: r.enabled,
@@ -225,10 +235,14 @@ export async function GET(request: Request) {
     }
     const models = [...byModel.entries()]
       .map(([modelId, eps]) => {
+        // Unknown model (no catalog row) is treated as parked rather than
+        // down — absence of a row is not evidence of an outage.
+        const active = modelActive.get(modelId) ?? false;
         const live = eps.filter((e) => e.enabled);
         const okCount = live.filter((e) => e.ok).length;
-        const status =
-          live.length === 0
+        const status = !active
+          ? ("parked" as const)
+          : live.length === 0
             ? ("no_enabled_endpoint" as const)
             : okCount === live.length
               ? ("healthy" as const)
@@ -237,6 +251,7 @@ export async function GET(request: Request) {
                 : ("degraded" as const);
         return {
           modelId,
+          modelActive: active,
           status,
           enabledEndpoints: live.length,
           okEndpoints: okCount,
@@ -245,7 +260,13 @@ export async function GET(request: Request) {
         };
       })
       .sort((a, b) => {
-        const rank = { down: 0, no_enabled_endpoint: 1, degraded: 2, healthy: 3 };
+        const rank = {
+          down: 0,
+          no_enabled_endpoint: 1,
+          degraded: 2,
+          healthy: 3,
+          parked: 4,
+        };
         return rank[a.status] - rank[b.status] || a.modelId.localeCompare(b.modelId);
       });
 
@@ -270,14 +291,31 @@ export async function GET(request: Request) {
       },
       totals: {
         endpoints: enriched.length,
-        enabled: enriched.filter((e) => e.enabled).length,
-        up: enriched.filter((e) => e.enabled && e.ok).length,
+        // "Serving" counts only pods that a customer request could actually
+        // reach: endpoint enabled AND its model listed.
+        enabled: enriched.filter(
+          (e) => e.enabled && (modelActive.get(e.modelId) ?? false),
+        ).length,
+        up: enriched.filter(
+          (e) => e.enabled && e.ok && (modelActive.get(e.modelId) ?? false),
+        ).length,
+        parkedEndpoints: enriched.filter(
+          (e) => !(modelActive.get(e.modelId) ?? false),
+        ).length,
         modelsDown: models.filter((m) => m.status === "down").length,
         modelsDegraded: models.filter((m) => m.status === "degraded").length,
+        modelsParked: models.filter((m) => m.status === "parked").length,
       },
       // Anything an operator should act on, already worded.
       alerts: enriched
-        .filter((e) => e.enabled && !e.ok && e.consecutiveFailures >= 3)
+        .filter(
+          (e) =>
+            e.enabled &&
+            !e.ok &&
+            e.consecutiveFailures >= 3 &&
+            // A parked model cannot be failing anyone.
+            (modelActive.get(e.modelId) ?? false),
+        )
         .map((e) => ({
           endpointId: e.endpointId,
           modelId: e.modelId,
