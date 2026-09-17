@@ -300,7 +300,7 @@ export function DedicatedServerCatalog({
                 <div className={s['pf-panel-top']}>
                     <DsIcon name="sliders" />
                     <div>
-                        <h3>Find your server</h3>
+                        <h3>Choose Your Server</h3>
                         <p>Filter the complete list without dividing plans into categories.</p>
                     </div>
                     <button

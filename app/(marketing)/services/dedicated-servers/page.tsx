@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { assetUrl } from '@/lib/asset-url';
 import { DedicatedServerCatalog } from '@/components/services/dedicated/server-catalog';
 import { DedicatedIconSprite, DsIcon } from '@/components/services/dedicated/icons';
-import { DedicatedPageNav } from '@/components/services/dedicated/page-nav';
 import {
     DEDICATED_ROWS,
     PREVIEW_ROWS,
@@ -19,10 +18,8 @@ export const metadata: Metadata = {
 };
 
 // app/(marketing)/layout.tsx already wraps every marketing route in the real
-// <Navbar/> and <Footer/>, so only the parts of the comp's own header and footer
-// that the site does not already have are ported: the section links, "Contact
-// sales" and "Back to top". The comp's logo, footer columns and copyright are
-// what that layout supplies.
+// <Navbar/> and <Footer/>, so the comp's own header and footer are not ported;
+// only its "Back to top" link is kept.
 const preview = DEDICATED_ROWS.slice(0, PREVIEW_ROWS);
 
 export default function DedicatedServersPage() {
@@ -32,21 +29,19 @@ export default function DedicatedServersPage() {
 
             {/* 01 / HERO */}
             <section className={s.hero} id="top" aria-labelledby="hero-title">
-                <DedicatedPageNav />
                 <div className={s.container}>
                     <div className={s['hero-main']}>
                         <div className={s['hero-copy']}>
                             <h1 id="hero-title">
-                                All the hardware.
-                                <br />
-                                <span className={s.blue}>All yours.</span>
+                                Dedicated Servers,{' '}
+                                <span className={s['hero-accent']}>Built for Performance</span>
                             </h1>
                             <p>
                                 Your workloads deserve room to run. Dedicated Intel and AMD servers with
                                 enterprise NVMe, full root access, and the freedom to build on your terms.
                             </p>
                             <div className={s['hero-actions']}>
-                                <Link className={`${s.btn} ${s['btn-white']}`} href="#pricing">
+                                <Link className={`${s.btn} ${s['btn-primary']}`} href="#pricing">
                                     Explore dedicated servers <DsIcon name="arrow" />
                                 </Link>
                                 <Link className={s.btn} href="#information">
@@ -119,11 +114,7 @@ export default function DedicatedServersPage() {
             <section className={`${s.section} ${s.info}`} id="information" aria-labelledby="info-title">
                 <div className={`${s.container} ${s['info-grid']}`}>
                     <div>
-                        <h2 id="info-title">
-                            More headroom.
-                            <br />
-                            Fewer compromises.
-                        </h2>
+                        <h2 id="info-title">Built for Demanding Workloads</h2>
                         <p className={s.intro}>
                             When your application outgrows shared infrastructure, give it a machine of its
                             own. Every core, every byte of memory, and every drive is dedicated to your
@@ -137,7 +128,7 @@ export default function DedicatedServersPage() {
                         <article className={s.workload}>
                             <span className={s.number}>/ 01</span>
                             <div>
-                                <h3>Production that keeps growing</h3>
+                                <h3>Built for Web &amp; SaaS</h3>
                                 <p>
                                     Build your web, SaaS, and database foundation on isolated resources with
                                     predictable capacity.
@@ -147,7 +138,7 @@ export default function DedicatedServersPage() {
                         <article className={s.workload}>
                             <span className={s.number}>/ 02</span>
                             <div>
-                                <h3>Speed where it matters</h3>
+                                <h3>Performance for Compute-Heavy Workloads</h3>
                                 <p>
                                     Choose high-clock Ryzen hardware for game servers, real-time
                                     applications, and fast build pipelines.
@@ -157,7 +148,7 @@ export default function DedicatedServersPage() {
                         <article className={s.workload}>
                             <span className={s.number}>/ 03</span>
                             <div>
-                                <h3>Space for heavier workloads</h3>
+                                <h3>Ready for Virtualization &amp; Data Platforms</h3>
                                 <p>
                                     Bring virtualization and memory-intensive data platforms to
                                     high-core-count EPYC infrastructure.
@@ -172,11 +163,7 @@ export default function DedicatedServersPage() {
             <section className={`${s.section} ${s.features}`} id="features" aria-labelledby="features-title">
                 <div className={s.container}>
                     <div className={s['section-head']}>
-                        <h2 id="features-title">
-                            The essentials.
-                            <br />
-                            Already accounted for.
-                        </h2>
+                        <h2 id="features-title">Everything You Need, Included</h2>
                         <p>
                             From the processor to the remote console, take control of the infrastructure
                             behind your application.
@@ -186,7 +173,7 @@ export default function DedicatedServersPage() {
                         <article className={s.feature}>
                             <DsIcon name="chip" />
                             <span className={s['feature-no']}>01</span>
-                            <h3>Entirely dedicated compute</h3>
+                            <h3>Dedicated Compute</h3>
                             <p>
                                 Intel Xeon and Core, AMD Ryzen and EPYC options. Choose core count, clock
                                 speed, and memory around the work you actually run.
@@ -195,7 +182,7 @@ export default function DedicatedServersPage() {
                         <article className={s.feature}>
                             <DsIcon name="drive" />
                             <span className={s['feature-no']}>02</span>
-                            <h3>Enterprise NVMe storage</h3>
+                            <h3>Enterprise NVMe Storage</h3>
                             <p>
                                 Keep databases, application data, and build caches close to the CPU with fast
                                 local storage and multi-drive configurations.
@@ -204,7 +191,7 @@ export default function DedicatedServersPage() {
                         <article className={s.feature}>
                             <DsIcon name="shield" />
                             <span className={s['feature-no']}>03</span>
-                            <h3>Network DDoS protection</h3>
+                            <h3>Built-In DDoS Protection</h3>
                             <p>
                                 Always-on L3/L4 mitigation helps protect network availability. Discuss
                                 application-layer protection for your specific workload.
@@ -213,7 +200,7 @@ export default function DedicatedServersPage() {
                         <article className={s.feature}>
                             <DsIcon name="terminal" />
                             <span className={s['feature-no']}>04</span>
-                            <h3>Root access. Real control.</h3>
+                            <h3>Full Root Access</h3>
                             <p>
                                 Own your software stack with full administrator access. Use IPMI / BMC for
                                 out-of-band hardware management.
@@ -222,7 +209,7 @@ export default function DedicatedServersPage() {
                         <article className={s.feature}>
                             <DsIcon name="network" />
                             <span className={s['feature-no']}>05</span>
-                            <h3>Room for your traffic</h3>
+                            <h3>High-Speed Networking</h3>
                             <p>
                                 Compare uplink speeds alongside memory and storage. Choose 1, 10 or 25 Gbps
                                 networking from the listed configurations.
@@ -231,7 +218,7 @@ export default function DedicatedServersPage() {
                         <article className={s.feature}>
                             <DsIcon name="sliders" />
                             <span className={s['feature-no']}>06</span>
-                            <h3>Your operating environment</h3>
+                            <h3>Your Choice of Operating System</h3>
                             <p>
                                 Start with a familiar Linux distribution or discuss Windows Server, custom
                                 images, and RAID requirements with our team.
@@ -250,20 +237,11 @@ export default function DedicatedServersPage() {
                 <div className={s.container}>
                     <div className={s['pc-heading']}>
                         <div>
-                            <h2 id="pricing-title">
-                                The right hardware.
-                                <br />
-                                <span>At a glance.</span>
-                            </h2>
+                            <h2 id="pricing-title">Pricing</h2>
                             <p>
                                 Compare all {DEDICATED_ROWS.length} dedicated-server plans by location,
                                 processor, memory, storage, network, and monthly price.
                             </p>
-                        </div>
-                        <div className={s['pc-billing']}>
-                            <span>COMPLETE SERVER LIST</span>
-                            <strong>Monthly pricing in USD</strong>
-                            <small>The same list the dashboard shows once you sign in</small>
                         </div>
                     </div>
 
@@ -283,7 +261,7 @@ export default function DedicatedServersPage() {
                             <DsIcon name="sliders" />
                         </span>
                         <div>
-                            <h3>Need something beyond the list?</h3>
+                            <h3>Need a Custom Configuration?</h3>
                             <p>Build around your memory, storage, and networking requirements.</p>
                         </div>
                         <Link href="/contact">
@@ -301,11 +279,7 @@ export default function DedicatedServersPage() {
             >
                 <div className={`${s.container} ${s['detail-grid']}`}>
                     <div className={s['detail-intro']}>
-                        <h2 id="details-title">
-                            Your stack.
-                            <br />
-                            Your way of working.
-                        </h2>
+                        <h2 id="details-title">Infrastructure That Works Your Way</h2>
                         <p>
                             Keep the environment your team knows, with direct access to the hardware
                             underneath. Set the details before your server goes live.

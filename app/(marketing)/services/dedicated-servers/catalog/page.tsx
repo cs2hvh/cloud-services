@@ -18,29 +18,15 @@ export const metadata: Metadata = {
 
 // `.catalog-page` sits on the <main>, not on the `.ds` wrapper: the comp set it
 // on <body> and every rule that uses it is written as a descendant of what is
-// now `.ds`, so the two classes have to live on different elements. The comp's
-// catalog header lives inside that <main> for the same reason — its styles are
-// written as `.catalog-page .catalog-nav`.
+// now `.ds`, so the two classes have to live on different elements.
 //
-// From the comp's header and footer, only what the site navbar and footer do
-// not already provide is ported: the route back to the overview, Compute, and
-// "Contact sales". The logo and copyright are theirs.
+// The comp's own header is not ported — the site navbar covers it. From its
+// footer, only the route back to the overview is kept.
 export default function DedicatedServerCatalogPage() {
     return (
         <div className={s.ds}>
             <DedicatedIconSprite />
             <main className={`${s['catalog-page']} ${s['catalog-page-main']}`} id="catalog-main">
-                <header className={s['catalog-nav']}>
-                    <div className={`${s.container} ${s['catalog-nav-inner']}`}>
-                        <nav className={s['catalog-nav-links']} aria-label="Catalog navigation">
-                            <Link href="/services/dedicated-servers">Dedicated server overview</Link>
-                            <Link href="/services/compute">Compute</Link>
-                            <Link className={s['catalog-contact']} href="/contact">
-                                Contact sales ↗
-                            </Link>
-                        </nav>
-                    </div>
-                </header>
                 <section
                     className={`${s['catalog-page-section']} ${s.pricing}`}
                     id="pricing"
