@@ -225,7 +225,9 @@ export default function EmbeddingsVectorStoreSection() {
             <p className="mt-2 text-[12.5px] leading-relaxed text-white/55">
               Per-collection metrics + a global usage feed. Embed calls, query calls, storage GB — invoiceable, not estimates.
             </p>
-            <div className="mt-4 grid grid-cols-3 gap-2">
+            {/* Phones: one metric per row. Three ~75px boxes could not hold
+                "Queries / hr" or "143,784", so both spilled past their borders. */}
+            <div className="mt-4 grid grid-cols-3 gap-2 max-sm:grid-cols-1">
               <LiveMetric
                 inView={inView}
                 label="Queries / hr"
@@ -418,12 +420,12 @@ function LiveMetric({
   }, [done, tickDelta]);
 
   return (
-    <div className="rounded-[5px] border border-white/[0.06] bg-white/[0.015] px-3 py-2">
+    <div className="min-w-0 rounded-[5px] border border-white/[0.06] bg-white/[0.015] px-3 py-2 max-sm:flex max-sm:items-baseline max-sm:justify-between max-sm:gap-3">
       <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-white/40">
         {label}
       </p>
       <p
-        className="mt-1 font-mono text-[13px] font-semibold tabular-nums"
+        className="mt-1 whitespace-nowrap font-mono text-[13px] font-semibold tabular-nums max-sm:mt-0"
         style={{ color: accent ?? "rgba(255,255,255,0.92)" }}
       >
         {format(val)}

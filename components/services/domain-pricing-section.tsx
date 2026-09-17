@@ -226,14 +226,19 @@ export default function DomainPricingSection() {
                                             href={`/dashboard/domains/marketplace?tld=${encodeURIComponent(row.tld.replace(".", ""))}`}
                                             className="group flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-white/[0.025] sm:px-5"
                                         >
-                                            <span
-                                                className={`${MONO} w-[68px] shrink-0 text-[14px] font-semibold tabular-nums sm:w-[80px]`}
-                                                style={{ color: row.accent }}
-                                            >
-                                                {row.tld}
-                                            </span>
-                                            <span className="flex-1 truncate text-[13px] text-white/65">
-                                                {row.description}
+                                            {/* Phones put the description under the TLD. Beside it, with the
+                                                price on the same line, it had ~65px at 320 and every row
+                                                read "Global sta…". */}
+                                            <span className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-3">
+                                                <span
+                                                    className={`${MONO} shrink-0 text-[14px] font-semibold tabular-nums sm:w-[80px]`}
+                                                    style={{ color: row.accent }}
+                                                >
+                                                    {row.tld}
+                                                </span>
+                                                <span className="min-w-0 text-[12px] leading-snug text-white/65 sm:flex-1 sm:truncate sm:text-[13px]">
+                                                    {row.description}
+                                                </span>
                                             </span>
                                             <span className="hidden sm:inline-block text-right">
                                                 <span

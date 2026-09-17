@@ -85,19 +85,24 @@ export async function ModelsList() {
   }
   const chat = rows.filter((r) => r.modality === "chat");
   return (
-    <div className="my-4 grid gap-px overflow-hidden border border-[var(--ah-line)] bg-[var(--ah-line)] sm:grid-cols-2">
+    // grid-cols-[minmax(0,1fr)]: with no explicit column on phones the grid sized
+    // its one column to the longest truncated (nowrap) model id, the rows grew
+    // wider than the screen and overflow-hidden clipped the prices ("$12.5").
+    // Phones also stack the price under the name and let ids wrap, since the id
+    // is the part a developer copies.
+    <div className="my-4 grid grid-cols-[minmax(0,1fr)] gap-px overflow-hidden border border-[var(--ah-line)] bg-[var(--ah-line)] sm:grid-cols-2">
       {chat.map((r) => (
-        <div key={r.model_id} className="flex items-start justify-between gap-3 bg-[#0E0F0F] px-3 py-2.5">
+        <div key={r.model_id} className="flex items-start justify-between gap-3 bg-[#0E0F0F] px-3 py-2.5 max-sm:flex-col max-sm:gap-1">
           <div className="min-w-0">
-            <p className="truncate text-[14px] text-[var(--ah-ink)]">
+            <p className="truncate text-[14px] text-[var(--ah-ink)] max-sm:whitespace-normal">
               {r.display_name}
               {r.serving_type !== "proxy" ? <span className="ah-lbl ml-2 text-[var(--ah-green)]">hosted</span> : null}
             </p>
-            <code className="block truncate font-[family-name:var(--font-geist-mono)] text-[11.5px] text-[var(--ah-body)]">
+            <code className="block truncate font-[family-name:var(--font-geist-mono)] text-[11.5px] text-[var(--ah-body)] max-sm:whitespace-normal max-sm:[overflow-wrap:anywhere]">
               {r.model_id}
             </code>
           </div>
-          <p className="ah-lbl shrink-0 pt-0.5 text-right normal-case">
+          <p className="ah-lbl shrink-0 pt-0.5 text-right normal-case max-sm:pt-0 max-sm:text-left">
             {usd(r.pricing?.input_cents_per_mtok)} / {usd(r.pricing?.output_cents_per_mtok)}
           </p>
         </div>

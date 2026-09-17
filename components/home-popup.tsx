@@ -94,7 +94,7 @@ export default function HomePopup() {
               }}
             >
               {/* Image — object-contain so the GPU is never cropped */}
-              <div className="relative h-[118px] w-full sm:h-auto sm:flex-1">
+              <div className="relative h-[118px] w-full max-sm:h-[92px] sm:h-auto sm:flex-1">
                 {/* Brand glow behind the render */}
                 <div
                   aria-hidden="true"
@@ -198,7 +198,12 @@ export default function HomePopup() {
                 </p>
               </div>
 
-              <div className="flex flex-col gap-2.5">
+              {/* Short phones (320×665): the card scrolls, but at rest it sliced the
+                  body copy mid-line and left the one action off-screen with no hint
+                  that more was below. The actions stay pinned to the card's bottom
+                  edge instead, over the panel's own colour, and the copy scrolls
+                  beneath them. */}
+              <div className="flex flex-col gap-2.5 max-sm:sticky max-sm:bottom-0 max-sm:-mx-6 max-sm:-mb-6 max-sm:bg-[linear-gradient(to_top,#07090f_80%,rgba(7,9,15,0))] max-sm:px-6 max-sm:pb-5 max-sm:pt-7">
                 <Link
                   href="/contact?topic=reserved-gpu"
                   onClick={() => setOpen(false)}

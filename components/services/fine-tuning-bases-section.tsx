@@ -158,8 +158,10 @@ export default function FineTuningBasesSection() {
                     </div>
 
                     <div className="min-w-0">
-                      <div className="flex items-baseline gap-2">
-                        <p className="truncate font-mono text-[13px] font-semibold text-white">
+                      {/* Phones wrap the Gated badge under the name rather than
+                          cutting the name to "llama-3.3-8B-in…". */}
+                      <div className="flex items-baseline gap-2 max-sm:flex-wrap max-sm:gap-y-1">
+                        <p className="truncate font-mono text-[13px] font-semibold text-white max-sm:whitespace-normal max-sm:[overflow-wrap:anywhere]">
                           {b.model}
                         </p>
                         {b.gated && (
