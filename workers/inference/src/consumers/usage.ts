@@ -39,7 +39,19 @@ interface PricingInfo {
    * know.
    */
   upstream_pricing: ModelPricing | null;
+  /**
+   * Cost per partner, keyed by usage.provider ("starimg", "wokey"). Two
+   * partners have two price lists; a request is costed by whoever served
+   * it, and upstream_pricing is the fallback for a provider with no entry.
+   */
+  provider_pricing: Record<string, ModelPricing> | null;
   off_peak: ModelOffPeak | null;
+}
+
+/** The cost basis for one event: the serving partner's rates if known, else the model's default. */
+export function upstreamPricingFor(info: PricingInfo, provider: string | null | undefined): ModelPricing | null {
+  if (provider && info.provider_pricing && info.provider_pricing[provider]) return info.provider_pricing[provider]!;
+  return info.upstream_pricing;
 }
 
 export async function handleUsageBatch(
@@ -58,7 +70,7 @@ export async function handleUsageBatch(
   const { data: modelRows, error: modelErr } = await supabase
     .schema("inference")
     .from("models")
-    .select("model_id, pricing, upstream_pricing, off_peak")
+    .select("model_id, pricing, upstream_pricing, provider_pricing, off_peak")
     .in("model_id", modelIds);
 
   if (modelErr) {
@@ -79,6 +91,7 @@ export async function handleUsageBatch(
     pricingMap.set(m.model_id as string, {
       pricing: (m.pricing ?? {}) as ModelPricing,
       upstream_pricing: (m.upstream_pricing ?? null) as ModelPricing | null,
+      provider_pricing: (m.provider_pricing ?? null) as Record<string, ModelPricing> | null,
       off_peak: (m.off_peak ?? null) as ModelOffPeak | null,
     });
   }
@@ -273,7 +286,7 @@ export function computeCost(
   // make to the customer, not one the upstream makes to us, so applying it
   // here would understate cost and overstate margin during exactly the hours
   // margin is thinnest.
-  const up = info.upstream_pricing;
+  const up = upstreamPricingFor(info, event.upstreamProvider);
   const upstreamCostCents = up
     ? Math.ceil(event.numUnits != null ? unitCost(event, up) : rateCost(event, up))
     : finalCents;   // no cost basis recorded — fall back to old behaviour

@@ -67,8 +67,28 @@ function ev(over: Partial<UsageEvent>): UsageEvent {
     ...over,
   } as UsageEvent;
 }
-const info = (pricing: object, upstream: object | null) =>
-  ({ pricing, upstream_pricing: upstream, off_peak: null }) as Parameters<typeof computeCost>[1];
+const info = (pricing: object, upstream: object | null, providerPricing: object | null = null) =>
+  ({ pricing, upstream_pricing: upstream, provider_pricing: providerPricing, off_peak: null }) as Parameters<typeof computeCost>[1];
+
+describe("computeCost costs by the partner that served", () => {
+  const sell = { input_cents_per_mtok: 800, cached_cents_per_mtok: 25, output_cents_per_mtok: 3000 };
+  const wokey = { input_cents_per_mtok: 230, cached_cents_per_mtok: 5.75, output_cents_per_mtok: 1150 };
+  const byProvider = { starimg: { input_cents_per_mtok: 36, cached_cents_per_mtok: 36, output_cents_per_mtok: 36 } };
+  const tokens = { modality: "chat" as const, inputTokens: 1_000_000, outputTokens: 1_000_000, cachedTokens: 0 };
+
+  it("uses the serving partner's rates when it has an entry", () => {
+    const r = computeCost(ev({ ...tokens, upstreamProvider: "starimg" }), info(sell, wokey, byProvider));
+    expect(r.costCents).toBe(3800);
+    expect(r.upstreamCostCents).toBe(72);
+  });
+  it("falls back to upstream_pricing for a partner without an entry, and for no partner", () => {
+    expect(computeCost(ev({ ...tokens, upstreamProvider: "wokey" }), info(sell, wokey, byProvider)).upstreamCostCents).toBe(1380);
+    expect(computeCost(ev({ ...tokens, upstreamProvider: null }), info(sell, wokey, byProvider)).upstreamCostCents).toBe(1380);
+  });
+  it("is unaffected for a model with no per-provider entries", () => {
+    expect(computeCost(ev({ ...tokens, upstreamProvider: "starimg" }), info(sell, wokey, {})).upstreamCostCents).toBe(1380);
+  });
+});
 
 describe("computeCost for media", () => {
   it("charges seconds times the resolution's rate, and costs the partner's rate", () => {
