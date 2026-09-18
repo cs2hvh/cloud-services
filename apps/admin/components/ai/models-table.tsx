@@ -63,6 +63,9 @@ type ModelRow = {
   margin: { input: number | null; output: number | null };
   pricedPerUnit: boolean;
   unitPricing: UnitPricing | null;
+  endpoints: { total: number; enabled: number } | null;
+  podHealth: { live: number; up: number } | null;
+  servedLast24h: { provider: string; requests: number }[] | null;
 };
 
 type CatalogSummary = {
@@ -101,6 +104,14 @@ export function AiModelsTable() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [editing, setEditing] = useState<ModelRow | null>(null);
   const [draft, setDraft] = useState({ input: "", output: "", cached: "" });
+  // Upstream cost is entered in CENTS per Mtok, not dollars: partner rates
+  // are routinely fractional (0.56c) and dollars would hide that.
+  const [costDraft, setCostDraft] = useState({
+    input: "",
+    output: "",
+    cached: "",
+    cacheWrite: "",
+  });
   const [creating, setCreating] = useState(false);
   const [endpointsFor, setEndpointsFor] = useState<string | null>(null);
   const [mediaPricing, setMediaPricing] = useState<ModelRow | null>(null);
@@ -178,6 +189,16 @@ export function AiModelsTable() {
           ? String(model.pricing.cached_cents_per_mtok / 100)
           : "",
     });
+    const up = (model.upstream_pricing ?? {}) as Record<string, number | undefined>;
+    setCostDraft({
+      input: up.input_cents_per_mtok != null ? String(up.input_cents_per_mtok) : "",
+      output: up.output_cents_per_mtok != null ? String(up.output_cents_per_mtok) : "",
+      cached: up.cached_cents_per_mtok != null ? String(up.cached_cents_per_mtok) : "",
+      cacheWrite:
+        up.cache_write_cents_per_mtok != null
+          ? String(up.cache_write_cents_per_mtok)
+          : "",
+    });
     setEditing(model);
   };
 
@@ -199,8 +220,29 @@ export function AiModelsTable() {
       }
       pricing[key] = Math.round(dollars * 100 * 10000) / 10000;
     }
+    const upstream_pricing: Record<string, number> = {};
+    const costMap: [string, string][] = [
+      ["input_cents_per_mtok", costDraft.input],
+      ["output_cents_per_mtok", costDraft.output],
+      ["cached_cents_per_mtok", costDraft.cached],
+      ["cache_write_cents_per_mtok", costDraft.cacheWrite],
+    ];
+    for (const [key, raw] of costMap) {
+      if (raw.trim() === "") continue;
+      const cents = Number(raw);
+      if (!Number.isFinite(cents) || cents < 0) {
+        toast.error("Upstream costs must be numbers >= 0 (cents per Mtok)");
+        return;
+      }
+      upstream_pricing[key] = cents;
+    }
+
     setEditing(null);
-    await patch(model, { pricing }, `${model.model_id} pricing updated`);
+    await patch(
+      model,
+      { pricing, upstream_pricing },
+      `${model.model_id} pricing updated`,
+    );
   };
 
   return (
@@ -272,7 +314,7 @@ export function AiModelsTable() {
               <TableRow>
                 <TableHead>Model</TableHead>
                 <TableHead>Modality</TableHead>
-                <TableHead>Serving</TableHead>
+                <TableHead>Upstream</TableHead>
                 <TableHead className="text-right">Price in/out ($/Mtok)</TableHead>
                 <TableHead className="text-right">Upstream in/out</TableHead>
                 <TableHead className="text-right">Margin in/out</TableHead>
@@ -311,7 +353,56 @@ export function AiModelsTable() {
                     <div className="font-mono text-xs text-muted-foreground">{m.model_id}</div>
                   </TableCell>
                   <TableCell className="text-sm capitalize">{m.modality}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{m.serving_type}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    <div className="flex items-center gap-1.5">
+                      <span>{m.upstream_provider ?? m.serving_type}</span>
+                      {m.serving_type === "runpod_byo" && m.podHealth && (
+                        // Hosted models answer from our pods, so "is it
+                        // serving" is a fact we hold, not a partner's claim.
+                        <span
+                          className={`rounded border px-1 py-0.5 text-[10px] ${
+                            m.podHealth.live === 0
+                              ? "border-white/[0.15] text-white/50"
+                              : m.podHealth.up === m.podHealth.live
+                                ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                                : m.podHealth.up === 0
+                                  ? "border-red-500/50 bg-red-500/15 text-red-300"
+                                  : "border-amber-500/50 bg-amber-500/10 text-amber-300"
+                          }`}
+                          title="Enabled pods serving / enabled pods"
+                        >
+                          {m.podHealth.up}/{m.podHealth.live} pods
+                        </span>
+                      )}
+                      {m.serving_type === "runpod_byo" &&
+                        !m.podHealth &&
+                        m.endpoints && (
+                          <span className="rounded border border-white/[0.15] px-1 py-0.5 text-[10px] text-white/50">
+                            {m.endpoints.total} pod
+                            {m.endpoints.total === 1 ? "" : "s"}, unprobed
+                          </span>
+                        )}
+                    </div>
+                    {m.upstream_model_id && (
+                      <div
+                        className="mt-0.5 max-w-[190px] truncate font-mono text-[10.5px] text-muted-foreground/70"
+                        title={m.upstream_model_id}
+                      >
+                        {m.upstream_model_id}
+                      </div>
+                    )}
+                    {/* Who OWNS the model and who SERVED it can differ once a
+                        primary/fallback chain exists — show the split when it
+                        does, and stay quiet when it does not. */}
+                    {m.servedLast24h && m.servedLast24h.length > 0 && (
+                      <div className="mt-0.5 text-[10.5px] text-muted-foreground/70">
+                        24h:{" "}
+                        {m.servedLast24h
+                          .map((x) => `${x.provider} ${x.requests}`)
+                          .join(" · ")}
+                      </div>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right text-sm tabular-nums">
                     {m.pricedPerUnit && m.unitPricing ? (
                       <span
@@ -459,11 +550,14 @@ export function AiModelsTable() {
       />
 
       <Dialog open={!!editing} onOpenChange={(open) => !open && setEditing(null)}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-h-[90vh] max-w-md overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Pricing — {editing?.model_id}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              What we charge
+            </div>
             {(
               [
                 ["input", "Input ($ per Mtok)"],
@@ -479,6 +573,36 @@ export function AiModelsTable() {
                   value={draft[key]}
                   onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
                   placeholder="unchanged"
+                />
+              </div>
+            ))}
+
+            <div className="border-t border-border pt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              What the partner charges us
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              In <strong>cents</strong> per Mtok, fractions allowed. Margin is
+              only ever as accurate as this. Applies to requests made after the
+              change, not to ones already billed.
+            </p>
+            {(
+              [
+                ["input", "Upstream input (c per Mtok)"],
+                ["output", "Upstream output (c per Mtok)"],
+                ["cached", "Upstream cached (c per Mtok)"],
+                ["cacheWrite", "Upstream cache write (c per Mtok)"],
+              ] as const
+            ).map(([key, label]) => (
+              <div key={key} className="space-y-1.5">
+                <Label htmlFor={`cost-${key}`}>{label}</Label>
+                <Input
+                  id={`cost-${key}`}
+                  inputMode="decimal"
+                  value={costDraft[key]}
+                  onChange={(e) =>
+                    setCostDraft((d) => ({ ...d, [key]: e.target.value }))
+                  }
+                  placeholder="unset"
                 />
               </div>
             ))}

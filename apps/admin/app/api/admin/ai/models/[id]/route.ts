@@ -11,6 +11,66 @@ const PRICE_KEYS = [
   "cached_cents_per_mtok",
 ] as const;
 
+/** What the partner charges us may include a cache-write rate ours does not. */
+const UPSTREAM_TOKEN_KEYS = [
+  "input_cents_per_mtok",
+  "output_cents_per_mtok",
+  "cached_cents_per_mtok",
+  "cache_write_cents_per_mtok",
+] as const;
+
+const UNIT_KEYS = ["cents_per_image", "cents_per_media_second"] as const;
+
+/**
+ * Merge a pricing blob, validating scalars and replacing `tiers` wholesale.
+ * Tiers replace rather than merge so a removed size actually stops applying;
+ * merging would leave a deleted resolution billing at its old rate forever.
+ */
+function mergePricing(
+  existing: Record<string, unknown> | null,
+  incoming: Record<string, unknown>,
+  scalarKeys: readonly string[],
+): { ok: true; value: Record<string, unknown> } | { ok: false; error: string } {
+  const merged: Record<string, unknown> = { ...(existing ?? {}) };
+  for (const key of scalarKeys) {
+    const value = incoming[key];
+    if (value === undefined) continue;
+    if (value === null || value === "") {
+      delete merged[key];
+      continue;
+    }
+    const n = Number(value);
+    // Fractional cents are real here (0.56), so no rounding.
+    if (!Number.isFinite(n) || n < 0) {
+      return { ok: false, error: `${key} must be a number >= 0` };
+    }
+    merged[key] = n;
+  }
+  const tiersIn = incoming.tiers;
+  if (tiersIn !== undefined) {
+    if (tiersIn === null) {
+      delete merged.tiers;
+    } else if (typeof tiersIn === "object") {
+      const tiers: Record<string, number> = {};
+      for (const [tier, raw] of Object.entries(tiersIn as Record<string, unknown>)) {
+        if (raw === "" || raw === null || raw === undefined) continue;
+        if (!/^[A-Za-z0-9._-]{1,20}$/.test(tier)) {
+          return { ok: false, error: `tier name "${tier}" is not a valid label` };
+        }
+        const n = Number(raw);
+        if (!Number.isFinite(n) || n < 0) {
+          return { ok: false, error: `tier "${tier}" must be a number >= 0` };
+        }
+        tiers[tier] = n;
+      }
+      merged.tiers = tiers;
+    } else {
+      return { ok: false, error: "tiers must be an object of tier -> cents" };
+    }
+  }
+  return { ok: true, value: merged };
+}
+
 /**
  * Update a catalog model: activate/deactivate, feature, or set customer
  * pricing (cents per Mtok). Pricing merges over the existing jsonb so keys
@@ -33,6 +93,7 @@ export async function PATCH(
     is_active?: boolean;
     is_featured?: boolean;
     pricing?: Record<string, unknown>;
+    upstream_pricing?: Record<string, unknown>;
   };
 
   const updates: Record<string, unknown> = {};
@@ -59,67 +120,40 @@ export async function PATCH(
       return NextResponse.json({ error: "Model not found" }, { status: 404 });
     }
 
-    if (body.pricing !== undefined) {
-      const merged: Record<string, unknown> = {
-        ...((existing.pricing as Record<string, unknown>) ?? {}),
-      };
-      // Token models and media models keep different keys. Both are merged
-      // over what is stored, so a field not sent is never silently cleared.
-      const scalarKeys = [
-        ...PRICE_KEYS,
-        "cents_per_image",
-        "cents_per_media_second",
-      ];
-      for (const key of scalarKeys) {
-        const value = (body.pricing as Record<string, unknown>)[key];
-        if (value === undefined) continue;
-        const n = Number(value);
-        if (!Number.isFinite(n) || n < 0) {
-          return NextResponse.json(
-            { error: `${key} must be a number >= 0` },
-            { status: 400 },
-          );
-        }
-        merged[key] = n;
-      }
+    // Which keys are legal depends on the modality: a video model has no
+    // per-Mtok rate and a chat model has no per-second rate, so accepting
+    // either shape on either model would store a price nothing reads.
+    const modality = String(existing.modality ?? "");
+    const isUnit = modality === "image" || modality === "video";
+    const priceKeys = isUnit ? UNIT_KEYS : PRICE_KEYS;
+    const upstreamKeys = isUnit ? UNIT_KEYS : UPSTREAM_TOKEN_KEYS;
 
-      // tiers REPLACES wholesale rather than merging: a tier removed from the
-      // form must actually disappear, or a deleted resolution would keep
-      // billing at its old price forever.
-      const tiersIn = (body.pricing as Record<string, unknown>).tiers;
-      if (tiersIn !== undefined) {
-        if (tiersIn === null) {
-          delete merged.tiers;
-        } else if (typeof tiersIn === "object") {
-          const tiers: Record<string, number> = {};
-          for (const [tier, raw] of Object.entries(
-            tiersIn as Record<string, unknown>,
-          )) {
-            if (raw === "" || raw === null || raw === undefined) continue;
-            const n = Number(raw);
-            if (!Number.isFinite(n) || n < 0) {
-              return NextResponse.json(
-                { error: `tier "${tier}" must be a number >= 0` },
-                { status: 400 },
-              );
-            }
-            if (!/^[A-Za-z0-9._-]{1,20}$/.test(tier)) {
-              return NextResponse.json(
-                { error: `tier name "${tier}" is not a valid label` },
-                { status: 400 },
-              );
-            }
-            tiers[tier] = n;
-          }
-          merged.tiers = tiers;
-        } else {
-          return NextResponse.json(
-            { error: "tiers must be an object of tier → cents" },
-            { status: 400 },
-          );
-        }
+    if (body.pricing !== undefined) {
+      const merged = mergePricing(
+        (existing.pricing as Record<string, unknown> | null) ?? null,
+        body.pricing,
+        priceKeys,
+      );
+      if (!merged.ok) {
+        return NextResponse.json({ error: merged.error }, { status: 400 });
       }
-      updates.pricing = merged;
+      updates.pricing = merged.value;
+    }
+
+    // UPSTREAM COST — what the partner charges us. Editable here because
+    // margin is only ever as right as this number, and until now it could
+    // only be whatever was seeded. The usage consumer reads it at flush
+    // time, so a change applies to requests made after it, not before.
+    if (body.upstream_pricing !== undefined) {
+      const merged = mergePricing(
+        (existing.upstream_pricing as Record<string, unknown> | null) ?? null,
+        body.upstream_pricing,
+        upstreamKeys,
+      );
+      if (!merged.ok) {
+        return NextResponse.json({ error: merged.error }, { status: 400 });
+      }
+      updates.upstream_pricing = merged.value;
     }
 
     if (Object.keys(updates).length === 0) {

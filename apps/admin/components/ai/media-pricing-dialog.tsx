@@ -54,6 +54,10 @@ export function MediaPricingDialog({
 }) {
   const [flat, setFlat] = useState("");
   const [tiers, setTiers] = useState<{ name: string; cents: string }[]>([]);
+  // Upstream cost is editable too: margin is only ever as accurate as what
+  // we believe the partner charges, and that was previously seed-only.
+  const [costFlat, setCostFlat] = useState("");
+  const [costTiers, setCostTiers] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
   const unitKey = model ? unitPriceKey(model.modality) : null;
@@ -81,6 +85,21 @@ export function MediaPricingDialog({
         name,
         cents: String(asNum(cents) ?? ""),
       })),
+    );
+    setCostFlat(
+      asNum(model.upstream_pricing?.[unitKey]) !== null
+        ? String(asNum(model.upstream_pricing?.[unitKey]))
+        : "",
+    );
+    const ut =
+      model.upstream_pricing?.tiers &&
+      typeof model.upstream_pricing.tiers === "object"
+        ? (model.upstream_pricing.tiers as Record<string, unknown>)
+        : {};
+    setCostTiers(
+      Object.fromEntries(
+        Object.entries(ut).map(([name, cents]) => [name, String(asNum(cents) ?? "")]),
+      ),
     );
   }, [model, unitKey]);
 
@@ -121,9 +140,34 @@ export function MediaPricingDialog({
     // Always send tiers, so removing the last one actually clears it.
     pricing.tiers = tierMap;
 
+    // Upstream cost, same two shapes.
+    const upstream: Record<string, unknown> = {};
+    if (costFlat.trim() !== "") {
+      const n = Number(costFlat);
+      if (!Number.isFinite(n) || n < 0) {
+        toast.error(`Upstream cost per ${noun} must be a number >= 0 (cents)`);
+        return;
+      }
+      upstream[unitKey] = n;
+    }
+    const upstreamTierMap: Record<string, number> = {};
+    for (const [name, raw] of Object.entries(costTiers)) {
+      if (raw.trim() === "") continue;
+      const n = Number(raw);
+      if (!Number.isFinite(n) || n < 0) {
+        toast.error(`Upstream cost for "${name}" must be a number >= 0 (cents)`);
+        return;
+      }
+      upstreamTierMap[name] = n;
+    }
+    upstream.tiers = upstreamTierMap;
+
     setSaving(true);
     try {
-      await api.patch(`/admin/ai/models/${model.id}`, { pricing });
+      await api.patch(`/admin/ai/models/${model.id}`, {
+        pricing,
+        upstream_pricing: upstream,
+      });
       toast.success(`${model.model_id} pricing updated`);
       onClose(true);
     } catch (e) {
@@ -145,7 +189,9 @@ export function MediaPricingDialog({
         <p className="text-[11.5px] text-muted-foreground">
           Priced per {noun}, in <strong>cents</strong>. Tiers override the
           default for the sizes they name; anything not listed bills the
-          default. Upstream cost is what the partner charges us.
+          default. The second field on each row is what the partner charges
+          us — margin is only as accurate as that, and a change applies to
+          requests made after it.
         </p>
 
         <div className="space-y-4 py-1">
@@ -160,9 +206,16 @@ export function MediaPricingDialog({
                 placeholder="unset"
                 className={`h-9 ${MONO}`}
               />
-              <span className="w-[190px] shrink-0 text-[11.5px] text-muted-foreground">
-                cost {upstreamFlat === null ? "—" : `${upstreamFlat}¢`} · margin{" "}
-                {marginOf(flat, upstreamFlat)}
+              <Input
+                inputMode="decimal"
+                value={costFlat}
+                onChange={(e) => setCostFlat(e.target.value)}
+                placeholder="cost"
+                className={`h-9 w-[90px] ${MONO}`}
+                title="What the partner charges us, in cents"
+              />
+              <span className="w-[90px] shrink-0 text-[11.5px] text-muted-foreground">
+                margin {marginOf(flat, costFlat.trim() === "" ? null : Number(costFlat))}
               </span>
             </div>
             {flat.trim() !== "" && Number(flat) > 0 && (
@@ -220,9 +273,27 @@ export function MediaPricingDialog({
                         placeholder="cents"
                         className={`h-9 w-[100px] ${MONO}`}
                       />
+                      <Input
+                        inputMode="decimal"
+                        value={costTiers[t.name.trim()] ?? ""}
+                        onChange={(e) =>
+                          setCostTiers((prev) => ({
+                            ...prev,
+                            [t.name.trim()]: e.target.value,
+                          }))
+                        }
+                        placeholder="cost"
+                        className={`h-9 w-[90px] ${MONO}`}
+                        title="What the partner charges us for this tier, in cents"
+                      />
                       <span className="flex-1 text-[11.5px] text-muted-foreground">
-                        cost {cost === null ? "—" : `${cost}¢`} · margin{" "}
-                        {marginOf(t.cents, cost)}
+                        margin{" "}
+                        {marginOf(
+                          t.cents,
+                          (costTiers[t.name.trim()] ?? "").trim() === ""
+                            ? cost
+                            : Number(costTiers[t.name.trim()]),
+                        )}
                       </span>
                       <Button
                         variant="ghost"

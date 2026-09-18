@@ -64,18 +64,33 @@ export async function GET() {
 
   try {
     const supabase = await createServiceClient();
-    const [{ data, error }, upstreamIds] = await Promise.all([
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (supabase as any)
-        .schema("inference")
-        .from("models")
-        .select(
-          "id, model_id, display_name, modality, serving_type, upstream_provider, upstream_model_id, org_id, pricing, upstream_pricing, is_active, is_featured, sort_order, created_at",
-        )
-        .order("sort_order", { ascending: true })
-        .order("model_id", { ascending: true }),
-      fetchWokeyModelIds(),
-    ]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const inferenceSchema = (supabase as any).schema("inference");
+    const dayAgo = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+
+    const [{ data, error }, upstreamIds, endpointsRes, healthRes, servedRes] =
+      await Promise.all([
+        inferenceSchema
+          .from("models")
+          .select(
+            "id, model_id, display_name, modality, serving_type, upstream_provider, upstream_model_id, org_id, pricing, upstream_pricing, is_active, is_featured, sort_order, created_at",
+          )
+          .order("sort_order", { ascending: true })
+          .order("model_id", { ascending: true }),
+        fetchWokeyModelIds(),
+        inferenceSchema.from("serving_endpoints").select("model_id, enabled"),
+        inferenceSchema.from("endpoint_health").select("model_id, enabled, ok"),
+        // Who actually served each model in the last 24h. upstream_provider
+        // says which partner OWNS a model; with a primary/fallback chain the
+        // partner that answered can differ per request, and only usage knows.
+        // Bounded on purpose: this is a catalog page, not an analytics one.
+        inferenceSchema
+          .from("usage")
+          .select("model_id, provider")
+          .gte("created_at", dayAgo)
+          .order("created_at", { ascending: false })
+          .limit(SERVED_SAMPLE_CAP),
+      ]);
     const upstreamIdSet = upstreamIds?.ids ?? null;
 
     if (error) {
@@ -91,6 +106,43 @@ export async function GET() {
       output_cents_per_mtok?: number;
       cached_cents_per_mtok?: number;
     } | null;
+
+    // endpoints per model, and how many of them are actually serving
+    const endpointCounts = new Map<string, { total: number; enabled: number }>();
+    for (const e of (endpointsRes?.data ?? []) as {
+      model_id: string;
+      enabled: boolean;
+    }[]) {
+      const c = endpointCounts.get(e.model_id) ?? { total: 0, enabled: 0 };
+      c.total += 1;
+      if (e.enabled) c.enabled += 1;
+      endpointCounts.set(e.model_id, c);
+    }
+    const healthCounts = new Map<string, { live: number; up: number }>();
+    for (const h of (healthRes?.data ?? []) as {
+      model_id: string;
+      enabled: boolean;
+      ok: boolean;
+    }[]) {
+      if (!h.enabled) continue;
+      const c = healthCounts.get(h.model_id) ?? { live: 0, up: 0 };
+      c.live += 1;
+      if (h.ok) c.up += 1;
+      healthCounts.set(h.model_id, c);
+    }
+    const servedRows = (servedRes?.data ?? []) as {
+      model_id: string | null;
+      provider: string | null;
+    }[];
+    const servedSplit = new Map<string, Record<string, number>>();
+    for (const u of servedRows) {
+      if (!u.model_id) continue;
+      const key = u.provider ?? "unstamped";
+      const m = servedSplit.get(u.model_id) ?? {};
+      m[key] = (m[key] ?? 0) + 1;
+      servedSplit.set(u.model_id, m);
+    }
+    const servedTruncated = servedRows.length >= SERVED_SAMPLE_CAP;
 
     const marginPct = (price?: number, cost?: number) =>
       typeof price === "number" && typeof cost === "number" && cost > 0
@@ -114,9 +166,25 @@ export async function GET() {
           upstreamIdSet.has(id.split("/").pop() ?? id);
       }
 
+      const endpoints = endpointCounts.get(m.model_id) ?? null;
+      const health = healthCounts.get(m.model_id) ?? null;
+      const split = servedSplit.get(m.model_id) ?? null;
+
       return {
         ...m,
         upstream_available,
+        // Hosted models answer from our own pods; proxy models answer from a
+        // partner. Both facts belong on the row that claims to describe how a
+        // model is served.
+        endpoints: endpoints
+          ? { total: endpoints.total, enabled: endpoints.enabled }
+          : null,
+        podHealth: health ? { live: health.live, up: health.up } : null,
+        servedLast24h: split
+          ? Object.entries(split)
+              .map(([provider, requests]) => ({ provider, requests }))
+              .sort((a, b) => b.requests - a.requests)
+          : null,
         // Media models are priced per image/second, not per Mtok — the
         // token margin below is null for them by construction, so carry the
         // real per-unit margin instead of showing a blank.
@@ -154,7 +222,8 @@ export async function GET() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         active: rows.filter((m: any) => m.is_active).length,
         orphaned,
-        upstreamChecked: upstreamIds !== null,
+        servedSampleTruncated: servedTruncated,
+      upstreamChecked: upstreamIds !== null,
         upstreamCount: upstreamIds?.count ?? null,
       },
     });
@@ -166,6 +235,9 @@ export async function GET() {
     );
   }
 }
+
+/** Rows of recent usage sampled to show who served each model. */
+const SERVED_SAMPLE_CAP = 1000;
 
 const MODEL_ID_RE = /^[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*$/;
 const PRICE_FIELDS = [
