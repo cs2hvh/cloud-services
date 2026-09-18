@@ -37,9 +37,47 @@ type Provider = {
   } | null;
 };
 
+type PartnerStat = {
+  provider: string;
+  requests: number;
+  errors: number;
+  models: number;
+  tokens: number;
+  revenueUsd: number;
+  upstreamUsd: number;
+  marginUsd: number;
+  p50LatencyMs: number | null;
+  p95LatencyMs: number | null;
+};
+
 type Feed = {
   days: number;
   truncated: boolean;
+  partners: {
+    chain: string[];
+    primary: string;
+    fallback: string;
+    configuredIn: string;
+    wokeyOnlyModels: string[];
+    stats: { h24: PartnerStat[]; d7: PartnerStat[] };
+    failover: {
+      requests: number;
+      basis: string;
+      byModel: {
+        modelId: string;
+        failedOver: number;
+        servedByPrimary: number;
+        ratePct: number | null;
+      }[];
+    };
+    starimgQuota: {
+      allowanceTokens: number;
+      usedTokensWindow: number;
+      windowDays: number;
+      usedPct: number;
+    };
+    starimgCostIsApproximate: boolean;
+  };
   attribution: {
     basis: string;
     unmappedRequests: number;
@@ -196,6 +234,212 @@ export function AiRoutingView() {
           icon={Zap}
         />
       </div>
+
+      {/* Partner chain: who is tried first, who actually served, and what
+          the fallback cost us. The order itself is worker configuration. */}
+      {feed && (
+        <div className="mb-5 overflow-hidden rounded-xl border border-border bg-card">
+          <div className="border-b border-border px-4 py-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="font-heading text-sm font-semibold tracking-tight">
+                Partner chain
+              </h2>
+              <span className="inline-flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                {feed.partners.chain.map((p, i) => (
+                  <span key={p} className="inline-flex items-center gap-1.5">
+                    {i > 0 && <span className="text-muted-foreground/60">&rarr;</span>}
+                    <span
+                      className={`rounded border px-1.5 py-0.5 text-[11px] ${
+                        i === 0
+                          ? "border-[#3987e5]/50 bg-[#3987e5]/10 text-[#82adfb]"
+                          : "border-border text-muted-foreground"
+                      }`}
+                    >
+                      {p}
+                      <span className="ml-1 opacity-70">
+                        {i === 0 ? "primary" : "fallback"}
+                      </span>
+                    </span>
+                  </span>
+                ))}
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Set in the {feed.partners.configuredIn} &mdash; shown here, not
+              editable from the panel. BYOK requests never go to the primary,
+              and every image and video model is {feed.partners.fallback}-only.
+            </p>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[860px] text-left text-[13px]">
+              <thead>
+                <tr className="border-b border-border text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                  <th className="px-4 py-2.5 font-semibold">Partner</th>
+                  <th className="px-4 py-2.5 text-right font-semibold">24h</th>
+                  <th className="px-4 py-2.5 text-right font-semibold">{feed.days}d</th>
+                  <th className="px-4 py-2.5 text-right font-semibold">Errors</th>
+                  <th className="px-4 py-2.5 text-right font-semibold">p50 / p95</th>
+                  <th className="px-4 py-2.5 text-right font-semibold">Billed</th>
+                  <th className="px-4 py-2.5 text-right font-semibold">Margin</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60">
+                {feed.partners.stats.d7.map((st) => {
+                  const today = feed.partners.stats.h24.find(
+                    (x) => x.provider === st.provider,
+                  );
+                  const approx =
+                    st.provider === "starimg" &&
+                    feed.partners.starimgCostIsApproximate;
+                  return (
+                    <tr
+                      key={st.provider}
+                      className="transition-colors hover:bg-white/[0.02]"
+                    >
+                      <td className="px-4 py-2.5">
+                        <span className="font-medium">{st.provider}</span>
+                        {st.provider === feed.partners.primary && (
+                          <span className="ml-1.5 text-[10.5px] text-muted-foreground">
+                            primary
+                          </span>
+                        )}
+                        <div className="text-[11px] text-muted-foreground">
+                          {st.models} model(s) served
+                        </div>
+                      </td>
+                      <td className={`${MONO} px-4 py-2.5 text-right text-[12px]`}>
+                        {today ? today.requests.toLocaleString() : "0"}
+                      </td>
+                      <td className={`${MONO} px-4 py-2.5 text-right text-[12px]`}>
+                        {st.requests.toLocaleString()}
+                      </td>
+                      <td
+                        className={`${MONO} px-4 py-2.5 text-right text-[12px] ${
+                          st.errors > 0 ? "text-red-300" : "text-muted-foreground"
+                        }`}
+                      >
+                        {st.errors}
+                      </td>
+                      <td
+                        className={`${MONO} px-4 py-2.5 text-right text-[12px] text-muted-foreground`}
+                      >
+                        {st.p50LatencyMs === null
+                          ? "\u2014"
+                          : `${(st.p50LatencyMs / 1000).toFixed(1)}s`}{" "}
+                        /{" "}
+                        {st.p95LatencyMs === null
+                          ? "\u2014"
+                          : `${(st.p95LatencyMs / 1000).toFixed(1)}s`}
+                      </td>
+                      <td className={`${MONO} px-4 py-2.5 text-right text-[12px]`}>
+                        {money(st.revenueUsd)}
+                      </td>
+                      <td
+                        className={`${MONO} px-4 py-2.5 text-right text-[12px] ${
+                          st.marginUsd < 0 ? "text-red-300" : "text-muted-foreground"
+                        }`}
+                        title={
+                          approx
+                            ? "Approximate: this partner has no cost basis of its own yet, so upstream cost is taken from the other partner rate card."
+                            : undefined
+                        }
+                      >
+                        {money(st.marginUsd)}
+                        {approx && <span className="ml-1 text-amber-300">&asymp;</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="grid gap-4 border-t border-border p-4 md:grid-cols-3">
+            <div>
+              <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                Failover to {feed.partners.fallback}
+              </div>
+              <div className="mt-1 font-heading text-lg font-semibold">
+                {feed.partners.failover.requests.toLocaleString()}
+              </div>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                requests the primary could not serve, over {feed.days}d. Counted
+                only for models the primary is observed to serve, so treat it as
+                a floor rather than a total.
+              </p>
+              {feed.partners.failover.byModel.slice(0, 4).map((m) => (
+                <div
+                  key={m.modelId}
+                  className="mt-1 text-[11px] text-muted-foreground"
+                >
+                  <span className={MONO}>{m.modelId}</span>{" "}
+                  <span
+                    className={
+                      m.ratePct !== null && m.ratePct > 25 ? "text-amber-300" : ""
+                    }
+                  >
+                    {m.failedOver}/{m.failedOver + m.servedByPrimary}
+                    {m.ratePct !== null && ` (${m.ratePct.toFixed(0)}%)`}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            <div>
+              <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                {feed.partners.primary} prepaid tokens
+              </div>
+              <div className="mt-1 font-heading text-lg font-semibold">
+                {feed.partners.starimgQuota.usedPct < 0.01
+                  ? "<0.01%"
+                  : `${feed.partners.starimgQuota.usedPct.toFixed(2)}%`}
+              </div>
+              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
+                <div
+                  className="h-full rounded-full bg-[#3987e5]"
+                  style={{
+                    width: `${Math.min(100, Math.max(0.5, feed.partners.starimgQuota.usedPct))}%`,
+                  }}
+                />
+              </div>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {feed.partners.starimgQuota.usedTokensWindow.toLocaleString()} of{" "}
+                {(feed.partners.starimgQuota.allowanceTokens / 1e9).toFixed(0)}B
+                over {feed.partners.starimgQuota.windowDays}d, estimated from our
+                own metering rather than read from the partner. Their token
+                counts are not comparable with the other partner.
+              </p>
+            </div>
+
+            <div>
+              <div className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
+                {feed.partners.fallback}-only models
+              </div>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {feed.partners.wokeyOnlyModels.length} chat models the primary
+                does not list, plus every image and video model.
+              </p>
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {feed.partners.wokeyOnlyModels.map((m) => (
+                  <span
+                    key={m}
+                    className={`${MONO} rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground`}
+                  >
+                    {m.split("/").pop()}
+                  </span>
+                ))}
+              </div>
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                The primary is slow to first token (2.5&ndash;13s), roughly 1 in
+                10 Claude requests hangs until the deadline, and most of its
+                streams arrive as a single burst. That is why the deadlines
+                exist.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Providers */}
       <div className="mb-5 overflow-hidden rounded-xl border border-border bg-card">

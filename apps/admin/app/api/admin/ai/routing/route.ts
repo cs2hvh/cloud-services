@@ -93,6 +93,9 @@ export async function GET(request: Request) {
       upstream_cost_cents: number | null;
       status: string;
       latency_ms: number | null;
+      input_tokens: number | null;
+      output_tokens: number | null;
+      created_at: string;
     };
     const usage: U[] = [];
     let truncated = false;
@@ -100,7 +103,7 @@ export async function GET(request: Request) {
       const { data, error } = await inference
         .from("usage")
         .select(
-          "provider, model_id, cost_cents, upstream_cost_cents, status, latency_ms",
+          "provider, model_id, cost_cents, upstream_cost_cents, status, latency_ms, input_tokens, output_tokens, created_at",
         )
         .gte("created_at", since)
         .order("created_at", { ascending: false })
@@ -208,6 +211,90 @@ export async function GET(request: Request) {
       routeStats.set(p, e);
     }
 
+    // ---- PARTNER CHAIN ----------------------------------------------------
+    // The order lives in the worker's UPSTREAM_PRIMARY, not in the database,
+    // so the panel reports it as configured text and cannot change it. What
+    // the panel CAN do is show what actually happened, from usage.provider.
+    const PARTNERS = ["starimg", "wokey"] as const;
+    // Mirrors workers/inference/wrangler.toml as briefed on 2026-09-18.
+    // Shown as configuration, never inferred — and the observed columns
+    // beside it make drift visible if the worker changes without this.
+    const WOKEY_ONLY_MODELS = [
+      "anthropic/claude-sonnet-4-5",
+      "openai/gpt-5.4-mini",
+      "openai/gpt-5.3-codex",
+      "x-ai/grok-4.3",
+      "moonshotai/kimi-k2.6",
+      "zhipu/glm-5.1",
+      "bytedance/doubao-seed-2.1-turbo",
+      "minimax/MiniMax-M3",
+    ];
+
+    const partnerStat = (rows: U[], name: string) => {
+      const mine = rows.filter((u) => u.provider === name);
+      const lat = mine
+        .map((u) => u.latency_ms)
+        .filter((v): v is number => v !== null)
+        .sort((a, b) => a - b);
+      const pick = (p: number) =>
+        lat.length === 0
+          ? null
+          : lat[Math.min(lat.length - 1, Math.floor((p / 100) * lat.length))];
+      const revenue = mine.reduce((s2, u) => s2 + Number(u.cost_cents ?? 0), 0);
+      const upstream = mine.reduce(
+        (s2, u) => s2 + Number(u.upstream_cost_cents ?? 0),
+        0,
+      );
+      return {
+        provider: name,
+        requests: mine.length,
+        errors: mine.filter((u) => u.status !== "success").length,
+        models: new Set(mine.map((u) => u.model_id)).size,
+        tokens: mine.reduce(
+          (s2, u) =>
+            s2 + Number(u.input_tokens ?? 0) + Number(u.output_tokens ?? 0),
+          0,
+        ),
+        revenueUsd: revenue / 100,
+        upstreamUsd: upstream / 100,
+        marginUsd: (revenue - upstream) / 100,
+        p50LatencyMs: pick(50),
+        p95LatencyMs: pick(95),
+      };
+    };
+
+    const dayAgo = Date.now() - 24 * 3600 * 1000;
+    const usage24h = usage.filter((u) => Date.parse(u.created_at) >= dayAgo);
+
+    // A model Starimg has actually served is a model Starimg lists. Derived
+    // from traffic rather than assumed, so it self-corrects; with little
+    // traffic it under-counts, which is the safe direction.
+    const starimgServes = new Set(
+      usage.filter((u) => u.provider === "starimg").map((u) => u.model_id),
+    );
+    const failoverRows = usage.filter(
+      (u) => u.provider === "wokey" && u.model_id && starimgServes.has(u.model_id),
+    );
+    const failoverByModel = new Map<string, { failed: number; primary: number }>();
+    for (const u of usage) {
+      if (!u.model_id || !starimgServes.has(u.model_id)) continue;
+      const e = failoverByModel.get(u.model_id) ?? { failed: 0, primary: 0 };
+      if (u.provider === "wokey") e.failed += 1;
+      if (u.provider === "starimg") e.primary += 1;
+      failoverByModel.set(u.model_id, e);
+    }
+
+    // Prepaid allowance. Starimg counts prompt tokens far lower than Wokey
+    // for the same request, so this total is NOT comparable with Wokey's.
+    const STARIMG_TOKEN_ALLOWANCE = 1_000_000_000;
+    const starimgTokensWindow = usage
+      .filter((u) => u.provider === "starimg")
+      .reduce(
+        (s2, u) =>
+          s2 + Number(u.input_tokens ?? 0) + Number(u.output_tokens ?? 0),
+        0,
+      );
+
     const providerNames = [
       ...new Set([
         ...byProvider.keys(),
@@ -272,6 +359,45 @@ export async function GET(request: Request) {
         servedBy: [...servedBy.entries()]
           .map(([provider, requests]) => ({ provider, requests }))
           .sort((a, b) => b.requests - a.requests),
+      },
+      partners: {
+        // Configuration, not a setting the panel owns.
+        chain: PARTNERS,
+        primary: "starimg",
+        fallback: "wokey",
+        configuredIn: "worker UPSTREAM_PRIMARY (wrangler.toml)",
+        wokeyOnlyModels: WOKEY_ONLY_MODELS,
+        stats: {
+          h24: PARTNERS.map((p) => partnerStat(usage24h, p)),
+          d7: PARTNERS.map((p) => partnerStat(usage, p)),
+        },
+        failover: {
+          requests: failoverRows.length,
+          // Only models Starimg is observed to serve can show a failover.
+          basis: "observed",
+          byModel: [...failoverByModel.entries()]
+            .filter(([, v]) => v.failed > 0)
+            .map(([modelId, v]) => ({
+              modelId,
+              failedOver: v.failed,
+              servedByPrimary: v.primary,
+              ratePct:
+                v.failed + v.primary > 0
+                  ? (v.failed / (v.failed + v.primary)) * 100
+                  : null,
+            }))
+            .sort((a, b) => b.failedOver - a.failedOver),
+        },
+        starimgQuota: {
+          allowanceTokens: STARIMG_TOKEN_ALLOWANCE,
+          usedTokensWindow: starimgTokensWindow,
+          windowDays: days,
+          usedPct: (starimgTokensWindow / STARIMG_TOKEN_ALLOWANCE) * 100,
+        },
+        // upstream_cost_cents is derived from Wokey's rate card for BOTH
+        // partners until Starimg has its own cost basis, so any Starimg
+        // margin here is an approximation, not a measured figure.
+        starimgCostIsApproximate: true,
       },
       providers,
       servingTypes: [...servingTypes.entries()].map(([type, count]) => ({

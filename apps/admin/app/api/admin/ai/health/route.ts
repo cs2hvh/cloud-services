@@ -66,8 +66,10 @@ export async function GET() {
     process.env.NEXT_PUBLIC_INFERENCE_API_BASE || "https://api.ahurasense.com/v1";
   const wokeyBase = process.env.WOKEY_BASE_URL || "https://api.wokey.ai/v1";
   const wokeyKey = process.env.WOKEY_PLATFORM_KEY;
+  const starimgBase = process.env.STARIMG_BASE_URL || "https://ai.starimg.ru/v1";
+  const starimgKey = process.env.STARIMG_PLATFORM_KEY;
 
-  const [gatewayRes, upstreamRes, podCheck, dbCheck] = await Promise.all([
+  const [gatewayRes, upstreamRes, starimgRes, podCheck, dbCheck] = await Promise.all([
     timedFetch(`${gatewayBase}/health`, {}, 5000),
     wokeyKey
       ? timedFetch(
@@ -79,6 +81,17 @@ export async function GET() {
     // Hosted pods: read what the gateway's own prober wrote. A model whose
     // only pod is dead is the outage that went three days unnoticed, so it
     // belongs on the same strip as the gateway and the database.
+    // Starimg — the primary partner for chat since 2026-09-18. Same rule as
+    // the other upstream probe: a key this host does not hold makes the check
+    // UNKNOWN, never failed. The panel not holding a credential is a fact
+    // about the panel.
+    starimgKey
+      ? timedFetch(
+          `${starimgBase}/models`,
+          { headers: { Authorization: `Bearer ${starimgKey}` } },
+          7000,
+        )
+      : Promise.resolve(null),
     (async (): Promise<Check & { detail: string }> => {
       try {
         const supabase = await createServiceClient();
@@ -186,6 +199,11 @@ export async function GET() {
   ]);
 
   const gatewayBody = (gatewayRes.body ?? {}) as { version?: string; env?: string };
+  const starimgModels = Array.isArray(
+    (starimgRes?.body as { data?: unknown[] } | undefined)?.data,
+  )
+    ? ((starimgRes!.body as { data: unknown[] }).data.length)
+    : undefined;
   const upstreamModels = Array.isArray(
     (upstreamRes?.body as { data?: unknown[] } | undefined)?.data,
   )
@@ -214,6 +232,20 @@ export async function GET() {
           unknown: true,
           detail:
             "not checkable from the panel — WOKEY_PLATFORM_KEY is not in this host's environment",
+        },
+    starimg: starimgRes
+      ? {
+          ok: starimgRes.ok,
+          latencyMs: starimgRes.latencyMs,
+          detail: starimgRes.ok
+            ? `${starimgModels ?? "?"} models listed`
+            : `auth/reachability failed (${starimgRes.status ?? "timeout"})`,
+        }
+      : {
+          ok: false,
+          unknown: true,
+          detail:
+            "not checkable from the panel — STARIMG_PLATFORM_KEY is not in this host's environment",
         },
     database: dbCheck,
     pods: podCheck,

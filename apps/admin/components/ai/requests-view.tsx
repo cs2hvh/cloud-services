@@ -85,6 +85,7 @@ type Feed = {
     orgs: { id: string; label: string }[];
     keys: { id: string; label: string }[];
     models: { id: string; label: string }[];
+    providers: string[];
   };
 };
 
@@ -139,6 +140,7 @@ export function AiRequestsView() {
   const [org, setOrg] = useState("all");
   const [keyId, setKeyId] = useState("all");
   const [modality, setModality] = useState("all");
+  const [provider, setProvider] = useState("all");
   const [q, setQ] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -156,6 +158,7 @@ export function AiRequestsView() {
           org: org === "all" ? undefined : org,
           key: keyId === "all" ? undefined : keyId,
           modality: modality === "all" ? undefined : modality,
+          provider: provider === "all" ? undefined : provider,
           q: search || undefined,
         },
       });
@@ -166,7 +169,7 @@ export function AiRequestsView() {
     } finally {
       setLoading(false);
     }
-  }, [days, page, status, model, org, keyId, modality, search]);
+  }, [days, page, status, model, org, keyId, modality, provider, search]);
 
   useEffect(() => {
     void load();
@@ -186,6 +189,7 @@ export function AiRequestsView() {
     org !== "all" ||
     keyId !== "all" ||
     modality !== "all" ||
+    provider !== "all" ||
     search !== "";
   const totalPages =
     feed?.total && feed.limit ? Math.ceil(feed.total / feed.limit) : 1;
@@ -353,6 +357,19 @@ export function AiRequestsView() {
             ))}
           </SelectContent>
         </Select>
+        <Select value={provider} onValueChange={(v) => reset(() => setProvider(v))}>
+          <SelectTrigger className="h-9 w-[150px] text-[13px]">
+            <SelectValue placeholder="Served by" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Any provider</SelectItem>
+            {(feed?.facets.providers ?? []).map((p) => (
+              <SelectItem key={p} value={p}>
+                served by {p}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         {hasFilters && (
           <Button
             variant="ghost"
@@ -364,6 +381,7 @@ export function AiRequestsView() {
                 setOrg("all");
                 setKeyId("all");
                 setModality("all");
+                setProvider("all");
                 setQ("");
                 setSearch("");
               })
@@ -432,9 +450,17 @@ export function AiRequestsView() {
                           <span className="font-medium">{r.modelLabel ?? "—"}</span>
                           {/* The catalog's provider, not the stamped one:
                               usage.provider is a constant today. */}
+                          {/* Owner first, then who actually served it when
+                              the two differ (fallback routing, or an
+                              unstamped hosted-pod request). */}
                           {r.catalogProvider && (
                             <span className="ml-1.5 text-[11px] text-muted-foreground">
                               via {r.catalogProvider}
+                            </span>
+                          )}
+                          {r.provider && r.provider !== r.catalogProvider && (
+                            <span className="ml-1.5 rounded border border-border px-1 py-0.5 text-[10px] text-muted-foreground">
+                              served by {r.provider}
                             </span>
                           )}
                         </td>

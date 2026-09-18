@@ -140,7 +140,7 @@ export async function GET(request: Request) {
         inference
           .from("usage")
           .select(
-            "status, input_tokens, output_tokens, cached_tokens, cache_write_tokens, cost_cents, upstream_cost_cents, latency_ms, ttft_ms, billed_to",
+            "status, input_tokens, output_tokens, cached_tokens, cache_write_tokens, cost_cents, upstream_cost_cents, latency_ms, ttft_ms, billed_to, provider",
           ),
       )
         .order("created_at", { ascending: false })
@@ -320,6 +320,15 @@ export async function GET(request: Request) {
             label: k.name || `${k.key_prefix ?? "key"}…${k.key_last_four ?? ""}`,
           }),
         ),
+        // Who actually served requests, straight from the column, so a
+        // partner that appears in traffic is always selectable.
+        providers: [
+          ...new Set(
+            summaryRows
+              .map((r) => (r as unknown as { provider?: string | null }).provider)
+              .filter((v): v is string => Boolean(v)),
+          ),
+        ].sort(),
         models: (modelsRes.data ?? []).map(
           (m: { model_id: string; display_name: string | null }) => ({
             id: m.model_id,
