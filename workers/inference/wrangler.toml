@@ -115,7 +115,7 @@ WOKEY_BASE_URL = "https://api.wokey.ai/v1"
 # Deadlines are for the primary only: a stream must start within TTFB_MS, a
 # buffered reply must complete within NONSTREAM_MS, else the secondary runs.
 STARIMG_BASE_URL = "https://ai.starimg.ru/v1"
-UPSTREAM_PRIMARY = "wokey"
+UPSTREAM_PRIMARY = "starimg"
 UPSTREAM_PRIMARY_TTFB_MS = "10000"
 UPSTREAM_PRIMARY_NONSTREAM_MS = "20000"
 SUPABASE_URL = "https://xafjjpgazdxhktpfeuri.supabase.co"
