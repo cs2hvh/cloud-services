@@ -144,6 +144,23 @@ export async function GET() {
     }
     const servedTruncated = servedRows.length >= SERVED_SAMPLE_CAP;
 
+    // Two catalog rows can send the SAME name upstream while being entirely
+    // different products at different prices — the hosted GLM build and the
+    // partner-served one both send "glm-5.3-flash", 22x apart in price. Near
+    // identical names plus a shared upstream id is how the wrong row gets
+    // edited, so each says which other row it shares with.
+    const upstreamIdOwners = new Map<string, string[]>();
+    for (const m of (data ?? []) as {
+      upstream_model_id: string | null;
+      model_id: string;
+      is_active: boolean;
+    }[]) {
+      if (!m.is_active || !m.upstream_model_id) continue;
+      const list = upstreamIdOwners.get(m.upstream_model_id) ?? [];
+      list.push(m.model_id);
+      upstreamIdOwners.set(m.upstream_model_id, list);
+    }
+
     const marginPct = (price?: number, cost?: number) =>
       typeof price === "number" && typeof cost === "number" && cost > 0
         ? Math.round(((price - cost) / cost) * 1000) / 10
@@ -195,6 +212,16 @@ export async function GET() {
         // partner. Both facts belong on the row that claims to describe how a
         // model is served.
         providerMargins,
+        sharesUpstreamIdWith: (
+          upstreamIdOwners.get(String(m.upstream_model_id ?? "")) ?? []
+        ).filter((id) => id !== m.model_id),
+        placeholderPrice: looksLikePlaceholderPrice(
+          (m.pricing ?? null) as Record<string, unknown> | null,
+          (m.provider_pricing ?? null) as Record<
+            string,
+            Record<string, unknown>
+          > | null,
+        ),
         endpoints: endpoints
           ? { total: endpoints.total, enabled: endpoints.enabled }
           : null,
@@ -242,6 +269,10 @@ export async function GET() {
         active: rows.filter((m: any) => m.is_active).length,
         orphaned,
         servedSampleTruncated: servedTruncated,
+      placeholderPriced: rows.filter(
+        (r: { is_active: boolean; placeholderPrice: boolean }) =>
+          r.is_active && r.placeholderPrice,
+      ).length,
       upstreamChecked: upstreamIds !== null,
         upstreamCount: upstreamIds?.count ?? null,
       },
@@ -257,6 +288,31 @@ export async function GET() {
 
 /** Rows of recent usage sampled to show who served each model. */
 const SERVED_SAMPLE_CAP = 1000;
+
+/**
+ * New catalog rows arrive priced at a placeholder: five times the partner's
+ * cost, with cached at a tenth of input. That is a seed, not a decision, and
+ * it is indistinguishable from a real price unless something says so.
+ *
+ * Detected by signature rather than by a list of model ids, so it clears
+ * itself the moment a real price is set and never needs maintaining. Both
+ * conditions must hold — one alone is an easy coincidence, both together is
+ * not — and the flag is reported as "looks seeded", never as fact.
+ */
+function looksLikePlaceholderPrice(
+  pricing: Record<string, unknown> | null,
+  providerPricing: Record<string, Record<string, unknown>> | null,
+): boolean {
+  const price = Number(pricing?.input_cents_per_mtok);
+  const cached = Number(pricing?.cached_cents_per_mtok);
+  const cost = Number(providerPricing?.starimg?.input_cents_per_mtok);
+  if (!Number.isFinite(price) || !Number.isFinite(cost) || cost <= 0) return false;
+  const ratio = price / cost;
+  if (ratio < 4.9 || ratio > 5.1) return false;
+  if (!Number.isFinite(cached) || price <= 0) return false;
+  const cachedRatio = cached / price;
+  return cachedRatio >= 0.09 && cachedRatio <= 0.11;
+}
 
 const MODEL_ID_RE = /^[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*$/;
 const PRICE_FIELDS = [

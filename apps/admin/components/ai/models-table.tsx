@@ -65,6 +65,8 @@ type ModelRow = {
   unitPricing: UnitPricing | null;
   provider_pricing: Record<string, Record<string, number | undefined>> | null;
   providerMargins: { provider: string; input: number | null; output: number | null }[];
+  placeholderPrice: boolean;
+  sharesUpstreamIdWith: string[];
   endpoints: { total: number; enabled: number } | null;
   podHealth: { live: number; up: number } | null;
   servedLast24h: { provider: string; requests: number }[] | null;
@@ -74,6 +76,7 @@ type CatalogSummary = {
   total: number;
   active: number;
   orphaned: number;
+  placeholderPriced: number;
   upstreamChecked: boolean;
   upstreamCount: number | null;
 };
@@ -103,6 +106,7 @@ export function AiModelsTable() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("active");
+  const [providerFilter, setProviderFilter] = useState("all");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [editing, setEditing] = useState<ModelRow | null>(null);
   const [draft, setDraft] = useState({ input: "", output: "", cached: "" });
@@ -151,6 +155,10 @@ export function AiModelsTable() {
       if (filter === "inactive" && m.is_active) return false;
       if (filter === "orphaned" && !(m.is_active && m.upstream_available === false))
         return false;
+      if (filter === "placeholder" && !(m.is_active && m.placeholderPrice))
+        return false;
+      if (providerFilter !== "all" && m.upstream_provider !== providerFilter)
+        return false;
       if (!q) return true;
       return (
         m.model_id.toLowerCase().includes(q) ||
@@ -158,7 +166,7 @@ export function AiModelsTable() {
         m.modality.toLowerCase().includes(q)
       );
     });
-  }, [rows, search, filter]);
+  }, [rows, search, filter, providerFilter]);
 
   const patch = async (
     model: ModelRow,
@@ -333,8 +341,41 @@ export function AiModelsTable() {
               <SelectItem value="all">All models</SelectItem>
               <SelectItem value="inactive">Inactive</SelectItem>
               <SelectItem value="orphaned">Active, not on Wokey</SelectItem>
+              <SelectItem value="placeholder">Placeholder pricing</SelectItem>
             </SelectContent>
           </Select>
+          {/* Carried-by filter. Driven off the rows, so a provider added to
+              the enum shows up here without a code change. */}
+          <Select value={providerFilter} onValueChange={setProviderFilter}>
+            <SelectTrigger className="w-44">
+              <SelectValue placeholder="Any upstream" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Any upstream</SelectItem>
+              {[
+                ...new Set(
+                  rows
+                    .map((m) => m.upstream_provider)
+                    .filter((v): v is string => Boolean(v)),
+                ),
+              ]
+                .sort()
+                .map((p) => (
+                  <SelectItem key={p} value={p}>
+                    {p}
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+          {summary && summary.placeholderPriced > 0 && (
+            <button
+              type="button"
+              onClick={() => setFilter("placeholder")}
+              className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-[11px] text-amber-300 transition-colors hover:bg-amber-500/15"
+            >
+              {summary.placeholderPriced} model(s) still at placeholder pricing
+            </button>
+          )}
           {summary?.upstreamChecked && summary.orphaned > 0 && (
             <button
               type="button"
@@ -439,6 +480,17 @@ export function AiModelsTable() {
                         {m.upstream_model_id}
                       </div>
                     )}
+                    {m.sharesUpstreamIdWith.length > 0 && (
+                      <div
+                        className="mt-0.5 text-[10px] text-amber-300/90"
+                        title={`Also sent as this name by: ${m.sharesUpstreamIdWith.join(", ")}. Different rows, different prices — check you are editing the right one.`}
+                      >
+                        same upstream name as{" "}
+                        {m.sharesUpstreamIdWith.length === 1
+                          ? m.sharesUpstreamIdWith[0]
+                          : `${m.sharesUpstreamIdWith.length} other rows`}
+                      </div>
+                    )}
                     {/* Who OWNS the model and who SERVED it can differ once a
                         primary/fallback chain exists — show the split when it
                         does, and stay quiet when it does not. */}
@@ -473,6 +525,16 @@ export function AiModelsTable() {
                       <>
                         {perMtok(m.pricing?.input_cents_per_mtok)} /{" "}
                         {perMtok(m.pricing?.output_cents_per_mtok)}
+                        {/* A seeded price is not a decision; say so until
+                            someone makes one. */}
+                        {m.placeholderPrice && (
+                          <div
+                            className="mt-0.5 inline-flex rounded border border-amber-500/40 bg-amber-500/10 px-1 py-0.5 text-[10px] font-normal text-amber-300"
+                            title="Looks like the seeded placeholder: 5x the partner cost, cached at a tenth of input. Set a real price."
+                          >
+                            placeholder
+                          </div>
+                        )}
                       </>
                     )}
                   </TableCell>
