@@ -9,12 +9,18 @@ export const dynamic = "force-dynamic";
  * the per-model route table, and the RunPod GPU footprint — fine-tune jobs,
  * their serving pods, and always-on deployments.
  *
- * Traffic is attributed by joining usage.model_id to the catalog, NOT by
- * usage.provider. That column is written by the gateway as a constant
- * today — every row reads "openrouter", including requests served by our
- * own pods — so grouping by it credits the wrong upstream. The catalog
- * mapping is checkable; the column is reported alongside as a discrepancy
- * count so the gap is visible rather than silently corrected.
+ * Two different questions, answered separately:
+ *   OWNER   — which upstream a model belongs to (models.upstream_provider).
+ *             This groups the table, and is checkable.
+ *   SERVED  — which partner actually handled a request (usage.provider).
+ *
+ * usage.provider became meaningful on 2026-09-18, when a second partner
+ * arrived and the gateway began stamping real values for partner-served
+ * traffic. It is NOT yet reliable on its own: requests served by our own
+ * hosted pods are still stamped with the old constant, so grouping the whole
+ * table by it would credit a partner for work our GPUs did. Hence owner for
+ * the grouping, served-by reported beside it, and the divergence counted
+ * rather than hidden.
  */
 
 const PAGE_CAP = 1000;
@@ -122,12 +128,8 @@ export async function GET(request: Request) {
       latencySum: 0,
       latencyN: 0,
     });
-    // Traffic is attributed through the CATALOG (models.upstream_provider),
-    // not through usage.provider. The recorded column is written by the
-    // gateway and is currently a constant — every row says "openrouter",
-    // including the 1.7k that ran on our own pods — so grouping by it
-    // reports a provider that did not serve the request. The catalog knows
-    // which upstream a model_id belongs to, and that is checkable.
+    // Grouping is by catalog owner; see the header note for why the stamped
+    // column cannot carry this alone yet.
     const providerOfModel = new Map<string, string>(
       models.map((m) => [
         m.model_id as string,
@@ -135,6 +137,7 @@ export async function GET(request: Request) {
       ]),
     );
     const byProvider = new Map<string, Roll>();
+    const servedBy = new Map<string, number>();
     let unmappedRequests = 0;
     let mislabeledRequests = 0;
     for (const u of usage) {
@@ -144,13 +147,14 @@ export async function GET(request: Request) {
       // A model id with no catalog row cannot be attributed to anyone —
       // counted separately rather than filed under a guess.
       if (!catalogProvider) unmappedRequests += 1;
-      if (
-        catalogProvider &&
-        u.provider &&
-        u.provider !== catalogProvider
-      ) {
+      // A model owned by one partner and served by another is REAL (fallback
+      // routing), not an error — but a hosted-pod request stamped with a
+      // partner name is stale data. Count the divergence; do not judge it.
+      if (catalogProvider && u.provider && u.provider !== catalogProvider) {
         mislabeledRequests += 1;
       }
+      const servedKey = u.provider ?? "(unstamped)";
+      servedBy.set(servedKey, (servedBy.get(servedKey) ?? 0) + 1);
       const key = catalogProvider ?? "(model not in catalog)";
       const r = byProvider.get(key) ?? blank();
       r.requests += 1;
@@ -261,9 +265,13 @@ export async function GET(request: Request) {
       attribution: {
         basis: "catalog",
         unmappedRequests,
-        mislabeledRequests,
+        divergentRequests: mislabeledRequests,
         totalRequests: usage.length,
         recordedProviders,
+        // What the gateway says actually served each request.
+        servedBy: [...servedBy.entries()]
+          .map(([provider, requests]) => ({ provider, requests }))
+          .sort((a, b) => b.requests - a.requests),
       },
       providers,
       servingTypes: [...servingTypes.entries()].map(([type, count]) => ({

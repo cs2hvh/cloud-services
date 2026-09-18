@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { createServiceClient } from "@/lib/supabase/server";
 import { AuditLogService } from "@/lib/audit";
+import { unitPricing, isUnitPriced } from "@admin/lib/model-pricing";
 
 export const dynamic = "force-dynamic";
 
@@ -116,6 +117,18 @@ export async function GET() {
       return {
         ...m,
         upstream_available,
+        // Media models are priced per image/second, not per Mtok — the
+        // token margin below is null for them by construction, so carry the
+        // real per-unit margin instead of showing a blank.
+        unitPricing: unitPricing(
+          String(m.modality),
+          (m.pricing ?? null) as Record<string, unknown> | null,
+          (m.upstream_pricing ?? null) as Record<string, unknown> | null,
+        ),
+        pricedPerUnit: isUnitPriced(
+          String(m.modality),
+          (m.pricing ?? null) as Record<string, unknown> | null,
+        ),
         margin: {
           input: marginPct(
             pricing?.input_cents_per_mtok,

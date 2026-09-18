@@ -9,6 +9,7 @@ import {
   KeyRound,
   LayoutDashboard,
   Route,
+  Film,
   ScrollText,
   Server,
 } from "lucide-react";
@@ -19,6 +20,7 @@ const TABS = [
   { href: "/ai/requests", label: "Requests", icon: ScrollText },
   { href: "/ai/accounts", label: "Orgs & Keys", icon: KeyRound },
   { href: "/ai/pods", label: "Hosted pods", icon: Server },
+  { href: "/ai/jobs", label: "Media jobs", icon: Film },
   { href: "/ai/routing", label: "Providers & GPU", icon: Route },
   { href: "/ai/models", label: "Models", icon: Boxes },
   { href: "/ai/workloads", label: "Workloads", icon: Cpu },

@@ -439,7 +439,12 @@ export function AiRequestsView() {
                           )}
                         </td>
                         <td className={`${MONO} px-4 py-2.5 text-[12px]`}>
-                          {r.inputTokens.toLocaleString()}/{r.outputTokens.toLocaleString()}
+                          {/* Image and video requests are metered in units, not
+                              tokens — showing 0/0 for them reads as a broken
+                              meter rather than a different unit. */}
+                          {r.units !== null && r.inputTokens === 0 && r.outputTokens === 0
+                            ? `${r.units} ${r.unitLabel ?? "units"}`
+                            : `${r.inputTokens.toLocaleString()}/${r.outputTokens.toLocaleString()}`}
                         </td>
                         <td className={`${MONO} px-4 py-2.5 text-[12px] text-muted-foreground`}>
                           {r.cachedTokens.toLocaleString()}/{r.cacheWriteTokens.toLocaleString()}

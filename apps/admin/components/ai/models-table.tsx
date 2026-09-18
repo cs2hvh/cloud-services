@@ -37,6 +37,8 @@ import {
   EndpointsDialog,
   NewHostedModelDialog,
 } from "@admin/components/ai/hosted-model-dialogs";
+import { MediaPricingDialog } from "@admin/components/ai/media-pricing-dialog";
+import { centsToUsd, type UnitPricing } from "@admin/lib/model-pricing";
 
 type Pricing = {
   input_cents_per_mtok?: number;
@@ -59,6 +61,8 @@ type ModelRow = {
   is_featured: boolean;
   upstream_available: boolean | null;
   margin: { input: number | null; output: number | null };
+  pricedPerUnit: boolean;
+  unitPricing: UnitPricing | null;
 };
 
 type CatalogSummary = {
@@ -99,6 +103,7 @@ export function AiModelsTable() {
   const [draft, setDraft] = useState({ input: "", output: "", cached: "" });
   const [creating, setCreating] = useState(false);
   const [endpointsFor, setEndpointsFor] = useState<string | null>(null);
+  const [mediaPricing, setMediaPricing] = useState<ModelRow | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -153,6 +158,12 @@ export function AiModelsTable() {
   };
 
   const openPricing = (model: ModelRow) => {
+    // A media model has no per-Mtok fields to fill in; send it to the
+    // per-unit editor rather than asking about tokens it does not have.
+    if (model.pricedPerUnit) {
+      setMediaPricing(model);
+      return;
+    }
     setDraft({
       input:
         model.pricing?.input_cents_per_mtok != null
@@ -302,16 +313,64 @@ export function AiModelsTable() {
                   <TableCell className="text-sm capitalize">{m.modality}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">{m.serving_type}</TableCell>
                   <TableCell className="text-right text-sm tabular-nums">
-                    {perMtok(m.pricing?.input_cents_per_mtok)} /{" "}
-                    {perMtok(m.pricing?.output_cents_per_mtok)}
+                    {m.pricedPerUnit && m.unitPricing ? (
+                      <span
+                        className="text-[12px]"
+                        title={m.unitPricing.tiers
+                          .map((t) => `${t.tier}: ${t.priceCents}¢`)
+                          .join(" · ")}
+                      >
+                        {m.unitPricing.flat
+                          ? `${m.unitPricing.flat.priceCents}¢/${m.unitPricing.unit}`
+                          : "—"}
+                        {m.unitPricing.tiers.length > 0 && (
+                          <span className="ml-1 text-muted-foreground">
+                            ({m.unitPricing.tiers.length} tier
+                            {m.unitPricing.tiers.length === 1 ? "" : "s"})
+                          </span>
+                        )}
+                      </span>
+                    ) : (
+                      <>
+                        {perMtok(m.pricing?.input_cents_per_mtok)} /{" "}
+                        {perMtok(m.pricing?.output_cents_per_mtok)}
+                      </>
+                    )}
                   </TableCell>
                   <TableCell className="text-right text-xs tabular-nums text-muted-foreground">
-                    {perMtok(m.upstream_pricing?.input_cents_per_mtok)} /{" "}
-                    {perMtok(m.upstream_pricing?.output_cents_per_mtok)}
+                    {m.pricedPerUnit && m.unitPricing ? (
+                      <span className="text-[12px]">
+                        {m.unitPricing.flat?.costCents != null
+                          ? `${m.unitPricing.flat.costCents}¢`
+                          : "—"}
+                      </span>
+                    ) : (
+                      <>
+                        {perMtok(m.upstream_pricing?.input_cents_per_mtok)} /{" "}
+                        {perMtok(m.upstream_pricing?.output_cents_per_mtok)}
+                      </>
+                    )}
                   </TableCell>
                   <TableCell className="text-right text-xs">
-                    <MarginBadge value={m.margin.input} /> /{" "}
-                    <MarginBadge value={m.margin.output} />
+                    {m.pricedPerUnit && m.unitPricing ? (
+                      // Per-unit margin, not per-token — the token columns are
+                      // structurally empty for these models.
+                      <span
+                        title={m.unitPricing.tiers
+                          .map(
+                            (t) =>
+                              `${t.tier}: ${t.marginPct === null ? "—" : `${t.marginPct.toFixed(0)}%`}`,
+                          )
+                          .join(" · ")}
+                      >
+                        <MarginBadge value={m.unitPricing.flat?.marginPct ?? null} />
+                      </span>
+                    ) : (
+                      <>
+                        <MarginBadge value={m.margin.input} /> /{" "}
+                        <MarginBadge value={m.margin.output} />
+                      </>
+                    )}
                   </TableCell>
                   <TableCell>
                     <Switch
@@ -378,6 +437,26 @@ export function AiModelsTable() {
         }}
       />
       <EndpointsDialog modelId={endpointsFor} onClose={() => setEndpointsFor(null)} />
+      <MediaPricingDialog
+        model={
+          mediaPricing
+            ? {
+                id: mediaPricing.id,
+                model_id: mediaPricing.model_id,
+                modality: mediaPricing.modality,
+                pricing: mediaPricing.pricing as Record<string, unknown> | null,
+                upstream_pricing: mediaPricing.upstream_pricing as Record<
+                  string,
+                  unknown
+                > | null,
+              }
+            : null
+        }
+        onClose={(changed) => {
+          setMediaPricing(null);
+          if (changed) void load();
+        }}
+      />
 
       <Dialog open={!!editing} onOpenChange={(open) => !open && setEditing(null)}>
         <DialogContent className="max-w-sm">

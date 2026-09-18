@@ -47,7 +47,7 @@ export async function PATCH(
 
     const { data: existing, error: readErr } = await inference
       .from("models")
-      .select("id, model_id, display_name, pricing, is_active, is_featured")
+      .select("id, model_id, display_name, modality, pricing, upstream_pricing, is_active, is_featured")
       .eq("id", id)
       .maybeSingle();
 
@@ -63,17 +63,61 @@ export async function PATCH(
       const merged: Record<string, unknown> = {
         ...((existing.pricing as Record<string, unknown>) ?? {}),
       };
-      for (const key of PRICE_KEYS) {
-        const value = body.pricing[key];
+      // Token models and media models keep different keys. Both are merged
+      // over what is stored, so a field not sent is never silently cleared.
+      const scalarKeys = [
+        ...PRICE_KEYS,
+        "cents_per_image",
+        "cents_per_media_second",
+      ];
+      for (const key of scalarKeys) {
+        const value = (body.pricing as Record<string, unknown>)[key];
         if (value === undefined) continue;
-        const num = Number(value);
-        if (!Number.isFinite(num) || num < 0) {
+        const n = Number(value);
+        if (!Number.isFinite(n) || n < 0) {
           return NextResponse.json(
             { error: `${key} must be a number >= 0` },
             { status: 400 },
           );
         }
-        merged[key] = num;
+        merged[key] = n;
+      }
+
+      // tiers REPLACES wholesale rather than merging: a tier removed from the
+      // form must actually disappear, or a deleted resolution would keep
+      // billing at its old price forever.
+      const tiersIn = (body.pricing as Record<string, unknown>).tiers;
+      if (tiersIn !== undefined) {
+        if (tiersIn === null) {
+          delete merged.tiers;
+        } else if (typeof tiersIn === "object") {
+          const tiers: Record<string, number> = {};
+          for (const [tier, raw] of Object.entries(
+            tiersIn as Record<string, unknown>,
+          )) {
+            if (raw === "" || raw === null || raw === undefined) continue;
+            const n = Number(raw);
+            if (!Number.isFinite(n) || n < 0) {
+              return NextResponse.json(
+                { error: `tier "${tier}" must be a number >= 0` },
+                { status: 400 },
+              );
+            }
+            if (!/^[A-Za-z0-9._-]{1,20}$/.test(tier)) {
+              return NextResponse.json(
+                { error: `tier name "${tier}" is not a valid label` },
+                { status: 400 },
+              );
+            }
+            tiers[tier] = n;
+          }
+          merged.tiers = tiers;
+        } else {
+          return NextResponse.json(
+            { error: "tiers must be an object of tier → cents" },
+            { status: 400 },
+          );
+        }
       }
       updates.pricing = merged;
     }
