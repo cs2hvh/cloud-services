@@ -107,6 +107,17 @@ max_concurrency = 2
 # ───────────────────────────────────────────────────────────────
 [vars]
 WOKEY_BASE_URL = "https://api.wokey.ai/v1"
+# Second partner for proxy-served models. With UPSTREAM_PRIMARY = "starimg"
+# a platform-billed request tries it first and falls over to Wokey on a
+# network error, a first-byte timeout, a 5xx/429, or a model it lacks. Flip
+# UPSTREAM_PRIMARY to "wokey" and redeploy to restore the old order; unset
+# STARIMG_PLATFORM_KEY (secret) to take it out of the chain entirely.
+# Deadlines are for the primary only: a stream must start within TTFB_MS, a
+# buffered reply must complete within NONSTREAM_MS, else the secondary runs.
+STARIMG_BASE_URL = "https://ai.starimg.ru/v1"
+UPSTREAM_PRIMARY = "wokey"
+UPSTREAM_PRIMARY_TTFB_MS = "10000"
+UPSTREAM_PRIMARY_NONSTREAM_MS = "20000"
 SUPABASE_URL = "https://xafjjpgazdxhktpfeuri.supabase.co"
 GATEWAY_VERSION = "0.1.0"
 ENV = "production"

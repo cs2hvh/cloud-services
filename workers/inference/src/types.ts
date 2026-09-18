@@ -31,9 +31,19 @@ export interface Env {
   // invoke internal endpoints (currently just the serving-pod watchdog).
   CONTROL_PLANE_URL: string;
 
+  // Second partner upstream for proxy-served models, tried before the
+  // first when UPSTREAM_PRIMARY = "starimg". Optional: unset means the
+  // chain is the single partner it always was. See lib/upstreams.ts.
+  STARIMG_BASE_URL?: string;
+  UPSTREAM_PRIMARY?: "starimg" | "wokey";
+  /** Deadline for the primary to produce response headers, per request kind. */
+  UPSTREAM_PRIMARY_TTFB_MS?: string;
+  UPSTREAM_PRIMARY_NONSTREAM_MS?: string;
+
   // Secrets (populated via `wrangler secret put`)
   SUPABASE_SERVICE_ROLE_KEY: string;
   WOKEY_PLATFORM_KEY: string;
+  STARIMG_PLATFORM_KEY?: string;
   /** Credential for EMBEDDINGS_BASE_URL, when that provider is not the main
    *  upstream. Optional — see EMBEDDINGS_BASE_URL above. */
   EMBEDDINGS_API_KEY?: string;
@@ -133,6 +143,9 @@ export interface UsageEvent {
    *  'semantic' for the pgvector similarity cache (Phase 7.C).
    *  Drives the cache-hit-rate aggregation in the usage dashboard. */
   cacheKind: "none" | "l1" | "semantic";
+  /** Which partner answered a proxy-served request; null for hosted pods,
+   *  cache hits and errors before any upstream was reached. Internal only. */
+  upstreamProvider?: string | null;
   occurredAt: string;
 }
 

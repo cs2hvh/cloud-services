@@ -118,6 +118,9 @@ export async function handleUsageBatch(
       modality: event.modality,
       request_id: event.requestId,
       billed_to: event.billedTo,
+      // Which partner answered. The column existed but nothing wrote it until
+      // there were two partners to tell apart; margin per provider needs it.
+      provider: event.upstreamProvider ?? null,
       input_tokens: event.inputTokens,
       output_tokens: event.outputTokens,
       cached_tokens: event.cachedTokens,

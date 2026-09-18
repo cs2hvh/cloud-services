@@ -23,12 +23,12 @@ import { z } from "zod";
 import type { AuthContext, Env, HonoVariables, UsageEvent } from "../types.ts";
 import {
   clampCachedTokens,
-  forwardJson,
   readCachedTokens,
   resolveUpstreamKey,
   sanitizeUpstreamError,
   streamPassthrough,
 } from "../lib/wokey.ts";
+import { forwardWithFallback, starimgModels, upstreamChain } from "../lib/upstreams.ts";
 import { lookupCache, shouldCacheMessages, writeCache } from "../lib/cache.ts";
 import { forwardToEndpoints, hasManagedTarget, lookupModelRouting } from "../lib/model-routing.ts";
 import { resolveModelId } from "../lib/aliases.ts";
@@ -349,6 +349,7 @@ export const messagesShim: Handler<{
   // the upstream has not heard of zhipu/glm-5.3-flash-derisked and would 404 it. The answer is
   // OpenAI-shaped either way, so everything below this branch is unchanged.
   let upstream: Response;
+  let servedBy: string | null = null;
   if (messagesRouting && messagesRouting.serving_type !== "proxy") {
     if (messagesRouting.endpoints_error || !hasManagedTarget(messagesRouting)) {
       c.header("Retry-After", "5");
@@ -400,13 +401,66 @@ export const messagesShim: Handler<{
       );
     }
   } else {
-    upstream = await forwardJson({
+    // Same two-partner chain as chat/completions. This route always speaks
+    // OpenAI Chat Completions to the partner, never its own Messages
+    // endpoint, so a partner whose Messages route is slow costs nothing here.
+    const chain = upstreamChain({
       env: c.env,
-      body: upstreamBody,
-      upstreamKey,
-      path: "/chat/completions",
-      signal: c.req.raw.signal,
+      billing: auth.billing,
+      byokKey: auth.billing === "byok" ? upstreamKey : undefined,
+      upstreamModelId: String(upstreamBody.model ?? normalizedModel),
+      primaryModels: await starimgModels(c.env),
     });
+    try {
+      const fwd = await forwardWithFallback({
+        env: c.env,
+        chain,
+        path: "/chat/completions",
+        body: upstreamBody,
+        stream: Boolean(req.stream),
+        clientSignal: c.req.raw.signal,
+      });
+      upstream = fwd.response;
+      servedBy = fwd.provider;
+      if (fwd.attempts.length > 0) {
+        console.warn(
+          JSON.stringify({
+            level: "warn",
+            message: "upstream failed over",
+            requestId,
+            model: normalizedModel,
+            attempts: fwd.attempts,
+            servedBy,
+            route: "messages",
+          })
+        );
+      }
+    } catch (err) {
+      if (c.req.raw.signal.aborted) throw err;
+      console.error(
+        JSON.stringify({
+          level: "error",
+          message: "every upstream failed",
+          requestId,
+          orgId: auth.orgId,
+          model: normalizedModel,
+          detail: err instanceof Error ? err.message : String(err),
+          route: "messages",
+        })
+      );
+      c.executionCtx.waitUntil(
+        sendUsage(c.env, {
+          ...baseUsageEvent(auth, normalizedModel, requestId, startedAt),
+          status: "error_upstream",
+          errorCode: "upstream_exhausted",
+        })
+      );
+      c.header("Retry-After", "5");
+      return c.json(
+        anthropicError("api_error", "The inference service is temporarily unable to process this request. Retry in a few seconds.", requestId),
+        503
+      );
+    }
   }
 
   if (!upstream.ok) {
@@ -433,6 +487,7 @@ export const messagesShim: Handler<{
         ...baseUsageEvent(auth, normalizedModel, requestId, startedAt),
         status: mapUpstreamStatus(upstream.status),
         errorCode: `upstream_${upstream.status}`,
+        upstreamProvider: servedBy,
       })
     );
     return c.json(
@@ -450,6 +505,7 @@ export const messagesShim: Handler<{
           inputTokens: usage?.input_tokens ?? null,
           outputTokens: usage?.output_tokens ?? null,
           status: "success",
+          upstreamProvider: servedBy,
         })
       );
     });
@@ -476,6 +532,7 @@ export const messagesShim: Handler<{
       outputTokens: oaiResp.usage?.completion_tokens ?? null,
       cachedTokens: clampCachedTokens(readCachedTokens(oaiResp.usage), oaiResp.usage?.prompt_tokens ?? null),
       status: "success",
+      upstreamProvider: servedBy,
     })
   );
 

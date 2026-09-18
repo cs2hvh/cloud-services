@@ -15,12 +15,12 @@ import { z } from "zod";
 import type { AuthContext, Env, HonoVariables, UsageEvent } from "../types.ts";
 import {
   clampCachedTokens,
-  forwardJson,
   readCachedTokens,
   resolveUpstreamKey,
   sanitizeUpstreamError,
   streamPassthrough,
 } from "../lib/wokey.ts";
+import { forwardWithFallback, starimgModels, upstreamChain } from "../lib/upstreams.ts";
 import { applyPreset, presetRoutingIsDegraded, resolvePreset } from "../lib/presets.ts";
 import { resolveModelId } from "../lib/aliases.ts";
 import { lookupCache, shouldCache, writeCache } from "../lib/cache.ts";
@@ -585,13 +585,70 @@ export const chatCompletions: Handler<{
       ? { ...outgoingBody, model: routing.upstream_model_id }
       : outgoingBody;
 
-  const upstream = await forwardJson({
+  // Two partners, tried in order, invisible to the caller. BYOK stays with
+  // its own vendor. See lib/upstreams.ts for the rules.
+  const chain = upstreamChain({
     env: c.env,
-    body: upstreamBody,
-    upstreamKey,
-    path: "/chat/completions",
-    signal: c.req.raw.signal,
+    billing: auth.billing,
+    byokKey: auth.billing === "byok" ? upstreamKey : undefined,
+    upstreamModelId: String(upstreamBody.model ?? effectiveModel),
+    primaryModels: await starimgModels(c.env),
   });
+  let upstream: Response;
+  let servedBy: string | null = null;
+  try {
+    const fwd = await forwardWithFallback({
+      env: c.env,
+      chain,
+      path: "/chat/completions",
+      body: upstreamBody,
+      stream: Boolean(req.stream),
+      clientSignal: c.req.raw.signal,
+    });
+    upstream = fwd.response;
+    servedBy = fwd.provider;
+    if (fwd.attempts.length > 0) {
+      console.warn(
+        JSON.stringify({
+          level: "warn",
+          message: "upstream failed over",
+          requestId,
+          model: effectiveModel,
+          attempts: fwd.attempts,
+          servedBy,
+        })
+      );
+    }
+  } catch (err) {
+    if (c.req.raw.signal.aborted) throw err;
+    console.error(
+      JSON.stringify({
+        level: "error",
+        message: "every upstream failed",
+        requestId,
+        orgId: auth.orgId,
+        model: effectiveModel,
+        detail: err instanceof Error ? err.message : String(err),
+      })
+    );
+    c.executionCtx.waitUntil(
+      sendUsage(c.env, {
+        ...baseUsageEvent(auth, effectiveModel, requestId, startedAt),
+        status: "error_upstream",
+        errorCode: "upstream_exhausted",
+      })
+    );
+    return c.json(
+      errorBody(
+        "The inference service is temporarily unable to process this request. Retry in a few seconds.",
+        "api_error",
+        "upstream_unavailable",
+        requestId
+      ),
+      503,
+      { "Retry-After": "5", "X-Ahura-Request-Id": requestId, "X-Ahura-Model": effectiveModel }
+    );
+  }
 
   // 5. Error responses — sanitise, then tag with our headers.
   //    This used to pass the upstream body through verbatim, which named the
@@ -617,6 +674,7 @@ export const chatCompletions: Handler<{
         ...baseUsageEvent(auth, effectiveModel, requestId, startedAt),
         status: mapUpstreamStatus(upstream.status),
         errorCode: `upstream_${upstream.status}`,
+        upstreamProvider: servedBy,
       })
     );
     return c.json(safe.body, upstream.status as ContentfulStatusCode, {
@@ -636,6 +694,7 @@ export const chatCompletions: Handler<{
           outputTokens: usage?.completion_tokens ?? null,
           cachedTokens: clampCachedTokens(readCachedTokens(usage), usage?.prompt_tokens ?? null),
           status: "success",
+          upstreamProvider: servedBy,
         })
       );
     });
@@ -654,6 +713,7 @@ export const chatCompletions: Handler<{
         outputTokens: data.usage?.completion_tokens ?? null,
         cachedTokens: clampCachedTokens(readCachedTokens(data.usage), data.usage?.prompt_tokens ?? null),
         status: "success",
+        upstreamProvider: servedBy,
       })
     );
   } catch (err) {
