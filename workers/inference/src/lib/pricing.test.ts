@@ -6,7 +6,10 @@
  * charges us.
  */
 import { describe, expect, it } from "vitest";
-import { activeDiscountPct, isWithinUtcWindow, publicPrices } from "./pricing.ts";
+import { activeDiscountPct, isWithinUtcWindow, publicPrices as publicPricesAny, type PublicPrices } from "./pricing.ts";
+
+// These cases are all token-priced models; the union narrows for media elsewhere.
+const publicPrices = (...a: Parameters<typeof publicPricesAny>) => publicPricesAny(...a) as PublicPrices;
 
 const at = (hhmm: string) => new Date(`2026-09-10T${hhmm}:00.000Z`);
 

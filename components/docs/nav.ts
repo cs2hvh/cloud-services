@@ -58,6 +58,16 @@ export const INFERENCE_DOCS: DocsNavGroup[] = [
         description: "POST /v1/messages: the Anthropic-compatible endpoint for existing Anthropic code.",
       },
       {
+        title: "Images",
+        href: "/docs/inference/images",
+        description: "POST /v1/images/generations: one image per request, returned as base64, billed per image.",
+      },
+      {
+        title: "Videos",
+        href: "/docs/inference/videos",
+        description: "POST /v1/videos and the job lifecycle: submit, poll, download, billed per second on completion.",
+      },
+      {
         title: "Streaming",
         href: "/docs/inference/streaming",
         description: "Server-sent events, how usage arrives on a stream, and reasoning tokens.",

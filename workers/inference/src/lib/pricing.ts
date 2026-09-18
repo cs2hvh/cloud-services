@@ -16,6 +16,29 @@ export interface ModelPricing {
   input_cents_per_mtok?: number;
   output_cents_per_mtok?: number;
   cached_cents_per_mtok?: number;
+  /** Media models are priced per unit, not per token: one of these is set. */
+  cents_per_image?: number;
+  cents_per_media_second?: number;
+  /** Per-tier override of the unit rate, keyed by size tier ("2K") or
+   *  resolution ("720p"). The flat rate above is the default. */
+  tiers?: Record<string, number>;
+}
+
+/** The per-unit rate for a media model, for a tier if one applies. Null for token-priced models. */
+export function unitRate(p: ModelPricing | null | undefined, tier: string | null | undefined): number | null {
+  if (!p) return null;
+  const flat = typeof p.cents_per_image === "number" ? p.cents_per_image
+    : typeof p.cents_per_media_second === "number" ? p.cents_per_media_second
+    : null;
+  if (flat === null) return null;
+  const tiered = tier ? p.tiers?.[tier] : undefined;
+  return typeof tiered === "number" ? tiered : flat;
+}
+
+export function unitLabelOf(p: ModelPricing | null | undefined): "image" | "second" | null {
+  if (typeof p?.cents_per_image === "number") return "image";
+  if (typeof p?.cents_per_media_second === "number") return "second";
+  return null;
 }
 
 export interface ModelOffPeak {
@@ -69,6 +92,17 @@ export interface DiscountedPrices {
   output: number | null;
 }
 
+/** Published prices for a media model: dollars per image or per second of output. */
+export interface PublicUnitPrices {
+  currency: "USD";
+  unit: "per_image" | "per_second";
+  price: number;
+  /** Per size-tier or resolution, when the model prices by it. */
+  tiers: Record<string, number> | null;
+  discount: { percent: number; window_utc: string; active_now: boolean; price: number } | null;
+  effective_price: number;
+}
+
 export interface PublicPrices {
   currency: "USD";
   unit: "per_million_tokens";
@@ -107,8 +141,32 @@ export function publicPrices(
   pricing: ModelPricing | null | undefined,
   offPeak: ModelOffPeak | null | undefined,
   now: Date = new Date()
-): PublicPrices {
+): PublicPrices | PublicUnitPrices {
   const p = pricing ?? {};
+
+  // Media: one number per image or per second, optionally by tier.
+  const label = unitLabelOf(p);
+  if (label) {
+    const flat = unitRate(p, null) as number;
+    const price = dollars(flat) as number;
+    const tiers = p.tiers
+      ? Object.fromEntries(Object.entries(p.tiers).map(([k, v]) => [k, dollars(v) as number]))
+      : null;
+    const op = offPeak ?? null;
+    if (op?.window_utc && op?.discount_pct) {
+      const activeNow = isWithinUtcWindow(op.window_utc, now);
+      const discounted = applyPct(price, op.discount_pct) as number;
+      return {
+        currency: "USD",
+        unit: label === "image" ? "per_image" : "per_second",
+        price,
+        tiers,
+        discount: { percent: op.discount_pct, window_utc: op.window_utc, active_now: activeNow, price: discounted },
+        effective_price: activeNow ? discounted : price,
+      };
+    }
+    return { currency: "USD", unit: label === "image" ? "per_image" : "per_second", price, tiers, discount: null, effective_price: price };
+  }
   const input = dollars(p.input_cents_per_mtok);
   const output = dollars(p.output_cents_per_mtok);
   const cachedInput = dollars(p.cached_cents_per_mtok) ?? input;

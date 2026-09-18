@@ -123,6 +123,9 @@ export interface UsageEvent {
   cachedTokens: number | null;
   numUnits: number | null;
   unitLabel: string | null;
+  /** Which price tier the units were produced at, for media priced by size
+   *  or resolution ("2K", "720p"). Null when the model has one flat rate. */
+  unitTier?: string | null;
   costCents: number;
   upstreamCostCents: number;
   isOffPeak: boolean;

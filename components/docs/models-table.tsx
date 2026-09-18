@@ -59,12 +59,71 @@ export async function ModelsTable() {
   }
 
   const chat = rows.filter((r) => r.modality === "chat");
-  const other = rows.filter((r) => r.modality !== "chat");
+  const images = rows.filter((r) => r.modality === "image");
+  const videos = rows.filter((r) => r.modality === "video");
+  const other = rows.filter((r) => !["chat", "image", "video"].includes(r.modality));
 
   return (
     <div className="my-4 space-y-8">
       <Section title={`Chat models (${chat.length})`} rows={chat} />
+      {images.length > 0 ? <MediaSection title={`Image models (${images.length})`} rows={images} unit="image" /> : null}
+      {videos.length > 0 ? <MediaSection title={`Video models (${videos.length})`} rows={videos} unit="second" /> : null}
       {other.length > 0 ? <Section title={`Other modalities (${other.length})`} rows={other} /> : null}
+    </div>
+  );
+}
+
+/**
+ * Media models price per image or per second of output, by size tier or
+ * resolution, so they get their own columns rather than blanks in the token
+ * table. Same source and cadence as the chat table.
+ */
+function MediaSection({ title, rows, unit }: { title: string; rows: Row[]; unit: "image" | "second" }) {
+  const flatKey = unit === "image" ? "cents_per_image" : "cents_per_media_second";
+  return (
+    <div>
+      <p className="ah-lbl mb-2">{title}</p>
+      <div className="ah-scroll overflow-x-auto border border-[var(--ah-line)]">
+        <table className="w-full min-w-[720px] border-collapse text-[13.5px]">
+          <thead>
+            <tr className="bg-white/[0.03]">
+              {["Model", `Price / ${unit}`, "By tier", unit === "image" ? "Sizes" : "Duration · Resolutions"].map((h) => (
+                <th key={h} className="ah-lbl border-b border-[var(--ah-line)] px-3 py-2 text-left font-normal">
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => {
+              const caps = (r.capabilities ?? {}) as Record<string, unknown>;
+              const tiers = (r.pricing as Record<string, unknown> | null)?.tiers as Record<string, number> | undefined;
+              const sizes = caps.sizes as string[] | undefined;
+              const resolutions = caps.resolutions as string[] | undefined;
+              const dur = caps.duration_seconds as { min?: number; max?: number } | undefined;
+              const detail =
+                unit === "image"
+                  ? sizes?.length
+                    ? `${sizes.length} sizes, ${sizes[0]} to ${sizes[sizes.length - 1]}`
+                    : "—"
+                  : `${dur?.min ?? "?"}–${dur?.max ?? "?"} s · ${resolutions?.join(", ") ?? "—"}`;
+              return (
+                <tr key={r.model_id} className="border-b border-[var(--ah-line)] last:border-b-0">
+                  <td className="px-3 py-2 align-top">
+                    <div className="text-[var(--ah-ink)]">{r.display_name}</div>
+                    <code className="font-[family-name:var(--font-geist-mono)] text-[12px] text-[var(--ah-body)]">{r.model_id}</code>
+                  </td>
+                  <td className="px-3 py-2 align-top text-[var(--ah-ink)]">{usd(r.pricing?.[flatKey])}</td>
+                  <td className="px-3 py-2 align-top text-[var(--ah-body)]">
+                    {tiers ? Object.entries(tiers).map(([k, v]) => `${k} ${usd(v)}`).join(" · ") : "—"}
+                  </td>
+                  <td className="px-3 py-2 align-top text-[var(--ah-body)]">{detail}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

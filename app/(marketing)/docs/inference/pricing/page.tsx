@@ -37,6 +37,12 @@ Usage:  prompt 1,200 tokens (of which 800 cached), completion 300 tokens
 cost = 400 × 1.00/1M + 800 × 0.10/1M + 300 × 5.00/1M
      = $0.0004 + $0.00008 + $0.0015
      = $0.00198, recorded as 1 cent (costs round up to the cent per request)`}</Code>
+      <P>
+        Image and video models are priced per unit instead of per token. An image is billed per
+        image, at the tier its size falls in. A video is billed per second of output at the rate
+        for its resolution, once the job completes; a job that fails is not charged. The unit
+        rates and tiers are in each model’s <C>prices</C> block from <C>GET /v1/models</C>.
+      </P>
       <Ul>
         <Li>Prices are on the <A href="/docs/inference/models">Models</A> page and in <C>GET /v1/models</C>. A change applies to requests after it, never retroactively.</Li>
         <Li>Requests that end in an error are not charged. A stream you cancel before it finishes is, at the moment, not charged and does not appear in your usage; do not build on that, it is a gap we intend to close.</Li>

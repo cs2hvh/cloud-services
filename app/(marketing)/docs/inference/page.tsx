@@ -59,6 +59,8 @@ export default function InferenceOverview() {
         rows={[
           [<C key="1">POST /v1/chat/completions</C>, <>OpenAI-compatible chat. Streaming, tool calling, JSON mode. <A href="/docs/inference/chat-completions">Reference</A>.</>],
           [<C key="2">POST /v1/messages</C>, <>Anthropic-compatible chat for existing Anthropic SDK code. <A href="/docs/inference/messages">Reference</A>.</>],
+          [<C key="2b">POST /v1/images/generations</C>, <>One image from a prompt, returned as base64. <A href="/docs/inference/images">Reference</A>.</>],
+          [<C key="2c">POST /v1/videos</C>, <>Start a video job; poll it and download the file. <A href="/docs/inference/videos">Reference</A>.</>],
           [<C key="3">GET /v1/models</C>, <>The models your key can call, with capabilities and prices. <A href="/docs/inference/models">Models</A>.</>],
           [<C key="4">GET /v1/key</C>, <>What the calling key is allowed to do and what it has spent this month. <A href="/docs/inference/authentication#inspect-a-key">Details</A>.</>],
           [<C key="5">GET /v1/health</C>, <>Unauthenticated liveness check. Returns <C>{`{"status":"ok"}`}</C> with the gateway version.</>],

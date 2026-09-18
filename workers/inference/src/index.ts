@@ -32,6 +32,9 @@ import { messagesShim } from "./routes/messages.ts";
 import { handleUsageBatch } from "./consumers/usage.ts";
 import { handleAuditBatch } from "./consumers/audit.ts";
 import { runEndpointHealthSweep } from "./lib/endpoint-health.ts";
+import { runMediaJobSweep } from "./lib/media.ts";
+import { imageGenerations } from "./routes/images.ts";
+import { videoContent, videoCreate, videoGet, videoList } from "./routes/videos.ts";
 
 const app = new Hono<{ Bindings: Env; Variables: HonoVariables }>();
 
@@ -108,6 +111,13 @@ v1.get("/key", keyInfo);
 
 // Anthropic Messages API compatibility shim — adapts to OAI chat/completions
 v1.post("/messages", messagesShim);
+
+// Media: images are synchronous, video is a job. See lib/media.ts.
+v1.post("/images/generations", imageGenerations);
+v1.post("/videos", videoCreate);
+v1.get("/videos", videoList);
+v1.get("/videos/:id", videoGet);
+v1.get("/videos/:id/content", videoContent);
 
 app.route("/v1", v1);
 
@@ -200,6 +210,9 @@ export default {
     // looked; this is what looks. Results land in inference.endpoint_health
     // for the admin panel. See lib/endpoint-health.ts.
     ctx.waitUntil(runEndpointHealthSweep(env, event));
+    // Settle open video jobs: bill the ones that finished, close the ones
+    // that were lost. A customer who never polls is still billed.
+    ctx.waitUntil(runMediaJobSweep(env, event));
     ctx.waitUntil(runServingPodWatchdog(env, event));
     const minuteOfHour = new Date(event.scheduledTime).getUTCMinutes();
     // Fine-tuning watchdog every 5 min: reaps orphaned FT jobs (stale

@@ -15,6 +15,7 @@ import type { Env, UsageEvent } from "../types.ts";
 // publish and the price we charge cannot drift apart.
 import {
   activeDiscountPct,
+  unitRate,
   type ModelOffPeak,
   type ModelPricing,
 } from "../lib/pricing.ts";
@@ -225,7 +226,11 @@ export async function handleUsageBatch(
  * defaults to '{}', and rateCost's `?? 0` would price that as a free model.
  */
 function hasUsablePricing(p: ModelPricing): boolean {
-  return Number.isFinite(p.input_cents_per_mtok) || Number.isFinite(p.output_cents_per_mtok);
+  return (
+    Number.isFinite(p.input_cents_per_mtok) ||
+    Number.isFinite(p.output_cents_per_mtok) ||
+    unitRate(p, null) !== null
+  );
 }
 
 /**
@@ -250,7 +255,11 @@ export function computeCost(
     return { costCents: 0, upstreamCostCents: 0, isOffPeak: false };
   }
 
-  const rawCents = rateCost(event, info.pricing);
+  // A media event carries units (images, seconds of video) instead of
+  // tokens; the same discount and rounding apply on top.
+  const rawCents = event.numUnits != null
+    ? unitCost(event, info.pricing)
+    : rateCost(event, info.pricing);
 
   // Window may wrap midnight; an unparseable window is no discount. Shared
   // with the catalog endpoint so both answer the same question the same way.
@@ -266,7 +275,7 @@ export function computeCost(
   // margin is thinnest.
   const up = info.upstream_pricing;
   const upstreamCostCents = up
-    ? Math.ceil(rateCost(event, up))
+    ? Math.ceil(event.numUnits != null ? unitCost(event, up) : rateCost(event, up))
     : finalCents;   // no cost basis recorded — fall back to old behaviour
 
   return { costCents: finalCents, upstreamCostCents, isOffPeak };
@@ -277,6 +286,17 @@ export function computeCost(
  * cost so the two can never drift apart in how they treat cached tokens.
  * Returns raw (unrounded) cents — callers round.
  */
+/**
+ * Units × the per-unit rate for the tier the units were produced at. Raw
+ * cents, unrounded, like rateCost. A media model with no unit rate prices
+ * at zero and is flagged unpriced by the caller.
+ */
+function unitCost(event: UsageEvent, p: ModelPricing): number {
+  const rate = unitRate(p, event.unitTier ?? null);
+  if (rate === null) return 0;
+  return (event.numUnits ?? 0) * rate;
+}
+
 function rateCost(event: UsageEvent, p: ModelPricing): number {
   const input = event.inputTokens ?? 0;
   const output = event.outputTokens ?? 0;
