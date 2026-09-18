@@ -73,7 +73,7 @@ export async function GET() {
         inferenceSchema
           .from("models")
           .select(
-            "id, model_id, display_name, modality, serving_type, upstream_provider, upstream_model_id, org_id, pricing, upstream_pricing, is_active, is_featured, sort_order, created_at",
+            "id, model_id, display_name, modality, serving_type, upstream_provider, upstream_model_id, org_id, pricing, upstream_pricing, provider_pricing, is_active, is_featured, sort_order, created_at",
           )
           .order("sort_order", { ascending: true })
           .order("model_id", { ascending: true }),
@@ -166,6 +166,24 @@ export async function GET() {
           upstreamIdSet.has(id.split("/").pop() ?? id);
       }
 
+      // Margin now depends on WHO SERVED the request: the same model can be
+      // deeply profitable on one partner and underwater on another, so a
+      // single margin number would be a coin toss dressed as a fact.
+      const perProvider = (m.provider_pricing ?? {}) as Record<
+        string,
+        Record<string, number | undefined>
+      >;
+      const providerMargins = Object.entries(perProvider).map(
+        ([provider, cost]) => ({
+          provider,
+          input: marginPct(pricing?.input_cents_per_mtok, cost?.input_cents_per_mtok),
+          output: marginPct(
+            pricing?.output_cents_per_mtok,
+            cost?.output_cents_per_mtok,
+          ),
+        }),
+      );
+
       const endpoints = endpointCounts.get(m.model_id) ?? null;
       const health = healthCounts.get(m.model_id) ?? null;
       const split = servedSplit.get(m.model_id) ?? null;
@@ -176,6 +194,7 @@ export async function GET() {
         // Hosted models answer from our own pods; proxy models answer from a
         // partner. Both facts belong on the row that claims to describe how a
         // model is served.
+        providerMargins,
         endpoints: endpoints
           ? { total: endpoints.total, enabled: endpoints.enabled }
           : null,

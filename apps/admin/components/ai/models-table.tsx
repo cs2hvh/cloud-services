@@ -63,6 +63,8 @@ type ModelRow = {
   margin: { input: number | null; output: number | null };
   pricedPerUnit: boolean;
   unitPricing: UnitPricing | null;
+  provider_pricing: Record<string, Record<string, number | undefined>> | null;
+  providerMargins: { provider: string; input: number | null; output: number | null }[];
   endpoints: { total: number; enabled: number } | null;
   podHealth: { live: number; up: number } | null;
   servedLast24h: { provider: string; requests: number }[] | null;
@@ -107,6 +109,15 @@ export function AiModelsTable() {
   // Upstream cost is entered in CENTS per Mtok, not dollars: partner rates
   // are routinely fractional (0.56c) and dollars would hide that.
   const [costDraft, setCostDraft] = useState({
+    input: "",
+    output: "",
+    cached: "",
+    cacheWrite: "",
+  });
+  // Cost is per partner now: the Default tab writes upstream_pricing (which
+  // the consumer falls back to), Starimg writes provider_pricing.starimg.
+  const [costTab, setCostTab] = useState<"default" | "starimg">("default");
+  const [starimgDraft, setStarimgDraft] = useState({
     input: "",
     output: "",
     cached: "",
@@ -199,6 +210,20 @@ export function AiModelsTable() {
           ? String(up.cache_write_cents_per_mtok)
           : "",
     });
+    const si = ((model.provider_pricing ?? {}).starimg ?? {}) as Record<
+      string,
+      number | undefined
+    >;
+    setStarimgDraft({
+      input: si.input_cents_per_mtok != null ? String(si.input_cents_per_mtok) : "",
+      output: si.output_cents_per_mtok != null ? String(si.output_cents_per_mtok) : "",
+      cached: si.cached_cents_per_mtok != null ? String(si.cached_cents_per_mtok) : "",
+      cacheWrite:
+        si.cache_write_cents_per_mtok != null
+          ? String(si.cache_write_cents_per_mtok)
+          : "",
+    });
+    setCostTab("default");
     setEditing(model);
   };
 
@@ -237,10 +262,33 @@ export function AiModelsTable() {
       upstream_pricing[key] = cents;
     }
 
+    const starimg: Record<string, number> = {};
+    const siMap: [string, string][] = [
+      ["input_cents_per_mtok", starimgDraft.input],
+      ["output_cents_per_mtok", starimgDraft.output],
+      ["cached_cents_per_mtok", starimgDraft.cached],
+      ["cache_write_cents_per_mtok", starimgDraft.cacheWrite],
+    ];
+    for (const [key, raw] of siMap) {
+      if (raw.trim() === "") continue;
+      const cents = Number(raw);
+      if (!Number.isFinite(cents) || cents < 0) {
+        toast.error("Starimg costs must be numbers >= 0 (cents per Mtok)");
+        return;
+      }
+      starimg[key] = cents;
+    }
+
     setEditing(null);
     await patch(
       model,
-      { pricing, upstream_pricing },
+      {
+        pricing,
+        upstream_pricing,
+        ...(Object.keys(starimg).length > 0
+          ? { provider_pricing: { starimg } }
+          : {}),
+      },
       `${model.model_id} pricing updated`,
     );
   };
@@ -316,8 +364,8 @@ export function AiModelsTable() {
                 <TableHead>Modality</TableHead>
                 <TableHead>Upstream</TableHead>
                 <TableHead className="text-right">Price in/out ($/Mtok)</TableHead>
-                <TableHead className="text-right">Upstream in/out</TableHead>
-                <TableHead className="text-right">Margin in/out</TableHead>
+                <TableHead className="text-right">Cost in/out</TableHead>
+                <TableHead className="text-right">Margin by partner</TableHead>
                 <TableHead>Featured</TableHead>
                 <TableHead>Active</TableHead>
                 <TableHead className="w-10" />
@@ -457,10 +505,26 @@ export function AiModelsTable() {
                         <MarginBadge value={m.unitPricing.flat?.marginPct ?? null} />
                       </span>
                     ) : (
-                      <>
-                        <MarginBadge value={m.margin.input} /> /{" "}
-                        <MarginBadge value={m.margin.output} />
-                      </>
+                      <div>
+                        <div>
+                          <MarginBadge value={m.margin.input} /> /{" "}
+                          <MarginBadge value={m.margin.output} />
+                        </div>
+                        {/* A model with a partner-specific rate has a second,
+                            different margin — showing only one of them would
+                            be a coin toss presented as a fact. */}
+                        {m.providerMargins.map((pm) => (
+                          <div
+                            key={pm.provider}
+                            className="mt-0.5 flex items-center justify-end gap-1 text-[10px] text-muted-foreground"
+                          >
+                            <span>{pm.provider}</span>
+                            <MarginBadge value={pm.input} />
+                            <span>/</span>
+                            <MarginBadge value={pm.output} />
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </TableCell>
                   <TableCell>
@@ -577,35 +641,96 @@ export function AiModelsTable() {
               </div>
             ))}
 
-            <div className="border-t border-border pt-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              What the partner charges us
+            <div className="border-t border-border pt-3">
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                What it costs us
+              </div>
+              {/* One tab per partner. A request is costed with the tab that
+                  served it, falling back to Default — so the same model can
+                  be profitable on one partner and underwater on another. */}
+              <div className="mb-2 flex gap-1">
+                {(
+                  [
+                    ["default", "Default / Wokey"],
+                    ["starimg", "Starimg"],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setCostTab(id)}
+                    className={`rounded-full border px-2.5 py-1 text-[11px] transition-colors ${
+                      costTab === id
+                        ? "border-[#3987e5]/60 bg-[#3987e5]/15 text-foreground"
+                        : "border-border text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                In <strong>cents</strong> per Mtok, fractions allowed.{" "}
+                {costTab === "default"
+                  ? "Used for any partner without its own rate below."
+                  : "Used only for requests Starimg served; leave blank to fall back to Default."}{" "}
+                Applies to requests made after the change, not to ones already
+                billed.
+              </p>
             </div>
-            <p className="text-[11px] text-muted-foreground">
-              In <strong>cents</strong> per Mtok, fractions allowed. Margin is
-              only ever as accurate as this. Applies to requests made after the
-              change, not to ones already billed.
-            </p>
             {(
               [
-                ["input", "Upstream input (c per Mtok)"],
-                ["output", "Upstream output (c per Mtok)"],
-                ["cached", "Upstream cached (c per Mtok)"],
-                ["cacheWrite", "Upstream cache write (c per Mtok)"],
+                ["input", "Input (c per Mtok)"],
+                ["output", "Output (c per Mtok)"],
+                ["cached", "Cached (c per Mtok)"],
+                ["cacheWrite", "Cache write (c per Mtok)"],
               ] as const
-            ).map(([key, label]) => (
-              <div key={key} className="space-y-1.5">
-                <Label htmlFor={`cost-${key}`}>{label}</Label>
-                <Input
-                  id={`cost-${key}`}
-                  inputMode="decimal"
-                  value={costDraft[key]}
-                  onChange={(e) =>
-                    setCostDraft((d) => ({ ...d, [key]: e.target.value }))
-                  }
-                  placeholder="unset"
-                />
-              </div>
-            ))}
+            ).map(([key, label]) => {
+              const draftFor = costTab === "default" ? costDraft : starimgDraft;
+              const setFor =
+                costTab === "default" ? setCostDraft : setStarimgDraft;
+              const charge =
+                key === "input"
+                  ? editing?.pricing?.input_cents_per_mtok
+                  : key === "output"
+                    ? editing?.pricing?.output_cents_per_mtok
+                    : key === "cached"
+                      ? editing?.pricing?.cached_cents_per_mtok
+                      : undefined;
+              const costNum = Number(draftFor[key]);
+              const showMargin =
+                typeof charge === "number" &&
+                charge > 0 &&
+                draftFor[key].trim() !== "" &&
+                Number.isFinite(costNum);
+              return (
+                <div key={key} className="space-y-1.5">
+                  <Label htmlFor={`cost-${key}`}>{label}</Label>
+                  <div className="flex items-center gap-3">
+                    <Input
+                      id={`cost-${key}`}
+                      inputMode="decimal"
+                      value={draftFor[key]}
+                      onChange={(e) =>
+                        setFor((d) => ({ ...d, [key]: e.target.value }))
+                      }
+                      placeholder={costTab === "starimg" ? "falls back" : "unset"}
+                    />
+                    <span
+                      className={`w-[110px] shrink-0 text-right text-[11.5px] ${
+                        showMargin && (charge - costNum) / charge < 0
+                          ? "text-red-300"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      {showMargin
+                        ? `margin ${(((charge - costNum) / charge) * 100).toFixed(0)}%`
+                        : ""}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
             <p className="text-xs text-muted-foreground">
               Upstream basis:{" "}
               {perMtok(editing?.upstream_pricing?.input_cents_per_mtok)} in /{" "}

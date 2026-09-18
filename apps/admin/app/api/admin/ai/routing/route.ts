@@ -51,7 +51,7 @@ export async function GET(request: Request) {
       inference
         .from("models")
         .select(
-          "model_id, display_name, modality, serving_type, upstream_provider, preferred_provider, upstream_model_id, runpod_endpoint_id, serving_url, is_active, is_managed",
+          "model_id, display_name, modality, serving_type, upstream_provider, preferred_provider, upstream_model_id, runpod_endpoint_id, serving_url, is_active, is_managed, provider_pricing",
         ),
       inference
         .from("model_routes")
@@ -394,10 +394,31 @@ export async function GET(request: Request) {
           windowDays: days,
           usedPct: (starimgTokensWindow / STARIMG_TOKEN_ALLOWANCE) * 100,
         },
-        // upstream_cost_cents is derived from Wokey's rate card for BOTH
-        // partners until Starimg has its own cost basis, so any Starimg
-        // margin here is an approximation, not a measured figure.
-        starimgCostIsApproximate: true,
+        // Starimg has its own cost basis now (provider_pricing.starimg), so
+        // its margin is measured for models that carry one and estimated for
+        // the rest. Report which, instead of marking the whole column
+        // approximate long after it stopped being true.
+        starimgCostCoverage: (() => {
+          const priced = new Set(
+            models
+              .filter((m) => {
+                const pp = (m.provider_pricing ?? {}) as Record<string, unknown>;
+                return Boolean(pp.starimg);
+              })
+              .map((m) => m.model_id as string),
+          );
+          const served = usage.filter((u) => u.provider === "starimg");
+          const covered = served.filter(
+            (u) => u.model_id && priced.has(u.model_id),
+          ).length;
+          return {
+            modelsPriced: priced.size,
+            requestsCovered: covered,
+            requestsTotal: served.length,
+            // Only the uncovered remainder is guesswork.
+            approximate: served.length > covered,
+          };
+        })(),
       },
       providers,
       servingTypes: [...servingTypes.entries()].map(([type, count]) => ({

@@ -76,7 +76,12 @@ type Feed = {
       windowDays: number;
       usedPct: number;
     };
-    starimgCostIsApproximate: boolean;
+    starimgCostCoverage: {
+      modelsPriced: number;
+      requestsCovered: number;
+      requestsTotal: number;
+      approximate: boolean;
+    };
   };
   attribution: {
     basis: string;
@@ -291,7 +296,7 @@ export function AiRoutingView() {
                   );
                   const approx =
                     st.provider === "starimg" &&
-                    feed.partners.starimgCostIsApproximate;
+                    feed.partners.starimgCostCoverage.approximate;
                   return (
                     <tr
                       key={st.provider}
@@ -341,7 +346,7 @@ export function AiRoutingView() {
                         }`}
                         title={
                           approx
-                            ? "Approximate: this partner has no cost basis of its own yet, so upstream cost is taken from the other partner rate card."
+                            ? `Partly estimated: ${feed.partners.starimgCostCoverage.requestsCovered} of ${feed.partners.starimgCostCoverage.requestsTotal} requests are on models with a Starimg rate; the rest fall back to the default rate card.`
                             : undefined
                         }
                       >
@@ -353,6 +358,14 @@ export function AiRoutingView() {
                 })}
               </tbody>
             </table>
+          </div>
+
+          <div className="border-t border-border px-4 py-2 text-[11px] text-muted-foreground">
+            Cost basis: {feed.partners.starimgCostCoverage.modelsPriced} model(s)
+            carry a {feed.partners.primary}-specific rate and are costed with it;
+            everything else falls back to the default rate card. A request that
+            fails over is therefore costed at the fallback&apos;s rate, which for
+            most chat models is materially higher.
           </div>
 
           <div className="grid gap-4 border-t border-border p-4 md:grid-cols-3">

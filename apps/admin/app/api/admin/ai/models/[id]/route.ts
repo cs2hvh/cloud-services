@@ -21,6 +21,9 @@ const UPSTREAM_TOKEN_KEYS = [
 
 const UNIT_KEYS = ["cents_per_image", "cents_per_media_second"] as const;
 
+/** Partners we will accept a cost blob for. */
+const KNOWN_PROVIDERS = ["starimg", "wokey"] as const;
+
 /**
  * Merge a pricing blob, validating scalars and replacing `tiers` wholesale.
  * Tiers replace rather than merge so a removed size actually stops applying;
@@ -94,6 +97,7 @@ export async function PATCH(
     is_featured?: boolean;
     pricing?: Record<string, unknown>;
     upstream_pricing?: Record<string, unknown>;
+    provider_pricing?: Record<string, Record<string, unknown>>;
   };
 
   const updates: Record<string, unknown> = {};
@@ -108,7 +112,7 @@ export async function PATCH(
 
     const { data: existing, error: readErr } = await inference
       .from("models")
-      .select("id, model_id, display_name, modality, pricing, upstream_pricing, is_active, is_featured")
+      .select("id, model_id, display_name, modality, pricing, upstream_pricing, provider_pricing, is_active, is_featured")
       .eq("id", id)
       .maybeSingle();
 
@@ -156,6 +160,49 @@ export async function PATCH(
       updates.upstream_pricing = merged.value;
     }
 
+    // PER-PROVIDER COST. upstream_pricing is the default (and Wokey's rate);
+    // provider_pricing[name] overrides it for requests that partner served.
+    // The consumer picks by usage.provider and falls back to the default, so
+    // the same model can be profitable on one partner and loss-making on the
+    // other — which is exactly what the seeded numbers show today.
+    if (body.provider_pricing !== undefined) {
+      const existingByProvider =
+        ((existing.provider_pricing as Record<
+          string,
+          Record<string, unknown>
+        > | null) ?? {});
+      const next: Record<string, unknown> = { ...existingByProvider };
+
+      for (const [provider, blob] of Object.entries(body.provider_pricing)) {
+        if (!KNOWN_PROVIDERS.includes(provider as (typeof KNOWN_PROVIDERS)[number])) {
+          return NextResponse.json(
+            { error: `Unknown provider "${provider}"` },
+            { status: 400 },
+          );
+        }
+        // An explicit null clears that partner's override and returns it to
+        // the default, which is different from setting every field to zero.
+        if (blob === null) {
+          delete next[provider];
+          continue;
+        }
+        const merged = mergePricing(
+          (existingByProvider[provider] as Record<string, unknown> | undefined) ??
+            null,
+          blob,
+          upstreamKeys,
+        );
+        if (!merged.ok) {
+          return NextResponse.json(
+            { error: `${provider}: ${merged.error}` },
+            { status: 400 },
+          );
+        }
+        next[provider] = merged.value;
+      }
+      updates.provider_pricing = next;
+    }
+
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
     }
@@ -165,7 +212,7 @@ export async function PATCH(
       .update(updates)
       .eq("id", id)
       .select(
-        "id, model_id, display_name, modality, serving_type, org_id, pricing, upstream_pricing, is_active, is_featured",
+        "id, model_id, display_name, modality, serving_type, org_id, pricing, upstream_pricing, provider_pricing, is_active, is_featured",
       )
       .single();
 
