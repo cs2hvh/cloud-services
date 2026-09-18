@@ -51,6 +51,16 @@ describe("upstreamChain", () => {
     expect(c.map((u) => u.id)).toEqual(["wokey", "starimg"]);
   });
 
+  it("sends a Starimg-only model to Starimg alone, ignoring the primary setting and the model list", () => {
+    const c = upstreamChain({ env: { ...env, UPSTREAM_PRIMARY: "wokey" }, billing: "platform", upstreamModelId: "gemini-3.8-flash", primaryModels: listed, modelProvider: "starimg" });
+    expect(c.map((u) => u.id)).toEqual(["starimg"]);
+  });
+
+  it("gives a Starimg-only model no chain at all when Starimg is not configured", () => {
+    const c = upstreamChain({ env: { ...env, STARIMG_PLATFORM_KEY: undefined }, billing: "platform", upstreamModelId: "gemini-3.8-flash", primaryModels: listed, modelProvider: "starimg" });
+    expect(c).toEqual([]);
+  });
+
   it("sends a BYOK key to its own vendor only, never into the chain", () => {
     const c = upstreamChain({ env, billing: "byok", byokKey: "customer-key", upstreamModelId: "claude-haiku-4-5", primaryModels: listed });
     expect(c).toEqual([{ id: "wokey", baseUrl: env.WOKEY_BASE_URL, key: "customer-key" }]);
@@ -157,6 +167,12 @@ describe("forwardWithFallback", () => {
     expect(r.provider).toBe("wokey");
     expect(r.response.status).toBe(503);
     expect(r.attempts).toHaveLength(1);
+  });
+
+  it("throws immediately on an empty chain", async () => {
+    await expect(
+      forwardWithFallback({ env: fenv, chain: [], path: "/chat/completions", body: {}, stream: false, fetchImpl: (async () => ok("x")) as unknown as typeof fetch })
+    ).rejects.toBeInstanceOf(UpstreamsExhaustedError);
   });
 
   it("throws only when every provider is unreachable", async () => {

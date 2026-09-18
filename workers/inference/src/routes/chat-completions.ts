@@ -593,6 +593,7 @@ export const chatCompletions: Handler<{
     byokKey: auth.billing === "byok" ? upstreamKey : undefined,
     upstreamModelId: String(upstreamBody.model ?? effectiveModel),
     primaryModels: await starimgModels(c.env),
+    modelProvider: routing?.upstream_provider ?? null,
   });
   let upstream: Response;
   let servedBy: string | null = null;

@@ -108,6 +108,13 @@ export interface ChainOptions {
   upstreamModelId: string;
   /** What the primary serves, from starimgModels(); null = do not use it. */
   primaryModels: Set<string> | null;
+  /**
+   * The catalog's upstream_provider for the model. "starimg" means only
+   * Starimg carries it: the chain is Starimg alone, whatever the primary
+   * setting, and the model list is not consulted (there is no alternative
+   * to fall back to, and a stale list must not make the model vanish).
+   */
+  modelProvider?: string | null;
 }
 
 export function upstreamChain(o: ChainOptions): Upstream[] {
@@ -117,6 +124,11 @@ export function upstreamChain(o: ChainOptions): Upstream[] {
     key: o.billing === "byok" ? (o.byokKey ?? "") : o.env.WOKEY_PLATFORM_KEY,
   };
   if (o.billing === "byok") return [wokey];
+
+  if (o.modelProvider === "starimg") {
+    if (!o.env.STARIMG_BASE_URL || !o.env.STARIMG_PLATFORM_KEY) return [];
+    return [{ id: "starimg", baseUrl: o.env.STARIMG_BASE_URL, key: o.env.STARIMG_PLATFORM_KEY }];
+  }
 
   const starimgUsable =
     Boolean(o.env.STARIMG_BASE_URL) &&
@@ -192,6 +204,7 @@ export async function forwardWithFallback(o: ForwardOptions): Promise<ForwardOut
   const ttfbMs = intVar(o.env.UPSTREAM_PRIMARY_TTFB_MS, DEFAULT_TTFB_MS);
   const nonStreamMs = intVar(o.env.UPSTREAM_PRIMARY_NONSTREAM_MS, DEFAULT_NONSTREAM_MS);
   const attempts: ForwardAttempt[] = [];
+  if (o.chain.length === 0) throw new UpstreamsExhaustedError(attempts);
   const bodyText = JSON.stringify(o.body);
 
   for (let i = 0; i < o.chain.length; i++) {
