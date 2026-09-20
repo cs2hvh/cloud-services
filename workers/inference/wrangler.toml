@@ -119,7 +119,7 @@ WOKEY_BASE_URL = "https://api.wokey.ai/v1"
 # every Starimg model answers 503 until it is set again.
 # The deadline vars only matter when a chain has more than one provider,
 # which today it never does; they are kept for that option.
-STARIMG_BASE_URL = "https://ai.starimg.ru/v1"
+STARIMG_BASE_URL = "https://starimg.ru/ai/common/v1"
 UPSTREAM_PRIMARY_TTFB_MS = "10000"
 UPSTREAM_PRIMARY_NONSTREAM_MS = "20000"
 SUPABASE_URL = "https://xafjjpgazdxhktpfeuri.supabase.co"
