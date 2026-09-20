@@ -36,7 +36,7 @@ function partnerDefs(): PartnerDef[] {
   return [
     {
       name: "starimg",
-      baseUrl: process.env.STARIMG_BASE_URL || "https://ai.starimg.ru/v1",
+      baseUrl: process.env.STARIMG_BASE_URL || "https://starimg.ru/ai/common/v1",
       key: process.env.STARIMG_PLATFORM_KEY,
       keyVar: "STARIMG_PLATFORM_KEY",
     },

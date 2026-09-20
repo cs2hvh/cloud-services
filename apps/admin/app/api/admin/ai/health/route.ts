@@ -66,7 +66,7 @@ export async function GET() {
     process.env.NEXT_PUBLIC_INFERENCE_API_BASE || "https://api.ahurasense.com/v1";
   const wokeyBase = process.env.WOKEY_BASE_URL || "https://api.wokey.ai/v1";
   const wokeyKey = process.env.WOKEY_PLATFORM_KEY;
-  const starimgBase = process.env.STARIMG_BASE_URL || "https://ai.starimg.ru/v1";
+  const starimgBase = process.env.STARIMG_BASE_URL || "https://starimg.ru/ai/common/v1";
   const starimgKey = process.env.STARIMG_PLATFORM_KEY;
 
   const [gatewayRes, upstreamRes, starimgRes, podCheck, dbCheck] = await Promise.all([
