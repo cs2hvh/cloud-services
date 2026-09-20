@@ -92,6 +92,17 @@ export interface DiscountedPrices {
   output: number | null;
 }
 
+/**
+ * The reference price a model is discounted from: the vendor's own list
+ * price as OpenRouter publishes it, synced by the admin panel. What a partner
+ * charges us is a different number and is never published.
+ */
+export interface PublicListPrices {
+  input: number | null;
+  cached_input: number | null;
+  output: number | null;
+}
+
 /** Published prices for a media model: dollars per image or per second of output. */
 export interface PublicUnitPrices {
   currency: "USD";
@@ -99,6 +110,10 @@ export interface PublicUnitPrices {
   price: number;
   /** Per size-tier or resolution, when the model prices by it. */
   tiers: Record<string, number> | null;
+  /** The reference price the standing discount is taken from; null when none is set. */
+  list_price: number | null;
+  /** Standing discount off list_price, in percent. 0 when none. */
+  discount_percent: number;
   discount: { percent: number; window_utc: string; active_now: boolean; price: number } | null;
   effective_price: number;
 }
@@ -106,6 +121,10 @@ export interface PublicUnitPrices {
 export interface PublicPrices {
   currency: "USD";
   unit: "per_million_tokens";
+  /** The reference (list) prices the standing discount is taken from; null when none is set. */
+  list: PublicListPrices | null;
+  /** Standing discount off list, in percent. 0 when none. input/output below are already net of it. */
+  discount_percent: number;
   input: number | null;
   cached_input: number | null;
   output: number | null;
@@ -140,9 +159,12 @@ function applyPct(usd: number | null, pct: number): number | null {
 export function publicPrices(
   pricing: ModelPricing | null | undefined,
   offPeak: ModelOffPeak | null | undefined,
-  now: Date = new Date()
+  now: Date = new Date(),
+  listPricing: ModelPricing | null | undefined = null,
+  discountPct: number | null | undefined = 0
 ): PublicPrices | PublicUnitPrices {
   const p = pricing ?? {};
+  const discountPercent = typeof discountPct === "number" && Number.isFinite(discountPct) && discountPct > 0 ? discountPct : 0;
 
   // Media: one number per image or per second, optionally by tier.
   const label = unitLabelOf(p);
@@ -152,6 +174,7 @@ export function publicPrices(
     const tiers = p.tiers
       ? Object.fromEntries(Object.entries(p.tiers).map(([k, v]) => [k, dollars(v) as number]))
       : null;
+    const listPrice = listPricing ? dollars(unitRate(listPricing, null) ?? undefined) : null;
     const op = offPeak ?? null;
     if (op?.window_utc && op?.discount_pct) {
       const activeNow = isWithinUtcWindow(op.window_utc, now);
@@ -161,12 +184,23 @@ export function publicPrices(
         unit: label === "image" ? "per_image" : "per_second",
         price,
         tiers,
+        list_price: listPrice,
+        discount_percent: discountPercent,
         discount: { percent: op.discount_pct, window_utc: op.window_utc, active_now: activeNow, price: discounted },
         effective_price: activeNow ? discounted : price,
       };
     }
-    return { currency: "USD", unit: label === "image" ? "per_image" : "per_second", price, tiers, discount: null, effective_price: price };
+    return { currency: "USD", unit: label === "image" ? "per_image" : "per_second", price, tiers, list_price: listPrice, discount_percent: discountPercent, discount: null, effective_price: price };
   }
+
+  const lp = listPricing ?? null;
+  const list: PublicListPrices | null = lp
+    ? {
+        input: dollars(lp.input_cents_per_mtok),
+        cached_input: dollars(lp.cached_cents_per_mtok) ?? dollars(lp.input_cents_per_mtok),
+        output: dollars(lp.output_cents_per_mtok),
+      }
+    : null;
   const input = dollars(p.input_cents_per_mtok);
   const output = dollars(p.output_cents_per_mtok);
   const cachedInput = dollars(p.cached_cents_per_mtok) ?? input;
@@ -178,6 +212,8 @@ export function publicPrices(
     return {
       currency: "USD",
       unit: "per_million_tokens",
+      list,
+      discount_percent: discountPercent,
       input,
       cached_input: cachedInput,
       output,
@@ -201,6 +237,8 @@ export function publicPrices(
   return {
     currency: "USD",
     unit: "per_million_tokens",
+    list,
+    discount_percent: discountPercent,
     input,
     cached_input: cachedInput,
     output,

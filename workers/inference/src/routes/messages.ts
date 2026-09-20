@@ -28,7 +28,7 @@ import {
   sanitizeUpstreamError,
   streamPassthrough,
 } from "../lib/wokey.ts";
-import { forwardWithFallback, starimgModels, upstreamChain } from "../lib/upstreams.ts";
+import { forwardWithFallback, upstreamChain } from "../lib/upstreams.ts";
 import { lookupCache, shouldCacheMessages, writeCache } from "../lib/cache.ts";
 import { forwardToEndpoints, hasManagedTarget, lookupModelRouting } from "../lib/model-routing.ts";
 import { resolveModelId } from "../lib/aliases.ts";
@@ -408,8 +408,6 @@ export const messagesShim: Handler<{
       env: c.env,
       billing: auth.billing,
       byokKey: auth.billing === "byok" ? upstreamKey : undefined,
-      upstreamModelId: String(upstreamBody.model ?? normalizedModel),
-      primaryModels: await starimgModels(c.env),
       modelProvider: messagesRouting?.upstream_provider ?? null,
     });
     try {

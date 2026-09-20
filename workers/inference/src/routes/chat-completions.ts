@@ -20,7 +20,7 @@ import {
   sanitizeUpstreamError,
   streamPassthrough,
 } from "../lib/wokey.ts";
-import { forwardWithFallback, starimgModels, upstreamChain } from "../lib/upstreams.ts";
+import { forwardWithFallback, upstreamChain } from "../lib/upstreams.ts";
 import { applyPreset, presetRoutingIsDegraded, resolvePreset } from "../lib/presets.ts";
 import { resolveModelId } from "../lib/aliases.ts";
 import { lookupCache, shouldCache, writeCache } from "../lib/cache.ts";
@@ -591,8 +591,6 @@ export const chatCompletions: Handler<{
     env: c.env,
     billing: auth.billing,
     byokKey: auth.billing === "byok" ? upstreamKey : undefined,
-    upstreamModelId: String(upstreamBody.model ?? effectiveModel),
-    primaryModels: await starimgModels(c.env),
     modelProvider: routing?.upstream_provider ?? null,
   });
   let upstream: Response;

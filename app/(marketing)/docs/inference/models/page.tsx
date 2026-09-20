@@ -90,6 +90,8 @@ export default function ModelsPage() {
       "prices": {
         "currency": "USD",
         "unit": "per_million_tokens",
+        "list": { "input": 1, "cached_input": 0.1, "output": 5 },
+        "discount_percent": 0,
         "input": 1,
         "cached_input": 0.1,
         "output": 5,
@@ -133,8 +135,10 @@ export default function ModelsPage() {
       <Table
         head={["Field", "Meaning"]}
         rows={[
-          [<C key="1">input</C>, "Dollars per million prompt tokens."],
-          [<C key="2">output</C>, "Dollars per million generated tokens, reasoning tokens included."],
+          [<C key="0">list</C>, <>The vendor’s own list price for the model, as published on OpenRouter, in the same three fields. <C>null</C> when we have not set one.</>],
+          [<C key="0b">discount_percent</C>, <>The standing discount off <C>list</C>. <C>input</C> and <C>output</C> below are already net of it; <C>0</C> means they equal the list price.</>],
+          [<C key="1">input</C>, "Dollars per million prompt tokens. What you pay."],
+          [<C key="2">output</C>, "Dollars per million generated tokens, reasoning tokens included. What you pay."],
           [<C key="3">cached_input</C>, <>Dollars per million prompt tokens served from cache. A model that publishes no cached rate bills cached tokens at the input rate, and this field says so rather than reading <C>null</C>.</>],
           [<C key="4">discount</C>, <><C>null</C> unless the model has a discount window. Otherwise the percent, the window in UTC, whether it is open at the moment of the request, and the three discounted rates.</>],
           [<C key="5">effective_input, effective_cached_input, effective_output</C>, "What a request sent right now is billed at: the discounted rates inside an open window, the list rates outside one."],

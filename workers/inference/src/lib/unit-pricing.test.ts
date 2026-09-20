@@ -41,6 +41,38 @@ describe("publicPrices for media", () => {
   });
 });
 
+describe("publicPrices publishes the list price and the standing discount", () => {
+  const charged = { input_cents_per_mtok: 4500, cached_cents_per_mtok: 450, output_cents_per_mtok: 4500 };
+  const list = { input_cents_per_mtok: 5000, cached_cents_per_mtok: 500, output_cents_per_mtok: 5000 };
+
+  it("shows list, discount_percent, and the charged price as the headline numbers", () => {
+    const p = publicPrices(charged, null, new Date(), list, 10) as import("./pricing.ts").PublicPrices;
+    expect(p.list).toEqual({ input: 50, cached_input: 5, output: 50 });
+    expect(p.discount_percent).toBe(10);
+    expect(p.input).toBe(45);
+    expect(p.output).toBe(45);
+    expect(p.effective_output).toBe(45);
+  });
+
+  it("is null list and zero discount when nothing is set, so nothing implies a markdown", () => {
+    const p = publicPrices(charged, null) as import("./pricing.ts").PublicPrices;
+    expect(p.list).toBeNull();
+    expect(p.discount_percent).toBe(0);
+  });
+
+  it("ignores a nonsense discount", () => {
+    expect((publicPrices(charged, null, new Date(), list, -5) as import("./pricing.ts").PublicPrices).discount_percent).toBe(0);
+    expect((publicPrices(charged, null, new Date(), list, Number.NaN) as import("./pricing.ts").PublicPrices).discount_percent).toBe(0);
+  });
+
+  it("carries a list price for media too", () => {
+    const p = publicPrices(image, null, new Date(), { cents_per_image: 4 }, 50) as PublicUnitPrices;
+    expect(p.list_price).toBe(0.04);
+    expect(p.discount_percent).toBe(50);
+    expect(p.price).toBe(0.02);
+  });
+});
+
 function ev(over: Partial<UsageEvent>): UsageEvent {
   return {
     orgId: "o",

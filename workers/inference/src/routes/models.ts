@@ -27,6 +27,8 @@ interface ModelRow {
   serving_type: string;
   capabilities: Record<string, unknown>;
   pricing: Record<string, unknown>;
+  list_pricing: Record<string, unknown> | null;
+  discount_pct: number | string | null;
   off_peak: Record<string, unknown> | null;
   is_featured: boolean;
   sort_order: number;
@@ -48,7 +50,7 @@ export const listModels: Handler<{
     .schema("inference")
     .from("models")
     .select(
-      "model_id, display_name, description, modality, serving_type, capabilities, pricing, off_peak, is_featured, sort_order, org_id"
+      "model_id, display_name, description, modality, serving_type, capabilities, pricing, list_pricing, discount_pct, off_peak, is_featured, sort_order, org_id"
     )
     .eq("is_active", true)
     .or(`org_id.is.null,org_id.eq.${auth.orgId}`)
@@ -105,10 +107,16 @@ export const listModels: Handler<{
       // tokens, in and out, plus the discounted pair when a model has an
       // off-peak window. Never what a backend charges us — upstream_pricing
       // is not selected above and must not be.
+      // `list` is the vendor's own price as OpenRouter publishes it and
+      // `discount_percent` is what we take off it; input/output are the
+      // result, and the number billing uses. What a partner charges us is a
+      // different figure and is not selected above.
       prices: publicPrices(
         m.pricing as ModelPricing | null,
         m.off_peak as ModelOffPeak | null,
-        now
+        now,
+        m.list_pricing as ModelPricing | null,
+        m.discount_pct === null ? 0 : Number(m.discount_pct)
       ),
       off_peak: m.off_peak,
       featured: m.is_featured,

@@ -1,26 +1,19 @@
 /**
- * Partner upstreams for proxy-served models, in the order to try them.
+ * Partner upstreams for proxy-served models.
  *
- * Until 2026-09-18 the gateway knew exactly one partner. This adds a second
- * and puts a chain in front of both, so a platform-billed request tries the
- * primary and falls over to the secondary when the primary is unreachable,
- * times out before its first byte, returns a 5xx or 429, or does not carry
- * the model. Nothing about this is visible to a caller: same ids, same
- * response shapes, same billing; the only trace is `usage.provider`.
- *
- * Which provider is primary is a var, UPSTREAM_PRIMARY, so the order can be
- * flipped back with a redeploy and no code change.
+ * The gateway knows two partners. Since 2026-09-20 a proxy model is served
+ * by exactly the partner named in its catalog row (models.upstream_provider,
+ * chosen per model in the admin panel); there is no cross-partner fallback.
+ * forwardWithFallback still handles a chain of any length, with deadlines on
+ * every provider but the last, so a fallback can be reintroduced per model
+ * without touching the routes.
  *
  * Two rules that keep this safe:
  *
- *  1. BYOK never enters the chain. A customer's own key belongs to one
- *     vendor and is sent only there. Platform billing is the only case with
- *     a choice to make.
- *  2. The primary only gets models it has told us it serves. Its model list
- *     is fetched with its own key and cached in the isolate for five minutes;
- *     a model absent from that list, or a list we could not fetch, means the
- *     request goes straight to the secondary. Eight catalog models are in
- *     that position today and must not pay a wasted round trip.
+ *  1. BYOK never enters any chain. A customer's own key belongs to one
+ *     vendor and is sent only there.
+ *  2. A Starimg model with no Starimg credential configured gets an empty
+ *     chain and a clean 503, never a silent reroute to the other partner.
  *
  * Provider names live here, in logs, and in usage.provider. They are never
  * put in a response body or header.
@@ -37,82 +30,24 @@ export interface Upstream {
 
 const DEFAULT_TTFB_MS = 20_000;
 const DEFAULT_NONSTREAM_MS = 60_000;
-const MODEL_LIST_TTL_MS = 5 * 60_000;
 
 function intVar(v: string | undefined, fallback: number): number {
   const n = Number.parseInt(v ?? "", 10);
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
-// ── Primary's model list, cached ─────────────────────────────────────────
-
-let modelCache: { at: number; ids: Set<string> } | null = null;
-let modelInflight: Promise<Set<string> | null> | null = null;
-
-async function loadStarimgModels(env: Env, fetchImpl: typeof fetch): Promise<Set<string>> {
-  const r = await fetchImpl(`${env.STARIMG_BASE_URL}/models`, {
-    headers: { Authorization: `Bearer ${env.STARIMG_PLATFORM_KEY}` },
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (!r.ok) throw new Error(`models list ${r.status}`);
-  const j = (await r.json()) as { data?: Array<{ id?: unknown }> };
-  const ids = new Set<string>();
-  for (const m of j.data ?? []) if (typeof m.id === "string") ids.add(m.id);
-  return ids;
-}
-
-/**
- * The set of bare model ids the primary serves, or null when it is not
- * configured or has never answered. Stale-on-error: a refresh that fails
- * keeps the last good set rather than dropping the primary for every model.
- */
-export async function starimgModels(env: Env, fetchImpl: typeof fetch = fetch): Promise<Set<string> | null> {
-  if (!env.STARIMG_BASE_URL || !env.STARIMG_PLATFORM_KEY) return null;
-  if (modelCache && Date.now() - modelCache.at < MODEL_LIST_TTL_MS) return modelCache.ids;
-  if (modelInflight) return modelInflight;
-  modelInflight = loadStarimgModels(env, fetchImpl)
-    .then((ids) => {
-      modelCache = { at: Date.now(), ids };
-      return ids;
-    })
-    .catch((err: unknown) => {
-      console.error(
-        JSON.stringify({
-          level: "error",
-          message: "upstreams: primary model list refresh failed; using last known",
-          err: err instanceof Error ? err.message : String(err),
-        })
-      );
-      return modelCache?.ids ?? null;
-    })
-    .finally(() => {
-      modelInflight = null;
-    });
-  return modelInflight;
-}
-
-/** Test seam. */
-export function resetUpstreamCaches(): void {
-  modelCache = null;
-  modelInflight = null;
-}
-
 // ── The chain ────────────────────────────────────────────────────────────
 
 export interface ChainOptions {
-  env: Pick<Env, "WOKEY_BASE_URL" | "WOKEY_PLATFORM_KEY" | "STARIMG_BASE_URL" | "STARIMG_PLATFORM_KEY" | "UPSTREAM_PRIMARY">;
+  env: Pick<Env, "WOKEY_BASE_URL" | "WOKEY_PLATFORM_KEY" | "STARIMG_BASE_URL" | "STARIMG_PLATFORM_KEY">;
   billing: "platform" | "byok";
   /** The customer's decrypted key when billing is byok. */
   byokKey?: string;
-  /** The bare id that will be sent upstream. */
-  upstreamModelId: string;
-  /** What the primary serves, from starimgModels(); null = do not use it. */
-  primaryModels: Set<string> | null;
   /**
-   * The catalog's upstream_provider for the model. "starimg" means only
-   * Starimg carries it: the chain is Starimg alone, whatever the primary
-   * setting, and the model list is not consulted (there is no alternative
-   * to fall back to, and a stale list must not make the model vanish).
+   * The catalog's upstream_provider for the model. From 2026-09-20 this is
+   * the whole routing decision: "starimg" goes to Starimg and nowhere else,
+   * anything else goes to Wokey. Harshit chose no cross-partner fallback;
+   * which partner serves a model is set per model in the admin panel.
    */
   modelProvider?: string | null;
 }
@@ -129,16 +64,7 @@ export function upstreamChain(o: ChainOptions): Upstream[] {
     if (!o.env.STARIMG_BASE_URL || !o.env.STARIMG_PLATFORM_KEY) return [];
     return [{ id: "starimg", baseUrl: o.env.STARIMG_BASE_URL, key: o.env.STARIMG_PLATFORM_KEY }];
   }
-
-  const starimgUsable =
-    Boolean(o.env.STARIMG_BASE_URL) &&
-    Boolean(o.env.STARIMG_PLATFORM_KEY) &&
-    o.primaryModels !== null &&
-    o.primaryModels.has(o.upstreamModelId);
-  if (!starimgUsable) return [wokey];
-
-  const starimg: Upstream = { id: "starimg", baseUrl: o.env.STARIMG_BASE_URL!, key: o.env.STARIMG_PLATFORM_KEY! };
-  return o.env.UPSTREAM_PRIMARY === "starimg" ? [starimg, wokey] : [wokey, starimg];
+  return [wokey];
 }
 
 // ── Forwarding with failover ─────────────────────────────────────────────

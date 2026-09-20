@@ -31,12 +31,11 @@ export interface Env {
   // invoke internal endpoints (currently just the serving-pod watchdog).
   CONTROL_PLANE_URL: string;
 
-  // Second partner upstream for proxy-served models, tried before the
-  // first when UPSTREAM_PRIMARY = "starimg". Optional: unset means the
-  // chain is the single partner it always was. See lib/upstreams.ts.
+  // Second partner upstream for proxy-served models. Which partner serves a
+  // model is the model's own upstream_provider; see lib/upstreams.ts.
   STARIMG_BASE_URL?: string;
-  UPSTREAM_PRIMARY?: "starimg" | "wokey";
-  /** Deadline for the primary to produce response headers, per request kind. */
+  /** Deadlines for a non-final provider in a multi-provider chain, per
+   *  request kind. Unused while every chain has one provider. */
   UPSTREAM_PRIMARY_TTFB_MS?: string;
   UPSTREAM_PRIMARY_NONSTREAM_MS?: string;
 
