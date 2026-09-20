@@ -5,73 +5,74 @@ import { createServiceClient } from "@/lib/supabase/server";
 export const dynamic = "force-dynamic";
 
 /**
- * What each partner can actually serve, next to what we already list.
+ * One row per model, across both partners and our own catalogue.
  *
- * The union of both partners' /v1/models, annotated with whether we carry it
- * already and who we route it to. This is how a model gets added to the
- * catalogue without guessing at an upstream id - the id shown here is the
- * exact string the partner answers to.
+ * This is the page that decides what customers can see. A row is the union
+ * of three sources - Starimg's /v1/models, Wokey's, and everything already
+ * in inference.models - so a model we switched off yesterday is still HERE,
+ * as a row that is simply not ticked, rather than vanishing from the only
+ * screen that could bring it back.
  *
- * A partner we cannot reach is reported as UNKNOWN, never as empty. An empty
- * list and an unreachable partner look identical in a UI that does not
- * distinguish them, and the difference is "they dropped 300 models" versus
- * "this host has no key". Only one of those is an emergency.
+ * Per partner a row is one of three states, and the third is the one that
+ * matters: carried, not carried, or UNKNOWN. Unknown means the panel has no
+ * key for that partner on this host and therefore could not ask. An empty
+ * answer and an unasked question look identical unless something says so,
+ * and only one of them means the partner dropped the model.
  *
- * Partner names are operator-only and never reach a customer surface.
+ * Partner names and per-partner cost are operator-only; neither reaches a
+ * customer surface.
  */
 
 const TIMEOUT_MS = 8000;
 
-type Partner = {
-  name: string;
+type PartnerDef = {
+  name: "starimg" | "wokey";
   baseUrl: string;
   key: string | undefined;
   keyVar: string;
 };
 
-function partners(): Partner[] {
+function partnerDefs(): PartnerDef[] {
   return [
-    {
-      name: "wokey",
-      baseUrl: process.env.WOKEY_BASE_URL || "https://api.wokey.ai/v1",
-      key: process.env.WOKEY_PLATFORM_KEY,
-      keyVar: "WOKEY_PLATFORM_KEY",
-    },
     {
       name: "starimg",
       baseUrl: process.env.STARIMG_BASE_URL || "https://ai.starimg.ru/v1",
       key: process.env.STARIMG_PLATFORM_KEY,
       keyVar: "STARIMG_PLATFORM_KEY",
     },
+    {
+      name: "wokey",
+      baseUrl: process.env.WOKEY_BASE_URL || "https://api.wokey.ai/v1",
+      key: process.env.WOKEY_PLATFORM_KEY,
+      keyVar: "WOKEY_PLATFORM_KEY",
+    },
   ];
 }
 
-type PartnerResult = {
-  partner: string;
+type PartnerFetch = {
+  partner: "starimg" | "wokey";
   reachable: boolean;
-  unknown: boolean;
   reason: string | null;
   count: number;
-  models: { id: string; name: string | null }[];
+  /** Every id form the partner answers to: raw, lowercased and bare. */
+  ids: Set<string>;
+  names: Map<string, string | null>;
 };
 
-async function fetchPartner(p: Partner): Promise<PartnerResult> {
-  const base = {
+async function fetchPartner(p: PartnerDef): Promise<PartnerFetch> {
+  const empty: PartnerFetch = {
     partner: p.name,
     reachable: false,
-    unknown: false,
-    reason: null as string | null,
+    reason: null,
     count: 0,
-    models: [] as { id: string; name: string | null }[],
+    ids: new Set(),
+    names: new Map(),
   };
 
   if (!p.key) {
-    // Not a failure of the partner - a gap in THIS host's environment. Said
-    // plainly so nobody reads a missing key as a missing catalogue.
     return {
-      ...base,
-      unknown: true,
-      reason: `${p.keyVar} is not in this host's environment, so the panel cannot ask them what they serve`,
+      ...empty,
+      reason: `${p.keyVar} is not in this host's environment, so the panel cannot ask ${p.name} what it serves`,
     };
   }
 
@@ -83,30 +84,52 @@ async function fetchPartner(p: Partner): Promise<PartnerResult> {
       cache: "no-store",
       signal: controller.signal,
     });
-    if (!res.ok) {
-      return { ...base, unknown: true, reason: `returned ${res.status}` };
-    }
-    const body = (await res.json()) as {
-      data?: { id?: string; name?: string }[];
-    };
+    if (!res.ok) return { ...empty, reason: `returned ${res.status}` };
+    const body = (await res.json()) as { data?: { id?: string; name?: string }[] };
     if (!Array.isArray(body.data)) {
-      return { ...base, unknown: true, reason: "unrecognised response shape" };
+      return { ...empty, reason: "unrecognised response shape" };
     }
-    const models = body.data
-      .filter((m): m is { id: string; name?: string } => typeof m?.id === "string")
-      .map((m) => ({ id: m.id, name: m.name ?? null }));
-    return {
-      ...base,
-      reachable: true,
-      count: models.length,
-      models,
-    };
+    const ids = new Set<string>();
+    const names = new Map<string, string | null>();
+    let count = 0;
+    for (const m of body.data) {
+      if (typeof m?.id !== "string") continue;
+      count += 1;
+      const bare = m.id.split("/").pop() ?? m.id;
+      for (const form of [m.id, m.id.toLowerCase(), bare, bare.toLowerCase()]) {
+        ids.add(form);
+      }
+      names.set(m.id, m.name ?? null);
+    }
+    return { partner: p.name, reachable: true, reason: null, count, ids, names };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "unreachable";
-    return { ...base, unknown: true, reason: msg };
+    return { ...empty, reason: msg };
   } finally {
     clearTimeout(timer);
   }
+}
+
+type CatalogRow = {
+  id: string;
+  model_id: string;
+  display_name: string | null;
+  upstream_model_id: string | null;
+  upstream_provider: string | null;
+  serving_type: string;
+  modality: string;
+  is_active: boolean;
+  provider_pricing: Record<string, Record<string, unknown>> | null;
+  upstream_pricing: Record<string, unknown> | null;
+};
+
+const num = (v: unknown): number | null =>
+  typeof v === "number" && Number.isFinite(v) ? v : null;
+
+/** Every form of an id a partner might answer to. */
+function idForms(raw: string): string[] {
+  const bare = raw.split("/").pop() ?? raw;
+  return [raw, raw.toLowerCase(), bare, bare.toLowerCase()];
 }
 
 export async function GET() {
@@ -119,127 +142,166 @@ export async function GET() {
   }
 
   try {
-    const [results, catalogue] = await Promise.all([
-      Promise.all(partners().map(fetchPartner)),
+    const [fetched, catalogue] = await Promise.all([
+      Promise.all(partnerDefs().map(fetchPartner)),
       (async () => {
         const supabase = await createServiceClient();
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const inference = (supabase as any).schema("inference");
         const { data, error } = await inference
           .from("models")
-          .select("model_id, upstream_model_id, upstream_provider, is_active");
+          .select(
+            "id, model_id, display_name, upstream_model_id, upstream_provider, serving_type, modality, is_active, provider_pricing, upstream_pricing",
+          )
+          .order("model_id");
         if (error) throw new Error(error.message);
-        return (data ?? []) as {
-          model_id: string;
-          upstream_model_id: string | null;
-          upstream_provider: string | null;
-          is_active: boolean;
-        }[];
+        return (data ?? []) as CatalogRow[];
       })(),
     ]);
 
-    // Index what we already carry, by the name we send upstream and by our
-    // own id, in raw and bare form - partners namespace inconsistently and a
-    // model we already list must not show up as new.
-    type Held = { modelId: string; provider: string | null; isActive: boolean };
-    const held = new Map<string, Held>();
-    for (const row of catalogue) {
-      const entry: Held = {
-        modelId: row.model_id,
-        provider: row.upstream_provider,
-        isActive: row.is_active,
-      };
-      for (const raw of [row.upstream_model_id, row.model_id]) {
-        if (!raw) continue;
-        for (const form of [raw, raw.toLowerCase(), raw.split("/").pop() ?? raw]) {
-          if (!held.has(form)) held.set(form, entry);
+    const byPartner = new Map(fetched.map((f) => [f.partner, f]));
+
+    /** carried / not carried / unknown, per partner, for one model. */
+    const carriage = (row: CatalogRow | null, partnerIds: string[]) => {
+      const out: Record<
+        string,
+        { carries: boolean | null; cost: { input: number | null; output: number | null } | null }
+      > = {};
+      for (const def of partnerDefs()) {
+        const f = byPartner.get(def.name);
+        let carries: boolean | null = null;
+        if (f?.reachable) {
+          const probes = [
+            ...(row ? idForms(row.upstream_model_id ?? row.model_id) : []),
+            ...(row ? idForms(row.model_id) : []),
+            ...partnerIds.flatMap(idForms),
+          ];
+          carries = probes.some((x) => f.ids.has(x));
         }
+        // Per-partner cost falls back to the default cost blob, which is
+        // what the consumer does. Admin-only.
+        const blob =
+          (row?.provider_pricing?.[def.name] as Record<string, unknown> | undefined) ??
+          (row?.upstream_pricing as Record<string, unknown> | undefined) ??
+          null;
+        out[def.name] = {
+          carries,
+          cost: blob
+            ? {
+                input: num(blob.input_cents_per_mtok),
+                output: num(blob.output_cents_per_mtok),
+              }
+            : null,
+        };
       }
+      return out;
+    };
+
+    type Row = {
+      key: string;
+      modelUuid: string | null;
+      ourModelId: string | null;
+      displayName: string;
+      upstreamModelId: string | null;
+      servingType: string | null;
+      modality: string | null;
+      inCatalogue: boolean;
+      isActive: boolean | null;
+      servedBy: string | null;
+      /** True when ticking a partner is meaningful: proxied models only. */
+      partnerRoutable: boolean;
+      partners: ReturnType<typeof carriage>;
+      /** Set when a partner we CAN see no longer lists a live model. */
+      liveButUnlisted: boolean;
+    };
+
+    const rows: Row[] = [];
+    const claimed = new Set<string>();
+
+    // 1. Everything we already carry - including the rows switched off, which
+    //    is the whole point: they are hidden, not gone.
+    for (const row of catalogue) {
+      for (const form of [
+        ...idForms(row.model_id),
+        ...(row.upstream_model_id ? idForms(row.upstream_model_id) : []),
+      ]) {
+        claimed.add(form);
+      }
+      const partners = carriage(row, []);
+      const routable = row.serving_type === "proxy";
+      const servingPartner = row.upstream_provider
+        ? partners[row.upstream_provider]
+        : undefined;
+      rows.push({
+        key: row.model_id,
+        modelUuid: row.id,
+        ourModelId: row.model_id,
+        displayName: row.display_name || row.model_id,
+        upstreamModelId: row.upstream_model_id,
+        servingType: row.serving_type,
+        modality: row.modality,
+        inCatalogue: true,
+        isActive: row.is_active,
+        servedBy: row.upstream_provider,
+        partnerRoutable: routable,
+        partners,
+        liveButUnlisted:
+          routable && row.is_active && servingPartner?.carries === false,
+      });
     }
 
-    const union = new Map<
-      string,
-      {
-        id: string;
-        name: string | null;
-        offeredBy: string[];
-        inCatalogue: boolean;
-        ourModelId: string | null;
-        routedTo: string | null;
-        isActive: boolean | null;
-      }
-    >();
-
-    for (const r of results) {
-      if (!r.reachable) continue;
-      for (const m of r.models) {
-        const existing = union.get(m.id);
-        if (existing) {
-          if (!existing.offeredBy.includes(r.partner)) {
-            existing.offeredBy.push(r.partner);
-          }
-          continue;
-        }
-        const match =
-          held.get(m.id) ??
-          held.get(m.id.toLowerCase()) ??
-          held.get(m.id.split("/").pop() ?? m.id) ??
-          null;
-        union.set(m.id, {
-          id: m.id,
-          name: m.name,
-          offeredBy: [r.partner],
-          inCatalogue: Boolean(match),
-          ourModelId: match?.modelId ?? null,
-          routedTo: match?.provider ?? null,
-          isActive: match ? match.isActive : null,
+    // 2. Anything a partner offers that we do not carry at all.
+    for (const f of fetched) {
+      if (!f.reachable) continue;
+      for (const [rawId, name] of f.names) {
+        if (idForms(rawId).some((x) => claimed.has(x))) continue;
+        claimed.add(rawId);
+        for (const form of idForms(rawId)) claimed.add(form);
+        rows.push({
+          key: rawId,
+          modelUuid: null,
+          ourModelId: null,
+          displayName: name || rawId,
+          upstreamModelId: rawId,
+          servingType: null,
+          modality: null,
+          inCatalogue: false,
+          isActive: null,
+          servedBy: null,
+          partnerRoutable: true,
+          partners: carriage(null, [rawId]),
+          liveButUnlisted: false,
         });
       }
     }
 
-    const rows = [...union.values()].sort((a, b) => a.id.localeCompare(b.id));
+    rows.sort((a, b) => {
+      // Live first, then everything we carry, then the rest.
+      const rank = (r: Row) => (r.isActive ? 0 : r.inCatalogue ? 1 : 2);
+      const d = rank(a) - rank(b);
+      return d !== 0 ? d : a.key.localeCompare(b.key);
+    });
 
     return NextResponse.json({
-      partners: results.map((r) => ({
-        partner: r.partner,
-        reachable: r.reachable,
-        unknown: r.unknown,
-        reason: r.reason,
-        count: r.count,
+      partners: fetched.map((f) => ({
+        partner: f.partner,
+        reachable: f.reachable,
+        reason: f.reason,
+        count: f.count,
       })),
       summary: {
-        union: rows.length,
-        onBoth: rows.filter((r) => r.offeredBy.length > 1).length,
-        alreadyCarried: rows.filter((r) => r.inCatalogue).length,
-        newToUs: rows.filter((r) => !r.inCatalogue).length,
-        // A model we route to a partner that no longer offers it is the
-        // failure this endpoint is best placed to catch, now that routing is
-        // strict and there is no second partner to cover for it.
-        routedToPartnerNotOffering: catalogue
-          .filter((c) => c.is_active && c.upstream_provider)
-          .filter((c) => {
-            const r = results.find((x) => x.partner === c.upstream_provider);
-            if (!r || !r.reachable) return false;
-            const id = c.upstream_model_id ?? c.model_id;
-            return !r.models.some(
-              (m) =>
-                m.id === id ||
-                m.id.toLowerCase() === id.toLowerCase() ||
-                (m.id.split("/").pop() ?? m.id) === (id.split("/").pop() ?? id),
-            );
-          })
-          .map((c) => ({
-            modelId: c.model_id,
-            provider: c.upstream_provider,
-            upstreamId: c.upstream_model_id,
-          })),
+        total: rows.length,
+        live: rows.filter((r) => r.isActive).length,
+        hidden: rows.filter((r) => r.inCatalogue && !r.isActive).length,
+        notCarried: rows.filter((r) => !r.inCatalogue).length,
+        liveButUnlisted: rows.filter((r) => r.liveButUnlisted).length,
       },
       rows,
     });
   } catch (err) {
     console.error("[Admin AI] partner catalog failed:", err);
     return NextResponse.json(
-      { error: "Could not build partner catalogue" },
+      { error: "Could not build the partner catalogue" },
       { status: 500 },
     );
   }

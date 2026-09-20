@@ -115,6 +115,33 @@ export async function GET(request: Request) {
       if (p === USAGE_PAGES - 1) truncated = true;
     }
 
+    // `inference.usage.provider` is `text NOT NULL DEFAULT 'openrouter'` - a
+    // leftover from when OpenRouter genuinely WAS the single upstream. The
+    // gateway only began stamping the real partner on 2026-09-18 12:07 UTC;
+    // every row before that carries the default, which means "nobody
+    // recorded it", not "OpenRouter served it".
+    //
+    // The two are indistinguishable in the data - old rows are both the
+    // default AND plausibly accurate - so they are not attributed to anyone.
+    // Counting them as a partner is how a decommissioned upstream shows up
+    // owning 96% of traffic on a 30-day window.
+    const UNSTAMPED = "(unstamped)";
+    const stampedRows = usage.filter((u) => u.provider && u.provider !== "openrouter");
+    const stampedSince =
+      stampedRows.length > 0
+        ? stampedRows.reduce(
+            (min, u) => (u.created_at < min ? u.created_at : min),
+            stampedRows[0].created_at,
+          )
+        : null;
+    let unstampedRows = 0;
+    for (const u of usage) {
+      if (!u.provider || u.provider === "openrouter") {
+        unstampedRows += 1;
+        u.provider = UNSTAMPED;
+      }
+    }
+
     type Roll = {
       requests: number;
       errors: number;
@@ -153,7 +180,12 @@ export async function GET(request: Request) {
       // A model owned by one partner and served by another is REAL (fallback
       // routing), not an error — but a hosted-pod request stamped with a
       // partner name is stale data. Count the divergence; do not judge it.
-      if (catalogProvider && u.provider && u.provider !== catalogProvider) {
+      if (
+        catalogProvider &&
+        u.provider &&
+        u.provider !== UNSTAMPED &&
+        u.provider !== catalogProvider
+      ) {
         mislabeledRequests += 1;
       }
       const servedKey = u.provider ?? "(unstamped)";
@@ -346,6 +378,14 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       days,
+      // Stated so no reader has to work out why a 30-day window and a 1-day
+      // window disagree about who serves what.
+      providerStamping: {
+        stampedSince,
+        unstampedRows,
+        note:
+          "Rows before the gateway began recording the serving partner carry the column default ('openrouter') and are reported as unstamped, not attributed to any partner.",
+      },
       truncated,
       // How traffic was attributed, and how far the recorded column drifts
       // from it — so the table's numbers can be trusted or challenged.
