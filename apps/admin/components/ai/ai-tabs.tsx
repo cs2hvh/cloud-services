@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   Route,
   Film,
+  ListChecks,
   ScrollText,
   Server,
 } from "lucide-react";
@@ -22,6 +23,7 @@ const TABS = [
   { href: "/ai/pods", label: "Hosted pods", icon: Server },
   { href: "/ai/jobs", label: "Media jobs", icon: Film },
   { href: "/ai/routing", label: "Providers & GPU", icon: Route },
+  { href: "/ai/partner-models", label: "Partner models", icon: ListChecks },
   { href: "/ai/models", label: "Models", icon: Boxes },
   { href: "/ai/workloads", label: "Workloads", icon: Cpu },
   { href: "/ai/activity", label: "Activity", icon: Activity },

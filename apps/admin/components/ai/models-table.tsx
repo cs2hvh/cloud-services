@@ -39,7 +39,6 @@ import {
 } from "@admin/components/ai/hosted-model-dialogs";
 import { MediaPricingDialog } from "@admin/components/ai/media-pricing-dialog";
 import { SyncOpenRouterDialog } from "@admin/components/ai/sync-openrouter-dialog";
-import { PartnerCatalogDialog } from "@admin/components/ai/partner-catalog-dialog";
 import { centsToUsd, type UnitPricing } from "@admin/lib/model-pricing";
 
 type Pricing = {
@@ -143,7 +142,6 @@ export function AiModelsTable() {
   const [endpointsFor, setEndpointsFor] = useState<string | null>(null);
   const [mediaPricing, setMediaPricing] = useState<ModelRow | null>(null);
   const [syncOpen, setSyncOpen] = useState(false);
-  const [partnerOpen, setPartnerOpen] = useState(false);
   // Discount and routing are per-model decisions edited alongside price.
   const [discountDraft, setDiscountDraft] = useState("");
   const [providerDraft, setProviderDraft] = useState("");
@@ -448,8 +446,8 @@ export function AiModelsTable() {
               {summary?.upstreamCount != null &&
                 ` · Wokey serves ${summary.upstreamCount}`}
             </span>
-            <Button variant="outline" size="sm" onClick={() => setPartnerOpen(true)}>
-              Partner catalogues
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/ai/partner-models">Partner models</Link>
             </Button>
             <Button variant="outline" size="sm" onClick={() => setSyncOpen(true)}>
               Sync with OpenRouter
@@ -777,14 +775,6 @@ export function AiModelsTable() {
         }
         onClose={(changed) => {
           setMediaPricing(null);
-          if (changed) void load();
-        }}
-      />
-
-      <PartnerCatalogDialog
-        open={partnerOpen}
-        onClose={(changed) => {
-          setPartnerOpen(false);
           if (changed) void load();
         }}
       />

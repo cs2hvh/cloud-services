@@ -123,6 +123,22 @@ type CatalogRow = {
   upstream_pricing: Record<string, unknown> | null;
 };
 
+/**
+ * Whether a partner's /v1/models list is evidence about this modality.
+ *
+ * It is an OpenAI-compatible CHAT model list: Wokey returns 30 text models
+ * and not one of the image or video models it demonstrably serves for us
+ * today. So for media, "absent from the list" is not evidence of absence -
+ * it is evidence the list does not cover media.
+ *
+ * Finding a media model there still counts as proof it is carried. Only the
+ * negative is withheld, because only the negative is unsupported.
+ */
+function listEnumerates(modality: string | null): boolean {
+  if (modality === null) return true; // came from the list, so it is on it
+  return modality === "chat" || modality === "text";
+}
+
 const num = (v: unknown): number | null =>
   typeof v === "number" && Number.isFinite(v) ? v : null;
 
@@ -176,7 +192,14 @@ export async function GET() {
             ...(row ? idForms(row.model_id) : []),
             ...partnerIds.flatMap(idForms),
           ];
-          carries = probes.some((x) => f.ids.has(x));
+          const found = probes.some((x) => f.ids.has(x));
+          // A miss only means "not carried" where the list covers the
+          // modality. Otherwise the honest answer is that we do not know.
+          carries = found
+            ? true
+            : listEnumerates(row?.modality ?? null)
+              ? false
+              : null;
         }
         // Per-partner cost falls back to the default cost blob, which is
         // what the consumer does. Admin-only.
