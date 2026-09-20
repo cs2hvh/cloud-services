@@ -54,6 +54,10 @@ type PartnerFetch = {
   reachable: boolean;
   reason: string | null;
   count: number;
+  /** Which host we actually asked. An env override on the deployed host can
+   *  differ from the default in this file, and a stale one reads as a plain
+   *  401 unless the URL is shown beside it. */
+  baseUrl: string;
   /** Every id form the partner answers to: raw, lowercased and bare. */
   ids: Set<string>;
   names: Map<string, string | null>;
@@ -65,6 +69,7 @@ async function fetchPartner(p: PartnerDef): Promise<PartnerFetch> {
     reachable: false,
     reason: null,
     count: 0,
+    baseUrl: p.baseUrl,
     ids: new Set(),
     names: new Map(),
   };
@@ -101,7 +106,15 @@ async function fetchPartner(p: PartnerDef): Promise<PartnerFetch> {
       }
       names.set(m.id, m.name ?? null);
     }
-    return { partner: p.name, reachable: true, reason: null, count, ids, names };
+    return {
+      partner: p.name,
+      reachable: true,
+      reason: null,
+      count,
+      baseUrl: p.baseUrl,
+      ids,
+      names,
+    };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "unreachable";
     return { ...empty, reason: msg };
@@ -311,6 +324,7 @@ export async function GET() {
         reachable: f.reachable,
         reason: f.reason,
         count: f.count,
+        baseUrl: f.baseUrl,
       })),
       summary: {
         total: rows.length,

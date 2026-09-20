@@ -69,6 +69,7 @@ type Feed = {
     reachable: boolean;
     reason: string | null;
     count: number;
+    baseUrl: string;
   }[];
   summary: {
     total: number;
@@ -324,7 +325,7 @@ export function PartnerModelsView() {
                 ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
                 : "border-white/[0.15] bg-white/[0.04] text-white/60"
             }`}
-            title={p.reason ?? undefined}
+            title={`${p.baseUrl}${p.reason ? ` — ${p.reason}` : ""}`}
           >
             {p.partner}: {p.reachable ? `${p.count} models` : "unknown"}
           </span>
@@ -345,7 +346,11 @@ export function PartnerModelsView() {
             className="mb-3 rounded-md border border-white/[0.12] bg-white/[0.03] px-3 py-2 text-[11.5px] text-muted-foreground"
           >
             <strong className="text-foreground">{p.partner} is unknown</strong> —{" "}
-            {p.reason}. Its column below reads <em>unknown</em> rather than empty:
+            {p.reason}. Asked at <span className={MONO}>{p.baseUrl}</span>, which
+            comes from STARIMG_BASE_URL / WOKEY_BASE_URL when either is set on
+            this host and otherwise from the default in the code — worth
+            checking first if a key is present and this still fails. Its
+            column below reads <em>unknown</em> rather than empty:
             the panel could not ask, which is not the same as them not carrying
             the model. Models we already route to {p.partner} still work.
           </p>
