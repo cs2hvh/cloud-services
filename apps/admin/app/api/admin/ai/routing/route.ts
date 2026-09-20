@@ -2,6 +2,14 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { createServiceClient } from "@/lib/supabase/server";
 
+import {
+  NO_PARTNER,
+  UNSTAMPED,
+  gapsOverlapping,
+  isPartnerBucket,
+  providerBucket,
+} from "@admin/lib/usage-integrity";
+
 export const dynamic = "force-dynamic";
 
 /**
@@ -115,31 +123,22 @@ export async function GET(request: Request) {
       if (p === USAGE_PAGES - 1) truncated = true;
     }
 
-    // `inference.usage.provider` is `text NOT NULL DEFAULT 'openrouter'` - a
-    // leftover from when OpenRouter genuinely WAS the single upstream. The
-    // gateway only began stamping the real partner on 2026-09-18 12:07 UTC;
-    // every row before that carries the default, which means "nobody
-    // recorded it", not "OpenRouter served it".
+    // Three different things can leave a row without a partner name, and
+    // only one of them is a gap in the record. See lib/usage-integrity.
     //
-    // The two are indistinguishable in the data - old rows are both the
-    // default AND plausibly accurate - so they are not attributed to anyone.
-    // Counting them as a partner is how a decommissioned upstream shows up
-    // owning 96% of traffic on a 30-day window.
-    const UNSTAMPED = "(unstamped)";
-    const stampedRows = usage.filter((u) => u.provider && u.provider !== "openrouter");
-    const stampedSince =
-      stampedRows.length > 0
-        ? stampedRows.reduce(
-            (min, u) => (u.created_at < min ? u.created_at : min),
-            stampedRows[0].created_at,
-          )
-        : null;
+    //   'openrouter' before the cutover -> nobody recorded it  (unstamped)
+    //   null AFTER the cutover          -> no partner was involved: our own
+    //                                      pods, a cache hit, or an error
+    //                                      before any upstream
+    //
+    // Merging them files our own pods under a decommissioned vendor.
     let unstampedRows = 0;
+    let noPartnerRows = 0;
     for (const u of usage) {
-      if (!u.provider || u.provider === "openrouter") {
-        unstampedRows += 1;
-        u.provider = UNSTAMPED;
-      }
+      const bucket = providerBucket(u.provider, u.created_at);
+      if (bucket === UNSTAMPED) unstampedRows += 1;
+      else if (bucket === NO_PARTNER) noPartnerRows += 1;
+      u.provider = bucket;
     }
 
     type Roll = {
@@ -183,7 +182,7 @@ export async function GET(request: Request) {
       if (
         catalogProvider &&
         u.provider &&
-        u.provider !== UNSTAMPED &&
+        isPartnerBucket(u.provider) &&
         u.provider !== catalogProvider
       ) {
         mislabeledRequests += 1;
@@ -381,11 +380,20 @@ export async function GET(request: Request) {
       // Stated so no reader has to work out why a 30-day window and a 1-day
       // window disagree about who serves what.
       providerStamping: {
-        stampedSince,
         unstampedRows,
+        noPartnerRows,
         note:
-          "Rows before the gateway began recording the serving partner carry the column default ('openrouter') and are reported as unstamped, not attributed to any partner.",
+          "Before 2026-09-18 12:07 UTC the provider column carried a default and is reported as unstamped. After it, an empty provider means no partner served the request - our own pods, a cache hit, or an error before any upstream.",
       },
+      // A window overlapping a known gap is INCOMPLETE. Every total drawn
+      // from it is a floor, and zero there means "not recorded", not "none".
+      usageGaps: gapsOverlapping(since).map((g) => ({
+        from: g.fromISO,
+        to: g.toISO,
+        affects: g.affects,
+        cause: g.cause,
+        recoverable: g.recoverable,
+      })),
       truncated,
       // How traffic was attributed, and how far the recorded column drifts
       // from it — so the table's numbers can be trusted or challenged.

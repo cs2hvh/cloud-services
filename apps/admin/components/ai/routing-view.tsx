@@ -53,6 +53,18 @@ type PartnerStat = {
 type Feed = {
   days: number;
   truncated: boolean;
+  providerStamping?: {
+    unstampedRows: number;
+    noPartnerRows: number;
+    note: string;
+  };
+  usageGaps?: {
+    from: string;
+    to: string;
+    affects: string;
+    cause: string;
+    recoverable: boolean;
+  }[];
   partners: {
     chain: string[];
     primary: string;
@@ -202,6 +214,41 @@ export function AiRoutingView() {
       {error && (
         <p className="mb-4 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-300">
           {error}
+        </p>
+      )}
+
+      {/* A window overlapping a known gap is incomplete, and every total on
+          this page is then a floor rather than a figure. Said before the
+          numbers, because a zero read as "none" is the whole risk. */}
+      {(feed?.usageGaps?.length ?? 0) > 0 && (
+        <div className="mb-4 flex items-start gap-2 rounded-md border border-purple-500/50 bg-purple-500/10 px-3 py-2 text-[12.5px] text-purple-200">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            <span className="font-semibold">
+              This window is missing usage that was served.
+            </span>{" "}
+            {feed?.usageGaps?.map((g) => (
+              <span key={g.from}>
+                Between {new Date(g.from).toLocaleString()} and{" "}
+                {new Date(g.to).toLocaleString()} no rows were recorded for{" "}
+                {g.affects} — {g.cause}.
+                {!g.recoverable && " Those rows are gone and cannot be recovered."}{" "}
+              </span>
+            ))}
+            Totals below are a floor, and a zero means <em>not recorded</em>,
+            not <em>none</em>.
+          </span>
+        </div>
+      )}
+
+      {(feed?.providerStamping?.noPartnerRows ?? 0) > 0 && (
+        <p className="mb-4 rounded-md border border-white/[0.12] bg-white/[0.03] px-3 py-2 text-[11.5px] text-muted-foreground">
+          <strong className="text-foreground">
+            {feed?.providerStamping?.noPartnerRows} request(s) had no partner
+          </strong>{" "}
+          — served by our own pods, answered from cache, or failed before any
+          upstream was called. They are counted as having no partner, rather
+          than against Starimg or Wokey.
         </p>
       )}
 
