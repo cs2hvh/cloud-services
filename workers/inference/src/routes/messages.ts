@@ -409,6 +409,7 @@ export const messagesShim: Handler<{
       billing: auth.billing,
       byokKey: auth.billing === "byok" ? upstreamKey : undefined,
       modelProvider: messagesRouting?.upstream_provider ?? null,
+      modelFallback: messagesRouting?.fallback_provider ?? null,
     });
     try {
       const fwd = await forwardWithFallback({

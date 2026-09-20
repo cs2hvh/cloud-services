@@ -57,6 +57,11 @@ export interface ModelRouting {
    * must never be sent to Wokey), or another value for legacy rows.
    */
   upstream_provider: string | null;
+  /**
+   * Second partner for a proxy model, tried when the first fails. Null, the
+   * default, means none: the model is served by upstream_provider alone.
+   */
+  fallback_provider: string | null;
   /** Full HTTPS URL of the managed vLLM server. NULL = self-serve only. */
   serving_url: string | null;
   /** The name to put in the outgoing `model` field when forwarding to a
@@ -107,13 +112,14 @@ export async function lookupModelRouting(
   const { data } = await supabase
     .schema("inference")
     .from("models")
-    .select("serving_type, serving_url, upstream_model_id, upstream_provider, is_active")
+    .select("serving_type, serving_url, upstream_model_id, upstream_provider, fallback_provider, is_active")
     .eq("model_id", modelId)
     .maybeSingle<{
       serving_type: ServingType;
       serving_url: string | null;
       upstream_model_id: string | null;
       upstream_provider: string | null;
+      fallback_provider: string | null;
       is_active: boolean;
     }>();
 
@@ -164,6 +170,7 @@ export async function lookupModelRouting(
     served_model_name: servedModelName,
     upstream_model_id: data.upstream_model_id,
     upstream_provider: data.upstream_provider,
+    fallback_provider: data.fallback_provider ?? null,
     is_active: data.is_active,
     endpoints,
     endpoints_error: endpointsError,

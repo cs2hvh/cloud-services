@@ -592,6 +592,7 @@ export const chatCompletions: Handler<{
     billing: auth.billing,
     byokKey: auth.billing === "byok" ? upstreamKey : undefined,
     modelProvider: routing?.upstream_provider ?? null,
+    modelFallback: routing?.fallback_provider ?? null,
   });
   let upstream: Response;
   let servedBy: string | null = null;

@@ -44,9 +44,20 @@ describe("upstreamChain", () => {
     expect(c).toEqual([]);
   });
 
-  it("sends a BYOK key to its own vendor only, whatever the model's provider", () => {
-    const c = upstreamChain({ env, billing: "byok", byokKey: "customer-key", modelProvider: "starimg" });
+  it("sends a BYOK key to its own vendor only, whatever the model's provider or fallback", () => {
+    const c = upstreamChain({ env, billing: "byok", byokKey: "customer-key", modelProvider: "starimg", modelFallback: "wokey" });
     expect(c).toEqual([{ id: "wokey", baseUrl: env.WOKEY_BASE_URL, key: "customer-key" }]);
+  });
+
+  it("appends the model's own fallback partner after the primary", () => {
+    expect(upstreamChain({ env, billing: "platform", modelProvider: "starimg", modelFallback: "wokey" }).map((u) => u.id)).toEqual(["starimg", "wokey"]);
+    expect(upstreamChain({ env, billing: "platform", modelProvider: "wokey", modelFallback: "starimg" }).map((u) => u.id)).toEqual(["wokey", "starimg"]);
+  });
+
+  it("ignores a fallback that is the primary again, unknown, or unconfigured", () => {
+    expect(upstreamChain({ env, billing: "platform", modelProvider: "starimg", modelFallback: "starimg" }).map((u) => u.id)).toEqual(["starimg"]);
+    expect(upstreamChain({ env, billing: "platform", modelProvider: "starimg", modelFallback: "openrouter" }).map((u) => u.id)).toEqual(["starimg"]);
+    expect(upstreamChain({ env: { ...env, STARIMG_PLATFORM_KEY: undefined }, billing: "platform", modelProvider: "wokey", modelFallback: "starimg" }).map((u) => u.id)).toEqual(["wokey"]);
   });
 });
 

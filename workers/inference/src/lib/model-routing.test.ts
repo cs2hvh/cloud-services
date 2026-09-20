@@ -24,6 +24,7 @@ function routing(overrides: Partial<ModelRouting> = {}): ModelRouting {
   return {
     serving_type: "runpod_byo",
     upstream_provider: null,
+    fallback_provider: null,
     serving_url: null,
     served_model_name: "glm-5.3-flash",
     upstream_model_id: "glm-5.3-flash",

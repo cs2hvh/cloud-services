@@ -2,11 +2,12 @@
  * Partner upstreams for proxy-served models.
  *
  * The gateway knows two partners. Since 2026-09-20 a proxy model is served
- * by exactly the partner named in its catalog row (models.upstream_provider,
- * chosen per model in the admin panel); there is no cross-partner fallback.
- * forwardWithFallback still handles a chain of any length, with deadlines on
- * every provider but the last, so a fallback can be reintroduced per model
- * without touching the routes.
+ * by the partner named in its catalog row (models.upstream_provider, chosen
+ * per model in the admin panel). There is no fallback unless the row also
+ * names one (models.fallback_provider): the default is strict, and the
+ * models where the usage table showed the second partner rescuing a large
+ * share of one customer's traffic keep theirs. forwardWithFallback puts a
+ * first-byte deadline on every provider but the last.
  *
  * Two rules that keep this safe:
  *
@@ -44,12 +45,17 @@ export interface ChainOptions {
   /** The customer's decrypted key when billing is byok. */
   byokKey?: string;
   /**
-   * The catalog's upstream_provider for the model. From 2026-09-20 this is
-   * the whole routing decision: "starimg" goes to Starimg and nowhere else,
-   * anything else goes to Wokey. Harshit chose no cross-partner fallback;
-   * which partner serves a model is set per model in the admin panel.
+   * The catalog's upstream_provider for the model: "starimg" goes to
+   * Starimg, anything else goes to Wokey. Set per model in the admin panel.
    */
   modelProvider?: string | null;
+  /**
+   * The catalog's fallback_provider for the model. Null, the default, means
+   * the primary is the whole chain. "wokey" or "starimg" appends that
+   * partner after the primary; the same partner as the primary, or one with
+   * no credential configured, is ignored rather than guessed around.
+   */
+  modelFallback?: string | null;
 }
 
 export function upstreamChain(o: ChainOptions): Upstream[] {
@@ -60,11 +66,17 @@ export function upstreamChain(o: ChainOptions): Upstream[] {
   };
   if (o.billing === "byok") return [wokey];
 
-  if (o.modelProvider === "starimg") {
-    if (!o.env.STARIMG_BASE_URL || !o.env.STARIMG_PLATFORM_KEY) return [];
-    return [{ id: "starimg", baseUrl: o.env.STARIMG_BASE_URL, key: o.env.STARIMG_PLATFORM_KEY }];
-  }
-  return [wokey];
+  const starimg: Upstream | null =
+    o.env.STARIMG_BASE_URL && o.env.STARIMG_PLATFORM_KEY
+      ? { id: "starimg", baseUrl: o.env.STARIMG_BASE_URL, key: o.env.STARIMG_PLATFORM_KEY }
+      : null;
+  const byId = (id: string | null | undefined): Upstream | null =>
+    id === "starimg" ? starimg : id === "wokey" ? wokey : null;
+
+  const primary = o.modelProvider === "starimg" ? starimg : wokey;
+  if (!primary) return [];
+  const fallback = byId(o.modelFallback);
+  return fallback && fallback.id !== primary.id ? [primary, fallback] : [primary];
 }
 
 // ── Forwarding with failover ─────────────────────────────────────────────
