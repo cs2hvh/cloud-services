@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { createServiceClient } from "@/lib/supabase/server";
 import { AuditLogService } from "@/lib/audit";
+import {
+  DERIVED_PRICE_KEYS,
+  deriveSellPricing,
+  isListPriced,
+} from "@admin/lib/list-pricing";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +28,16 @@ const UNIT_KEYS = ["cents_per_image", "cents_per_media_second"] as const;
 
 /** Partners we will accept a cost blob for. */
 const KNOWN_PROVIDERS = ["starimg", "wokey"] as const;
+
+/**
+ * Who may carry a proxied model. Routing is strict now - there is no
+ * fallback to the other partner - so this field decides who serves every
+ * request for the model, not merely who is preferred. The enum in the
+ * database is wider (it doubles as the BYOK provider list), but pointing a
+ * proxied model at "openai" here would name a partner we have no platform
+ * key for and take the model off the air.
+ */
+const ROUTABLE_PARTNERS = ["starimg", "wokey"] as const;
 
 /**
  * Merge a pricing blob, validating scalars and replacing `tiers` wholesale.
@@ -98,6 +113,10 @@ export async function PATCH(
     pricing?: Record<string, unknown>;
     upstream_pricing?: Record<string, unknown>;
     provider_pricing?: Record<string, Record<string, unknown>>;
+    list_pricing?: Record<string, unknown> | null;
+    discount_pct?: number | string;
+    openrouter_id?: string | null;
+    upstream_provider?: string;
   };
 
   const updates: Record<string, unknown> = {};
@@ -112,7 +131,9 @@ export async function PATCH(
 
     const { data: existing, error: readErr } = await inference
       .from("models")
-      .select("id, model_id, display_name, modality, pricing, upstream_pricing, provider_pricing, is_active, is_featured")
+      .select(
+        "id, model_id, display_name, modality, serving_type, upstream_provider, pricing, upstream_pricing, provider_pricing, list_pricing, discount_pct, openrouter_id, is_active, is_featured",
+      )
       .eq("id", id)
       .maybeSingle();
 
@@ -203,6 +224,111 @@ export async function PATCH(
       updates.provider_pricing = next;
     }
 
+    // WHO CARRIES IT. Strict routing means this is not a preference, it is
+    // the whole answer, so it is refused on models where it would be a lie:
+    // a pod-served model's upstream is its own endpoint list, not a partner.
+    if (body.upstream_provider !== undefined) {
+      const next = String(body.upstream_provider);
+      if (!ROUTABLE_PARTNERS.includes(next as (typeof ROUTABLE_PARTNERS)[number])) {
+        return NextResponse.json(
+          { error: `Provider must be one of: ${ROUTABLE_PARTNERS.join(", ")}` },
+          { status: 400 },
+        );
+      }
+      if (String(existing.serving_type ?? "") !== "proxy") {
+        return NextResponse.json(
+          {
+            error:
+              "Only proxied models have a partner. This one is served by our own pods - change its endpoints instead.",
+          },
+          { status: 400 },
+        );
+      }
+      updates.upstream_provider = next;
+    }
+
+    // The id this model is known by on OpenRouter, used to match it when
+    // list prices are synced. Empty string clears it, which is how a wrong
+    // match gets unstuck.
+    if (body.openrouter_id !== undefined) {
+      const raw = body.openrouter_id;
+      const trimmed = raw === null ? "" : String(raw).trim();
+      if (trimmed.length > 200) {
+        return NextResponse.json(
+          { error: "openrouter_id is too long" },
+          { status: 400 },
+        );
+      }
+      updates.openrouter_id = trimmed === "" ? null : trimmed;
+    }
+
+    // LIST PRICE - the public reference we position against. Null clears it,
+    // which returns the model to hand pricing.
+    if (body.list_pricing !== undefined) {
+      if (body.list_pricing === null) {
+        updates.list_pricing = null;
+      } else {
+        const merged = mergePricing(
+          (existing.list_pricing as Record<string, unknown> | null) ?? null,
+          body.list_pricing,
+          priceKeys,
+        );
+        if (!merged.ok) {
+          return NextResponse.json({ error: merged.error }, { status: 400 });
+        }
+        updates.list_pricing = merged.value;
+      }
+    }
+
+    if (body.discount_pct !== undefined) {
+      const d = Number(body.discount_pct);
+      if (!Number.isFinite(d) || d < 0 || d >= 100) {
+        return NextResponse.json(
+          { error: "Discount must be a number from 0 to 99.99" },
+          { status: 400 },
+        );
+      }
+      updates.discount_pct = d;
+    }
+
+    // ---- THE INVARIANT --------------------------------------------------
+    // pricing = list_pricing x (1 - discount_pct / 100), for every model
+    // that has a list price. Enforced here because the gateway bills from
+    // `pricing` alone and will never recompute it.
+    const effectiveList =
+      updates.list_pricing !== undefined
+        ? (updates.list_pricing as Record<string, unknown> | null)
+        : ((existing.list_pricing as Record<string, unknown> | null) ?? null);
+    const effectiveDiscount =
+      updates.discount_pct !== undefined
+        ? (updates.discount_pct as number)
+        : Number(existing.discount_pct ?? 0);
+
+    if (body.pricing !== undefined && isListPriced(effectiveList)) {
+      // A hand-edited sell price on a derived model survives exactly until
+      // the next sync or discount change overwrites it. Refusing is kinder
+      // than accepting a number we are about to silently discard.
+      return NextResponse.json(
+        {
+          error:
+            "This model is priced from its list price. Set the discount instead, or clear the list price in the same request to hand-price it.",
+        },
+        { status: 400 },
+      );
+    }
+
+    if (
+      isListPriced(effectiveList) &&
+      (updates.list_pricing !== undefined || updates.discount_pct !== undefined)
+    ) {
+      updates.pricing = deriveSellPricing(
+        effectiveList,
+        effectiveDiscount,
+        (updates.pricing as Record<string, unknown> | undefined) ??
+          ((existing.pricing as Record<string, unknown> | null) ?? {}),
+      );
+    }
+
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
     }
@@ -212,7 +338,7 @@ export async function PATCH(
       .update(updates)
       .eq("id", id)
       .select(
-        "id, model_id, display_name, modality, serving_type, org_id, pricing, upstream_pricing, provider_pricing, is_active, is_featured",
+        "id, model_id, display_name, modality, serving_type, upstream_provider, org_id, pricing, upstream_pricing, provider_pricing, list_pricing, discount_pct, openrouter_id, is_active, is_featured",
       )
       .single();
 
@@ -234,9 +360,18 @@ export async function PATCH(
           operation: "admin.inference.model.update",
           before: {
             pricing: existing.pricing,
+            list_pricing: existing.list_pricing,
+            discount_pct: existing.discount_pct,
+            upstream_provider: existing.upstream_provider,
             is_active: existing.is_active,
             is_featured: existing.is_featured,
           },
+          // Say when the sell price moved because the invariant moved it,
+          // rather than leaving a price change with no author.
+          derived:
+            updates.pricing !== undefined && body.pricing === undefined
+              ? DERIVED_PRICE_KEYS.slice()
+              : undefined,
           updates,
         },
         user_agent: request.headers.get("user-agent") || undefined,

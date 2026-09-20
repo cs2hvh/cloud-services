@@ -3,6 +3,11 @@ import { requireAdmin } from "@/lib/supabase/auth";
 import { createServiceClient } from "@/lib/supabase/server";
 import { AuditLogService } from "@/lib/audit";
 import { unitPricing, isUnitPriced } from "@admin/lib/model-pricing";
+import {
+  impliedDiscountPct,
+  isListPriced,
+  pricingDrift,
+} from "@admin/lib/list-pricing";
 
 export const dynamic = "force-dynamic";
 
@@ -73,7 +78,7 @@ export async function GET() {
         inferenceSchema
           .from("models")
           .select(
-            "id, model_id, display_name, modality, serving_type, upstream_provider, upstream_model_id, org_id, pricing, upstream_pricing, provider_pricing, is_active, is_featured, sort_order, created_at",
+            "id, model_id, display_name, modality, serving_type, upstream_provider, upstream_model_id, org_id, pricing, upstream_pricing, provider_pricing, list_pricing, discount_pct, openrouter_id, is_active, is_featured, sort_order, created_at",
           )
           .order("sort_order", { ascending: true })
           .order("model_id", { ascending: true }),
@@ -215,6 +220,23 @@ export async function GET() {
         sharesUpstreamIdWith: (
           upstreamIdOwners.get(String(m.upstream_model_id ?? "")) ?? []
         ).filter((id) => id !== m.model_id),
+        // THE FOUR LAYERS. Real cost is admin-only and is already on the
+        // row as provider_pricing/upstream_pricing; these three describe how
+        // the customer price was arrived at rather than merely what it is.
+        listPriced: isListPriced(m.list_pricing),
+        discountPct: Number(m.discount_pct ?? 0),
+        // What the stored price implies, for rows that have a list price but
+        // were priced before discount_pct existed. Shown, never written.
+        impliedDiscountPct: impliedDiscountPct(m.pricing, m.list_pricing),
+        // Where the stored price disagrees with list x (1 - discount). The
+        // panel maintains that invariant on write; anything already in the
+        // table predates it, and a drifted row is reported rather than
+        // quietly rewritten - what a customer was charged is a fact.
+        priceDrift: pricingDrift(
+          m.pricing,
+          m.list_pricing,
+          Number(m.discount_pct ?? 0),
+        ),
         placeholderPrice: looksLikePlaceholderPrice(
           (m.pricing ?? null) as Record<string, unknown> | null,
           (m.provider_pricing ?? null) as Record<
@@ -269,6 +291,14 @@ export async function GET() {
         active: rows.filter((m: any) => m.is_active).length,
         orphaned,
         servedSampleTruncated: servedTruncated,
+      listPriced: rows.filter(
+        (r: { is_active: boolean; listPriced: boolean }) =>
+          r.is_active && r.listPriced,
+      ).length,
+      drifted: rows.filter(
+        (r: { is_active: boolean; priceDrift: unknown[] }) =>
+          r.is_active && r.priceDrift.length > 0,
+      ).length,
       placeholderPriced: rows.filter(
         (r: { is_active: boolean; placeholderPrice: boolean }) =>
           r.is_active && r.placeholderPrice,
@@ -321,13 +351,19 @@ const PRICE_FIELDS = [
   "cached_cents_per_mtok",
 ] as const;
 
+/** Partners that may carry a proxied model. Strict routing, no fallback. */
+const CREATE_PARTNERS = ["starimg", "wokey"] as const;
+
 /**
- * Create a self-hosted ("bring your own pod") catalog model.
+ * Create a catalog model - either self-hosted ("bring your own pod") or
+ * proxied to a partner.
  *
  * Deliberately narrow: this creates the model row only. It is born
  * INACTIVE unless asked otherwise, because a model with no serving
  * endpoint yet cannot answer a request — endpoints are added next, and
- * activating before then would publish a model that 503s.
+ * activating before then would publish a model that 503s. A proxied model
+ * is born inactive for the same reason by a different route: nothing has
+ * confirmed the partner answers to that name until a request tries it.
  */
 export async function POST(request: Request) {
   const admin = await requireAdmin();
@@ -343,6 +379,27 @@ export async function POST(request: Request) {
   const displayName = String(body.display_name ?? "").trim();
   const upstreamModelId = String(body.upstream_model_id ?? "").trim();
 
+  // Proxied models are carried by a partner; hosted ones answer from our own
+  // pods. The two differ in what "upstream" even means, so the shape is
+  // decided here rather than inferred later.
+  const servingType = String(body.serving_type ?? "runpod_byo");
+  if (servingType !== "runpod_byo" && servingType !== "proxy") {
+    return NextResponse.json(
+      { error: "serving_type must be runpod_byo or proxy" },
+      { status: 400 },
+    );
+  }
+  const isProxy = servingType === "proxy";
+  const partner = String(body.upstream_provider ?? "").trim();
+  if (isProxy && !CREATE_PARTNERS.includes(partner as (typeof CREATE_PARTNERS)[number])) {
+    return NextResponse.json(
+      {
+        error: `A proxied model needs a partner to carry it: ${CREATE_PARTNERS.join(" or ")}`,
+      },
+      { status: 400 },
+    );
+  }
+
   if (!MODEL_ID_RE.test(modelId)) {
     return NextResponse.json(
       { error: "model_id must be namespaced lowercase, e.g. vendor/model-name" },
@@ -354,7 +411,11 @@ export async function POST(request: Request) {
   }
   if (!upstreamModelId) {
     return NextResponse.json(
-      { error: "upstream_model_id is required — the name the pod answers to" },
+      {
+        error: isProxy
+          ? "upstream_model_id is required — the exact name the partner answers to"
+          : "upstream_model_id is required — the name the pod answers to",
+      },
       { status: 400 },
     );
   }
@@ -406,15 +467,17 @@ export async function POST(request: Request) {
         display_name: displayName,
         description: body.description ? String(body.description).slice(0, 1000) : null,
         modality: String(body.modality ?? "chat"),
-        serving_type: "runpod_byo",
-        upstream_provider: "custom",
+        serving_type: servingType,
+        upstream_provider: isProxy ? partner : "custom",
         upstream_model_id: upstreamModelId,
         org_id: null, // public hosted model
         capabilities,
         pricing,
         // Pods bill by the hour, not per token: leaving upstream_pricing
         // null keeps per-token margin reports honest rather than implying
-        // a token cost basis that does not exist.
+        // a token cost basis that does not exist. A proxied model does have
+        // a per-token cost, but we do not know it yet - null says so, and a
+        // guess would be reported as margin.
         upstream_pricing: null,
         sort_order: sortOrder,
         is_featured: body.is_featured === true,

@@ -38,6 +38,8 @@ import {
   NewHostedModelDialog,
 } from "@admin/components/ai/hosted-model-dialogs";
 import { MediaPricingDialog } from "@admin/components/ai/media-pricing-dialog";
+import { SyncOpenRouterDialog } from "@admin/components/ai/sync-openrouter-dialog";
+import { PartnerCatalogDialog } from "@admin/components/ai/partner-catalog-dialog";
 import { centsToUsd, type UnitPricing } from "@admin/lib/model-pricing";
 
 type Pricing = {
@@ -67,6 +69,14 @@ type ModelRow = {
   providerMargins: { provider: string; input: number | null; output: number | null }[];
   placeholderPrice: boolean;
   sharesUpstreamIdWith: string[];
+  // The four layers. Real cost lives in upstream_pricing/provider_pricing;
+  // these describe how the customer price was arrived at.
+  listPriced: boolean;
+  discountPct: number;
+  impliedDiscountPct: number | null;
+  priceDrift: { key: string; charged: number; expected: number }[];
+  list_pricing: Record<string, number> | null;
+  openrouter_id: string | null;
   endpoints: { total: number; enabled: number } | null;
   podHealth: { live: number; up: number } | null;
   servedLast24h: { provider: string; requests: number }[] | null;
@@ -77,6 +87,8 @@ type CatalogSummary = {
   active: number;
   orphaned: number;
   placeholderPriced: number;
+  listPriced: number;
+  drifted: number;
   upstreamChecked: boolean;
   upstreamCount: number | null;
 };
@@ -130,6 +142,12 @@ export function AiModelsTable() {
   const [creating, setCreating] = useState(false);
   const [endpointsFor, setEndpointsFor] = useState<string | null>(null);
   const [mediaPricing, setMediaPricing] = useState<ModelRow | null>(null);
+  const [syncOpen, setSyncOpen] = useState(false);
+  const [partnerOpen, setPartnerOpen] = useState(false);
+  // Discount and routing are per-model decisions edited alongside price.
+  const [discountDraft, setDiscountDraft] = useState("");
+  const [providerDraft, setProviderDraft] = useState("");
+  const [orIdDraft, setOrIdDraft] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -232,6 +250,9 @@ export function AiModelsTable() {
           : "",
     });
     setCostTab("default");
+    setDiscountDraft(String(model.discountPct ?? 0));
+    setProviderDraft(model.upstream_provider ?? "");
+    setOrIdDraft(model.openrouter_id ?? "");
     setEditing(model);
   };
 
@@ -287,11 +308,39 @@ export function AiModelsTable() {
       starimg[key] = cents;
     }
 
+    // A list-priced model's sell price is derived, so sending `pricing` for
+    // one is refused by the API - the discount is the editable layer.
+    let discountUpdate: Record<string, unknown> = {};
+    if (model.listPriced) {
+      const d = Number(discountDraft);
+      if (!Number.isFinite(d) || d < 0 || d >= 100) {
+        toast.error("Discount must be a number from 0 to 99.99");
+        return;
+      }
+      if (d !== model.discountPct) discountUpdate = { discount_pct: d };
+    }
+
+    // Routing is strict: this decides who serves every request for the
+    // model, so it is only sent when it actually changed.
+    const routingUpdate: Record<string, unknown> = {};
+    if (
+      model.serving_type === "proxy" &&
+      providerDraft !== "" &&
+      providerDraft !== model.upstream_provider
+    ) {
+      routingUpdate.upstream_provider = providerDraft;
+    }
+    if (orIdDraft.trim() !== (model.openrouter_id ?? "")) {
+      routingUpdate.openrouter_id = orIdDraft.trim();
+    }
+
     setEditing(null);
     await patch(
       model,
       {
-        pricing,
+        ...(model.listPriced ? {} : { pricing }),
+        ...discountUpdate,
+        ...routingUpdate,
         upstream_pricing,
         ...(Object.keys(starimg).length > 0
           ? { provider_pricing: { starimg } }
@@ -367,6 +416,14 @@ export function AiModelsTable() {
                 ))}
             </SelectContent>
           </Select>
+          {summary && summary.drifted > 0 && (
+            <span
+              className="rounded-full border border-purple-500/40 bg-purple-500/10 px-2.5 py-1 text-[11px] text-purple-300"
+              title="The stored price does not equal list x (1 - discount). Either the list price moved or someone hand-edited the price. Re-syncing or saving a discount will bring it back in line."
+            >
+              {summary.drifted} price(s) out of line with list
+            </span>
+          )}
           {summary && summary.placeholderPriced > 0 && (
             <button
               type="button"
@@ -391,6 +448,12 @@ export function AiModelsTable() {
               {summary?.upstreamCount != null &&
                 ` · Wokey serves ${summary.upstreamCount}`}
             </span>
+            <Button variant="outline" size="sm" onClick={() => setPartnerOpen(true)}>
+              Partner catalogues
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setSyncOpen(true)}>
+              Sync with OpenRouter
+            </Button>
             <Button variant="ghost" size="sm" onClick={load} disabled={loading}>
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             </Button>
@@ -404,8 +467,16 @@ export function AiModelsTable() {
                 <TableHead>Model</TableHead>
                 <TableHead>Modality</TableHead>
                 <TableHead>Upstream</TableHead>
-                <TableHead className="text-right">Price in/out ($/Mtok)</TableHead>
-                <TableHead className="text-right">Cost in/out</TableHead>
+                <TableHead className="text-right">Sell in/out ($/Mtok)</TableHead>
+                <TableHead className="text-right">
+                  Cost in/out
+                  <span
+                    className="ml-1 rounded border border-white/[0.15] px-1 text-[9px] uppercase tracking-wide text-white/50"
+                    title="What the partner charges us. Operator-only - this never appears on a customer-facing surface."
+                  >
+                    internal
+                  </span>
+                </TableHead>
                 <TableHead className="text-right">Margin by partner</TableHead>
                 <TableHead>Featured</TableHead>
                 <TableHead>Active</TableHead>
@@ -533,6 +604,41 @@ export function AiModelsTable() {
                             title="Looks like the seeded placeholder: 5x the partner cost, cached at a tenth of input. Set a real price."
                           >
                             placeholder
+                          </div>
+                        )}
+                        {/* Where the sell price came from. A derived price
+                            without its list price and discount beside it is
+                            just a number nobody can check. */}
+                        {m.listPriced && (
+                          <div
+                            className="mt-0.5 text-[10.5px] font-normal text-muted-foreground/80"
+                            title="List price from OpenRouter, less the discount. The sell price above is list x (1 - discount)."
+                          >
+                            list {perMtok(m.list_pricing?.input_cents_per_mtok)} ·{" "}
+                            <span className="text-emerald-300/80">
+                              -{m.discountPct}%
+                            </span>
+                          </div>
+                        )}
+                        {!m.listPriced && m.is_active && (
+                          <div
+                            className="mt-0.5 text-[10.5px] font-normal text-muted-foreground/60"
+                            title="No list price on file, so this price is hand-set and the OpenRouter sync will not move it."
+                          >
+                            hand-priced
+                          </div>
+                        )}
+                        {m.priceDrift.length > 0 && (
+                          <div
+                            className="mt-0.5 inline-flex rounded border border-purple-500/40 bg-purple-500/10 px-1 py-0.5 text-[10px] font-normal text-purple-300"
+                            title={m.priceDrift
+                              .map(
+                                (d) =>
+                                  `${d.key}: charging ${d.charged}c, list x (1 - ${m.discountPct}%) would be ${d.expected}c`,
+                              )
+                              .join(" · ")}
+                          >
+                            off list formula
                           </div>
                         )}
                       </>
@@ -675,33 +781,163 @@ export function AiModelsTable() {
         }}
       />
 
+      <PartnerCatalogDialog
+        open={partnerOpen}
+        onClose={(changed) => {
+          setPartnerOpen(false);
+          if (changed) void load();
+        }}
+      />
+
+      <SyncOpenRouterDialog
+        open={syncOpen}
+        onClose={(changed) => {
+          setSyncOpen(false);
+          if (changed) void load();
+        }}
+      />
+
       <Dialog open={!!editing} onOpenChange={(open) => !open && setEditing(null)}>
         <DialogContent className="max-h-[90vh] max-w-md overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Pricing — {editing?.model_id}</DialogTitle>
+            <DialogTitle>
+              {editing?.serving_type === "proxy" ? "Pricing & routing" : "Pricing"} —{" "}
+              {editing?.model_id}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
               What we charge
             </div>
-            {(
-              [
-                ["input", "Input ($ per Mtok)"],
-                ["output", "Output ($ per Mtok)"],
-                ["cached", "Cached input ($ per Mtok)"],
-              ] as const
-            ).map(([key, label]) => (
-              <div key={key} className="space-y-1.5">
-                <Label htmlFor={`price-${key}`}>{label}</Label>
-                <Input
-                  id={`price-${key}`}
-                  inputMode="decimal"
-                  value={draft[key]}
-                  onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
-                  placeholder="unchanged"
-                />
+
+            {/* A list-priced model has a derived sell price: the editable
+                layer is the discount, and the API refuses a direct price so
+                the two can never disagree. A model with no list price is
+                hand-priced and keeps the raw fields. */}
+            {editing?.listPriced ? (
+              <div className="space-y-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="discount">Discount off list (%)</Label>
+                  <Input
+                    id="discount"
+                    inputMode="decimal"
+                    value={discountDraft}
+                    onChange={(e) => setDiscountDraft(e.target.value)}
+                    placeholder="0"
+                  />
+                </div>
+                <div className="rounded-md border border-border bg-white/[0.02] px-3 py-2 text-[11.5px]">
+                  {(() => {
+                    const d = Number(discountDraft);
+                    const ok = Number.isFinite(d) && d >= 0 && d < 100;
+                    const f = ok ? 1 - d / 100 : null;
+                    const li = editing.list_pricing?.input_cents_per_mtok;
+                    const lo = editing.list_pricing?.output_cents_per_mtok;
+                    return (
+                      <>
+                        <div className="flex justify-between text-muted-foreground">
+                          <span>List (OpenRouter)</span>
+                          <span className="tabular-nums">
+                            {perMtok(li)} / {perMtok(lo)}
+                          </span>
+                        </div>
+                        <div className="mt-1 flex justify-between font-medium">
+                          <span>Customer pays</span>
+                          <span className="tabular-nums">
+                            {f !== null && typeof li === "number"
+                              ? perMtok(Math.round(li * f * 10000) / 10000)
+                              : "—"}{" "}
+                            /{" "}
+                            {f !== null && typeof lo === "number"
+                              ? perMtok(Math.round(lo * f * 10000) / 10000)
+                              : "—"}
+                          </span>
+                        </div>
+                        {!ok && discountDraft.trim() !== "" && (
+                          <div className="mt-1 text-red-300">
+                            Discount must be between 0 and 99.99.
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Priced from its list price, so the price itself is not
+                  edited here. To set a price by hand, clear the list price
+                  first.
+                </p>
               </div>
-            ))}
+            ) : (
+              (
+                [
+                  ["input", "Input ($ per Mtok)"],
+                  ["output", "Output ($ per Mtok)"],
+                  ["cached", "Cached input ($ per Mtok)"],
+                ] as const
+              ).map(([key, label]) => (
+                <div key={key} className="space-y-1.5">
+                  <Label htmlFor={`price-${key}`}>{label}</Label>
+                  <Input
+                    id={`price-${key}`}
+                    inputMode="decimal"
+                    value={draft[key]}
+                    onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
+                    placeholder="unchanged"
+                  />
+                </div>
+              ))
+            )}
+
+            {/* ROUTING. There is no fallback any more, so this field is not a
+                preference - it names the only partner that will serve the
+                model. Shown only where it means something. */}
+            {editing?.serving_type === "proxy" && (
+              <div className="border-t border-border pt-3">
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                  Who serves it
+                </div>
+                <div className="space-y-1.5">
+                  <Select value={providerDraft} onValueChange={setProviderDraft}>
+                    <SelectTrigger id="provider">
+                      <SelectValue placeholder="Choose a partner" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="starimg">starimg</SelectItem>
+                      <SelectItem value="wokey">wokey</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground">
+                    Routing is strict — every request for this model goes to
+                    the partner named here, with no failover to the other. If
+                    they cannot serve it, the model is down.
+                    {editing.upstream_model_id && (
+                      <>
+                        {" "}
+                        Sent upstream as{" "}
+                        <span className="font-mono">
+                          {editing.upstream_model_id}
+                        </span>
+                        .
+                      </>
+                    )}
+                  </p>
+                </div>
+                <div className="mt-3 space-y-1.5">
+                  <Label htmlFor="orid">OpenRouter id (for price sync)</Label>
+                  <Input
+                    id="orid"
+                    value={orIdDraft}
+                    onChange={(e) => setOrIdDraft(e.target.value)}
+                    placeholder={editing.model_id}
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Only needed when our id differs from theirs. Blank matches
+                    on the model id above.
+                  </p>
+                </div>
+              </div>
+            )}
 
             <div className="border-t border-border pt-3">
               <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
