@@ -170,25 +170,55 @@ export async function handleUsageBatch(
     .from("usage")
     .insert(rows);
 
+  // The batch insert is all-or-nothing, so one event the table rejects used
+  // to fail every event around it, and after three retries Cloudflare dropped
+  // them all. That is how two days of hosted-pod usage vanished (2026-09-18
+  // to 09-20: provider null against a NOT NULL column). When the batch is
+  // refused, write the rows one at a time: the refused event is retried on
+  // its own, logged with its request id, and everything else is kept.
+  let inserted = rows;
+  let ackedIndividually = false;
   if (insertErr) {
     console.error(
       JSON.stringify({
         level: "error",
         scope: "usage-consumer",
-        message: "Failed to insert usage rows",
+        message: "Batch insert refused; inserting rows one by one",
         count: rows.length,
         err: insertErr.message,
       })
     );
-    batch.retryAll();
-    return;
+    ackedIndividually = true;
+    inserted = [];
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i]!;
+      const msg = batch.messages[i]!;
+      const { error } = await supabase.schema("inference").from("usage").insert(row);
+      if (error) {
+        console.error(
+          JSON.stringify({
+            level: "error",
+            scope: "usage-consumer",
+            message: "Usage row refused",
+            request_id: row.request_id,
+            model_id: row.model_id,
+            err: error.message,
+          })
+        );
+        msg.retry();
+      } else {
+        inserted.push(row);
+        msg.ack();
+      }
+    }
+    if (inserted.length === 0) return;
   }
 
   // 4. Increment per-org SPEND counter for the current month
   //    (the edge gateway reads this on every request for hard-cap enforcement)
   const month = new Date().toISOString().slice(0, 7);
   const spendByOrg = new Map<string, number>();
-  for (const row of rows) {
+  for (const row of inserted) {
     spendByOrg.set(row.org_id, (spendByOrg.get(row.org_id) ?? 0) + row.cost_cents);
   }
 
@@ -216,15 +246,16 @@ export async function handleUsageBatch(
   //     fire the same threshold twice in one month.
   const { orgsUnchecked } = await fireSpendAlerts(env, totalsByOrg, month);
 
-  batch.ackAll();
+  if (!ackedIndividually) batch.ackAll();
 
   console.log(
     JSON.stringify({
       level: "info",
       scope: "usage-consumer",
       message: "Flushed usage batch",
-      count: rows.length,
-      total_cents: rows.reduce((sum, r) => sum + r.cost_cents, 0),
+      count: inserted.length,
+      refused: rows.length - inserted.length,
+      total_cents: inserted.reduce((sum, r) => sum + r.cost_cents, 0),
       // Successful rows inserted at cost 0 because the model/pricing was
       // unknown — each one is also logged individually above.
       unpriced,

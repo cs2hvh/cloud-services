@@ -93,6 +93,11 @@ max_batch_size = 25
 max_batch_timeout = 5
 max_retries = 3
 max_concurrency = 4
+# An event still refused after max_retries lands here instead of vanishing.
+# Nothing consumes it; it is read by hand (`wrangler queues consumer` or the
+# dashboard) and replayed once the cause is fixed. Added 2026-09-20 after two
+# days of usage were dropped with no trace.
+dead_letter_queue = "ahura-inference-usage-dlq"
 
 # AUDIT consumer: append-only insert into inference.audit_log.
 [[queues.consumers]]
