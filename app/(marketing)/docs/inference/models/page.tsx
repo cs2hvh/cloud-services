@@ -169,7 +169,7 @@ export default function ModelsPage() {
             "Z.AI / GLM 5.3 Derisked",
             <C key="g2">zhipu/glm-5.3-derisked</C>,
             "1,000,000",
-            <>The full GLM 5.3, served through a dedicated derisked backend rather than on AhuraSense GPUs. Honours the <A href="/docs/inference/reasoning">reasoning ladder</A>: <C>none</C>, <C>minimal</C> and <C>low</C> answer without thinking, the default thinks briefly, <C>max</C> thinks most. Reports prompt-cache hits, billed at the cached rate.</>,
+            <>The full GLM 5.3, served through a dedicated derisked backend rather than on AhuraSense GPUs. Honours the <A href="/docs/inference/reasoning">reasoning ladder</A>: <C>none</C>, <C>minimal</C> and <C>low</C> answer without thinking, the default thinks briefly, <C>max</C> thinks most. Prompt-cache hits, when the backend reports them, bill at the cached rate.</>,
           ],
           [
             "Qwen / Qwen3.8 Flash Next Uncensored",
