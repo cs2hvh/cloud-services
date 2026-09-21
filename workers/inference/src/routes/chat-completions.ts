@@ -325,6 +325,12 @@ export const chatCompletions: Handler<{
     // weighted, with failover) or the legacy single serving_url. The cache +
     // guardrail already ran above; preset rewrite already applied. Pass the
     // body as-is (model rewritten to the served-model-name inside).
+    // Who serves an endpoint-routed model: our own pods ('custom') leave the
+    // usage row's provider null; a partner reached through endpoints (GLM 5.3
+    // Derisked on three keys of one backend, 2026-09-21) is stamped so its
+    // per-provider cost applies and the panel can show it as a partner.
+    const managedProvider =
+      routing.upstream_provider && routing.upstream_provider !== "custom" ? routing.upstream_provider : null;
     let upstream: Response;
     let servedFrom: string;
     try {
@@ -362,6 +368,7 @@ export const chatCompletions: Handler<{
           ...baseUsageEvent(auth, effectiveModel, requestId, startedAt),
           status: "error_upstream",
           errorCode: "managed_warming_up",
+          upstreamProvider: managedProvider,
         })
       );
       c.header("Retry-After", "10");
@@ -397,6 +404,7 @@ export const chatCompletions: Handler<{
           ...baseUsageEvent(auth, effectiveModel, requestId, startedAt),
           status: mapUpstreamStatus(upstream.status),
           errorCode: `managed_${upstream.status}`,
+          upstreamProvider: managedProvider,
         })
       );
       if (upstream.status >= 500 && upstream.status < 600) {
@@ -438,7 +446,11 @@ export const chatCompletions: Handler<{
             ...baseUsageEvent(auth, effectiveModel, requestId, startedAt),
             inputTokens: usage?.prompt_tokens ?? null,
             outputTokens: usage?.completion_tokens ?? null,
+            // The partner backend reports prompt-cache hits in OpenAI's
+            // spelling; bill them at the cached rate like the proxy path does.
+            cachedTokens: clampCachedTokens(readCachedTokens(usage), usage?.prompt_tokens ?? null),
             status: "success",
+            upstreamProvider: managedProvider,
           })
         );
       });
@@ -457,7 +469,9 @@ export const chatCompletions: Handler<{
         ...baseUsageEvent(auth, effectiveModel, requestId, startedAt),
         inputTokens: usage?.prompt_tokens ?? null,
         outputTokens: usage?.completion_tokens ?? null,
+        cachedTokens: clampCachedTokens(readCachedTokens(usage), usage?.prompt_tokens ?? null),
         status: "success",
+        upstreamProvider: managedProvider,
       })
     );
     return new Response(text, {

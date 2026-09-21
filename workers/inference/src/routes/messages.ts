@@ -370,6 +370,12 @@ export const messagesShim: Handler<{
         signal: c.req.raw.signal,
       });
       upstream = managed.response;
+      // A partner reached through endpoints is stamped on the usage row; our
+      // own pods ('custom') stay null. Same rule as chat/completions.
+      servedBy =
+        messagesRouting.upstream_provider && messagesRouting.upstream_provider !== "custom"
+          ? messagesRouting.upstream_provider
+          : null;
       if (managed.attempts.length > 0) {
         console.warn(
           JSON.stringify({
