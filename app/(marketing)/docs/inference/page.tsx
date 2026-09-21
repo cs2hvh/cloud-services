@@ -162,8 +162,9 @@ console.log(completion.choices[0].message.content);`,
       </P>
       <ModelsList />
       <Callout kind="note" title="Hosted, uncensored models">
-        <C>zhipu/glm-5.3-derisked</C>, <C>zhipu/glm-5.3-flash-derisked</C> and{" "}
-        <C>qwen/qwen3.8-flash-next-uncensored</C> run on AhuraSense GPU infrastructure without vendor refusal tuning, with{" "}
+        <C>zhipu/glm-5.3-flash-derisked</C> and{" "}
+        <C>qwen/qwen3.8-flash-next-uncensored</C> run on AhuraSense GPU infrastructure without vendor refusal tuning, and{" "}
+        <C>zhipu/glm-5.3-derisked</C> is served through a dedicated derisked backend, all with{" "}
         <A href="/docs/inference/reasoning">reasoning effort</A> under your control. Every other
         model is served by a partner backend with the vendor’s own behaviour.
       </Callout>

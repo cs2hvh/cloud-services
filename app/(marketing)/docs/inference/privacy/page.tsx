@@ -52,9 +52,10 @@ export default function PrivacyPage() {
       <H2>Where a request goes</H2>
       <P>
         The gateway runs at the edge and forwards your request to the backend that serves the
-        model: AhuraSense GPU infrastructure for hosted models, an inference partner for the rest
-        of the catalog. The backend receives the prompt in order to generate the answer and is
-        bound by our subprocessor terms. The <A href="/subprocessors">subprocessor list</A> and{" "}
+        model: AhuraSense GPU infrastructure for the hosted flash model, a dedicated derisked
+        backend for <C>zhipu/glm-5.3-derisked</C>, an inference partner for the rest of the
+        catalog. The backend receives the prompt in order to generate the answer and is bound by
+        our subprocessor terms. The <A href="/subprocessors">subprocessor list</A> and{" "}
         <A href="/dpa">data processing agreement</A> are published on this site.
       </P>
 

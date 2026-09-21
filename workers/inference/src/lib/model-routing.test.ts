@@ -154,6 +154,26 @@ describe("forwardToEndpoints", () => {
     expect(calls.map((c) => c.authorization)).toEqual([undefined, undefined, undefined]);
   });
 
+  it("treats a 429 as an overloaded endpoint and moves to the next key", async () => {
+    const calls: Call[] = [];
+    const fetchImpl = fakeFetch(
+      {
+        "https://busy.example/v1": () => new Response('{"error":"rate limited"}', { status: 429 }),
+        "https://ok.example/v1": () => new Response("{}", { status: 200 }),
+      },
+      calls
+    );
+    const r = routing({
+      endpoints: [
+        { id: "b", baseUrl: "https://busy.example/v1", apiKeyCt: null, servedModelName: null, weight: 1 },
+        { id: "o", baseUrl: "https://ok.example/v1", apiKeyCt: null, servedModelName: null, weight: 1 },
+      ],
+    });
+    const result = await forwardToEndpoints({ env: { BYOK_DEK: dek() }, routing: r, body: { model: "m" }, fetchImpl, random: () => 0 });
+    expect(result.baseUrl).toBe("https://ok.example/v1");
+    expect(result.attempts).toEqual([{ baseUrl: "https://busy.example/v1", status: 429, error: null }]);
+  });
+
   it("returns a 4xx from the first endpoint without trying another", async () => {
     const calls: Call[] = [];
     const fetchImpl = fakeFetch(

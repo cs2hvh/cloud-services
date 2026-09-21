@@ -168,8 +168,8 @@ export default function ModelsPage() {
           [
             "Z.AI / GLM 5.3 Derisked",
             <C key="g2">zhipu/glm-5.3-derisked</C>,
-            "1,048,576",
-            <>The full GLM 5.3. Thinks hard by default: send <C>reasoning_effort: low</C>, and see the <A href="/docs/inference/reasoning">caveat on its ladder</A>. Carries about 660 tokens of system template on every request, and does not report prompt-cache hits, so a repeated prefix bills at the input rate.</>,
+            "1,000,000",
+            <>The full GLM 5.3, served through a dedicated derisked backend rather than on AhuraSense GPUs. Honours the <A href="/docs/inference/reasoning">reasoning ladder</A>: <C>none</C>, <C>minimal</C> and <C>low</C> answer without thinking, the default thinks briefly, <C>max</C> thinks most. Reports prompt-cache hits, billed at the cached rate.</>,
           ],
           [
             "Qwen / Qwen3.8 Flash Next Uncensored",
@@ -193,7 +193,10 @@ export default function ModelsPage() {
           with <C>Retry-After: 10</C>. Retry, and the request goes through.
         </Li>
         <Li>
-          They run on AhuraSense infrastructure end to end; no partner receives the prompt.
+          <C>zhipu/glm-5.3-flash-derisked</C> runs on AhuraSense infrastructure end to end; no
+          partner receives the prompt. <C>zhipu/glm-5.3-derisked</C> is served through a dedicated
+          derisked backend under contract to us, so that backend does receive the prompt; the
+          same <A href="/docs/inference/privacy">retention terms</A> apply.
         </Li>
       </Ul>
 

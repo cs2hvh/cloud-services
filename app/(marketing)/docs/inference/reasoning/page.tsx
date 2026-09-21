@@ -87,7 +87,9 @@ export default function ReasoningPage() {
       <P>
         This is the field OpenCode, Hermes and most SDKs already send when you set a reasoning
         level in them, so in those tools there is nothing extra to configure. The template
-        spelling, <C>{`"chat_template_kwargs": {"reasoning_effort": "high"}`}</C>, is accepted too.
+        spelling, <C>{`"chat_template_kwargs": {"reasoning_effort": "high"}`}</C>, is accepted on
+        the flash model; <C>zhipu/glm-5.3-derisked</C> refuses it with a 400, so use{" "}
+        <C>reasoning_effort</C> there.
       </P>
       <P>
         Not every hosted model has five distinct levels. <C>qwen/qwen3.8-flash-next-uncensored</C> folds the
@@ -96,23 +98,18 @@ export default function ReasoningPage() {
         <C>none</C> are as above. Sending any value is always safe; a model without a matching
         level uses its nearest.
       </P>
-      <Callout kind="warn" title="The caps do not hold on zhipu/glm-5.3-derisked">
-        On the full GLM 5.3 the levels above <C>low</C> do not stop where the table says. Measured
-        on one hard prompt with a 9,000-token allowance, <C>minimal</C>, <C>medium</C>,{" "}
-        <C>xhigh</C>, <C>max</C> and sending nothing at all each spent the entire allowance
-        thinking and came back truncated, with <C>finish_reason: length</C> and no usable answer.{" "}
-        <C>high</C> spent 8,020. Only <C>low</C> finished on its own, at 2,264 thinking tokens.{" "}
-        <C>none</C> is worse than useless here: the model still reasons, but as plain text at the
-        start of the visible answer, so a one-word question comes back as a sentence of monologue
-        with the word at the end. <C>custom_params.thinking_budget</C> is ignored on this model as
-        well. Until that is fixed on our side, use <C>low</C> and nothing else, and give it room in{" "}
-        <C>max_tokens</C>. The flash model, where the table was measured, is unaffected.
-      </Callout>
+      <P>
+        On <C>zhipu/glm-5.3-derisked</C> the ladder is coarser than the table: <C>none</C>,{" "}
+        <C>minimal</C> and <C>low</C> all answer without thinking, <C>medium</C> and <C>high</C>{" "}
+        think briefly, <C>max</C> thinks most, and sending nothing sits between the two. Every
+        level finishes on its own.
+      </P>
 
       <H2>An exact budget</H2>
       <P>
         To cap thinking at a number of tokens rather than a level, send{" "}
         <C>custom_params.thinking_budget</C>. A budget overrides the ladder when both are present.
+        On <C>zhipu/glm-5.3-derisked</C> the budget is ignored; use the ladder there.
       </P>
       <Code lang="json" title="request body">{`{
   "model": "zhipu/glm-5.3-flash-derisked",
