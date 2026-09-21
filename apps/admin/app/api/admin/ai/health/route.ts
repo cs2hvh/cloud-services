@@ -100,7 +100,7 @@ export async function GET() {
         const inf = (supabase as any).schema("inference");
         const [{ data, error }, modelsRes] = await Promise.all([
           inf.from("endpoint_health").select("model_id, enabled, ok, checked_at"),
-          inf.from("models").select("model_id, is_active"),
+          inf.from("models").select("model_id, is_active, upstream_provider"),
         ]);
         if (error) return { ok: false, unknown: true, detail: "pod health unreadable" };
         // A delisted model is unroutable — its dead pod is housekeeping, not
@@ -110,6 +110,20 @@ export async function GET() {
             (m) => [m.model_id, m.is_active],
           ),
         );
+        // Endpoint rows are the mechanism, not a statement about hardware.
+        // A model reached through endpoints may be served entirely by a
+        // partner, one row per API key, so its keys must not be counted as
+        // our pods - a partner outage would otherwise read as ours.
+        const providerOf = new Map<string, string>(
+          (
+            (modelsRes.data ?? []) as {
+              model_id: string;
+              upstream_provider: string | null;
+            }[]
+          ).map((m) => [m.model_id, m.upstream_provider ?? "custom"]),
+        );
+        const isOurs = (modelId: string) =>
+          (providerOf.get(modelId) ?? "custom") === "custom";
         const rows = (data ?? []) as {
           model_id: string;
           enabled: boolean;
@@ -135,6 +149,7 @@ export async function GET() {
         for (const r of rows) {
           if (!r.enabled) continue;
           if (!(active.get(r.model_id) ?? false)) continue;
+          if (!isOurs(r.model_id)) continue;
           const e = byModel.get(r.model_id) ?? { live: 0, up: 0 };
           e.live += 1;
           if (r.ok) e.up += 1;
@@ -145,7 +160,7 @@ export async function GET() {
           ([, v]) => v.up > 0 && v.up < v.live,
         );
         const live = rows.filter(
-          (r) => r.enabled && (active.get(r.model_id) ?? false),
+          (r) => r.enabled && (active.get(r.model_id) ?? false) && isOurs(r.model_id),
         );
         if (down.length > 0) {
           return {

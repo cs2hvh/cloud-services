@@ -39,6 +39,7 @@ import {
 } from "@admin/components/ai/hosted-model-dialogs";
 import { MediaPricingDialog } from "@admin/components/ai/media-pricing-dialog";
 import { SyncOpenRouterDialog } from "@admin/components/ai/sync-openrouter-dialog";
+import { costTabsFor, servedByEndpoints } from "@admin/lib/serving";
 import { centsToUsd, type UnitPricing } from "@admin/lib/model-pricing";
 
 type Pricing = {
@@ -70,6 +71,8 @@ type ModelRow = {
   sharesUpstreamIdWith: string[];
   // The four layers. Real cost lives in upstream_pricing/provider_pricing;
   // these describe how the customer price was arrived at.
+  ownPods: boolean;
+  endpointNoun: { one: string; many: string };
   listPriced: boolean;
   discountPct: number;
   impliedDiscountPct: number | null;
@@ -129,15 +132,19 @@ export function AiModelsTable() {
     cached: "",
     cacheWrite: "",
   });
-  // Cost is per partner now: the Default tab writes upstream_pricing (which
-  // the consumer falls back to), Starimg writes provider_pricing.starimg.
-  const [costTab, setCostTab] = useState<"default" | "starimg">("default");
-  const [starimgDraft, setStarimgDraft] = useState({
+  // Cost is per partner: the Default tab writes upstream_pricing (which the
+  // consumer falls back to), every other tab writes provider_pricing[name].
+  // Held as a map rather than one state per partner, so a new partner costs
+  // an entry in lib/serving rather than another pair of hooks here.
+  type CostFields = { input: string; output: string; cached: string; cacheWrite: string };
+  const blankCost = (): CostFields => ({
     input: "",
     output: "",
     cached: "",
     cacheWrite: "",
   });
+  const [costTab, setCostTab] = useState<string>("default");
+  const [partnerDrafts, setPartnerDrafts] = useState<Record<string, CostFields>>({});
   const [creating, setCreating] = useState(false);
   const [endpointsFor, setEndpointsFor] = useState<string | null>(null);
   const [mediaPricing, setMediaPricing] = useState<ModelRow | null>(null);
@@ -234,19 +241,27 @@ export function AiModelsTable() {
           ? String(up.cache_write_cents_per_mtok)
           : "",
     });
-    const si = ((model.provider_pricing ?? {}).starimg ?? {}) as Record<
+    const perProvider = (model.provider_pricing ?? {}) as Record<
       string,
-      number | undefined
+      Record<string, number | undefined> | undefined
     >;
-    setStarimgDraft({
-      input: si.input_cents_per_mtok != null ? String(si.input_cents_per_mtok) : "",
-      output: si.output_cents_per_mtok != null ? String(si.output_cents_per_mtok) : "",
-      cached: si.cached_cents_per_mtok != null ? String(si.cached_cents_per_mtok) : "",
-      cacheWrite:
-        si.cache_write_cents_per_mtok != null
-          ? String(si.cache_write_cents_per_mtok)
-          : "",
-    });
+    const drafts: Record<string, CostFields> = {};
+    for (const tab of costTabsFor(model.upstream_provider)) {
+      if (tab.id === "default") continue;
+      const blob = perProvider[tab.id] ?? {};
+      drafts[tab.id] = {
+        input: blob.input_cents_per_mtok != null ? String(blob.input_cents_per_mtok) : "",
+        output:
+          blob.output_cents_per_mtok != null ? String(blob.output_cents_per_mtok) : "",
+        cached:
+          blob.cached_cents_per_mtok != null ? String(blob.cached_cents_per_mtok) : "",
+        cacheWrite:
+          blob.cache_write_cents_per_mtok != null
+            ? String(blob.cache_write_cents_per_mtok)
+            : "",
+      };
+    }
+    setPartnerDrafts(drafts);
     setCostTab("default");
     setDiscountDraft(String(model.discountPct ?? 0));
     setProviderDraft(model.upstream_provider ?? "");
@@ -289,21 +304,28 @@ export function AiModelsTable() {
       upstream_pricing[key] = cents;
     }
 
-    const starimg: Record<string, number> = {};
-    const siMap: [string, string][] = [
-      ["input_cents_per_mtok", starimgDraft.input],
-      ["output_cents_per_mtok", starimgDraft.output],
-      ["cached_cents_per_mtok", starimgDraft.cached],
-      ["cache_write_cents_per_mtok", starimgDraft.cacheWrite],
-    ];
-    for (const [key, raw] of siMap) {
-      if (raw.trim() === "") continue;
-      const cents = Number(raw);
-      if (!Number.isFinite(cents) || cents < 0) {
-        toast.error("Starimg costs must be numbers >= 0 (cents per Mtok)");
-        return;
+    // One blob per partner tab that has anything in it. A tab left entirely
+    // blank is not sent, so it keeps falling back to Default rather than
+    // being written as a row of zeroes.
+    const providerPricing: Record<string, Record<string, number>> = {};
+    for (const [provider, fields] of Object.entries(partnerDrafts)) {
+      const blob: Record<string, number> = {};
+      const map: [string, string][] = [
+        ["input_cents_per_mtok", fields.input],
+        ["output_cents_per_mtok", fields.output],
+        ["cached_cents_per_mtok", fields.cached],
+        ["cache_write_cents_per_mtok", fields.cacheWrite],
+      ];
+      for (const [key, raw] of map) {
+        if (raw.trim() === "") continue;
+        const cents = Number(raw);
+        if (!Number.isFinite(cents) || cents < 0) {
+          toast.error(`${provider} costs must be numbers >= 0 (cents per Mtok)`);
+          return;
+        }
+        blob[key] = cents;
       }
-      starimg[key] = cents;
+      if (Object.keys(blob).length > 0) providerPricing[provider] = blob;
     }
 
     // A list-priced model's sell price is derived, so sending `pricing` for
@@ -340,8 +362,8 @@ export function AiModelsTable() {
         ...discountUpdate,
         ...routingUpdate,
         upstream_pricing,
-        ...(Object.keys(starimg).length > 0
-          ? { provider_pricing: { starimg } }
+        ...(Object.keys(providerPricing).length > 0
+          ? { provider_pricing: providerPricing }
           : {}),
       },
       `${model.model_id} pricing updated`,
@@ -514,9 +536,10 @@ export function AiModelsTable() {
                   <TableCell className="text-xs text-muted-foreground">
                     <div className="flex items-center gap-1.5">
                       <span>{m.upstream_provider ?? m.serving_type}</span>
-                      {m.serving_type === "runpod_byo" && m.podHealth && (
-                        // Hosted models answer from our pods, so "is it
-                        // serving" is a fact we hold, not a partner's claim.
+                      {servedByEndpoints(m.serving_type) && m.podHealth && (
+                        // Probed by us either way, so "is it serving" is a
+                        // fact we hold rather than a partner's claim - but
+                        // a partner's endpoint rows are API keys, not pods.
                         <span
                           className={`rounded border px-1 py-0.5 text-[10px] ${
                             m.podHealth.live === 0
@@ -527,17 +550,20 @@ export function AiModelsTable() {
                                   ? "border-red-500/50 bg-red-500/15 text-red-300"
                                   : "border-amber-500/50 bg-amber-500/10 text-amber-300"
                           }`}
-                          title="Enabled pods serving / enabled pods"
+                          title={`Enabled ${m.endpointNoun.many} serving / enabled ${m.endpointNoun.many}`}
                         >
-                          {m.podHealth.up}/{m.podHealth.live} pods
+                          {m.podHealth.up}/{m.podHealth.live} {m.endpointNoun.many}
                         </span>
                       )}
-                      {m.serving_type === "runpod_byo" &&
+                      {servedByEndpoints(m.serving_type) &&
                         !m.podHealth &&
                         m.endpoints && (
                           <span className="rounded border border-white/[0.15] px-1 py-0.5 text-[10px] text-white/50">
-                            {m.endpoints.total} pod
-                            {m.endpoints.total === 1 ? "" : "s"}, unprobed
+                            {m.endpoints.total}{" "}
+                            {m.endpoints.total === 1
+                              ? m.endpointNoun.one
+                              : m.endpointNoun.many}
+                            , unprobed
                           </span>
                         )}
                     </div>
@@ -937,12 +963,7 @@ export function AiModelsTable() {
                   served it, falling back to Default — so the same model can
                   be profitable on one partner and underwater on another. */}
               <div className="mb-2 flex gap-1">
-                {(
-                  [
-                    ["default", "Default / Wokey"],
-                    ["starimg", "Starimg"],
-                  ] as const
-                ).map(([id, label]) => (
+                {costTabsFor(editing?.upstream_provider).map(({ id, label }) => (
                   <button
                     key={id}
                     type="button"
@@ -961,7 +982,7 @@ export function AiModelsTable() {
                 In <strong>cents</strong> per Mtok, fractions allowed.{" "}
                 {costTab === "default"
                   ? "Used for any partner without its own rate below."
-                  : "Used only for requests Starimg served; leave blank to fall back to Default."}{" "}
+                  : `Used only for requests ${costTab} served; leave blank to fall back to Default.`}{" "}
                 Applies to requests made after the change, not to ones already
                 billed.
               </p>
@@ -974,9 +995,18 @@ export function AiModelsTable() {
                 ["cacheWrite", "Cache write (c per Mtok)"],
               ] as const
             ).map(([key, label]) => {
-              const draftFor = costTab === "default" ? costDraft : starimgDraft;
+              const draftFor =
+                costTab === "default"
+                  ? costDraft
+                  : (partnerDrafts[costTab] ?? blankCost());
               const setFor =
-                costTab === "default" ? setCostDraft : setStarimgDraft;
+                costTab === "default"
+                  ? setCostDraft
+                  : (fn: (d: CostFields) => CostFields) =>
+                      setPartnerDrafts((prev) => ({
+                        ...prev,
+                        [costTab]: fn(prev[costTab] ?? blankCost()),
+                      }));
               const charge =
                 key === "input"
                   ? editing?.pricing?.input_cents_per_mtok

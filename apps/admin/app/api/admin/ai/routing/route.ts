@@ -246,7 +246,11 @@ export async function GET(request: Request) {
     // The order lives in the worker's UPSTREAM_PRIMARY, not in the database,
     // so the panel reports it as configured text and cannot change it. What
     // the panel CAN do is show what actually happened, from usage.provider.
-    const PARTNERS = ["starimg", "wokey"] as const;
+    // Abliteration is reached through per-key endpoint rows rather than a
+    // shared API, so it has no platform key here and no /models call - but
+    // it serves customers and bills like any other partner, so it belongs
+    // in the same rollup. Its usage rows carry provider = 'abliteration'.
+    const PARTNERS = ["starimg", "wokey", "abliteration"] as const;
     // Mirrors workers/inference/wrangler.toml as briefed on 2026-09-18.
     // Shown as configuration, never inferred — and the observed columns
     // beside it make drift visible if the worker changes without this.

@@ -25,6 +25,9 @@ export const dynamic = "force-dynamic";
 
 const TIMEOUT_MS = 8000;
 
+/** Partners reached through per-key endpoint rows rather than a shared API. */
+const ENDPOINT_PARTNER_NAMES = ["abliteration"] as const;
+
 type PartnerDef = {
   name: "starimg" | "wokey";
   baseUrl: string;
@@ -188,13 +191,48 @@ export async function GET() {
       })(),
     ]);
 
+    // Abliteration is reached through per-key endpoint rows, not a shared
+    // API, so there is no /models call to make and no platform key on this
+    // host. Its evidence is the endpoints themselves: a model it serves has
+    // rows pointing at it, one per key, each probed like any other.
+    const supabase2 = await createServiceClient();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const inf2 = (supabase2 as any).schema("inference");
+    const [epRes, ehRes] = await Promise.all([
+      inf2.from("serving_endpoints").select("id, model_id, enabled, label, base_url"),
+      inf2.from("endpoint_health").select("endpoint_id, ok, enabled"),
+    ]);
+    const healthByEndpoint = new Map<string, { ok: boolean }>();
+    for (const h of (ehRes.data ?? []) as { endpoint_id: string; ok: boolean }[]) {
+      healthByEndpoint.set(h.endpoint_id, { ok: Boolean(h.ok) });
+    }
+    type EpTally = { total: number; enabled: number; up: number };
+    const endpointsByModel = new Map<string, EpTally>();
+    for (const e of (epRes.data ?? []) as {
+      id: string;
+      model_id: string;
+      enabled: boolean;
+    }[]) {
+      const t = endpointsByModel.get(e.model_id) ?? { total: 0, enabled: 0, up: 0 };
+      t.total += 1;
+      if (e.enabled) {
+        t.enabled += 1;
+        if (healthByEndpoint.get(e.id)?.ok) t.up += 1;
+      }
+      endpointsByModel.set(e.model_id, t);
+    }
+
     const byPartner = new Map(fetched.map((f) => [f.partner, f]));
 
     /** carried / not carried / unknown, per partner, for one model. */
     const carriage = (row: CatalogRow | null, partnerIds: string[]) => {
       const out: Record<
         string,
-        { carries: boolean | null; cost: { input: number | null; output: number | null } | null }
+        {
+          carries: boolean | null;
+          cost: { input: number | null; output: number | null } | null;
+          configured?: { total: number; enabled: number; up: number } | null;
+        }
       > = {};
       for (const def of partnerDefs()) {
         const f = byPartner.get(def.name);
@@ -230,6 +268,28 @@ export async function GET() {
             : null,
         };
       }
+
+      // The endpoint partner. "Carried" here is a fact about OUR
+      // configuration, not about them: we hold keys for this model or we do
+      // not. They may well serve others - we simply have no way to ask, and
+      // adding keys is the endpoints screen's job, not a tick here.
+      for (const name of ENDPOINT_PARTNER_NAMES) {
+        const tally = row ? endpointsByModel.get(row.model_id) : undefined;
+        const onThisPartner = row?.upstream_provider === name;
+        const blob =
+          (row?.provider_pricing?.[name] as Record<string, unknown> | undefined) ??
+          null;
+        out[name] = {
+          carries: onThisPartner && (tally?.total ?? 0) > 0 ? true : false,
+          configured: onThisPartner ? (tally ?? null) : null,
+          cost: blob
+            ? {
+                input: num(blob.input_cents_per_mtok),
+                output: num(blob.output_cents_per_mtok),
+              }
+            : null,
+        };
+      }
       return out;
     };
 
@@ -246,6 +306,7 @@ export async function GET() {
       servedBy: string | null;
       /** True when ticking a partner is meaningful: proxied models only. */
       partnerRoutable: boolean;
+      partnerIsFixed: boolean;
       partners: ReturnType<typeof carriage>;
       /** Set when a partner we CAN see no longer lists a live model. */
       liveButUnlisted: boolean;
@@ -264,11 +325,25 @@ export async function GET() {
         claimed.add(form);
       }
       const partners = carriage(row, []);
-      const routable = row.serving_type === "proxy";
+      // A partner column can be ticked when the model is proxied (we choose
+      // the partner) OR already served by an endpoint partner (we choose
+      // only whether customers see it - the partner is fixed by its keys).
+      const routable =
+        row.serving_type === "proxy" ||
+        (ENDPOINT_PARTNER_NAMES as readonly string[]).includes(
+          row.upstream_provider ?? "",
+        );
       const servingPartner = row.upstream_provider
         ? partners[row.upstream_provider]
         : undefined;
       rows.push({
+        // Whether the partner is ours to choose. Fixed for an endpoint
+        // partner: moving a model there means adding keys, not ticking.
+        partnerIsFixed:
+          row.serving_type !== "proxy" &&
+          (ENDPOINT_PARTNER_NAMES as readonly string[]).includes(
+            row.upstream_provider ?? "",
+          ),
         key: row.model_id,
         modelUuid: row.id,
         ourModelId: row.model_id,
@@ -305,6 +380,7 @@ export async function GET() {
           isActive: null,
           servedBy: null,
           partnerRoutable: true,
+          partnerIsFixed: false,
           partners: carriage(null, [rawId]),
           liveButUnlisted: false,
         });
@@ -319,13 +395,38 @@ export async function GET() {
     });
 
     return NextResponse.json({
-      partners: fetched.map((f) => ({
-        partner: f.partner,
-        reachable: f.reachable,
-        reason: f.reason,
-        count: f.count,
-        baseUrl: f.baseUrl,
-      })),
+      partners: [
+        ...fetched.map((f) => ({
+          partner: f.partner as string,
+          reachable: f.reachable,
+          reason: f.reason,
+          count: f.count,
+          baseUrl: f.baseUrl,
+          evidence: "models_api" as const,
+        })),
+        // Counted from our own endpoint rows, so it is always answerable -
+        // there is nothing to be unreachable.
+        ...ENDPOINT_PARTNER_NAMES.map((name) => {
+          const mine = catalogue.filter((c) => c.upstream_provider === name);
+          const tally = mine.reduce(
+            (acc, c) => {
+              const t = endpointsByModel.get(c.model_id);
+              acc.keys += t?.enabled ?? 0;
+              acc.up += t?.up ?? 0;
+              return acc;
+            },
+            { keys: 0, up: 0 },
+          );
+          return {
+            partner: name as string,
+            reachable: true,
+            reason: `${tally.up}/${tally.keys} keys answering across ${mine.length} model(s) — health comes from our own probes, not a models API`,
+            count: mine.length,
+            baseUrl: "per-endpoint",
+            evidence: "endpoints" as const,
+          };
+        }),
+      ],
       summary: {
         total: rows.length,
         live: rows.filter((r) => r.isActive).length,

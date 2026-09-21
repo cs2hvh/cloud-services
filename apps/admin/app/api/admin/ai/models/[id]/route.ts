@@ -27,17 +27,23 @@ const UPSTREAM_TOKEN_KEYS = [
 const UNIT_KEYS = ["cents_per_image", "cents_per_media_second"] as const;
 
 /** Partners we will accept a cost blob for. */
-const KNOWN_PROVIDERS = ["starimg", "wokey"] as const;
+const KNOWN_PROVIDERS = ["starimg", "wokey", "abliteration"] as const;
 
 /**
- * Who may carry a proxied model. Routing is strict now - there is no
- * fallback to the other partner - so this field decides who serves every
- * request for the model, not merely who is preferred. The enum in the
- * database is wider (it doubles as the BYOK provider list), but pointing a
- * proxied model at "openai" here would name a partner we have no platform
- * key for and take the model off the air.
+ * Who may serve a model, by how it is reached.
+ *
+ * serving_type says HOW - a partner's shared API, or our own endpoint list.
+ * upstream_provider says WHO. They are independent: an endpoint-served model
+ * can be entirely somebody else's, with one endpoint row per API key.
+ *
+ * A proxied model must name a partner we hold a platform key for; routing is
+ * strict, so this decides who serves every request. An endpoint-served model
+ * may be ours ('custom') or a partner reached through those endpoints - the
+ * credentials live on the endpoint rows, not here, so naming the partner is
+ * a labelling act rather than a routing one.
  */
-const ROUTABLE_PARTNERS = ["starimg", "wokey"] as const;
+const PROXY_PARTNERS = ["starimg", "wokey"] as const;
+const ENDPOINT_PROVIDERS = ["custom", "abliteration"] as const;
 
 /**
  * Merge a pricing blob, validating scalars and replacing `tiers` wholesale.
@@ -229,17 +235,16 @@ export async function PATCH(
     // a pod-served model's upstream is its own endpoint list, not a partner.
     if (body.upstream_provider !== undefined) {
       const next = String(body.upstream_provider);
-      if (!ROUTABLE_PARTNERS.includes(next as (typeof ROUTABLE_PARTNERS)[number])) {
-        return NextResponse.json(
-          { error: `Provider must be one of: ${ROUTABLE_PARTNERS.join(", ")}` },
-          { status: 400 },
-        );
-      }
-      if (String(existing.serving_type ?? "") !== "proxy") {
+      const isProxied = String(existing.serving_type ?? "") === "proxy";
+      const allowed: readonly string[] = isProxied
+        ? PROXY_PARTNERS
+        : ENDPOINT_PROVIDERS;
+      if (!allowed.includes(next)) {
         return NextResponse.json(
           {
-            error:
-              "Only proxied models have a partner. This one is served by our own pods - change its endpoints instead.",
+            error: isProxied
+              ? `A proxied model must name a partner we hold a key for: ${PROXY_PARTNERS.join(", ")}`
+              : `An endpoint-served model is either ours or a partner reached through its endpoints: ${ENDPOINT_PROVIDERS.join(", ")}`,
           },
           { status: 400 },
         );

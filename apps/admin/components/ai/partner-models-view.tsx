@@ -40,11 +40,14 @@ import { AiTabs } from "@admin/components/ai/ai-tabs";
 
 const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
 /** One public model id is served by exactly one of these. */
-type PartnerName = "starimg" | "wokey";
+type PartnerName = "starimg" | "wokey" | "abliteration";
+/** Reached through per-key endpoint rows rather than a shared API. */
+const ENDPOINT_PARTNERS: readonly string[] = ["abliteration"];
 
 type Carriage = {
   carries: boolean | null;
   cost: { input: number | null; output: number | null } | null;
+  configured?: { total: number; enabled: number; up: number } | null;
 };
 
 type Row = {
@@ -59,6 +62,8 @@ type Row = {
   isActive: boolean | null;
   servedBy: string | null;
   partnerRoutable: boolean;
+  /** The partner is fixed by its endpoint keys; only visibility is ours. */
+  partnerIsFixed: boolean;
   partners: Record<string, Carriage>;
   liveButUnlisted: boolean;
 };
@@ -70,6 +75,7 @@ type Feed = {
     reason: string | null;
     count: number;
     baseUrl: string;
+    evidence: "models_api" | "endpoints";
   }[];
   summary: {
     total: number;
@@ -146,7 +152,9 @@ export function PartnerModelsView() {
     try {
       await api.patch(`/admin/ai/models/${row.modelUuid}`, {
         is_active: partner !== null,
-        ...(partner ? { upstream_provider: partner } : {}),
+        // Its partner is decided by which endpoint keys exist, so sending
+        // one here would be claiming a choice we do not have.
+        ...(partner && !row.partnerIsFixed ? { upstream_provider: partner } : {}),
       });
       toast.success(
         partner
@@ -262,10 +270,15 @@ export function PartnerModelsView() {
     }
 
     if (c?.carries === false) {
+      const endpointPartner = ENDPOINT_PARTNERS.includes(partner);
       return (
         <span
           className="text-[10.5px] text-muted-foreground/40"
-          title={`${partner} does not list this model`}
+          title={
+            endpointPartner
+              ? `No ${partner} keys are configured for this model. Serving it here means adding endpoint rows with credentials, which is the endpoints screen's job — not a tick.`
+              : `${partner} does not list this model`
+          }
         >
           —
         </span>
@@ -284,6 +297,22 @@ export function PartnerModelsView() {
           }
           className="accent-[#3987e5]"
         />
+        {c?.configured && (
+          <span
+            className={`rounded border px-1 py-0.5 text-[9.5px] ${
+              c.configured.enabled === 0
+                ? "border-white/[0.15] text-white/50"
+                : c.configured.up === c.configured.enabled
+                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                  : c.configured.up === 0
+                    ? "border-red-500/50 bg-red-500/15 text-red-300"
+                    : "border-amber-500/50 bg-amber-500/10 text-amber-300"
+            }`}
+            title="Enabled keys answering / enabled keys, from our own probes"
+          >
+            {c.configured.up}/{c.configured.enabled} keys
+          </span>
+        )}
         {c?.cost && (c.cost.input !== null || c.cost.output !== null) && (
           <span
             className={`${MONO} text-[10px] text-muted-foreground/70`}
@@ -325,9 +354,18 @@ export function PartnerModelsView() {
                 ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
                 : "border-white/[0.15] bg-white/[0.04] text-white/60"
             }`}
-            title={`${p.baseUrl}${p.reason ? ` — ${p.reason}` : ""}`}
+            title={
+              p.evidence === "endpoints"
+                ? (p.reason ?? "")
+                : `${p.baseUrl}${p.reason ? ` — ${p.reason}` : ""}`
+            }
           >
-            {p.partner}: {p.reachable ? `${p.count} models` : "unknown"}
+            {p.partner}:{" "}
+            {!p.reachable
+              ? "unknown"
+              : p.evidence === "endpoints"
+                ? `${p.count} model(s), by key`
+                : `${p.count} models`}
           </span>
         ))}
         {s && (
@@ -404,20 +442,21 @@ export function PartnerModelsView() {
                 </span>
               </th>
               <th className="w-[150px] px-3 py-2 font-medium">Wokey</th>
+              <th className="w-[160px] px-3 py-2 font-medium">Abliteration</th>
               <th className="w-[130px] px-3 py-2 font-medium">Shown to customers</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={4} className="py-12 text-center text-muted-foreground">
+                <td colSpan={5} className="py-12 text-center text-muted-foreground">
                   <Loader2 className="mx-auto h-4 w-4 animate-spin" />
                 </td>
               </tr>
             )}
             {!loading && rows.length === 0 && (
               <tr>
-                <td colSpan={4} className="py-12 text-center text-muted-foreground">
+                <td colSpan={5} className="py-12 text-center text-muted-foreground">
                   {feed?.partners.every((p) => !p.reachable)
                     ? "Neither partner could be reached from this host, and nothing in our catalogue matches."
                     : "Nothing matches."}
@@ -450,6 +489,9 @@ export function PartnerModelsView() {
                 </td>
                 <td className="px-3 py-2">
                   <PartnerCell row={r} partner="wokey" />
+                </td>
+                <td className="px-3 py-2">
+                  <PartnerCell row={r} partner="abliteration" />
                 </td>
                 <td className="px-3 py-2">
                   {r.isActive ? (

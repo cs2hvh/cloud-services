@@ -8,6 +8,7 @@ import {
   isListPriced,
   pricingDrift,
 } from "@admin/lib/list-pricing";
+import { endpointNoun, servedByOwnPods } from "@admin/lib/serving";
 
 export const dynamic = "force-dynamic";
 
@@ -223,6 +224,11 @@ export async function GET() {
         // THE FOUR LAYERS. Real cost is admin-only and is already on the
         // row as provider_pricing/upstream_pricing; these three describe how
         // the customer price was arrived at rather than merely what it is.
+        // HOW it is reached and WHO serves it are separate. An endpoint-
+        // served model can be entirely a partner's, one endpoint row per
+        // API key - calling those "pods" would invent hardware.
+        ownPods: servedByOwnPods(m.serving_type, m.upstream_provider),
+        endpointNoun: endpointNoun(m.serving_type, m.upstream_provider),
         listPriced: isListPriced(m.list_pricing),
         discountPct: Number(m.discount_pct ?? 0),
         // What the stored price implies, for rows that have a list price but
