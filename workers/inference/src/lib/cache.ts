@@ -137,11 +137,24 @@ async function computeCacheKey(orgId: string, body: CacheableRequest): Promise<s
     top_p: body.top_p,
     seed: body.seed,
   };
-  const payload = `${orgId}::${JSON.stringify(normalized, Object.keys(normalized).sort())}`;
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(payload));
-  return "l1:" + Array.from(new Uint8Array(buf))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  return hashKey("l1", orgId, normalized);
+}
+
+/**
+ * JSON with the top-level keys in sorted order and NOTHING else changed.
+ *
+ * This used to be `JSON.stringify(obj, sortedKeys)`. An array as the second
+ * argument is not a key order, it is a whitelist, and it applies at every
+ * depth: the message objects inside `messages` serialised as `{}` because
+ * "role" and "content" were not on the list. Every temperature-0 request
+ * from one org with the same model, message count and max_tokens therefore
+ * shared one cache key and was answered with whatever was cached first.
+ * Found 2026-09-24 when a request for a haiku was answered "pong".
+ */
+function stableTopLevelJson(obj: Record<string, unknown>): string {
+  const sorted: Record<string, unknown> = {};
+  for (const k of Object.keys(obj).sort()) sorted[k] = obj[k];
+  return JSON.stringify(sorted);
 }
 
 export async function lookupCache(
@@ -292,12 +305,12 @@ function resolveTtl(request: Request): number {
 async function hashKey(prefix: string, orgId: string, payload: unknown): Promise<string> {
   // Stable JSON via sorted keys (top level only; nested arrays/objects keep insertion order,
   // which is what callers actually send — sorting deeper would silently merge requests that
-  // differ only in message ordering, which would be wrong).
-  const sortedTop =
+  // differ only in message ordering, which would be wrong). See stableTopLevelJson for why
+  // the sort must not be passed to JSON.stringify as a replacer.
+  const json =
     payload && typeof payload === "object" && !Array.isArray(payload)
-      ? Object.keys(payload as Record<string, unknown>).sort()
-      : undefined;
-  const json = JSON.stringify(payload, sortedTop);
+      ? stableTopLevelJson(payload as Record<string, unknown>)
+      : JSON.stringify(payload);
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${orgId}::${json}`));
   return prefix + ":" + Array.from(new Uint8Array(buf))
     .map((b) => b.toString(16).padStart(2, "0"))
