@@ -271,6 +271,26 @@ export async function GET() {
         // HOW it is reached and WHO serves it are separate. An endpoint-
         // served model can be entirely a partner's, one endpoint row per
         // API key - calling those "pods" would invent hardware.
+        // upstream_pricing is Wokey's rate alone. Where it is byte-identical
+        // to a partner's entry it was almost certainly written by a save that
+        // sent both at once - the panel did that until ccafe26c. Harmless
+        // while that partner also serves the model, wrong the moment Wokey
+        // does or the model moves to our own pods, and misleading in the
+        // Wokey tab either way. Flagged rather than corrected: it is a real
+        // number someone entered, just filed under the wrong name.
+        upstreamEqualsPartner: (() => {
+          const up = m.upstream_pricing as Record<string, unknown> | null;
+          if (!up || Object.keys(up).length === 0) return null;
+          const per = (m.provider_pricing ?? {}) as Record<string, unknown>;
+          const key = JSON.stringify(Object.entries(up).sort());
+          for (const [partner, blob] of Object.entries(per)) {
+            if (partner === "wokey" || !blob) continue;
+            if (JSON.stringify(Object.entries(blob as object).sort()) === key) {
+              return partner;
+            }
+          }
+          return null;
+        })(),
         ownPods: servedByOwnPods(m.serving_type, m.upstream_provider),
         endpointProviders: [...(providersOnModel.get(m.model_id) ?? [])].sort(),
         // A partner answering here with no rate of its own: its cost is
@@ -372,6 +392,10 @@ export async function GET() {
         active: rows.filter((m: any) => m.is_active).length,
         orphaned,
         servedSampleTruncated: servedTruncated,
+      upstreamBorrowed: rows.filter(
+        (r: { is_active: boolean; upstreamEqualsPartner: string | null }) =>
+          r.is_active && r.upstreamEqualsPartner !== null,
+      ).length,
       listPriced: rows.filter(
         (r: { is_active: boolean; listPriced: boolean }) =>
           r.is_active && r.listPriced,

@@ -71,6 +71,7 @@ type ModelRow = {
   sharesUpstreamIdWith: string[];
   // The four layers. Real cost lives in upstream_pricing/provider_pricing;
   // these describe how the customer price was arrived at.
+  upstreamEqualsPartner: string | null;
   ownPods: boolean;
   endpointProviders: string[];
   partnersWithoutCost: string[];
@@ -95,6 +96,7 @@ type CatalogSummary = {
   active: number;
   orphaned: number;
   placeholderPriced: number;
+  upstreamBorrowed: number;
   listPriced: number;
   drifted: number;
   upstreamChecked: boolean;
@@ -480,6 +482,14 @@ export function AiModelsTable() {
                 ))}
             </SelectContent>
           </Select>
+          {summary && summary.upstreamBorrowed > 0 && (
+            <span
+              className="rounded-full border border-purple-500/40 bg-purple-500/10 px-2.5 py-1 text-[11px] text-purple-300"
+              title="On these models the Wokey cost is byte-identical to a partner's own rate — the signature of a save that wrote both at once. It is a real number filed under the wrong partner: correct while that partner serves the model, wrong the moment Wokey does or it moves to our own pods."
+            >
+              {summary.upstreamBorrowed} model(s) with a partner&apos;s rate under Wokey
+            </span>
+          )}
           {summary && summary.drifted > 0 && (
             <span
               className="rounded-full border border-purple-500/40 bg-purple-500/10 px-2.5 py-1 text-[11px] text-purple-300"
