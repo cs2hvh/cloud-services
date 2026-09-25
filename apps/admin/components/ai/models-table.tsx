@@ -72,6 +72,8 @@ type ModelRow = {
   // The four layers. Real cost lives in upstream_pricing/provider_pricing;
   // these describe how the customer price was arrived at.
   ownPods: boolean;
+  endpointProviders: string[];
+  partnersWithoutCost: string[];
   endpointNoun: { one: string; many: string };
   serving: {
     pods: { live: number; up: number };
@@ -250,7 +252,7 @@ export function AiModelsTable() {
       Record<string, number | undefined> | undefined
     >;
     const drafts: Record<string, CostFields> = {};
-    for (const tab of costTabsFor(model.upstream_provider)) {
+    for (const tab of costTabsFor(model.upstream_provider, model.endpointProviders)) {
       if (tab.id === "default") continue;
       const blob = perProvider[tab.id] ?? {};
       drafts[tab.id] = {
@@ -974,7 +976,10 @@ export function AiModelsTable() {
                   served it, falling back to Default — so the same model can
                   be profitable on one partner and underwater on another. */}
               <div className="mb-2 flex gap-1">
-                {costTabsFor(editing?.upstream_provider).map(({ id, label }) => (
+                {costTabsFor(
+                  editing?.upstream_provider,
+                  editing?.endpointProviders,
+                ).map(({ id, label }) => (
                   <button
                     key={id}
                     type="button"
@@ -986,6 +991,14 @@ export function AiModelsTable() {
                     }`}
                   >
                     {label}
+                    {editing?.partnersWithoutCost.includes(id) && (
+                      <span
+                        className="ml-1 text-amber-300"
+                        title="This partner answers on one of this model's endpoints but has no rate of its own, so its cost is unknown. It does NOT fall back to Default — that blob belongs to whoever it was set for."
+                      >
+                        •
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -993,7 +1006,9 @@ export function AiModelsTable() {
                 In <strong>cents</strong> per Mtok, fractions allowed.{" "}
                 {costTab === "default"
                   ? "Used for any partner without its own rate below."
-                  : `Used only for requests ${costTab} served; leave blank to fall back to Default.`}{" "}
+                  : editing?.partnersWithoutCost.includes(costTab)
+                    ? `${costTab} answers on this model but has no cost basis yet. Blank does NOT inherit Default — that rate belongs to whoever it was set for, so margin stays unknown until you set one here.`
+                    : `Used only for requests ${costTab} served.`}{" "}
                 Applies to requests made after the change, not to ones already
                 billed.
               </p>

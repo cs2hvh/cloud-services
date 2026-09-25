@@ -20,7 +20,7 @@ export const PROXY_PARTNERS = ["starimg", "wokey"] as const;
  * They are not selectable from a dropdown: moving a model here means adding
  * endpoints with credentials, which is the endpoints screen's job.
  */
-export const ENDPOINT_PARTNERS = ["abliteration"] as const;
+export const ENDPOINT_PARTNERS = ["abliteration", "audn"] as const;
 
 export const ALL_PARTNERS = [...PROXY_PARTNERS, ...ENDPOINT_PARTNERS] as const;
 export type PartnerName = (typeof ALL_PARTNERS)[number];
@@ -62,19 +62,48 @@ export function servedByLabel(
   return upstreamProvider ?? servingType ?? "unknown";
 }
 
-/** Cost tabs for the price editor: the default blob plus each named partner. */
-export function costTabsFor(upstreamProvider: string | null | undefined) {
+/**
+ * Cost tabs for the price editor: the default blob plus each partner that
+ * could actually bill this model.
+ *
+ * An endpoint partner is offered only where it genuinely answers - named by
+ * the model, or by one of its endpoint rows. Since a model's own provider
+ * can be 'custom' while a partner answers on one of its rows, the row
+ * providers have to be consulted or that partner's tab never appears and
+ * its rate can never be set.
+ */
+export function costTabsFor(
+  upstreamProvider: string | null | undefined,
+  endpointProviders: readonly string[] = [],
+) {
   const tabs: { id: string; label: string }[] = [
     { id: "default", label: "Default / Wokey" },
   ];
+  const present = new Set(endpointProviders.filter(Boolean));
   for (const p of ALL_PARTNERS) {
     if (p === "wokey") continue; // wokey IS the default blob
-    // Only offer an endpoint partner's tab on a model it actually serves;
-    // an abliteration rate on a Starimg model would never be read.
-    if ((ENDPOINT_PARTNERS as readonly string[]).includes(p) && upstreamProvider !== p) {
-      continue;
+    if ((ENDPOINT_PARTNERS as readonly string[]).includes(p)) {
+      if (upstreamProvider !== p && !present.has(p)) continue;
     }
     tabs.push({ id: p, label: p.charAt(0).toUpperCase() + p.slice(1) });
   }
   return tabs;
+}
+
+/**
+ * Whether a partner's cost may fall back to the default blob.
+ *
+ * It may NOT. upstream_pricing is a single number that was set for whoever
+ * came before, and inheriting it hands a new partner someone else's rate as
+ * though it were measured: glm-5.3-derisked's default blob is abliteration's
+ * 300/30/500, so an audn row would silently report that as its cost and a
+ * margin computed from it as fact. A partner with no rate of its own has NO
+ * COST BASIS, which is a thing worth saying out loud.
+ */
+export function partnerCost(
+  provider: string,
+  providerPricing: Record<string, Record<string, unknown>> | null | undefined,
+): Record<string, unknown> | null {
+  const blob = providerPricing?.[provider];
+  return blob && Object.keys(blob).length > 0 ? blob : null;
 }

@@ -250,7 +250,7 @@ export async function GET(request: Request) {
     // shared API, so it has no platform key here and no /models call - but
     // it serves customers and bills like any other partner, so it belongs
     // in the same rollup. Its usage rows carry provider = 'abliteration'.
-    const PARTNERS = ["starimg", "wokey", "abliteration"] as const;
+    const PARTNERS = ["starimg", "wokey", "abliteration", "audn"] as const;
     // Mirrors workers/inference/wrangler.toml as briefed on 2026-09-18.
     // Shown as configuration, never inferred — and the observed columns
     // beside it make drift visible if the worker changes without this.

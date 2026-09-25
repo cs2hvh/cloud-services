@@ -123,15 +123,20 @@ async function loadCatalogueRows(): Promise<Row[]> {
   return (data ?? []) as Row[];
 }
 
-/** The cost that matters is the partner who actually carries the model. */
+/**
+ * The cost that matters is the partner who actually carries the model - and
+ * only if we hold a rate for THAT partner. Falling back to upstream_pricing
+ * would borrow whoever came before, so a margin would be computed against
+ * someone else's number and shown as fact. No rate means no margin.
+ */
 function realCostOf(row: Row): Record<string, unknown> | null {
   const partner = String(row.upstream_provider ?? "");
   const perProvider = row.provider_pricing ?? {};
-  return (
-    (perProvider[partner] as Record<string, unknown> | undefined) ??
-    row.upstream_pricing ??
-    null
-  );
+  const own = perProvider[partner] as Record<string, unknown> | undefined;
+  if (own && Object.keys(own).length > 0) return own;
+  // Only the default blob's rightful owner may use it: wokey IS the default.
+  if (partner === "wokey" && row.upstream_pricing) return row.upstream_pricing;
+  return null;
 }
 
 function buildPreview(

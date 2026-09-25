@@ -47,7 +47,13 @@ export type EndpointRow = {
 };
 
 /** Who can answer at one endpoint row. */
-const ROW_PROVIDERS = ["starimg", "wokey", "abliteration", "custom"] as const;
+const ROW_PROVIDERS = [
+  "starimg",
+  "wokey",
+  "abliteration",
+  "audn",
+  "custom",
+] as const;
 
 type ProbeResult = {
   ok: boolean;
@@ -533,8 +539,18 @@ export function EndpointsDialog({
                 value={baseUrl}
                 onChange={(e) => setBaseUrl(e.target.value)}
                 placeholder="https://pod-id.proxy.runpod.net/v1"
+                aria-describedby="ep-url-hint"
                 className={`h-8 ${MONO} text-[12px]`}
               />
+              {/* A bare IP is not a slow endpoint, it is a dead one: the
+                  edge worker cannot fetch it at all. Said here rather than
+                  discovered later as an unexplained 403. */}
+              <p id="ep-url-hint" className="text-[10.5px] text-muted-foreground">
+                Must be a hostname, never an IP — the edge worker cannot fetch
+                a bare IP (Cloudflare answers 403, error 1003). For a machine
+                that only has an address, a wildcard-DNS name works:{" "}
+                <span className={MONO}>203.0.113.10.nip.io</span>.
+              </p>
             </div>
             <div className="space-y-1.5">
               <Label className="text-[11px]">API key (stored encrypted, never shown again)</Label>

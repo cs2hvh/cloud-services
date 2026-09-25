@@ -82,16 +82,39 @@ export function validateBaseUrl(
     }
   }
   const host = parsed.hostname.toLowerCase();
+
+  // A bare IP cannot be fetched by the edge worker at all: Cloudflare
+  // refuses it with 403 error 1003, so an endpoint saved this way is dead
+  // on arrival and the failure is reported nowhere near the cause. Named
+  // here instead, with the workaround, rather than discovered by a probe.
+  const isIpLiteral =
+    /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.includes(":") || /^\[/.test(host);
+  if (isIpLiteral) {
+    return {
+      ok: false,
+      error:
+        "base_url must be a hostname, not an IP address — the edge worker cannot fetch a bare IP (Cloudflare answers 403, error 1003). Use a DNS name, or a wildcard-DNS form such as 203.0.113.10.nip.io",
+    };
+  }
+
+  // Private ranges, including when smuggled through wildcard DNS. A host
+  // like 10.1.2.3.nip.io resolves straight back to 10.1.2.3, so the check
+  // looks at every dotted quad ANYWHERE in the name, not just its start.
+  const privateQuad = (quad: string) =>
+    /^127\./.test(quad) ||
+    /^10\./.test(quad) ||
+    /^192\.168\./.test(quad) ||
+    /^169\.254\./.test(quad) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(quad) ||
+    quad === "0.0.0.0";
+  const embedded = host.match(/\d{1,3}(?:\.\d{1,3}){3}/g) ?? [];
   const isPrivate =
     host === "localhost" ||
     host === "0.0.0.0" ||
     host.endsWith(".local") ||
     host.endsWith(".internal") ||
-    /^127\./.test(host) ||
-    /^10\./.test(host) ||
-    /^192\.168\./.test(host) ||
-    /^169\.254\./.test(host) ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(host);
+    host.endsWith(".localhost") ||
+    embedded.some(privateQuad);
   if (isPrivate) {
     return { ok: false, error: "base_url must be a public host, not a private or loopback address" };
   }

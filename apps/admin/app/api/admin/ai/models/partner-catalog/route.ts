@@ -26,7 +26,7 @@ export const dynamic = "force-dynamic";
 const TIMEOUT_MS = 8000;
 
 /** Partners reached through per-key endpoint rows rather than a shared API. */
-const ENDPOINT_PARTNER_NAMES = ["abliteration"] as const;
+const ENDPOINT_PARTNER_NAMES = ["abliteration", "audn"] as const;
 
 type PartnerDef = {
   name: "starimg" | "wokey";
@@ -252,11 +252,11 @@ export async function GET() {
               ? false
               : null;
         }
-        // Per-partner cost falls back to the default cost blob, which is
-        // what the consumer does. Admin-only.
+        // A partner's cost is its own or it is unknown. The default blob
+        // belongs to whoever it was set for - inheriting it would report
+        // one partner's rate as another's and compute a margin from it.
         const blob =
           (row?.provider_pricing?.[def.name] as Record<string, unknown> | undefined) ??
-          (row?.upstream_pricing as Record<string, unknown> | undefined) ??
           null;
         out[def.name] = {
           carries,

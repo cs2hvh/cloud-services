@@ -40,9 +40,9 @@ import { AiTabs } from "@admin/components/ai/ai-tabs";
 
 const MONO = "font-[var(--font-geist-mono),ui-monospace,monospace]";
 /** One public model id is served by exactly one of these. */
-type PartnerName = "starimg" | "wokey" | "abliteration";
+type PartnerName = "starimg" | "wokey" | "abliteration" | "audn";
 /** Reached through per-key endpoint rows rather than a shared API. */
-const ENDPOINT_PARTNERS: readonly string[] = ["abliteration"];
+const ENDPOINT_PARTNERS: readonly string[] = ["abliteration", "audn"];
 
 type Carriage = {
   carries: boolean | null;
@@ -443,20 +443,21 @@ export function PartnerModelsView() {
               </th>
               <th className="w-[150px] px-3 py-2 font-medium">Wokey</th>
               <th className="w-[160px] px-3 py-2 font-medium">Abliteration</th>
+              <th className="w-[160px] px-3 py-2 font-medium">Audn</th>
               <th className="w-[130px] px-3 py-2 font-medium">Shown to customers</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={5} className="py-12 text-center text-muted-foreground">
+                <td colSpan={6} className="py-12 text-center text-muted-foreground">
                   <Loader2 className="mx-auto h-4 w-4 animate-spin" />
                 </td>
               </tr>
             )}
             {!loading && rows.length === 0 && (
               <tr>
-                <td colSpan={5} className="py-12 text-center text-muted-foreground">
+                <td colSpan={6} className="py-12 text-center text-muted-foreground">
                   {feed?.partners.every((p) => !p.reachable)
                     ? "Neither partner could be reached from this host, and nothing in our catalogue matches."
                     : "Nothing matches."}
@@ -492,6 +493,9 @@ export function PartnerModelsView() {
                 </td>
                 <td className="px-3 py-2">
                   <PartnerCell row={r} partner="abliteration" />
+                </td>
+                <td className="px-3 py-2">
+                  <PartnerCell row={r} partner="audn" />
                 </td>
                 <td className="px-3 py-2">
                   {r.isActive ? (

@@ -132,11 +132,21 @@ export async function GET() {
     // partner's API keys with a machine of our own, and counting the keys
     // as pods would make a partner's outage read as ours.
     const rowProvider = new Map<string, string | null>();
+    // Which partners actually answer somewhere on a model. Its own
+    // upstream_provider can be 'custom' while a partner answers on one of
+    // its rows, so the rows have to be asked or that partner is invisible.
+    const providersOnModel = new Map<string, Set<string>>();
     for (const e of (endpointsRes?.data ?? []) as {
       id: string;
+      model_id: string;
       provider: string | null;
     }[]) {
       rowProvider.set(e.id, e.provider ?? null);
+      if (e.provider && e.provider !== "custom") {
+        const set = providersOnModel.get(e.model_id) ?? new Set<string>();
+        set.add(e.provider);
+        providersOnModel.set(e.model_id, set);
+      }
     }
 
     const healthCounts = new Map<string, { live: number; up: number }>();
@@ -262,6 +272,18 @@ export async function GET() {
         // served model can be entirely a partner's, one endpoint row per
         // API key - calling those "pods" would invent hardware.
         ownPods: servedByOwnPods(m.serving_type, m.upstream_provider),
+        endpointProviders: [...(providersOnModel.get(m.model_id) ?? [])].sort(),
+        // A partner answering here with no rate of its own: its cost is
+        // unknown, and must not borrow the default blob, which belongs to
+        // whoever came before it.
+        partnersWithoutCost: [...(providersOnModel.get(m.model_id) ?? [])]
+          .filter(
+            (prov) =>
+              !(
+                (m.provider_pricing ?? {}) as Record<string, unknown>
+              )[prov],
+          )
+          .sort(),
         // A row that names no provider inherits the model's, so a model on
         // a partner whose rows are unmarked is all keys; one on 'custom' is
         // all pods. Rows that DO name a partner were already counted as
