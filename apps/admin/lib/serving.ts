@@ -77,7 +77,7 @@ export function costTabsFor(
   endpointProviders: readonly string[] = [],
 ) {
   const tabs: { id: string; label: string }[] = [
-    { id: "default", label: "Default / Wokey" },
+    { id: "default", label: "Wokey" },
   ];
   const present = new Set(endpointProviders.filter(Boolean));
   for (const p of ALL_PARTNERS) {

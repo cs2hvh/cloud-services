@@ -171,6 +171,36 @@ export async function PATCH(
       updates.pricing = merged.value;
     }
 
+    // upstream_pricing is WOKEY'S RATE and nothing else. The consumer falls
+    // back to it for wokey alone: a request no partner served records no cost
+    // basis, and a named partner without its own entry records none either.
+    //
+    // Refusing the exact signature of the bug that made this worth saying:
+    // a save that writes upstream_pricing with the same numbers it is writing
+    // to a partner underneath. That is how abliteration's rate came to sit in
+    // this column on a model served by our own pods, and every pod request
+    // was then costed at a partner's price. A genuinely identical Wokey rate
+    // can still be set - on its own, in a save of its own.
+    if (
+      body.upstream_pricing !== undefined &&
+      body.provider_pricing !== undefined
+    ) {
+      const incoming = JSON.stringify(
+        Object.entries(body.upstream_pricing).sort(),
+      );
+      for (const [partner, blob] of Object.entries(body.provider_pricing)) {
+        if (!blob) continue;
+        if (JSON.stringify(Object.entries(blob).sort()) === incoming) {
+          return NextResponse.json(
+            {
+              error: `Refusing to write ${partner}'s rate into upstream_pricing. That column is Wokey's rate alone — other partners read their own entry, and our own pods record no cost basis. Save the Wokey rate separately if it genuinely matches.`,
+            },
+            { status: 400 },
+          );
+        }
+      }
+    }
+
     // UPSTREAM COST — what the partner charges us. Editable here because
     // margin is only ever as right as this number, and until now it could
     // only be whatever was seeded. The usage consumer reads it at flush

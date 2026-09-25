@@ -151,6 +151,19 @@ export function AiModelsTable() {
   });
   const [costTab, setCostTab] = useState<string>("default");
   const [partnerDrafts, setPartnerDrafts] = useState<Record<string, CostFields>>({});
+  // What the editor loaded. A field the operator never touched must not be
+  // written back: doing so round-trips a value they did not choose and can
+  // resurrect a column someone else deliberately cleared, from a page that
+  // was merely open at the wrong moment.
+  const [loadedCost, setLoadedCost] = useState<CostFields>({
+    input: "",
+    output: "",
+    cached: "",
+    cacheWrite: "",
+  });
+  const [loadedPartnerDrafts, setLoadedPartnerDrafts] = useState<
+    Record<string, CostFields>
+  >({});
   const [creating, setCreating] = useState(false);
   const [endpointsFor, setEndpointsFor] = useState<string | null>(null);
   const [mediaPricing, setMediaPricing] = useState<ModelRow | null>(null);
@@ -238,7 +251,7 @@ export function AiModelsTable() {
           : "",
     });
     const up = (model.upstream_pricing ?? {}) as Record<string, number | undefined>;
-    setCostDraft({
+    const loadedUp: CostFields = {
       input: up.input_cents_per_mtok != null ? String(up.input_cents_per_mtok) : "",
       output: up.output_cents_per_mtok != null ? String(up.output_cents_per_mtok) : "",
       cached: up.cached_cents_per_mtok != null ? String(up.cached_cents_per_mtok) : "",
@@ -246,7 +259,9 @@ export function AiModelsTable() {
         up.cache_write_cents_per_mtok != null
           ? String(up.cache_write_cents_per_mtok)
           : "",
-    });
+    };
+    setCostDraft(loadedUp);
+    setLoadedCost(loadedUp);
     const perProvider = (model.provider_pricing ?? {}) as Record<
       string,
       Record<string, number | undefined> | undefined
@@ -268,6 +283,7 @@ export function AiModelsTable() {
       };
     }
     setPartnerDrafts(drafts);
+    setLoadedPartnerDrafts(JSON.parse(JSON.stringify(drafts)) as Record<string, CostFields>);
     setCostTab("default");
     setDiscountDraft(String(model.discountPct ?? 0));
     setProviderDraft(model.upstream_provider ?? "");
@@ -331,7 +347,18 @@ export function AiModelsTable() {
         }
         blob[key] = cents;
       }
-      if (Object.keys(blob).length > 0) providerPricing[provider] = blob;
+      // Untouched partner tabs are not sent. Rewriting an identical blob
+      // is harmless in itself but makes every price edit look like a cost
+      // edit in the audit trail, and clobbers a change made elsewhere while
+      // this dialog sat open.
+      const loaded = loadedPartnerDrafts[provider];
+      const changed =
+        !loaded ||
+        loaded.input !== fields.input ||
+        loaded.output !== fields.output ||
+        loaded.cached !== fields.cached ||
+        loaded.cacheWrite !== fields.cacheWrite;
+      if (changed && Object.keys(blob).length > 0) providerPricing[provider] = blob;
     }
 
     // A list-priced model's sell price is derived, so sending `pricing` for
@@ -360,6 +387,12 @@ export function AiModelsTable() {
       routingUpdate.openrouter_id = orIdDraft.trim();
     }
 
+    const costChanged =
+      loadedCost.input !== costDraft.input ||
+      loadedCost.output !== costDraft.output ||
+      loadedCost.cached !== costDraft.cached ||
+      loadedCost.cacheWrite !== costDraft.cacheWrite;
+
     setEditing(null);
     await patch(
       model,
@@ -367,7 +400,12 @@ export function AiModelsTable() {
         ...(model.listPriced ? {} : { pricing }),
         ...discountUpdate,
         ...routingUpdate,
-        upstream_pricing,
+        // upstream_pricing is WOKEY's rate and nothing else - the gateway
+        // falls back to it for wokey alone. It is sent only when the Wokey
+        // cost fields were actually edited. Writing it on every save is how
+        // one partner's rate ended up stamped on this column and billed
+        // against our own pods.
+        ...(costChanged ? { upstream_pricing } : {}),
         ...(Object.keys(providerPricing).length > 0
           ? { provider_pricing: providerPricing }
           : {}),
@@ -1005,7 +1043,7 @@ export function AiModelsTable() {
               <p className="text-[11px] text-muted-foreground">
                 In <strong>cents</strong> per Mtok, fractions allowed.{" "}
                 {costTab === "default"
-                  ? "Used for any partner without its own rate below."
+                  ? "Wokey's rate, and only Wokey's. A request no partner served (our own pods) records no cost basis rather than borrowing this, and a partner without its own rate below records none either."
                   : editing?.partnersWithoutCost.includes(costTab)
                     ? `${costTab} answers on this model but has no cost basis yet. Blank does NOT inherit Default — that rate belongs to whoever it was set for, so margin stays unknown until you set one here.`
                     : `Used only for requests ${costTab} served.`}{" "}
