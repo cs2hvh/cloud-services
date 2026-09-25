@@ -154,6 +154,16 @@ describe("forwardToEndpoints", () => {
     expect(calls.map((c) => c.authorization)).toEqual([undefined, undefined, undefined]);
   });
 
+  it("reports the answering endpoint's own provider, and null when its row names none", async () => {
+    const fetchImpl = fakeFetch({ "https://pod.example/v1": () => new Response("{}", { status: 200 }), "https://partner.example/v1": () => new Response("{}", { status: 200 }) }, []);
+    const pod = { id: "p", baseUrl: "https://pod.example/v1", apiKeyCt: null, servedModelName: null, weight: 1, provider: "custom" };
+    const partner = { id: "k", baseUrl: "https://partner.example/v1", apiKeyCt: null, servedModelName: null, weight: 1, provider: "abliteration" };
+    const bare = { id: "b", baseUrl: "https://pod.example/v1", apiKeyCt: null, servedModelName: null, weight: 1 };
+    expect((await forwardToEndpoints({ env: { BYOK_DEK: dek() }, routing: routing({ endpoints: [pod] }), body: {}, fetchImpl })).provider).toBe("custom");
+    expect((await forwardToEndpoints({ env: { BYOK_DEK: dek() }, routing: routing({ endpoints: [partner] }), body: {}, fetchImpl })).provider).toBe("abliteration");
+    expect((await forwardToEndpoints({ env: { BYOK_DEK: dek() }, routing: routing({ endpoints: [bare] }), body: {}, fetchImpl })).provider).toBeNull();
+  });
+
   it("treats a 429 as an overloaded endpoint and moves to the next key", async () => {
     const calls: Call[] = [];
     const fetchImpl = fakeFetch(

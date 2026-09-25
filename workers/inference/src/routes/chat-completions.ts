@@ -329,8 +329,8 @@ export const chatCompletions: Handler<{
     // usage row's provider null; a partner reached through endpoints (GLM 5.3
     // Derisked on three keys of one backend, 2026-09-21) is stamped so its
     // per-provider cost applies and the panel can show it as a partner.
-    const managedProvider =
-      routing.upstream_provider && routing.upstream_provider !== "custom" ? routing.upstream_provider : null;
+    const stampFor = (p: string | null | undefined): string | null => (p && p !== "custom" ? p : null);
+    let managedProvider = stampFor(routing.upstream_provider);
     let upstream: Response;
     let servedFrom: string;
     try {
@@ -342,6 +342,8 @@ export const chatCompletions: Handler<{
       });
       upstream = managed.response;
       servedFrom = managed.baseUrl;
+      // The endpoint that answered knows better than the model who it is.
+      managedProvider = stampFor(managed.provider ?? routing.upstream_provider);
       if (managed.attempts.length > 0) {
         // A replica was skipped. Worth a line even though the customer got an
         // answer: a pod that is always skipped is a pod nobody is paying

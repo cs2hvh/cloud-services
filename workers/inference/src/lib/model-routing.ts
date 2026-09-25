@@ -47,6 +47,13 @@ export interface ServingEndpoint {
   servedModelName: string | null;
   /** Relative share of first picks. */
   weight: number;
+  /**
+   * Who answers here: a partner name, or "custom" for a pod we operate.
+   * Null falls back to the model's upstream_provider. One model can mix
+   * partner keys and our own pods, so the stamp on the usage row has to
+   * come from the endpoint that answered, not from the model.
+   */
+  provider?: string | null;
 }
 
 export interface ModelRouting {
@@ -141,7 +148,7 @@ export async function lookupModelRouting(
     const { data: rows, error } = await supabase
       .schema("inference")
       .from("serving_endpoints")
-      .select("id, base_url, api_key_ct, served_model_name, weight")
+      .select("id, base_url, api_key_ct, served_model_name, weight, provider")
       .eq("model_id", modelId)
       .eq("enabled", true);
     if (error) {
@@ -161,6 +168,7 @@ export async function lookupModelRouting(
       apiKeyCt: (r.api_key_ct as string | null) ?? null,
       servedModelName: (r.served_model_name as string | null) ?? null,
       weight: Number(r.weight) > 0 ? Number(r.weight) : 1,
+      provider: (r.provider as string | null) ?? null,
     }));
   }
 
@@ -273,6 +281,8 @@ export interface ManagedResult {
   response: Response;
   /** Which endpoint answered. */
   baseUrl: string;
+  /** That endpoint's own provider, when its row names one. */
+  provider: string | null;
   /** Endpoints tried before this one answered. Empty on the happy path. */
   attempts: ManagedAttempt[];
 }
@@ -369,7 +379,7 @@ export async function forwardToEndpoints(opts: {
       continue;
     }
 
-    return { response, baseUrl: endpoint.baseUrl, attempts };
+    return { response, baseUrl: endpoint.baseUrl, provider: endpoint.provider ?? null, attempts };
   }
 
   throw new ManagedUnavailableError(attempts);

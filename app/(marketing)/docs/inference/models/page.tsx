@@ -169,7 +169,7 @@ export default function ModelsPage() {
             "Z.AI / GLM 5.3 Derisked",
             <C key="g2">zhipu/glm-5.3-derisked</C>,
             "1,000,000",
-            <>The full GLM 5.3, served through a dedicated derisked backend rather than on AhuraSense GPUs. Honours the <A href="/docs/inference/reasoning">reasoning ladder</A>: <C>none</C>, <C>minimal</C> and <C>low</C> answer without thinking, the default thinks briefly, <C>max</C> thinks most. Prompt-cache hits, when the backend reports them, bill at the cached rate.</>,
+            <>The full GLM 5.3, served on AhuraSense GPU capacity and through a dedicated derisked backend. Honours the <A href="/docs/inference/reasoning">reasoning ladder</A>: <C>none</C>, <C>minimal</C> and <C>low</C> answer without thinking, the default thinks briefly, <C>max</C> thinks most. Prompt-cache hits, when the backend reports them, bill at the cached rate.</>,
           ],
           [
             "Qwen / Qwen3.8 Flash Next Uncensored",
@@ -194,9 +194,10 @@ export default function ModelsPage() {
         </Li>
         <Li>
           <C>zhipu/glm-5.3-flash-derisked</C> runs on AhuraSense infrastructure end to end; no
-          partner receives the prompt. <C>zhipu/glm-5.3-derisked</C> is served through a dedicated
-          derisked backend under contract to us, so that backend does receive the prompt; the
-          same <A href="/docs/inference/privacy">retention terms</A> apply.
+          partner receives the prompt. <C>zhipu/glm-5.3-derisked</C> is served partly on AhuraSense
+          GPU capacity and partly through a dedicated derisked backend under contract to us, so
+          that backend may receive the prompt; the same{" "}
+          <A href="/docs/inference/privacy">retention terms</A> apply.
         </Li>
       </Ul>
 
