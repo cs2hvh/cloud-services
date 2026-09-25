@@ -11,7 +11,13 @@ name = "ahura-inference-edge"
 account_id = "800d1f863643585554014dd496baebe3"
 main = "src/index.ts"
 compatibility_date = "2026-05-01"
-compatibility_flags = ["nodejs_compat"]
+# global_fetch_strictly_public: fetch() routes every request as if from the
+# public Internet, so a serving endpoint whose hostname resolves to a private
+# or link-local address (10.x, 169.254.169.254 …) cannot reach anything
+# internal. Base URLs are pasted by operators; the panel checks the hostname,
+# this is the check at the point of the fetch. Every legitimate origin of
+# this worker is public. Added 2026-09-25.
+compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
 
 # ───────────────────────────────────────────────────────────────
 # Routes

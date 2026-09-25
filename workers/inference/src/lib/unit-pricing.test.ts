@@ -113,12 +113,15 @@ describe("computeCost costs by the partner that served", () => {
     expect(r.costCents).toBe(3800);
     expect(r.upstreamCostCents).toBe(72);
   });
-  it("falls back to upstream_pricing for a partner without an entry, and for no partner", () => {
+  it("falls back to upstream_pricing only for its owner, wokey, and for no partner", () => {
     expect(computeCost(ev({ ...tokens, upstreamProvider: "wokey" }), info(sell, wokey, byProvider)).upstreamCostCents).toBe(1380);
     expect(computeCost(ev({ ...tokens, upstreamProvider: null }), info(sell, wokey, byProvider)).upstreamCostCents).toBe(1380);
   });
-  it("is unaffected for a model with no per-provider entries", () => {
-    expect(computeCost(ev({ ...tokens, upstreamProvider: "starimg" }), info(sell, wokey, {})).upstreamCostCents).toBe(1380);
+  it("never costs one partner at another's rate: a partner with no entry has no cost basis", () => {
+    // No basis → the consumer's long-standing convention, upstream cost = billed cost,
+    // which reads as zero margin rather than as a number that was never this partner's.
+    expect(computeCost(ev({ ...tokens, upstreamProvider: "starimg" }), info(sell, wokey, {})).upstreamCostCents).toBe(3800);
+    expect(computeCost(ev({ ...tokens, upstreamProvider: "audn" }), info(sell, wokey, byProvider)).upstreamCostCents).toBe(3800);
   });
 });
 

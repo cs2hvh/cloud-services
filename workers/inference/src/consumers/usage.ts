@@ -48,10 +48,21 @@ interface PricingInfo {
   off_peak: ModelOffPeak | null;
 }
 
-/** The cost basis for one event: the serving partner's rates if known, else the model's default. */
+/**
+ * The cost basis for one event: the serving partner's own rates, if known.
+ *
+ * upstream_pricing is the single default blob and it has exactly one rightful
+ * owner, the original partner (wokey); it is also what a request with no
+ * partner (our own pods) falls back to. Any OTHER partner without an entry of
+ * its own gets null, which computeCost records as "no cost basis" rather than
+ * as whoever came before. Until 2026-09-25 a Starimg-served request on a
+ * model with no Starimg rate was silently costed at Wokey's rate, and an
+ * audn-served one at abliteration's, and both showed up as measured margin.
+ */
 export function upstreamPricingFor(info: PricingInfo, provider: string | null | undefined): ModelPricing | null {
   if (provider && info.provider_pricing && info.provider_pricing[provider]) return info.provider_pricing[provider]!;
-  return info.upstream_pricing;
+  if (!provider || provider === "wokey") return info.upstream_pricing;
+  return null;
 }
 
 export async function handleUsageBatch(
