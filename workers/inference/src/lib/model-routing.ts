@@ -369,7 +369,15 @@ export async function forwardToEndpoints(opts: {
     // 429 joins 5xx: an endpoint that is a partner API key rather than a pod
     // (2026-09-20, GLM 5.3 Derisked on three keys of one backend) says
     // "overloaded" as 429, and the next key is the answer to that.
-    if ((response.status >= 500 && response.status < 600) || response.status === 429) {
+    // 401/403 join too: they say the ENDPOINT is misconfigured (a key that
+    // was rotated, a proxy that denies our egress range, 2026-09-25), never
+    // that the request is wrong, and a customer must not receive them.
+    if (
+      (response.status >= 500 && response.status < 600) ||
+      response.status === 429 ||
+      response.status === 401 ||
+      response.status === 403
+    ) {
       attempts.push({ baseUrl: endpoint.baseUrl, status: response.status, error: null });
       try {
         await response.body?.cancel();

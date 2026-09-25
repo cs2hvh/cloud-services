@@ -164,6 +164,27 @@ describe("forwardToEndpoints", () => {
     expect((await forwardToEndpoints({ env: { BYOK_DEK: dek() }, routing: routing({ endpoints: [bare] }), body: {}, fetchImpl })).provider).toBeNull();
   });
 
+  it("treats a 401 or 403 as a misconfigured endpoint and moves on, never returning it to the caller", async () => {
+    for (const status of [401, 403]) {
+      const fetchImpl = fakeFetch(
+        {
+          "https://denied.example/v1": () => new Response("forbidden", { status }),
+          "https://ok.example/v1": () => new Response("{}", { status: 200 }),
+        },
+        []
+      );
+      const r = routing({
+        endpoints: [
+          { id: "d", baseUrl: "https://denied.example/v1", apiKeyCt: null, servedModelName: null, weight: 1 },
+          { id: "o", baseUrl: "https://ok.example/v1", apiKeyCt: null, servedModelName: null, weight: 1 },
+        ],
+      });
+      const result = await forwardToEndpoints({ env: { BYOK_DEK: dek() }, routing: r, body: { model: "m" }, fetchImpl, random: () => 0 });
+      expect(result.baseUrl).toBe("https://ok.example/v1");
+      expect(result.attempts).toEqual([{ baseUrl: "https://denied.example/v1", status, error: null }]);
+    }
+  });
+
   it("treats a 429 as an overloaded endpoint and moves to the next key", async () => {
     const calls: Call[] = [];
     const fetchImpl = fakeFetch(
