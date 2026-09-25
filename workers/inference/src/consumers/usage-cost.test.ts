@@ -65,15 +65,19 @@ describe("computeCost — upstream cost is real, not a copy", () => {
 
   it("produces a margin — the regression that motivated this", () => {
     const r = computeCost(event(), info());
-    expect(r.upstreamCostCents).toBeLessThan(r.costCents);
+    expect(r.upstreamCostCents).not.toBeNull();
+    expect(r.upstreamCostCents!).toBeLessThan(r.costCents);
     // ~4.5x, matching the vendor-list-over-Wokey-cost spread
-    expect(r.costCents / r.upstreamCostCents).toBeCloseTo(4.55, 1);
+    expect(r.costCents / r.upstreamCostCents!).toBeCloseTo(4.55, 1);
   });
 
-  it("falls back to the billed amount when no cost basis is recorded", () => {
-    // Honest degradation: report zero margin rather than invent one.
+  it("records no cost basis as null, never as the billed amount", () => {
+    // "Equal to the billed cost" looked like honest zero margin, but a
+    // sub-cent request bills 1 c and costs 1 c, so the marker was the
+    // rounding floor thousands of times a day. Null cannot collide.
     const r = computeCost(event(), info({ upstream_pricing: null }));
-    expect(r.upstreamCostCents).toBe(r.costCents);
+    expect(r.upstreamCostCents).toBeNull();
+    expect(r.costCents).toBeGreaterThan(0);
   });
 
   it("charges cached tokens at the cached rate on BOTH sides", () => {

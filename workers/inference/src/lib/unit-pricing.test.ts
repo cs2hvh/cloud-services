@@ -117,11 +117,12 @@ describe("computeCost costs by the partner that served", () => {
     expect(computeCost(ev({ ...tokens, upstreamProvider: "wokey" }), info(sell, wokey, byProvider)).upstreamCostCents).toBe(1380);
     expect(computeCost(ev({ ...tokens, upstreamProvider: null }), info(sell, wokey, byProvider)).upstreamCostCents).toBe(1380);
   });
-  it("never costs one partner at another's rate: a partner with no entry has no cost basis", () => {
-    // No basis → the consumer's long-standing convention, upstream cost = billed cost,
-    // which reads as zero margin rather than as a number that was never this partner's.
-    expect(computeCost(ev({ ...tokens, upstreamProvider: "starimg" }), info(sell, wokey, {})).upstreamCostCents).toBe(3800);
-    expect(computeCost(ev({ ...tokens, upstreamProvider: "audn" }), info(sell, wokey, byProvider)).upstreamCostCents).toBe(3800);
+  it("never costs one partner at another's rate: a partner with no entry has no cost basis, recorded as null", () => {
+    // Not "equal to the billed cost": a sub-cent request bills 1 c and costs 1 c,
+    // so equality is the rounding floor far more often than it is a marker.
+    expect(computeCost(ev({ ...tokens, upstreamProvider: "starimg" }), info(sell, wokey, {})).upstreamCostCents).toBeNull();
+    expect(computeCost(ev({ ...tokens, upstreamProvider: "audn" }), info(sell, wokey, byProvider)).upstreamCostCents).toBeNull();
+    expect(computeCost(ev({ ...tokens, upstreamProvider: null }), info(sell, null, {})).upstreamCostCents).toBeNull();
   });
 });
 

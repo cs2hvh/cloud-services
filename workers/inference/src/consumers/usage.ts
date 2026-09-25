@@ -302,7 +302,7 @@ function hasUsablePricing(p: ModelPricing): boolean {
 export function computeCost(
   event: UsageEvent,
   info: PricingInfo | undefined
-): { costCents: number; upstreamCostCents: number; isOffPeak: boolean } {
+): { costCents: number; upstreamCostCents: number | null; isOffPeak: boolean } {
   // Don't charge for non-success requests or unknown models.
   // Cost is zero too — a failed request still cost us nothing billable, and
   // recording a phantom upstream cost here would show negative margin.
@@ -329,9 +329,13 @@ export function computeCost(
   // here would understate cost and overstate margin during exactly the hours
   // margin is thinnest.
   const up = upstreamPricingFor(info, event.upstreamProvider);
+  // No cost basis is recorded as NULL, never as "equal to the billed cost":
+  // a sub-cent request bills 1 c and costs 1 c, so equality is the rounding
+  // floor thousands of times a day and a marker nothing could decode
+  // (2026-09-25: 5,205 of 5,210 "equal" Starimg rows were that floor).
   const upstreamCostCents = up
     ? Math.ceil(event.numUnits != null ? unitCost(event, up) : rateCost(event, up))
-    : finalCents;   // no cost basis recorded — fall back to old behaviour
+    : null;
 
   return { costCents: finalCents, upstreamCostCents, isOffPeak };
 }

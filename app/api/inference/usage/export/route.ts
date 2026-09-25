@@ -32,7 +32,6 @@ interface UsageRow {
   output_tokens: number | null;
   cached_tokens: number | null;
   cost_cents: number;
-  upstream_cost_cents: number;
   is_off_peak: boolean;
   latency_ms: number | null;
   ttft_ms: number | null;
@@ -94,7 +93,9 @@ export async function GET(request: NextRequest) {
     .schema("inference")
     .from("usage")
     .select(
-      "created_at, request_id, api_key_id, model_id, modality, input_tokens, output_tokens, cached_tokens, cost_cents, upstream_cost_cents, is_off_peak, latency_ms, ttft_ms, status, error_code, billed_to, cache_kind"
+      // upstream_cost_cents is what a backend charges US. It was in this
+      // customer export until 2026-09-25; it is internal and stays out.
+      "created_at, request_id, api_key_id, model_id, modality, input_tokens, output_tokens, cached_tokens, cost_cents, is_off_peak, latency_ms, ttft_ms, status, error_code, billed_to, cache_kind"
     )
     .eq("org_id", org.org_id)
     .gte("created_at", since.toISOString())
@@ -155,7 +156,6 @@ export async function GET(request: NextRequest) {
     "cached_tokens",
     "cost_cents",
     "cost_usd",
-    "upstream_cost_cents",
     "is_off_peak",
     "latency_ms",
     "ttft_ms",
@@ -182,7 +182,6 @@ export async function GET(request: NextRequest) {
         r.cached_tokens,
         r.cost_cents,
         (r.cost_cents / 100).toFixed(4),
-        r.upstream_cost_cents,
         r.is_off_peak,
         r.latency_ms,
         r.ttft_ms,
