@@ -293,6 +293,17 @@ export async function GET(request: Request) {
         revenueUsd: revenue / 100,
         upstreamUsd: upstream / 100,
         marginUsd: (revenue - upstream) / 100,
+        // Cost and revenue are stored as whole cents, so a request too small
+        // to reach a cent is billed 1c and costed 1c - and shows zero margin
+        // on a request that in fact earned nearly all of that cent. On some
+        // models this is most of the traffic, which drags the margin above
+        // down. Reported rather than corrected: the true figure is not
+        // recoverable at this precision, and inventing one would be worse.
+        atRoundingFloor: mine.filter(
+          (u) =>
+            Number(u.cost_cents ?? 0) === 1 &&
+            Number(u.upstream_cost_cents ?? 0) === 1,
+        ).length,
         p50LatencyMs: pick(50),
         p95LatencyMs: pick(95),
       };

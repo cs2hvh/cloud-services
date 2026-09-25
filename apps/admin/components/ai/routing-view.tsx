@@ -46,6 +46,7 @@ type PartnerStat = {
   revenueUsd: number;
   upstreamUsd: number;
   marginUsd: number;
+  atRoundingFloor?: number;
   p50LatencyMs: number | null;
   p95LatencyMs: number | null;
 };
@@ -399,6 +400,20 @@ export function AiRoutingView() {
                       >
                         {money(st.marginUsd)}
                         {approx && <span className="ml-1 text-amber-300">&asymp;</span>}
+                        {/* Whole-cent storage puts a floor under both sides:
+                            a request too small to reach a cent is billed 1c
+                            and costed 1c, so it reports no margin on a cent
+                            it very nearly all earned. Where that is most of
+                            the traffic the figure above is understated, and
+                            saying so beats quietly correcting it. */}
+                        {(st.atRoundingFloor ?? 0) > 0 && st.requests > 0 && (
+                          <div
+                            className="text-[10px] font-normal text-amber-300/80"
+                            title={`${st.atRoundingFloor} of ${st.requests} requests are too small to resolve at whole-cent precision: billed 1c and costed 1c, so they contribute no margin here even though nearly all of that cent is margin. The true figure is higher and is not recoverable from these columns.`}
+                          >
+                            understated · {Math.round(((st.atRoundingFloor ?? 0) / st.requests) * 100)}% sub-cent
+                          </div>
+                        )}
                       </td>
                     </tr>
                   );
