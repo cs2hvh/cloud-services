@@ -154,6 +154,8 @@ export async function GET(request: Request) {
 
     const num = (v: number | null | undefined) => Number(v ?? 0);
     let requests = 0;
+    /** No cost basis: counted, never summed as zero. */
+    let uncostedRequests = 0;
     let errors = 0;
     let inputTokens = 0;
     let outputTokens = 0;
@@ -172,7 +174,12 @@ export async function GET(request: Request) {
       cachedTokens += num(r.cached_tokens);
       cacheWriteTokens += num(r.cache_write_tokens);
       revenueCents += num(r.cost_cents);
-      upstreamCents += num(r.upstream_cost_cents);
+      // NULL is no cost basis, not zero cost.
+      if (r.upstream_cost_cents !== null && r.upstream_cost_cents !== undefined) {
+        upstreamCents += Number(r.upstream_cost_cents);
+      } else {
+        uncostedRequests += 1;
+      }
       if (r.billed_to === "byok") byokRequests += 1;
       if (r.latency_ms !== null) latencies.push(Number(r.latency_ms));
       if (r.ttft_ms !== null) ttfts.push(Number(r.ttft_ms));
@@ -233,7 +240,12 @@ export async function GET(request: Request) {
       const key = r.api_key_id ? keyById.get(r.api_key_id) : undefined;
       const org = r.org_id ? orgById.get(r.org_id) : undefined;
       const cost = num(r.cost_cents) / 100;
-      const upstream = num(r.upstream_cost_cents) / 100;
+      // Null travels to the UI as null so one request can say "unknown"
+      // rather than showing a confident $0.00 cost.
+      const upstream =
+        r.upstream_cost_cents === null || r.upstream_cost_cents === undefined
+          ? null
+          : Number(r.upstream_cost_cents) / 100;
       return {
         id: r.id,
         requestId: r.request_id,
@@ -260,7 +272,11 @@ export async function GET(request: Request) {
         upstreamUsd: upstream,
         // BYOK requests bill against the customer's own upstream key —
         // margin there is not ours to claim, so it reports null, not zero.
-        marginUsd: r.billed_to === "byok" ? null : cost - upstream,
+        // Null for BYOK (the margin is not ours to claim) and null when we
+        // hold no cost basis for the request - in both cases the honest
+        // answer is "unknown", and `cost - 0` would answer "all of it".
+        marginUsd:
+          r.billed_to === "byok" || upstream === null ? null : cost - upstream,
         latencyMs: r.latency_ms,
         ttftMs: r.ttft_ms,
         billedTo: r.billed_to,
@@ -290,6 +306,10 @@ export async function GET(request: Request) {
           inputTokens > 0 ? (cachedTokens / inputTokens) * 100 : null,
         revenueUsd: revenueCents / 100,
         upstreamUsd: upstreamCents / 100,
+        // How much of this window the cost figure could actually see. A
+        // margin drawn over requests we hold no rate for is a guess, and
+        // the denominator is the only thing that says so.
+        uncostedRequests,
         marginUsd: (revenueCents - upstreamCents) / 100,
         marginPct:
           revenueCents > 0

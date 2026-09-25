@@ -105,6 +105,8 @@ export async function GET(request: Request) {
       tokens: number;
       revenueCents: number;
       upstreamCents: number;
+      /** Requests with no cost basis: excluded from upstreamCents, not zeroed. */
+      uncosted: number;
       last: string | null;
     };
     const blank = (): Roll => ({
@@ -113,6 +115,7 @@ export async function GET(request: Request) {
       tokens: 0,
       revenueCents: 0,
       upstreamCents: 0,
+      uncosted: 0,
       last: null,
     });
     const byOrg = new Map<string, Roll>();
@@ -123,7 +126,12 @@ export async function GET(request: Request) {
       if (r.status !== "success") roll.errors += 1;
       roll.tokens += Number(r.input_tokens ?? 0) + Number(r.output_tokens ?? 0);
       roll.revenueCents += Number(r.cost_cents ?? 0);
-      roll.upstreamCents += Number(r.upstream_cost_cents ?? 0);
+      // NULL is no cost basis, not zero cost - see the note on the column.
+      if (r.upstream_cost_cents !== null && r.upstream_cost_cents !== undefined) {
+        roll.upstreamCents += Number(r.upstream_cost_cents);
+      } else {
+        roll.uncosted += 1;
+      }
       if (!roll.last || r.created_at > roll.last) roll.last = r.created_at;
       m.set(id, roll);
     };

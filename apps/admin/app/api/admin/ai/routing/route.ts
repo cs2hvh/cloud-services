@@ -148,6 +148,8 @@ export async function GET(request: Request) {
       upstreamCents: number;
       latencySum: number;
       latencyN: number;
+      /** Requests with no cost basis: excluded from upstreamCents, not zeroed. */
+      uncosted: number;
     };
     const blank = (): Roll => ({
       requests: 0,
@@ -156,6 +158,7 @@ export async function GET(request: Request) {
       upstreamCents: 0,
       latencySum: 0,
       latencyN: 0,
+      uncosted: 0,
     });
     // Grouping is by catalog owner; see the header note for why the stamped
     // column cannot carry this alone yet.
@@ -194,7 +197,12 @@ export async function GET(request: Request) {
       r.requests += 1;
       if (u.status !== "success") r.errors += 1;
       r.revenueCents += Number(u.cost_cents ?? 0);
-      r.upstreamCents += Number(u.upstream_cost_cents ?? 0);
+      // NULL means no cost basis, which is not a cost of zero.
+      if (u.upstream_cost_cents !== null && u.upstream_cost_cents !== undefined) {
+        r.upstreamCents += Number(u.upstream_cost_cents);
+      } else {
+        r.uncosted += 1;
+      }
       if (u.latency_ms !== null) {
         r.latencySum += Number(u.latency_ms);
         r.latencyN += 1;
@@ -277,7 +285,10 @@ export async function GET(request: Request) {
           : lat[Math.min(lat.length - 1, Math.floor((p / 100) * lat.length))];
       const revenue = mine.reduce((s2, u) => s2 + Number(u.cost_cents ?? 0), 0);
       const upstream = mine.reduce(
-        (s2, u) => s2 + Number(u.upstream_cost_cents ?? 0),
+        (s2, u) =>
+          u.upstream_cost_cents === null || u.upstream_cost_cents === undefined
+            ? s2
+            : s2 + Number(u.upstream_cost_cents),
         0,
       );
       return {
@@ -302,7 +313,14 @@ export async function GET(request: Request) {
         atRoundingFloor: mine.filter(
           (u) =>
             Number(u.cost_cents ?? 0) === 1 &&
-            Number(u.upstream_cost_cents ?? 0) === 1,
+            u.upstream_cost_cents !== null &&
+            Number(u.upstream_cost_cents) === 1,
+        ).length,
+        // Requests this partner served for which we hold no rate. Their
+        // margin is unknown, not zero, and they are excluded from the sum
+        // above rather than quietly counted as free.
+        uncostedRequests: mine.filter(
+          (u) => u.upstream_cost_cents === null || u.upstream_cost_cents === undefined,
         ).length,
         p50LatencyMs: pick(50),
         p95LatencyMs: pick(95),

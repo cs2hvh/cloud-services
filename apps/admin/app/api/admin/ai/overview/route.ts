@@ -85,6 +85,8 @@ export async function GET(request: Request) {
 
     let revenueCents = 0;
     let upstreamCents = 0;
+    /** No cost basis: counted, never summed as zero. */
+    let uncostedRequests = 0;
     let tokens = 0;
     let errors = 0;
     const orgSet = new Set<string>();
@@ -96,7 +98,13 @@ export async function GET(request: Request) {
 
     for (const r of rows) {
       revenueCents += Number(r.cost_cents) || 0;
-      upstreamCents += Number(r.upstream_cost_cents) || 0;
+      // NULL is no cost basis, not zero cost. Counting it as zero would
+      // report the request at 100% margin.
+      if (r.upstream_cost_cents !== null && r.upstream_cost_cents !== undefined) {
+        upstreamCents += Number(r.upstream_cost_cents);
+      } else {
+        uncostedRequests += 1;
+      }
       tokens += (Number(r.input_tokens) || 0) + (Number(r.output_tokens) || 0);
       if (r.status !== "success") errors += 1;
       if (r.org_id) orgSet.add(r.org_id);
@@ -162,6 +170,9 @@ export async function GET(request: Request) {
         tokens,
         revenue: Math.round(revenueCents) / 100,
         upstreamCost: Math.round(upstreamCents) / 100,
+        // Requests with no cost basis, excluded from the cost above rather
+        // than counted as free. The margin beside it is drawn over the rest.
+        uncostedRequests,
         marginPct:
           upstreamCents > 0
             ? Math.round(((revenueCents - upstreamCents) / upstreamCents) * 1000) / 10
