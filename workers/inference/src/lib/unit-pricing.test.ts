@@ -95,6 +95,9 @@ function ev(over: Partial<UsageEvent>): UsageEvent {
     status: "success",
     errorCode: null,
     cacheKind: "none",
+    // Media and partner events carry the partner that served them; the
+    // per-provider tests below override this explicitly.
+    upstreamProvider: "wokey",
     occurredAt: "2026-09-18T12:00:00.000Z",
     ...over,
   } as UsageEvent;
@@ -113,9 +116,16 @@ describe("computeCost costs by the partner that served", () => {
     expect(r.costCents).toBe(3800);
     expect(r.upstreamCostCents).toBe(72);
   });
-  it("falls back to upstream_pricing only for its owner, wokey, and for no partner", () => {
+  it("falls back to upstream_pricing only for its owner, wokey", () => {
     expect(computeCost(ev({ ...tokens, upstreamProvider: "wokey" }), info(sell, wokey, byProvider)).upstreamCostCents).toBe(1380);
-    expect(computeCost(ev({ ...tokens, upstreamProvider: null }), info(sell, wokey, byProvider)).upstreamCostCents).toBe(1380);
+  });
+  it("our own pods (no partner) have no per-token basis even when the model carries a default blob", () => {
+    // The panel rewrites upstream_pricing from a partner's rate; a pod costed
+    // from it would be that partner's margin, not ours.
+    expect(computeCost(ev({ ...tokens, upstreamProvider: null }), info(sell, wokey, byProvider)).upstreamCostCents).toBeNull();
+  });
+  it("a cache hit cost nothing upstream: 0, a real figure", () => {
+    expect(computeCost(ev({ ...tokens, upstreamProvider: null, cacheKind: "l1" }), info(sell, wokey, byProvider)).upstreamCostCents).toBe(0);
   });
   it("never costs one partner at another's rate: a partner with no entry has no cost basis, recorded as null", () => {
     // Not "equal to the billed cost": a sub-cent request bills 1 c and costs 1 c,

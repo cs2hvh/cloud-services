@@ -43,6 +43,9 @@ function event(over: Partial<UsageEvent> = {}): UsageEvent {
     ttftMs: null,
     status: "success",
     errorCode: null,
+    cacheKind: "none",
+    // A partner-served proxy request; upstream_pricing is that partner's own rate.
+    upstreamProvider: "wokey",
     occurredAt: "2026-08-26T12:00:00.000Z",
     ...over,
   } as UsageEvent;

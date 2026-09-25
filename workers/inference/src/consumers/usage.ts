@@ -60,9 +60,9 @@ interface PricingInfo {
  * audn-served one at abliteration's, and both showed up as measured margin.
  */
 export function upstreamPricingFor(info: PricingInfo, provider: string | null | undefined): ModelPricing | null {
-  if (provider && info.provider_pricing && info.provider_pricing[provider]) return info.provider_pricing[provider]!;
-  if (!provider || provider === "wokey") return info.upstream_pricing;
-  return null;
+  if (!provider) return null;
+  if (info.provider_pricing && info.provider_pricing[provider]) return info.provider_pricing[provider]!;
+  return provider === "wokey" ? info.upstream_pricing : null;
 }
 
 export async function handleUsageBatch(
@@ -328,14 +328,31 @@ export function computeCost(
   // make to the customer, not one the upstream makes to us, so applying it
   // here would understate cost and overstate margin during exactly the hours
   // margin is thinnest.
-  const up = upstreamPricingFor(info, event.upstreamProvider);
   // No cost basis is recorded as NULL, never as "equal to the billed cost":
   // a sub-cent request bills 1 c and costs 1 c, so equality is the rounding
   // floor thousands of times a day and a marker nothing could decode
   // (2026-09-25: 5,205 of 5,210 "equal" Starimg rows were that floor).
-  const upstreamCostCents = up
-    ? Math.ceil(event.numUnits != null ? unitCost(event, up) : rateCost(event, up))
-    : null;
+  //
+  // Who paid what:
+  //   cache hit         → nothing went upstream: 0, a real figure
+  //   no partner        → our own pods, no per-token basis: NULL. The model's
+  //                       default blob is NOT used here; the panel rewrites
+  //                       it from a partner's rate, and a pod costed at a
+  //                       partner's rate is the borrowed basis again.
+  //   a partner         → its own rate, else NULL (wokey alone may use the
+  //                       default blob, which was always its own)
+  const isCacheHit = event.cacheKind !== undefined && event.cacheKind !== "none";
+  let upstreamCostCents: number | null;
+  if (isCacheHit) {
+    upstreamCostCents = 0;
+  } else if (!event.upstreamProvider) {
+    upstreamCostCents = null;
+  } else {
+    const up = upstreamPricingFor(info, event.upstreamProvider);
+    upstreamCostCents = up
+      ? Math.ceil(event.numUnits != null ? unitCost(event, up) : rateCost(event, up))
+      : null;
+  }
 
   return { costCents: finalCents, upstreamCostCents, isOffPeak };
 }
