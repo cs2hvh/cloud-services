@@ -291,6 +291,30 @@ export async function GET() {
           }
           return null;
         })(),
+        // A cost entry whose input, cached and output are all the SAME
+        // number is one blended figure spread across three fields, not three
+        // measurements. Starimg's table was seeded from a per-model output
+        // price, so input and cached are overstated wherever it applies -
+        // and since input dominates real traffic, that understates margin
+        // rather than flattering it. Named "single blended figure" because
+        // that is what it is; it is not wrong, it is unrefined.
+        blendedCostPartners: Object.entries(
+          (m.provider_pricing ?? {}) as Record<string, Record<string, unknown>>,
+        )
+          .filter(([, blob]) => {
+            const i = blob?.input_cents_per_mtok;
+            const o = blob?.output_cents_per_mtok;
+            const c = blob?.cached_cents_per_mtok;
+            return (
+              typeof i === "number" &&
+              typeof o === "number" &&
+              typeof c === "number" &&
+              i === o &&
+              i === c
+            );
+          })
+          .map(([partner]) => partner)
+          .sort(),
         ownPods: servedByOwnPods(m.serving_type, m.upstream_provider),
         endpointProviders: [...(providersOnModel.get(m.model_id) ?? [])].sort(),
         // A partner answering here with no rate of its own: its cost is
@@ -392,6 +416,10 @@ export async function GET() {
         active: rows.filter((m: any) => m.is_active).length,
         orphaned,
         servedSampleTruncated: servedTruncated,
+      blendedCost: rows.filter(
+        (r: { is_active: boolean; blendedCostPartners: string[] }) =>
+          r.is_active && r.blendedCostPartners.length > 0,
+      ).length,
       upstreamBorrowed: rows.filter(
         (r: { is_active: boolean; upstreamEqualsPartner: string | null }) =>
           r.is_active && r.upstreamEqualsPartner !== null,

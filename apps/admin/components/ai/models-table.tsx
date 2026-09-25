@@ -72,6 +72,7 @@ type ModelRow = {
   // The four layers. Real cost lives in upstream_pricing/provider_pricing;
   // these describe how the customer price was arrived at.
   upstreamEqualsPartner: string | null;
+  blendedCostPartners: string[];
   ownPods: boolean;
   endpointProviders: string[];
   partnersWithoutCost: string[];
@@ -97,6 +98,7 @@ type CatalogSummary = {
   orphaned: number;
   placeholderPriced: number;
   upstreamBorrowed: number;
+  blendedCost: number;
   listPriced: number;
   drifted: number;
   upstreamChecked: boolean;
@@ -482,6 +484,14 @@ export function AiModelsTable() {
                 ))}
             </SelectContent>
           </Select>
+          {summary && summary.blendedCost > 0 && (
+            <span
+              className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-1 text-[11px] text-amber-300"
+              title="On these models a partner's input, cached and output cost are all the same number — one blended figure spread across three fields, not three measurements. Input and cached are therefore overstated, and since input is the bulk of real traffic that UNDERSTATES margin. Refine per field when the real rates are known."
+            >
+              {summary.blendedCost} model(s) on a single blended cost figure
+            </span>
+          )}
           {summary && summary.upstreamBorrowed > 0 && (
             <span
               className="rounded-full border border-purple-500/40 bg-purple-500/10 px-2.5 py-1 text-[11px] text-purple-300"
@@ -689,6 +699,14 @@ export function AiModelsTable() {
                             title="Looks like the seeded placeholder: 5x the partner cost, cached at a tenth of input. Set a real price."
                           >
                             placeholder
+                          </div>
+                        )}
+                        {m.blendedCostPartners.length > 0 && (
+                          <div
+                            className="mt-0.5 inline-flex rounded border border-amber-500/40 bg-amber-500/10 px-1 py-0.5 text-[10px] font-normal text-amber-300"
+                            title={`${m.blendedCostPartners.join(", ")}: input, cached and output cost are the same number — one blended figure, not three measurements. Input and cached are overstated, so the margin shown is a floor.`}
+                          >
+                            blended cost
                           </div>
                         )}
                         {/* Where the sell price came from. A derived price
