@@ -98,6 +98,7 @@ export async function probeEndpoint(
   let status: number | null = null;
   let body: unknown = null;
   let error: string | null = null;
+  let detail: string | null = null;
   try {
     const res = await fetchImpl(managedPath(row.base_url, "/models"), {
       method: "GET",
@@ -105,16 +106,25 @@ export async function probeEndpoint(
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     });
     status = res.status;
+    const text = await res.text();
     try {
-      body = await res.json();
+      body = JSON.parse(text);
     } catch {
       body = null;
+    }
+    // A non-200 keeps the start of what the endpoint said and who said it,
+    // because "http_403" alone cannot tell a proxy's address deny from a
+    // missing token from an auth page (2026-09-25, a server that answers
+    // Cloudflare with 403 and everyone else with 200).
+    if (status !== 200) {
+      const server = res.headers.get("server");
+      detail = `${server ? `server=${server} ` : ""}${text.replace(/\s+/g, " ").trim().slice(0, 300)}`;
     }
   } catch (err) {
     error = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
   }
   const verdict = judgeProbe(status, body, row.served_model_name, error);
-  return { endpointId: row.id, ...verdict, status, latencyMs: Date.now() - started, error };
+  return { endpointId: row.id, ...verdict, status, latencyMs: Date.now() - started, error: error ?? detail };
 }
 
 interface HealthState {
