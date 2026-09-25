@@ -73,6 +73,10 @@ type ModelRow = {
   // these describe how the customer price was arrived at.
   ownPods: boolean;
   endpointNoun: { one: string; many: string };
+  serving: {
+    pods: { live: number; up: number };
+    keys: { live: number; up: number };
+  } | null;
   listPriced: boolean;
   discountPct: number;
   impliedDiscountPct: number | null;
@@ -552,7 +556,14 @@ export function AiModelsTable() {
                           }`}
                           title={`Enabled ${m.endpointNoun.many} serving / enabled ${m.endpointNoun.many}`}
                         >
-                          {m.podHealth.up}/{m.podHealth.live} {m.endpointNoun.many}
+                          {/* A model can be served by a partner's keys AND a
+                              machine of our own at once, and one number over
+                              the two hides which half is down. */}
+                          {m.serving &&
+                          m.serving.keys.live > 0 &&
+                          m.serving.pods.live > 0
+                            ? `${m.serving.keys.up}/${m.serving.keys.live} keys · ${m.serving.pods.up}/${m.serving.pods.live} pod${m.serving.pods.live === 1 ? "" : "s"}`
+                            : `${m.podHealth.up}/${m.podHealth.live} ${m.endpointNoun.many}`}
                         </span>
                       )}
                       {servedByEndpoints(m.serving_type) &&

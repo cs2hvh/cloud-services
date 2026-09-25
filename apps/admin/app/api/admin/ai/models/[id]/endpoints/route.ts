@@ -37,10 +37,35 @@ type EndpointRow = {
 
 // api_key_ct is deliberately absent from every select in this file.
 const SAFE_COLUMNS =
-  "id, model_id, base_url, served_model_name, weight, enabled, label, created_at, updated_at";
+  "id, model_id, base_url, served_model_name, weight, enabled, label, provider, plaintext_ok, created_at, updated_at";
 
-/** Operator-supplied URLs are fetched by the server, so keep them public https. */
-export function validateBaseUrl(raw: string): { ok: true; url: string } | { ok: false; error: string } {
+/**
+ * Who answers at ONE endpoint row. Null falls back to the model's
+ * upstream_provider, which is what every pre-existing row does. A single
+ * model can now mix a partner's API keys with a machine of our own.
+ */
+export const ENDPOINT_PROVIDERS = [
+  "starimg",
+  "wokey",
+  "abliteration",
+  "custom",
+] as const;
+
+/**
+ * Operator-supplied URLs are fetched by our server and carry customer
+ * prompts, so https is required unless the operator has explicitly accepted
+ * plaintext for that row.
+ *
+ * `plaintextOk` is deliberately per-row and defaults to false: over http the
+ * request body, the model name and the response travel in clear text across
+ * whatever network sits between us, readable and alterable by anything on
+ * the path. That is a decision about customer data, so it is made once, per
+ * endpoint, on purpose - never inferred from the URL someone pasted.
+ */
+export function validateBaseUrl(
+  raw: string,
+  plaintextOk = false,
+): { ok: true; url: string } | { ok: false; error: string } {
   let parsed: URL;
   try {
     parsed = new URL(raw.trim());
@@ -48,7 +73,13 @@ export function validateBaseUrl(raw: string): { ok: true; url: string } | { ok: 
     return { ok: false, error: "base_url must be a full URL, e.g. https://pod.example.com/v1" };
   }
   if (parsed.protocol !== "https:") {
-    return { ok: false, error: "base_url must use https" };
+    if (!(plaintextOk && parsed.protocol === "http:")) {
+      return {
+        ok: false,
+        error:
+          "base_url must use https — tick \"allow plain HTTP\" on this endpoint if you accept sending prompts unencrypted",
+      };
+    }
   }
   const host = parsed.hostname.toLowerCase();
   const isPrivate =
@@ -141,9 +172,12 @@ export async function POST(
     weight?: number;
     label?: string;
     enabled?: boolean;
+    provider?: string | null;
+    plaintext_ok?: boolean;
   };
 
-  const urlCheck = validateBaseUrl(String(body.base_url ?? ""));
+  const plaintextOk = body.plaintext_ok === true;
+  const urlCheck = validateBaseUrl(String(body.base_url ?? ""), plaintextOk);
   if (!urlCheck.ok) {
     return NextResponse.json({ error: urlCheck.error }, { status: 400 });
   }
@@ -154,6 +188,19 @@ export async function POST(
       { status: 400 },
     );
   }
+  // Empty string and null both mean "inherit the model's provider".
+  let providerValue: string | null = null;
+  if (body.provider !== undefined && body.provider !== null && body.provider !== "") {
+    const p = String(body.provider);
+    if (!ENDPOINT_PROVIDERS.includes(p as (typeof ENDPOINT_PROVIDERS)[number])) {
+      return NextResponse.json(
+        { error: `provider must be one of: ${ENDPOINT_PROVIDERS.join(", ")}` },
+        { status: 400 },
+      );
+    }
+    providerValue = p;
+  }
+
   const weight = Number(body.weight ?? 1);
   if (!Number.isInteger(weight) || weight < 1) {
     return NextResponse.json({ error: "weight must be a whole number ≥ 1" }, { status: 400 });
@@ -197,6 +244,8 @@ export async function POST(
         base_url: urlCheck.url,
         api_key_ct: ciphertext,
         served_model_name: body.served_model_name?.trim() || null,
+        provider: providerValue,
+        plaintext_ok: plaintextOk,
         weight,
         label: body.label?.trim() || null,
         enabled: body.enabled ?? true,

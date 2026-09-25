@@ -98,9 +98,12 @@ export async function GET() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const inf = (supabase as any).schema("inference");
-        const [{ data, error }, modelsRes] = await Promise.all([
-          inf.from("endpoint_health").select("model_id, enabled, ok, checked_at"),
+        const [{ data, error }, modelsRes, epRes] = await Promise.all([
+          inf
+            .from("endpoint_health")
+            .select("endpoint_id, model_id, enabled, ok, checked_at"),
           inf.from("models").select("model_id, is_active, upstream_provider"),
+          inf.from("serving_endpoints").select("id, provider"),
         ]);
         if (error) return { ok: false, unknown: true, detail: "pod health unreadable" };
         // A delisted model is unroutable — its dead pod is housekeeping, not
@@ -122,9 +125,22 @@ export async function GET() {
             }[]
           ).map((m) => [m.model_id, m.upstream_provider ?? "custom"]),
         );
-        const isOurs = (modelId: string) =>
-          (providerOf.get(modelId) ?? "custom") === "custom";
+        // Who answers at a ROW: its own provider when it names one, else
+        // the model's. A model can hold a partner's keys and a machine of
+        // ours at once, so this card counts rows, not models - otherwise a
+        // partner's outage is reported as our pods being down.
+        const rowProvider = new Map<string, string | null>();
+        for (const e of (epRes?.data ?? []) as {
+          id: string;
+          provider: string | null;
+        }[]) {
+          rowProvider.set(e.id, e.provider ?? null);
+        }
+        const isOurs = (endpointId: string, modelId: string) =>
+          (rowProvider.get(endpointId) ?? providerOf.get(modelId) ?? "custom") ===
+          "custom";
         const rows = (data ?? []) as {
+          endpoint_id: string;
           model_id: string;
           enabled: boolean;
           ok: boolean;
@@ -149,7 +165,7 @@ export async function GET() {
         for (const r of rows) {
           if (!r.enabled) continue;
           if (!(active.get(r.model_id) ?? false)) continue;
-          if (!isOurs(r.model_id)) continue;
+          if (!isOurs(r.endpoint_id, r.model_id)) continue;
           const e = byModel.get(r.model_id) ?? { live: 0, up: 0 };
           e.live += 1;
           if (r.ok) e.up += 1;
@@ -160,7 +176,10 @@ export async function GET() {
           ([, v]) => v.up > 0 && v.up < v.live,
         );
         const live = rows.filter(
-          (r) => r.enabled && (active.get(r.model_id) ?? false) && isOurs(r.model_id),
+          (r) =>
+            r.enabled &&
+            (active.get(r.model_id) ?? false) &&
+            isOurs(r.endpoint_id, r.model_id),
         );
         if (down.length > 0) {
           return {

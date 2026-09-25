@@ -3,12 +3,12 @@ import { requireAdmin } from "@/lib/supabase/auth";
 import { createServiceClient } from "@/lib/supabase/server";
 import { AuditLogService } from "@/lib/audit";
 import { encryptAesGcm, bytesToPostgresBytea } from "@/lib/inference/crypto";
-import { validateBaseUrl } from "../route";
+import { ENDPOINT_PROVIDERS, validateBaseUrl } from "../route";
 
 export const dynamic = "force-dynamic";
 
 const SAFE_COLUMNS =
-  "id, model_id, base_url, served_model_name, weight, enabled, label, created_at, updated_at";
+  "id, model_id, base_url, served_model_name, weight, enabled, label, provider, plaintext_ok, created_at, updated_at";
 
 /**
  * Edit or remove one serving endpoint. A key may be ROTATED here (send a new
@@ -36,12 +36,56 @@ export async function PATCH(
     weight?: number;
     label?: string | null;
     enabled?: boolean;
+    provider?: string | null;
+    plaintext_ok?: boolean;
   };
 
   const updates: Record<string, unknown> = {};
 
+  // Who answers at THIS row. Null returns it to the model's own provider,
+  // which is what every row did before this column existed.
+  if (body.provider !== undefined) {
+    if (body.provider === null || body.provider === "") {
+      updates.provider = null;
+    } else {
+      const p = String(body.provider);
+      if (!ENDPOINT_PROVIDERS.includes(p as (typeof ENDPOINT_PROVIDERS)[number])) {
+        return NextResponse.json(
+          { error: `provider must be one of: ${ENDPOINT_PROVIDERS.join(", ")}` },
+          { status: 400 },
+        );
+      }
+      updates.provider = p;
+    }
+  }
+
+  if (body.plaintext_ok !== undefined) {
+    if (typeof body.plaintext_ok !== "boolean") {
+      return NextResponse.json(
+        { error: "plaintext_ok must be true or false" },
+        { status: 400 },
+      );
+    }
+    updates.plaintext_ok = body.plaintext_ok;
+  }
+
   if (body.base_url !== undefined) {
-    const check = validateBaseUrl(String(body.base_url));
+    // The URL is judged against the plaintext decision this request leaves
+    // in place, not the one it started with - otherwise turning the flag off
+    // and pointing at http:// in one call would slip through.
+    let effectivePlaintext = body.plaintext_ok === true;
+    if (body.plaintext_ok === undefined) {
+      const supabase = await createServiceClient();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const inf = (supabase as any).schema("inference");
+      const { data: current } = await inf
+        .from("serving_endpoints")
+        .select("plaintext_ok")
+        .eq("id", endpointId)
+        .maybeSingle();
+      effectivePlaintext = Boolean(current?.plaintext_ok);
+    }
+    const check = validateBaseUrl(String(body.base_url), effectivePlaintext);
     if (!check.ok) return NextResponse.json({ error: check.error }, { status: 400 });
     updates.base_url = check.url;
   }

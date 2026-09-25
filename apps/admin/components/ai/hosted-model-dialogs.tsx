@@ -40,7 +40,14 @@ export type EndpointRow = {
   enabled: boolean;
   label: string | null;
   hasKey: boolean;
+  /** Who answers at THIS row. Null inherits the model's upstream_provider. */
+  provider: string | null;
+  /** Explicit consent to send prompts unencrypted from this row. */
+  plaintext_ok: boolean;
 };
+
+/** Who can answer at one endpoint row. */
+const ROW_PROVIDERS = ["starimg", "wokey", "abliteration", "custom"] as const;
 
 type ProbeResult = {
   ok: boolean;
@@ -266,6 +273,10 @@ export function EndpointsDialog({
   const [servedName, setServedName] = useState("");
   const [label, setLabel] = useState("");
   const [weight, setWeight] = useState("1");
+  // "" means inherit the model's provider, which is what every row did
+  // before this column existed.
+  const [rowProvider, setRowProvider] = useState("");
+  const [plaintextOk, setPlaintextOk] = useState(false);
   const [adding, setAdding] = useState(false);
 
   const load = useCallback(async () => {
@@ -298,6 +309,8 @@ export function EndpointsDialog({
         served_model_name: servedName.trim() || undefined,
         label: label.trim() || undefined,
         weight: Number(weight) || 1,
+        provider: rowProvider || null,
+        plaintext_ok: plaintextOk,
       });
       toast.success("Endpoint added");
       setBaseUrl("");
@@ -305,6 +318,8 @@ export function EndpointsDialog({
       setServedName("");
       setLabel("");
       setWeight("1");
+      setRowProvider("");
+      setPlaintextOk(false);
       await load();
     } catch (e) {
       toast.error(errMsg(e, "Could not add the endpoint"));
@@ -413,10 +428,34 @@ export function EndpointsDialog({
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="min-w-0">
                       <div className={`${MONO} truncate text-[12.5px]`}>{r.base_url}</div>
-                      <div className="mt-0.5 text-[11px] text-muted-foreground">
-                        {r.label ? `${r.label} · ` : ""}
-                        serves {r.served_model_name || "(model default)"} · weight {r.weight} ·{" "}
-                        {r.hasKey ? "key set" : "no key"}
+                      <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                        <span>
+                          {r.label ? `${r.label} · ` : ""}
+                          serves {r.served_model_name || "(model default)"} · weight{" "}
+                          {r.weight} · {r.hasKey ? "key set" : "no key"}
+                        </span>
+                        {/* Who answers HERE. One model can mix a partner's
+                            keys with a machine of our own, so the row says
+                            which it is rather than the model speaking for
+                            all of them. */}
+                        <span
+                          className="rounded border border-white/[0.15] px-1 py-0.5 text-[10px] text-white/60"
+                          title={
+                            r.provider
+                              ? `This endpoint is ${r.provider}`
+                              : "Inherits the model's provider"
+                          }
+                        >
+                          {r.provider ?? "inherits"}
+                        </span>
+                        {r.plaintext_ok && (
+                          <span
+                            className="rounded border border-amber-500/50 bg-amber-500/10 px-1 py-0.5 text-[10px] text-amber-300"
+                            title="Prompts and responses travel to this endpoint over plain HTTP — unencrypted, readable and alterable by anything on the network path."
+                          >
+                            plain HTTP
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -539,7 +578,41 @@ export function EndpointsDialog({
                 className="h-8 text-[12px]"
               />
             </div>
+            <div className="space-y-1.5">
+              <Label className="text-[11px]">Answered by</Label>
+              <select
+                value={rowProvider}
+                onChange={(e) => setRowProvider(e.target.value)}
+                className="h-8 w-full rounded-md border border-border bg-transparent px-2 text-[12px]"
+              >
+                <option value="">inherit from model</option>
+                {ROW_PROVIDERS.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
+
+          {/* Plain HTTP is a decision about customer data, so it is taken
+              once, deliberately, per endpoint - never inferred from the URL
+              that was pasted. Off by default. */}
+          <label className="flex items-start gap-2 rounded-md border border-border px-2.5 py-2 text-[11.5px]">
+            <input
+              type="checkbox"
+              checked={plaintextOk}
+              onChange={(e) => setPlaintextOk(e.target.checked)}
+              className="mt-0.5 accent-amber-500"
+            />
+            <span className="text-muted-foreground">
+              <span className="text-foreground">Allow plain HTTP for this endpoint.</span>{" "}
+              Without TLS the prompt, the model name and the response cross the
+              network in clear text, readable and alterable by anything on the
+              path. Only tick this for a host you control on a network you
+              trust, and prefer fixing TLS.
+            </span>
+          </label>
           <div className="flex items-center justify-between gap-2">
             <Button
               variant="ghost"

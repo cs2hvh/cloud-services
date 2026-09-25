@@ -84,8 +84,12 @@ export async function GET() {
           .order("sort_order", { ascending: true })
           .order("model_id", { ascending: true }),
         fetchWokeyModelIds(),
-        inferenceSchema.from("serving_endpoints").select("model_id, enabled"),
-        inferenceSchema.from("endpoint_health").select("model_id, enabled, ok"),
+        inferenceSchema
+          .from("serving_endpoints")
+          .select("id, model_id, enabled, provider"),
+        inferenceSchema
+          .from("endpoint_health")
+          .select("endpoint_id, model_id, enabled, ok"),
         // Who actually served each model in the last 24h. upstream_provider
         // says which partner OWNS a model; with a primary/fallback chain the
         // partner that answered can differ per request, and only usage knows.
@@ -124,13 +128,43 @@ export async function GET() {
       if (e.enabled) c.enabled += 1;
       endpointCounts.set(e.model_id, c);
     }
+    // Who answers at each ROW, not each model. One model can mix a
+    // partner's API keys with a machine of our own, and counting the keys
+    // as pods would make a partner's outage read as ours.
+    const rowProvider = new Map<string, string | null>();
+    for (const e of (endpointsRes?.data ?? []) as {
+      id: string;
+      provider: string | null;
+    }[]) {
+      rowProvider.set(e.id, e.provider ?? null);
+    }
+
     const healthCounts = new Map<string, { live: number; up: number }>();
+    // The same counts, split by what each row actually is.
+    type Split = { pods: { live: number; up: number }; keys: { live: number; up: number } };
+    const servingSplit = new Map<string, Split>();
     for (const h of (healthRes?.data ?? []) as {
+      endpoint_id: string;
       model_id: string;
       enabled: boolean;
       ok: boolean;
     }[]) {
       if (!h.enabled) continue;
+      const rp = rowProvider.get(h.endpoint_id) ?? null;
+      const sp =
+        servingSplit.get(h.model_id) ??
+        { pods: { live: 0, up: 0 }, keys: { live: 0, up: 0 } };
+      // A row with no provider of its own inherits the model's, resolved
+      // below; here we only know it is not explicitly a partner's.
+      const bucket = rp === null || rp === "custom" ? "inherit" : "partner";
+      if (bucket === "partner") {
+        sp.keys.live += 1;
+        if (h.ok) sp.keys.up += 1;
+      } else {
+        sp.pods.live += 1;
+        if (h.ok) sp.pods.up += 1;
+      }
+      servingSplit.set(h.model_id, sp);
       const c = healthCounts.get(h.model_id) ?? { live: 0, up: 0 };
       c.live += 1;
       if (h.ok) c.up += 1;
@@ -228,6 +262,25 @@ export async function GET() {
         // served model can be entirely a partner's, one endpoint row per
         // API key - calling those "pods" would invent hardware.
         ownPods: servedByOwnPods(m.serving_type, m.upstream_provider),
+        // A row that names no provider inherits the model's, so a model on
+        // a partner whose rows are unmarked is all keys; one on 'custom' is
+        // all pods. Rows that DO name a partner were already counted as
+        // keys above, whatever the model says.
+        serving: (() => {
+          const sp = servingSplit.get(m.model_id);
+          if (!sp) return null;
+          const inheritsPartner =
+            m.upstream_provider && m.upstream_provider !== "custom";
+          return inheritsPartner
+            ? {
+                pods: { live: 0, up: 0 },
+                keys: {
+                  live: sp.keys.live + sp.pods.live,
+                  up: sp.keys.up + sp.pods.up,
+                },
+              }
+            : sp;
+        })(),
         endpointNoun: endpointNoun(m.serving_type, m.upstream_provider),
         listPriced: isListPriced(m.list_pricing),
         discountPct: Number(m.discount_pct ?? 0),
