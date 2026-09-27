@@ -165,17 +165,25 @@ export function AiOverview() {
       <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <StatCard label="Requests" value={t ? compact(t.requests) : "—"} icon={Activity} />
         <StatCard label="Tokens" value={t ? compact(t.tokens) : "—"} icon={Braces} />
+        {/* Recorded usage, NOT collected money: inference is not yet
+            settled to customer balances, so none of this has been charged.
+            Calling it revenue sat it beside the HQ board's revenue - which
+            IS collected - as if the two were the same kind of number. */}
         <StatCard
-          label="Revenue"
+          label="Recorded usage"
           value={t ? money(t.revenue) : "—"}
           icon={DollarSign}
-          hint={t ? `${money(t.upstreamCost)} upstream cost` : undefined}
+          hint={
+            t
+              ? `not yet settled to balances · ${money(t.upstreamCost)} upstream cost`
+              : undefined
+          }
         />
         <StatCard
           label="Margin"
           value={t?.marginPct != null ? `${t.marginPct}%` : "—"}
           icon={TrendingUp}
-          hint="revenue vs upstream cost"
+          hint="usage vs upstream cost, before settlement"
         />
         <StatCard
           label="Error rate"
@@ -227,7 +235,10 @@ export function AiOverview() {
           </div>
         </ChartCard>
 
-        <ChartCard title="Revenue" subtitle={`USD per day, last ${overview?.days ?? days} days`}>
+        <ChartCard
+          title="Recorded usage"
+          subtitle={`USD per day, last ${overview?.days ?? days} days · not yet settled to balances`}
+        >
           <div className="h-52">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={overview?.daily ?? []} margin={{ top: 4, right: 4, left: -14, bottom: 0 }}>
@@ -247,7 +258,7 @@ export function AiOverview() {
                 <Area
                   type="monotone"
                   dataKey="revenue"
-                  name="Revenue"
+                  name="Recorded usage"
                   stroke={SERIES[0]}
                   strokeWidth={2}
                   fill="url(#aiRevenue)"
@@ -280,7 +291,7 @@ export function AiOverview() {
                   content={<ChartTooltip formatter={(v) => money(Number(v))} />}
                   cursor={{ fill: "rgba(255,255,255,0.04)" }}
                 />
-                <Bar dataKey="revenue" name="Revenue" fill={SERIES[0]} radius={[0, 4, 4, 0]} maxBarSize={16} />
+                <Bar dataKey="revenue" name="Recorded usage" fill={SERIES[0]} radius={[0, 4, 4, 0]} maxBarSize={16} />
               </BarChart>
             </ResponsiveContainer>
           </div>

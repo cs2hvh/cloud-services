@@ -333,7 +333,7 @@ export function AiRoutingView() {
                   <th className="px-4 py-2.5 text-right font-semibold">{feed.days}d</th>
                   <th className="px-4 py-2.5 text-right font-semibold">Errors</th>
                   <th className="px-4 py-2.5 text-right font-semibold">p50 / p95</th>
-                  <th className="px-4 py-2.5 text-right font-semibold">Billed</th>
+                  <th className="px-4 py-2.5 text-right font-semibold" title="Recorded usage — not yet settled to customer balances">Usage</th>
                   <th className="px-4 py-2.5 text-right font-semibold">Margin</th>
                 </tr>
               </thead>
@@ -573,7 +573,7 @@ export function AiRoutingView() {
                 <th className="px-4 py-2.5 text-right font-semibold">Requests</th>
                 <th className="px-4 py-2.5 text-right font-semibold">Errors</th>
                 <th className="px-4 py-2.5 text-right font-semibold">Avg latency</th>
-                <th className="px-4 py-2.5 text-right font-semibold">Billed</th>
+                <th className="px-4 py-2.5 text-right font-semibold" title="Recorded usage — not yet settled to customer balances">Usage</th>
                 <th className="px-4 py-2.5 text-right font-semibold">Margin</th>
               </tr>
             </thead>

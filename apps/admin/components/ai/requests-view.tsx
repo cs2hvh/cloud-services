@@ -238,7 +238,7 @@ export function AiRequestsView() {
           }
         />
         <StatCard
-          label="Billed"
+          label="Recorded usage"
           value={s ? money(s.revenueUsd, 2) : "—"}
           hint={s ? `upstream ${money(s.upstreamUsd, 2)}` : undefined}
         />
@@ -528,7 +528,7 @@ export function AiRequestsView() {
                               />
                               <Detail k="TTFT" v={ms(r.ttftMs)} />
                               <Detail k="Total latency" v={ms(r.latencyMs)} />
-                              <Detail k="Billed" v={money(r.costUsd)} />
+                              <Detail k="Usage (unsettled)" v={money(r.costUsd)} />
                               <Detail
                                 k="Upstream cost"
                                 v={`${money(r.upstreamUsd)}${

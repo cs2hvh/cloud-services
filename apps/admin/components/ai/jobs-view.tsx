@@ -107,7 +107,7 @@ export function AiJobsView() {
     <div>
       <PageHeader
         title="Media jobs"
-        description="Image and video generation. A job bills once when it completes, so an open job is unbilled work in progress."
+        description="Image and video generation. A job is recorded once it completes; inference is not yet settled to customer balances, so recorded is not the same as charged."
         actions={
           <div className="flex items-center gap-2">
             <Select value={status} onValueChange={setStatus}>
@@ -180,7 +180,7 @@ export function AiJobsView() {
           hint="seconds / images on completed jobs"
         />
         <StatCard
-          label="Billed"
+          label="Recorded usage"
           value={s ? `$${s.billedUsd.toFixed(2)}` : "—"}
           hint="completed jobs only"
         />
@@ -196,7 +196,7 @@ export function AiJobsView() {
                 <th className="px-4 py-2.5 font-semibold">Org</th>
                 <th className="px-4 py-2.5 font-semibold">Spec</th>
                 <th className="px-4 py-2.5 text-right font-semibold">Units</th>
-                <th className="px-4 py-2.5 text-right font-semibold">Billed</th>
+                <th className="px-4 py-2.5 text-right font-semibold" title="Recorded usage — not yet settled to the customer's balance">Usage</th>
                 <th className="px-4 py-2.5 font-semibold">Status</th>
               </tr>
             </thead>

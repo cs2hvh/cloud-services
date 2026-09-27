@@ -239,7 +239,7 @@ export function AiAccountsView({ initialOrg }: { initialOrg?: string }) {
                 <th className="px-4 py-2.5 font-semibold">Keys</th>
                 <th className="px-4 py-2.5 text-right font-semibold">Requests</th>
                 <th className="px-4 py-2.5 text-right font-semibold">Tokens</th>
-                <th className="px-4 py-2.5 text-right font-semibold">Billed</th>
+                <th className="px-4 py-2.5 text-right font-semibold" title="Recorded usage — not yet settled to the customer's balance">Usage</th>
                 <th className="px-4 py-2.5 text-right font-semibold">Margin</th>
                 <th className="px-4 py-2.5 font-semibold">Budget</th>
                 <th className="px-4 py-2.5 font-semibold">Last call</th>
@@ -330,7 +330,7 @@ export function AiAccountsView({ initialOrg }: { initialOrg?: string }) {
                 <th className="px-4 py-2.5 font-semibold">Created by</th>
                 <th className="px-4 py-2.5 font-semibold">Limits</th>
                 <th className="px-4 py-2.5 text-right font-semibold">Requests</th>
-                <th className="px-4 py-2.5 text-right font-semibold">Billed</th>
+                <th className="px-4 py-2.5 text-right font-semibold" title="Recorded usage — not yet settled to the customer's balance">Usage</th>
                 <th className="px-4 py-2.5 font-semibold">Last used</th>
                 <th className="px-4 py-2.5 font-semibold">State</th>
               </tr>
