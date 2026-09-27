@@ -20,6 +20,7 @@
 import type { Handler } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { z } from "zod";
+import { modelIdSchema } from "../lib/model-id.ts";
 import type { AuthContext, Env, HonoVariables, UsageEvent } from "../types.ts";
 import {
   clampCachedTokens,
@@ -73,7 +74,7 @@ const anthropicMessage = z
 
 const messagesRequestSchema = z
   .object({
-    model: z.string().min(1),
+    model: modelIdSchema,
     messages: z.array(anthropicMessage).min(1),
     system: z.union([z.string(), z.array(anthropicContentBlock)]).optional(),
     max_tokens: z.number().int().positive(),

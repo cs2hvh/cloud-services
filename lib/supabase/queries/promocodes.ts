@@ -2,6 +2,9 @@ import { createServiceClient } from "../server";
 import { handleQueryError } from "@/lib/utils/error-handler";
 import { Promocode, Coupon } from "../types";
 
+/** The customer-safe view of a coupon: what the billing page shows, nothing else. */
+export type AvailablePromocode = Pick<Promocode, "id" | "code" | "amount" | "valid_till" | "coupon_type">;
+
 interface PromocodeRedemptionEntry {
   userId?: string;
   email?: string;
@@ -231,10 +234,17 @@ export const Promocodes = {
   },
 
   // User: Get available promocodes (not yet redeemed by user)
+  //
+  // Returns only the fields a customer may see. The rows also hold redeem_by,
+  // the list of every customer (email and user id) who has redeemed the code,
+  // plus created_by and max_redemptions; until 2026-09-27 whole rows went to
+  // the billing page and GET /api/billing/coupons, so any signed-in user could
+  // read every other redeemer's email. Filtering on redeem_by stays here, on
+  // the server.
   get_available_for_user: async (
     userId: string,
     email: string
-  ): Promise<Promocode[]> => {
+  ): Promise<AvailablePromocode[]> => {
     try {
       const supabase = await createServiceClient();
 
@@ -269,7 +279,13 @@ export const Promocodes = {
         return !hasRedeemed;
       });
 
-      return available;
+      return available.map(({ id, code, amount, valid_till, coupon_type }) => ({
+        id,
+        code,
+        amount,
+        valid_till,
+        coupon_type,
+      }));
     } catch (err) {
       handleQueryError("Get available promocodes for user", err, "Promocodes");
       return [];

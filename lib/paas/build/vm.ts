@@ -365,7 +365,20 @@ export function renderCloudInit(
 ): string {
   const b64 = (s: string) => Buffer.from(s, "utf8").toString("base64");
 
-  const rootDir = req.rootDirectory ? `/${req.rootDirectory.replace(/^\/+|\/+$/g, "")}` : "";
+  // rootDirectory lands unquoted in a root shell script below (DOCKERFILE=...,
+  // cd ...). It comes from the project row, which customers write, so refuse
+  // anything but a plain relative path rather than trying to quote it:
+  // letters, digits, dot, underscore, dash and slash, no `..` segment. The
+  // same shape is a CHECK on paas.projects.root_directory
+  // (20260927140000); this is the guard at the sink.
+  const rootTrimmed = req.rootDirectory ? req.rootDirectory.replace(/^\/+|\/+$/g, "") : "";
+  if (
+    rootTrimmed &&
+    (!/^[A-Za-z0-9._/-]{1,255}$/.test(rootTrimmed) || /(^|\/)\.\.(\/|$)/.test(rootTrimmed))
+  ) {
+    throw new Error(`[paas/build] root directory ${JSON.stringify(req.rootDirectory)} is not a plain relative path`);
+  }
+  const rootDir = rootTrimmed ? `/${rootTrimmed}` : "";
 
   // Only for a Dockerfile the repository supplies. Ours is generated against
   // the application directory and would COPY the wrong manifest from a

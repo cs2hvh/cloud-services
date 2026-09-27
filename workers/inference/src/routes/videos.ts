@@ -12,6 +12,7 @@
 import type { Handler } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { z } from "zod";
+import { modelIdSchema } from "../lib/model-id.ts";
 import type { Env, HonoVariables } from "../types.ts";
 import { resolveModelId } from "../lib/aliases.ts";
 import { resolveUpstreamKey } from "../lib/wokey.ts";
@@ -38,7 +39,7 @@ type H = Handler<{ Bindings: Env; Variables: HonoVariables }>;
 
 const submitSchema = z
   .object({
-    model: z.string().min(1),
+    model: modelIdSchema,
     prompt: z.string().min(1).max(4000),
     mode: z.string().optional(),
     duration_seconds: z.number().int().min(1).max(60),

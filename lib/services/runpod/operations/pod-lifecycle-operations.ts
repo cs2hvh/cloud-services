@@ -720,7 +720,7 @@ export const podLifecycleOperations = {
             try {
                 await RunPodClient.rest(
                     "POST",
-                    `/pods/${pod.runpod_pod_id}/${req.action}`
+                    `/pods/${encodeURIComponent(pod.runpod_pod_id)}/${encodeURIComponent(req.action)}`
                 );
             } catch (e) {
                 // The upstream message is worth keeping SOME of — a capacity
@@ -814,7 +814,7 @@ export const podLifecycleOperations = {
             // 1. Destroy on RunPod (best-effort — DB cleanup must still happen)
             if (pod.runpod_pod_id) {
                 try {
-                    await RunPodClient.rest("DELETE", `/pods/${pod.runpod_pod_id}`);
+                    await RunPodClient.rest("DELETE", `/pods/${encodeURIComponent(pod.runpod_pod_id)}`);
                 } catch (e) {
                     console.warn(
                         `[GPU:destroyPod] RunPod delete failed for ${pod.runpod_pod_id}:`,

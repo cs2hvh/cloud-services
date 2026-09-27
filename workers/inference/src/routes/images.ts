@@ -6,6 +6,7 @@
 import type { Handler } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { z } from "zod";
+import { modelIdSchema } from "../lib/model-id.ts";
 import type { Env, HonoVariables } from "../types.ts";
 import { resolveModelId } from "../lib/aliases.ts";
 import { resolveUpstreamKey } from "../lib/wokey.ts";
@@ -14,7 +15,7 @@ import { baseUsageEvent, errorBody, sendUsage } from "../lib/usage-events.ts";
 
 const schema = z
   .object({
-    model: z.string().min(1),
+    model: modelIdSchema,
     prompt: z.string().min(1).max(4000),
     n: z.number().int().min(1).max(4).optional(),
     size: z.string().regex(/^\d{3,4}x\d{3,4}$|^auto$/).optional(),

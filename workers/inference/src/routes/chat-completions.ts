@@ -12,6 +12,7 @@
 import type { Handler } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { z } from "zod";
+import { modelIdSchema } from "../lib/model-id.ts";
 import type { AuthContext, Env, HonoVariables, UsageEvent } from "../types.ts";
 import {
   clampCachedTokens,
@@ -61,7 +62,7 @@ const chatRequestSchema = z
   .object({
     // Optional in the schema — required at runtime UNLESS a preset is in play
     // (preset's first model becomes the default). The handler enforces this.
-    model: z.string().min(1).optional(),
+    model: modelIdSchema.optional(),
     messages: z.array(messageSchema).min(1),
     stream: z.boolean().optional(),
     temperature: z.number().min(0).max(2).optional(),

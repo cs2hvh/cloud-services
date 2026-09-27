@@ -259,7 +259,7 @@ export const volumeOperations = {
                 try {
                     await RunPodClient.rest(
                         "DELETE",
-                        `/networkvolumes/${vol.runpod_volume_id}`
+                        `/networkvolumes/${encodeURIComponent(vol.runpod_volume_id)}`
                     );
                 } catch (e) {
                     console.warn(

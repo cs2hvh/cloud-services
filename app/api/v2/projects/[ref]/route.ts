@@ -131,8 +131,19 @@ export async function PATCH(request: Request, { params }: Params) {
   }
 
   if (body.rootDirectory === null || typeof body.rootDirectory === "string") {
+    // Stripped of leading and trailing slashes, as at create. The value ends up
+    // in the build VM's root shell script, so only a plain relative path is
+    // accepted; the same shape is a CHECK on paas.projects.root_directory.
     const dir =
-      typeof body.rootDirectory === "string" ? body.rootDirectory.trim() : "";
+      typeof body.rootDirectory === "string"
+        ? body.rootDirectory.trim().replace(/^\/+|\/+$/g, "")
+        : "";
+    if (dir && (!/^[A-Za-z0-9._/-]{1,255}$/.test(dir) || /(^|\/)\.\.(\/|$)/.test(dir))) {
+      return invalid(
+        "Root directory must be a relative path of letters, numbers, dots, dashes, underscores and slashes.",
+        { rootDirectory: "shape" }
+      );
+    }
     patch.root_directory = dir || null;
   }
 

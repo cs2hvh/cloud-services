@@ -325,10 +325,39 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
+  // A test-mode event must never credit a live deployment, or the reverse.
+  // Acknowledged rather than refused, so Stripe does not retry it for days.
+  const expectLivemode = /^(sk|rk)_live_/.test(process.env.STRIPE_SECRET_KEY ?? "");
+  if (Boolean(event.livemode) !== expectLivemode) {
+    console.warn(
+      `[Stripe Webhook] Ignoring ${event.livemode ? "live" : "test"}-mode event ${event.id} on a ${expectLivemode ? "live" : "test"}-mode deployment`
+    );
+    return NextResponse.json({ received: true });
+  }
+
   switch (event.type) {
-    case "checkout.session.completed": {
-      const session = event.data.object as Stripe.Checkout.Session;
+    case "checkout.session.completed":
+    case "checkout.session.async_payment_succeeded": {
       const stripe = getStripeClient();
+
+      // Re-read the session from Stripe with the server's own key and act only
+      // on what Stripe returns. The event body is signed, but a signing secret
+      // can leak (the 2026-09-27 security scan found one in git history); a
+      // session fetched from Stripe cannot be forged, and its payment_status is
+      // the only proof that money arrived. Amount, user and mode below all come
+      // from this copy, not from the event.
+      const eventSession = event.data.object as Stripe.Checkout.Session;
+      let session: Stripe.Checkout.Session;
+      try {
+        session = await stripe.checkout.sessions.retrieve(eventSession.id);
+      } catch (err: unknown) {
+        if ((err as { code?: string } | null)?.code === "resource_missing") {
+          console.error("[Stripe Webhook] Event names a session this Stripe account does not have:", eventSession.id);
+          return NextResponse.json({ error: "Unknown session" }, { status: 400 });
+        }
+        console.error("[Stripe Webhook] Could not verify session with Stripe:", err);
+        return NextResponse.json({ error: "Could not verify session" }, { status: 500 });
+      }
 
       if (session.mode === "subscription") {
         const userId = session.metadata?.user_id;
@@ -375,6 +404,15 @@ export async function POST(request: Request) {
 
         console.log(`[Stripe Webhook] Registered recurring checkout for user ${userId} (session: ${session.id})`);
         break;
+      }
+
+      // Delayed payment methods (bank debits and similar) complete checkout
+      // with payment_status "unpaid" and settle days later, when Stripe sends
+      // checkout.session.async_payment_succeeded, which comes back through this
+      // same case. Until then there is no money, so there is no credit.
+      if (session.payment_status !== "paid") {
+        console.log(`[Stripe Webhook] Session ${session.id} is ${session.payment_status}; not crediting until it is paid`);
+        return NextResponse.json({ received: true });
       }
 
       const userId = session.metadata?.user_id;
@@ -487,9 +525,34 @@ export async function POST(request: Request) {
       break;
     }
 
+    case "checkout.session.async_payment_failed": {
+      // Nothing was credited for this session (see payment_status above), so
+      // there is nothing to reverse.
+      const failed = event.data.object as Stripe.Checkout.Session;
+      console.warn("[Stripe Webhook] Delayed payment failed; nothing was credited:", failed.id);
+      break;
+    }
+
     case "invoice.payment_succeeded": {
-      const invoice = event.data.object as Stripe.Invoice;
-      const stripeInvoiceId = invoice.id;
+      // Re-read from Stripe, for the same reason as checkout sessions above:
+      // credit what Stripe says was paid, not what the event body says.
+      const eventInvoice = event.data.object as Stripe.Invoice;
+      let invoice: Stripe.Invoice;
+      try {
+        invoice = await getStripeClient().invoices.retrieve(eventInvoice.id as string);
+      } catch (err: unknown) {
+        if ((err as { code?: string } | null)?.code === "resource_missing") {
+          console.error("[Stripe Webhook] Event names an invoice this Stripe account does not have:", eventInvoice.id);
+          return NextResponse.json({ error: "Unknown invoice" }, { status: 400 });
+        }
+        console.error("[Stripe Webhook] Could not verify invoice with Stripe:", err);
+        return NextResponse.json({ error: "Could not verify invoice" }, { status: 500 });
+      }
+      if (invoice.status !== "paid") {
+        console.log(`[Stripe Webhook] Invoice ${invoice.id} is ${invoice.status}; not crediting`);
+        return NextResponse.json({ received: true });
+      }
+      const stripeInvoiceId = invoice.id as string;
       const subscriptionRef = invoice.parent?.subscription_details?.subscription;
       const subscriptionId =
         typeof subscriptionRef === "string"
@@ -556,7 +619,9 @@ export async function POST(request: Request) {
           break;
         }
 
-        const paymentIntentRef = invoice.payments?.data?.[0]?.payment?.payment_intent;
+        // Recorded for reference only. A retrieved invoice may not carry its
+        // payments list unless expanded, so fall back to the event's copy.
+        const paymentIntentRef = (invoice.payments ?? eventInvoice.payments)?.data?.[0]?.payment?.payment_intent;
         const paymentIntentId =
           typeof paymentIntentRef === "string"
             ? paymentIntentRef

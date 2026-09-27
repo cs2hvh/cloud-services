@@ -167,7 +167,12 @@ export function validateCreateProject(input: CreateProjectInput): Validated {
   // directory rather than two different lookups that both half-work.
   const rootRaw = typeof input.rootDirectory === "string" ? input.rootDirectory.trim() : "";
   const rootDirectory = rootRaw ? rootRaw.replace(/^\/+|\/+$/g, "") || null : null;
-  if (rootDirectory && (rootDirectory.includes("..") || rootDirectory.length > 255)) {
+  // Same shape as paas.projects.root_directory's CHECK: the value is placed in
+  // the build VM's root shell script, so only a plain relative path passes.
+  if (
+    rootDirectory &&
+    (!/^[A-Za-z0-9._/-]{1,255}$/.test(rootDirectory) || /(^|\/)\.\.(\/|$)/.test(rootDirectory))
+  ) {
     return { ok: false, message: "That root directory is not valid.", fields: { rootDirectory: "shape" } };
   }
 

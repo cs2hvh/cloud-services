@@ -11,6 +11,7 @@
  */
 import { createClient } from "@supabase/supabase-js";
 import type { Env, UsageEvent } from "../types.ts";
+import { isSafeModelId } from "../lib/model-id.ts";
 // The same off-peak arithmetic GET /v1/models quotes from, so the price we
 // publish and the price we charge cannot drift apart.
 import {
@@ -76,13 +77,21 @@ export async function handleUsageBatch(
     global: { headers: { "X-Client-Info": "ahura-inference-usage-consumer" } },
   });
 
-  // 1. Resolve pricing for every distinct model in the batch
-  const modelIds = [...new Set(batch.messages.map((m) => m.body.modelId))];
-  const { data: modelRows, error: modelErr } = await supabase
-    .schema("inference")
-    .from("models")
-    .select("model_id, pricing, upstream_pricing, provider_pricing, off_peak")
-    .in("model_id", modelIds);
+  // 1. Resolve pricing for every distinct model in the batch.
+  //
+  // Only ids of catalog shape go into the lookup. The routes already refuse
+  // anything else, but this query prices the whole batch at once, so a single
+  // id that could break it would fail pricing for every tenant batched with it
+  // and, through retryAll below, dead-letter all of their usage. An id kept
+  // out here is simply unknown: its row is still written, unpriced and logged.
+  const modelIds = [...new Set(batch.messages.map((m) => m.body.modelId))].filter(isSafeModelId);
+  const { data: modelRows, error: modelErr } = modelIds.length
+    ? await supabase
+        .schema("inference")
+        .from("models")
+        .select("model_id, pricing, upstream_pricing, provider_pricing, off_peak")
+        .in("model_id", modelIds)
+    : { data: [], error: null };
 
   if (modelErr) {
     console.error(

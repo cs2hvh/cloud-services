@@ -63,6 +63,11 @@ describe("POST /api/billing/webhook", () => {
     invoices: {
       retrieve: vi.fn(),
     },
+    checkout: {
+      sessions: {
+        retrieve: vi.fn(),
+      },
+    },
   };
 
   beforeEach(async () => {
@@ -86,6 +91,12 @@ describe("POST /api/billing/webhook", () => {
     });
     mockStripe.invoices.retrieve.mockResolvedValue({
       hosted_invoice_url: "https://stripe.com/invoices/in_123",
+    });
+    // The webhook re-reads every session from Stripe. By default Stripe
+    // returns the session the event named, paid, in payment mode.
+    mockStripe.checkout.sessions.retrieve.mockImplementation(async () => {
+      const event = mockStripe.webhooks.constructEvent.mock.results.at(-1)?.value;
+      return { payment_status: "paid", mode: "payment", ...(event?.data?.object ?? {}) };
     });
   });
 
@@ -239,6 +250,61 @@ describe("POST /api/billing/webhook", () => {
     const data = await expectResponseStatus(response, 500);
 
     expect(data.error).toBe("Processing failed");
+  });
+
+  it("TC-WEBHOOK-010: does not credit a session Stripe reports as unpaid", async () => {
+    const { Billing } = await import("@/lib/supabase/queries/billing");
+    mockStripe.checkout.sessions.retrieve.mockResolvedValueOnce({
+      ...createCheckoutCompletedEvent().data.object,
+      mode: "payment",
+      payment_status: "unpaid",
+    });
+
+    const response = await POST(createWebhookRequest());
+    await expectResponseStatus(response, 200);
+
+    expect(Billing.topup).not.toHaveBeenCalled();
+  });
+
+  it("TC-WEBHOOK-011: credits from Stripe's copy of the session, not the event body", async () => {
+    const { Billing } = await import("@/lib/supabase/queries/billing");
+    // A forged event claims $5,000; Stripe's own session says $50.
+    mockStripe.webhooks.constructEvent.mockReturnValue(
+      createCheckoutCompletedEvent({ amount_total: 500000, metadata: { user_id: "attacker", amount: "5000" } })
+    );
+    mockStripe.checkout.sessions.retrieve.mockResolvedValueOnce({
+      ...createCheckoutCompletedEvent().data.object,
+      mode: "payment",
+      payment_status: "paid",
+    });
+
+    const response = await POST(createWebhookRequest());
+    await expectResponseStatus(response, 200);
+
+    expect(Billing.topup).toHaveBeenCalledWith("user-123", 50);
+  });
+
+  it("TC-WEBHOOK-012: refuses an event naming a session the account does not have", async () => {
+    const { Billing } = await import("@/lib/supabase/queries/billing");
+    mockStripe.checkout.sessions.retrieve.mockRejectedValueOnce(
+      Object.assign(new Error("No such checkout.session"), { code: "resource_missing" })
+    );
+
+    const response = await POST(createWebhookRequest());
+    await expectResponseStatus(response, 400);
+
+    expect(Billing.topup).not.toHaveBeenCalled();
+  });
+
+  it("TC-WEBHOOK-013: ignores a live-mode event on a test-mode deployment", async () => {
+    const { Billing } = await import("@/lib/supabase/queries/billing");
+    mockStripe.webhooks.constructEvent.mockReturnValue({ ...createCheckoutCompletedEvent(), livemode: true });
+
+    const response = await POST(createWebhookRequest());
+    await expectResponseStatus(response, 200);
+
+    expect(mockStripe.checkout.sessions.retrieve).not.toHaveBeenCalled();
+    expect(Billing.topup).not.toHaveBeenCalled();
   });
 
   afterAll(() => {

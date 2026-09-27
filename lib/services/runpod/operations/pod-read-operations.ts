@@ -250,7 +250,7 @@ export const podReadOperations = {
         try {
             upstream = await RunPodClient.rest<RunPodPodResource>(
                 "GET",
-                `/pods/${pod.runpodPodId}`
+                `/pods/${encodeURIComponent(pod.runpodPodId)}`
             );
         } catch {
             // Disappearance / transient errors are left to the reconcile sweep.
@@ -356,7 +356,7 @@ export const podReadOperations = {
                 try {
                     upstream = await RunPodClient.rest<RunPodPodResource>(
                         "GET",
-                        `/pods/${r.runpod_pod_id}`
+                        `/pods/${encodeURIComponent(r.runpod_pod_id)}`
                     );
                 } catch (e) {
                     if (isRunPodError(e) && e.code === "NOT_FOUND") {
