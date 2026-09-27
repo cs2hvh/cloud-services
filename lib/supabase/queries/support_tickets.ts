@@ -274,10 +274,18 @@ export const SupportTickets = {
 
     return {
       ...(ticket as Omit<SupportTicketDetail, "messages" | "attachments">),
-      messages: typedMessages.map((message) => ({
-        ...message,
-        author: message.author_id ? authorProfiles.get(message.author_id) || null : null,
-      })) as SupportTicketMessage[],
+      // The customer sees who THEY are on their own messages and a generic
+      // "Support Team" on ours. A staff reply carries no author and no author
+      // id here, so no staff name, email or user id reaches the customer's
+      // browser; the page renders actor_type "admin" as Support Team.
+      messages: typedMessages.map((message) =>
+        message.actor_type === "user"
+          ? {
+              ...message,
+              author: message.author_id ? authorProfiles.get(message.author_id) || null : null,
+            }
+          : { ...message, author_id: null, author: null }
+      ) as SupportTicketMessage[],
       attachments: (attachments ?? []) as SupportTicketAttachment[],
     };
   },

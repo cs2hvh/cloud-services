@@ -23,15 +23,18 @@ function getMessageIdentity(message: SupportTicketMessage): {
   name: string;
   email: string;
 } {
+  // These emails go to the customer, and every message in the thread is
+  // printed as "name (email)". Staff replies are always "Support Team" with
+  // the support address, never the staff member's own name or email.
+  if (message.actor_type === "admin") {
+    return { name: "Support Team", email: "support@ahurasense.com" };
+  }
+
   if (message.author) {
     return {
       name: message.author.display_name || message.author.username || message.author.email || "User",
       email: message.author.email || "No email",
     };
-  }
-
-  if (message.actor_type === "admin") {
-    return { name: "Support Team", email: "support@ahurasense.com" };
   }
   if (message.actor_type === "system") {
     return { name: "System", email: "-" };

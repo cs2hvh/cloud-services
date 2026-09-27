@@ -120,16 +120,19 @@ function getMessageIdentity(message: SupportTicketMessage): {
   email: string;
   avatar: string | null;
 } {
+  // Staff replies are always "Support Team", whoever wrote them: a staff
+  // member's name or email is never shown to a customer. The API already
+  // strips the author from staff messages; this holds even if one arrives.
+  if (message.actor_type === "admin") {
+    return { name: "Support Team", email: "support@ahurasense.com", avatar: null };
+  }
+
   if (message.author) {
     return {
       name: message.author.display_name || message.author.username || message.author.email || "User",
       email: message.author.email || "No email",
       avatar: message.author.avatar || null,
     };
-  }
-
-  if (message.actor_type === "admin") {
-    return { name: "Support Team", email: "support@ahurasense.com", avatar: null };
   }
   if (message.actor_type === "system") {
     return { name: "System", email: "—", avatar: null };
