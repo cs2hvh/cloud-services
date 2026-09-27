@@ -27,7 +27,7 @@ function getMessageIdentity(message: SupportTicketMessage): {
   // printed as "name (email)". Staff replies are always "Support Team" with
   // the support address, never the staff member's own name or email.
   if (message.actor_type === "admin") {
-    return { name: "Support Team", email: "support@ahurasense.com" };
+    return { name: "AhuraSense Support", email: "support@ahurasense.com" };
   }
 
   if (message.author) {
