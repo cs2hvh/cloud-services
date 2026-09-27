@@ -61,6 +61,9 @@ type OrgRow = {
   createdAt: string;
   keyCount: number;
   liveKeyCount: number;
+  /** All-time unpaid inference; null when the ledger could not be read. */
+  unpaidUsd: number | null;
+  unpaidSince: string | null;
   usage: {
     requests: number;
     errors: number;
@@ -239,7 +242,13 @@ export function AiAccountsView({ initialOrg }: { initialOrg?: string }) {
                 <th className="px-4 py-2.5 font-semibold">Keys</th>
                 <th className="px-4 py-2.5 text-right font-semibold">Requests</th>
                 <th className="px-4 py-2.5 text-right font-semibold">Tokens</th>
-                <th className="px-4 py-2.5 text-right font-semibold" title="Recorded usage — not yet settled to the customer's balance">Usage</th>
+                <th className="px-4 py-2.5 text-right font-semibold" title="Recorded usage in this window — collected or not">Usage</th>
+                <th
+                  className="px-4 py-2.5 text-right font-semibold"
+                  title="All-time unpaid inference: the hourly sweep never takes a wallet negative, so what a balance could not cover is recorded here as owed. Not revenue."
+                >
+                  Unpaid
+                </th>
                 <th className="px-4 py-2.5 text-right font-semibold">Margin</th>
                 <th className="px-4 py-2.5 font-semibold">Budget</th>
                 <th className="px-4 py-2.5 font-semibold">Last call</th>
@@ -248,7 +257,7 @@ export function AiAccountsView({ initialOrg }: { initialOrg?: string }) {
             <tbody className="divide-y divide-border/60">
               {orgs.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">
                     {loading ? "Loading…" : "No organisations match."}
                   </td>
                 </tr>
@@ -290,6 +299,20 @@ export function AiAccountsView({ initialOrg }: { initialOrg?: string }) {
                     </td>
                     <td className={`${MONO} px-4 py-2.5 text-right text-[12px]`}>
                       {money(o.usage.revenueUsd)}
+                    </td>
+                    <td className="px-4 py-2.5 text-right">
+                      {o.unpaidUsd === null ? (
+                        <span className="text-muted-foreground" title="Ledger unreadable — unknown, not zero">?</span>
+                      ) : o.unpaidUsd > 0 ? (
+                        <span
+                          className="font-medium text-red-300"
+                          title={o.unpaidSince ? `Last shortfall ${new Date(o.unpaidSince).toLocaleString()}` : undefined}
+                        >
+                          {money(o.unpaidUsd)}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground/60">—</span>
+                      )}
                     </td>
                     <td
                       className={`${MONO} px-4 py-2.5 text-right text-[12px] ${

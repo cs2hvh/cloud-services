@@ -37,8 +37,22 @@ import { StatCard } from "@admin/components/stat-card";
 import { ChartCard, ChartTooltip } from "@admin/components/chart-card";
 import { SERIES, CHROME, STATUS, axisProps } from "@admin/lib/chart-theme";
 
+type Settlement = {
+  ok: boolean;
+  collectedUsd: number;
+  unpaidInWindowUsd: number;
+  accruedUsd: number;
+  accruedRows: number;
+  accruedTruncated: boolean;
+  outstandingUsd: number;
+  unpaidOrgs: number;
+  lastSweepAt: string | null;
+  servedEmptyRecently: boolean;
+};
+
 type Overview = {
   days: number;
+  settlement?: Settlement;
   totals: {
     requests: number;
     tokens: number;
@@ -161,29 +175,79 @@ export function AiOverview() {
         />
       </div>
 
+      {/* SETTLEMENT. Inference bills to wallets every hour. The one number
+          here that someone has to act on is the unpaid debt, so it leads. */}
+      {overview?.settlement?.ok && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2 text-[12px]">
+          <span className="font-medium text-foreground">Settlement</span>
+          <span className="text-muted-foreground">
+            billed hourly
+            {overview.settlement.lastSweepAt &&
+              ` · last run ${new Date(overview.settlement.lastSweepAt).toLocaleTimeString()}`}
+          </span>
+          {overview.settlement.outstandingUsd > 0 ? (
+            <a
+              href="/ai/accounts"
+              className="rounded-full border border-red-500/50 bg-red-500/10 px-2 py-0.5 text-red-300 hover:bg-red-500/15"
+              title="All-time unpaid inference: debits the sweep capped at a wallet's balance. It is owed, not collected, and does not count as revenue."
+            >
+              {money(overview.settlement.outstandingUsd)} unpaid across{" "}
+              {overview.settlement.unpaidOrgs} org
+              {overview.settlement.unpaidOrgs === 1 ? "" : "s"}
+            </a>
+          ) : (
+            <span className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-emerald-300">
+              nothing unpaid
+            </span>
+          )}
+          <span
+            className="rounded-full border border-white/[0.12] px-2 py-0.5 text-muted-foreground"
+            title="Served and priced, not yet swept. Swept within the hour; a figure that keeps growing means the sweep has stopped."
+          >
+            {money(overview.settlement.accruedUsd)}
+            {overview.settlement.accruedTruncated ? "+" : ""} accrued
+          </span>
+          {/* The setting lives in the worker, not the database, so the
+              panel cannot read it. What the receipts CAN prove is whether
+              an empty wallet was served recently. */}
+          {overview.settlement.servedEmptyRecently && (
+            <span
+              className="rounded-full border border-amber-500/50 bg-amber-500/10 px-2 py-0.5 text-amber-300"
+              title="Unpaid inference was recorded in the last two hours, which only happens when a wallet with no balance is served. Balance enforcement (BALANCE_ENFORCEMENT in workers/inference/wrangler.toml) is therefore not stopping it. The setting itself is not in the database, so this is read from the receipts."
+            >
+              empty wallets still being served
+            </span>
+          )}
+        </div>
+      )}
+
       {/* KPI row */}
       <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <StatCard label="Requests" value={t ? compact(t.requests) : "—"} icon={Activity} />
         <StatCard label="Tokens" value={t ? compact(t.tokens) : "—"} icon={Braces} />
-        {/* Recorded usage, NOT collected money: inference is not yet
-            settled to customer balances, so none of this has been charged.
-            Calling it revenue sat it beside the HQ board's revenue - which
-            IS collected - as if the two were the same kind of number. */}
+        {/* Collected is revenue: money that left a wallet. It is read from
+            the ledger, not from settled_at, because the sweep stamps rows it
+            could not collect as well - settled usage includes what is still
+            owed. Unpaid and accrued are shown beneath, never folded in. */}
         <StatCard
-          label="Recorded usage"
-          value={t ? money(t.revenue) : "—"}
+          label="Collected"
+          value={overview?.settlement?.ok ? money(overview.settlement.collectedUsd) : "—"}
           icon={DollarSign}
           hint={
-            t
-              ? `not yet settled to balances · ${money(t.upstreamCost)} upstream cost`
-              : undefined
+            overview?.settlement?.ok
+              ? `${money(overview.settlement.accruedUsd)} accrued, not yet billed${
+                  overview.settlement.unpaidInWindowUsd > 0
+                    ? ` · ${money(overview.settlement.unpaidInWindowUsd)} unpaid`
+                    : ""
+                }`
+              : "settlement unreadable"
           }
         />
         <StatCard
           label="Margin"
           value={t?.marginPct != null ? `${t.marginPct}%` : "—"}
           icon={TrendingUp}
-          hint="usage vs upstream cost, before settlement"
+          hint="on all recorded usage, collected or not"
         />
         <StatCard
           label="Error rate"
@@ -236,8 +300,8 @@ export function AiOverview() {
         </ChartCard>
 
         <ChartCard
-          title="Recorded usage"
-          subtitle={`USD per day, last ${overview?.days ?? days} days · not yet settled to balances`}
+          title="Usage"
+          subtitle={`USD per day, last ${overview?.days ?? days} days · recorded, collected or not`}
         >
           <div className="h-52">
             <ResponsiveContainer width="100%" height="100%">
@@ -258,7 +322,7 @@ export function AiOverview() {
                 <Area
                   type="monotone"
                   dataKey="revenue"
-                  name="Recorded usage"
+                  name="Usage"
                   stroke={SERIES[0]}
                   strokeWidth={2}
                   fill="url(#aiRevenue)"
@@ -291,7 +355,7 @@ export function AiOverview() {
                   content={<ChartTooltip formatter={(v) => money(Number(v))} />}
                   cursor={{ fill: "rgba(255,255,255,0.04)" }}
                 />
-                <Bar dataKey="revenue" name="Recorded usage" fill={SERIES[0]} radius={[0, 4, 4, 0]} maxBarSize={16} />
+                <Bar dataKey="revenue" name="Usage" fill={SERIES[0]} radius={[0, 4, 4, 0]} maxBarSize={16} />
               </BarChart>
             </ResponsiveContainer>
           </div>

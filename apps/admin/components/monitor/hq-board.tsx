@@ -60,7 +60,8 @@ interface Feed {
     failuresUnresolved: number | null;
     livePrices: number | null;
     liveCoupons: number | null;
-    topups24h: number;
+    /** Completed top-ups, last 24h. Null when the read failed. */
+    topups24h: number | null;
     couponRedemptions24h: number;
   };
   providers: {
@@ -398,7 +399,7 @@ function buildGraph(f: Feed): { nodes: Node<HqNodeData>[]; edges: Edge[] } {
       value: `${b.charges24hTruncated ? "≥ " : ""}${money(b.charged24h)}`,
       sub: b.charges24hTruncated
         ? `first 1000 of ${b.chargeCount24h} charges — sum is partial`
-        : `usage charged · topups ${money(b.topups24h)}`,
+        : `usage charged · topups ${b.topups24h === null ? "unreadable" : money(b.topups24h)}`,
       tone: b.charges24hTruncated ? "warn" : "info",
       wide: true,
     }),

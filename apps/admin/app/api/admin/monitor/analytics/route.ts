@@ -67,6 +67,7 @@ export async function GET() {
     ticketsOpenRes,
     ticketsTotalRes,
     oldestOpenRes,
+    inferenceRes,
   ] = await Promise.all([
       fetchAll<{
         period_start: string;
@@ -128,6 +129,24 @@ export async function GET() {
         .eq("status", "open")
         .order("created_at", { ascending: true })
         .limit(1),
+      // Inference settles hourly into the ledger, not into service_charges,
+      // so it was absent from revenue entirely. Only COMPLETED rows count:
+      // a failed row is a shortfall the sweep could not collect - a debt,
+      // already counted in arrears below - and has the same positive amount
+      // and the same type 'usage', so omitting the status filter would book
+      // unpaid usage as revenue.
+      fetchAll<{ created_at: string; amount: string | number; user_id: string | null }>(
+        (from, to) =>
+          billing
+            .from("transactions")
+            .select("created_at, amount, user_id")
+            .eq("service_type", "inference")
+            .eq("type", "usage")
+            .eq("status", "completed")
+            .gte("created_at", since)
+            .order("created_at", { ascending: true })
+            .range(from, to),
+      ),
     ]);
 
   // ---- usage revenue: day buckets by service, margin where upstream known ----
@@ -181,6 +200,23 @@ export async function GET() {
     b.total += amt;
     mix.set("deploy", (mix.get("deploy") ?? 0) + amt);
     spendByUser.set(p.user_id, (spendByUser.get(p.user_id) ?? 0) + amt);
+  }
+
+  // ---- inference: collected, hourly ----
+  // Upstream cost is not on the ledger row, so it is left unknown rather than
+  // zero - same treatment as deploy. Counting it as zero would claim a 100%
+  // margin on inference and drag the blended figure up; leaving it out of
+  // the covered denominator keeps the margin honest about what it can see.
+  const inferenceOk = inferenceRes.error === null;
+  for (const t of inferenceRes.rows) {
+    const day = dayKey(t.created_at);
+    const amt = Number(t.amount);
+    const b = bucket(day);
+    b.byService["inference"] = (b.byService["inference"] ?? 0) + amt;
+    b.total += amt;
+    b.gross += amt;
+    mix.set("inference", (mix.get("inference") ?? 0) + amt);
+    if (t.user_id) spendByUser.set(t.user_id, (spendByUser.get(t.user_id) ?? 0) + amt);
   }
 
   // ---- cash movements ----
@@ -288,7 +324,9 @@ export async function GET() {
     billingActiveSince: BILLING_ACTIVE_SINCE,
     billedWindowDays: billedAxis.length,
     revenue: {
-      ok: revenueOk && paasOk,
+      // Every source that feeds the total must have been read, or the total
+      // is quietly missing a service and still reports ok.
+      ok: revenueOk && paasOk && inferenceOk,
       truncated: chargesRes.truncated || paasRes.truncated,
       total30: revenue30,
       gross30,
@@ -335,6 +373,6 @@ export async function GET() {
       total: ticketsTotalRes.error ? null : (ticketsTotalRes.count ?? 0),
       oldestOpen: oldestOpenRes.error ? null : (oldestOpenRes.data?.[0]?.created_at ?? null),
     },
-    topCustomers: revenueOk && paasOk ? topCustomers : null,
+    topCustomers: revenueOk && paasOk && inferenceOk ? topCustomers : null,
   });
 }

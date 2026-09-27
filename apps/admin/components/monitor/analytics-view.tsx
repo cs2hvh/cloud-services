@@ -261,7 +261,7 @@ export default function AnalyticsView() {
         <Tile
           label={`Revenue · ${billedLabel}`}
           value={rev.ok ? `${geq}${money(rev.total30)}` : "—"}
-          sub={rev.ok ? "usage + deploy charges" : "read failed"}
+          sub={rev.ok ? "compute + deploy + inference (collected)" : "read failed"}
           tone={rev.ok ? undefined : "dim"}
         />
         <Tile
@@ -461,7 +461,7 @@ export default function AnalyticsView() {
         </Card>
 
         {/* Top customers */}
-        <Card title="Top customers by spend" right={`${billedLabel} · usage + deploy`}>
+        <Card title="Top customers by spend" right={`${billedLabel} · compute + deploy + inference`}>
           {feed.topCustomers === null ? (
             <Unavailable what="spend" />
           ) : feed.topCustomers.length === 0 ? (

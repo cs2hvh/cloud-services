@@ -93,6 +93,7 @@ export async function GET() {
     gpuQuoteRes,
     liveCouponsRes,
     txns24Res,
+    topups24Res,
     linodeSyncRes,
     auditProbeRes,
     supportOpenRes,
@@ -157,6 +158,16 @@ export async function GET() {
       .gte("created_at", dayAgo)
       .order("created_at", { ascending: false })
       .limit(200),
+    // Cash in, counted where it is filtered: completed top-ups only. A
+    // declined or abandoned card payment writes a top-up row too, and with
+    // live Stripe keys those are real now. Not capped - a day's top-ups are
+    // few, and a cap here is exactly what would lose one.
+    billing
+      .from("transactions")
+      .select("amount")
+      .in("type", ["topup", "recharge"])
+      .eq("status", "completed")
+      .gte("created_at", dayAgo),
     supabase
       .from("linode_types")
       .select("synced_at")
@@ -328,9 +339,14 @@ export async function GET() {
     };
   }
   const txns = txns24Res.data ?? [];
-  const topups24h = txns
-    .filter((t) => t.type === "recharge" || t.type === "topup")
-    .reduce((s, t) => s + Number(t.amount), 0);
+  // Completed only, from its own uncapped query - see above. Null when the
+  // read failed: unknown, never a confident $0.
+  const topups24h = topups24Res.error
+    ? null
+    : ((topups24Res.data ?? []) as { amount: string | number }[]).reduce(
+        (sum, t) => sum + Number(t.amount),
+        0,
+      );
   const coupons24h = txns.filter((t) => t.type === "coupon").length;
 
   // --- audit pipeline: probed, not assumed ---

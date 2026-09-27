@@ -249,6 +249,32 @@ export async function GET(request: Request) {
       },
     );
 
+    // UNPAID per org - what staff chase. The hourly sweep caps a debit at
+    // the wallet's balance and records the shortfall as a failed ledger row
+    // (service_id = org id). All-time, because a debt does not expire with
+    // the window; and read from the ledger rather than inferred from usage,
+    // so only a receipted shortfall ever accuses a customer.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const billingDb = (supabase as any).schema("billing");
+    const { data: unpaidRows, error: unpaidErr } = await billingDb
+      .from("transactions")
+      .select("service_id, amount, created_at")
+      .eq("service_type", "inference")
+      .eq("type", "usage")
+      .eq("status", "failed");
+    const unpaidByOrg = new Map<string, { usd: number; last: string }>();
+    for (const r of (unpaidRows ?? []) as {
+      service_id: string | null;
+      amount: string | number;
+      created_at: string;
+    }[]) {
+      if (!r.service_id) continue;
+      const e = unpaidByOrg.get(r.service_id) ?? { usd: 0, last: r.created_at };
+      e.usd += Number(r.amount);
+      if (r.created_at > e.last) e.last = r.created_at;
+      unpaidByOrg.set(r.service_id, e);
+    }
+
     const orgRows = (orgsRes.data ?? []).map((o: Record<string, unknown>) => {
       const roll = byOrg.get(o.id as string) ?? blank();
       const keys = keyRows.filter((k: KeyOut) => k.orgId === (o.id as string));
@@ -269,6 +295,11 @@ export async function GET(request: Request) {
         createdAt: o.created_at as string,
         keyCount: keys.length,
         liveKeyCount: keys.filter((k: KeyOut) => k.revokedAt === null).length,
+        // null when the ledger could not be read - unknown, never zero.
+        unpaidUsd: unpaidErr
+          ? null
+          : Math.round((unpaidByOrg.get(o.id as string)?.usd ?? 0) * 100) / 100,
+        unpaidSince: unpaidByOrg.get(o.id as string)?.last ?? null,
         usage: {
           requests: roll.requests,
           errors: roll.errors,
@@ -282,7 +313,11 @@ export async function GET(request: Request) {
     });
 
     orgRows.sort(
-      (a: { usage: { revenueUsd: number } }, b: { usage: { revenueUsd: number } }) =>
+      (
+        a: { unpaidUsd: number | null; usage: { revenueUsd: number } },
+        b: { unpaidUsd: number | null; usage: { revenueUsd: number } },
+      ) =>
+        (b.unpaidUsd ?? 0) - (a.unpaidUsd ?? 0) ||
         b.usage.revenueUsd - a.usage.revenueUsd,
     );
 

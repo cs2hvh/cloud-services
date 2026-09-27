@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/supabase/auth";
 import { createServiceClient } from "@/lib/supabase/server";
+import { INFERENCE_SERVICE_TYPE } from "@admin/lib/inference-settlement";
 
 export const dynamic = "force-dynamic";
 
@@ -163,8 +164,82 @@ export async function GET(request: Request) {
           revenue: Math.round(v.revenueCents) / 100,
         }));
 
+    // ---- SETTLEMENT --------------------------------------------------
+    // What actually happened to that usage. Read from the ledger, never
+    // from settled_at: the sweep stamps settled_at on rows it could NOT
+    // collect too, so settled rows = collected + unpaid. See
+    // lib/inference-settlement.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const billingDb = (supabase as any).schema("billing");
+    const [ledgerRes, openRes, debtRes, sweepRes] = await Promise.all([
+      billingDb
+        .from("transactions")
+        .select("status, amount")
+        .eq("service_type", INFERENCE_SERVICE_TYPE)
+        .eq("type", "usage")
+        .gte("created_at", since.toISOString()),
+      // Accrued: priced, served, not yet swept. Always small - the sweep
+      // runs hourly - so its size is itself a health signal.
+      inference
+        .from("usage")
+        .select("cost_cents")
+        .is("settled_at", null)
+        .eq("status", "success")
+        .gt("cost_cents", 0),
+      // Debt is all-time: an hour unpaid last month is still owed.
+      billingDb
+        .from("transactions")
+        .select("service_id, amount, created_at")
+        .eq("service_type", INFERENCE_SERVICE_TYPE)
+        .eq("type", "usage")
+        .eq("status", "failed"),
+      billingDb
+        .from("sweep_runs")
+        .select("started_at")
+        .order("started_at", { ascending: false })
+        .limit(1),
+    ]);
+
+    let collectedUsd = 0;
+    let unpaidInWindowUsd = 0;
+    for (const t of (ledgerRes.data ?? []) as { status: string; amount: string | number }[]) {
+      if (t.status === "completed") collectedUsd += Number(t.amount);
+      else if (t.status === "failed") unpaidInWindowUsd += Number(t.amount);
+    }
+    const openRows = (openRes.data ?? []) as { cost_cents: number | null }[];
+    const accruedUsd =
+      openRows.reduce((sum, r) => sum + Number(r.cost_cents ?? 0), 0) / 100;
+    const debtRows = (debtRes.data ?? []) as {
+      service_id: string | null;
+      amount: string | number;
+      created_at: string;
+    }[];
+    const outstandingUsd = debtRows.reduce((sum, r) => sum + Number(r.amount), 0);
+    const lastSweepAt = (sweepRes.data?.[0]?.started_at as string | undefined) ?? null;
+    // Unpaid recorded in the last two sweeps means an empty wallet was
+    // served recently - which is what the receipts can prove about
+    // enforcement, since the setting itself is not in the database.
+    const recentCutoff = Date.now() - 2 * 3600 * 1000;
+    const servedEmptyRecently = debtRows.some(
+      (r) => Date.parse(r.created_at) >= recentCutoff,
+    );
+
     return NextResponse.json({
       days,
+      settlement: {
+        ok: !ledgerRes.error && !openRes.error && !debtRes.error,
+        collectedUsd: Math.round(collectedUsd * 100) / 100,
+        unpaidInWindowUsd: Math.round(unpaidInWindowUsd * 100) / 100,
+        accruedUsd: Math.round(accruedUsd * 100) / 100,
+        accruedRows: openRows.length,
+        // PostgREST caps a read at 1000 rows; past that the figure is a
+        // floor and says so.
+        accruedTruncated: openRows.length >= 1000,
+        outstandingUsd: Math.round(outstandingUsd * 100) / 100,
+        unpaidOrgs: new Set(debtRows.map((r) => r.service_id).filter(Boolean)).size,
+        lastSweepAt,
+        servedEmptyRecently,
+      },
       totals: {
         requests: rows.length,
         tokens,
