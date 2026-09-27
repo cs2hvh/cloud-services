@@ -73,6 +73,12 @@ const PRODUCTS: SolutionItem[] = [
     tags: ["VPS", "Dedicated CPU", "Shared CPU", "Cloud Servers"],
   },
   {
+    label: "Dedicated Servers",
+    desc: "Single-tenant bare metal, the whole machine yours",
+    href: "/services/compute/bare-metal",
+    tags: ["Bare Metal", "AMD EPYC", "Intel Xeon", "Monthly"],
+  },
+  {
     label: "GPU Instances",
     desc: "High-performance GPU acceleration for AI/ML",
     href: "/services/gpu",
