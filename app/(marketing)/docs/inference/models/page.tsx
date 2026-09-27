@@ -40,7 +40,7 @@ export default function ModelsPage() {
       <H2>Model ids</H2>
       <P>
         Ids are namespaced by vendor, <C>anthropic/claude-sonnet-5</C>,{" "}
-        <C>openai/gpt-5.5</C>, <C>zhipu/glm-5.3-flash-derisked</C>, and are used exactly as listed,
+        <C>openai/gpt-6-astra</C>, <C>zhipu/glm-5.3-derisked</C>, and are used exactly as listed,
         including case. A request naming an id that is not in the catalog, or not in your key’s
         allowlist, is refused before anything is billed.
       </P>
@@ -50,8 +50,8 @@ export default function ModelsPage() {
         becomes an alias and keeps resolving to the same model, so nothing you have deployed has
         to change. Each entry lists its retired ids in <C>aliases</C>, and a request that uses one
         is answered normally, with <C>X-Ahura-Model</C> and your usage record carrying the current
-        id. <C>zhipu/glm-5.3-flash-uncensored</C> is an alias of{" "}
-        <C>zhipu/glm-5.3-flash-derisked</C> for this reason.
+        id. <C>zhipu/glm-5.3-uncensored</C> is an alias of{" "}
+        <C>zhipu/glm-5.3-derisked</C> for this reason.
       </P>
 
       <H2>List models</H2>
@@ -153,29 +153,17 @@ export default function ModelsPage() {
       <P>
         Most catalog models are served by partner backends. Some run on AhuraSense GPU
         infrastructure; the table marks them <Strong>hosted</Strong>, and responses from them
-        carry <C>X-Ahura-Routing: managed</C>. Today these are the uncensored builds: the same
+        carry <C>X-Ahura-Routing: managed</C>. Today that is the derisked GLM 5.3 build: the same
         open weights, served without the vendor’s refusal tuning.
       </P>
       <Table
         head={["Model", "Id", "Context", "Notes"]}
         rows={[
           [
-            "Z.AI / GLM 5.3 Flash Derisked",
-            <C key="g">zhipu/glm-5.3-flash-derisked</C>,
-            "1,048,576",
-            <>Five-level <A href="/docs/inference/reasoning">reasoning ladder</A>; unbounded thinking by default. Two replicas with failover.</>,
-          ],
-          [
             "Z.AI / GLM 5.3 Derisked",
             <C key="g2">zhipu/glm-5.3-derisked</C>,
             "1,000,000",
             <>The full GLM 5.3, served on AhuraSense GPU capacity and through a dedicated derisked backend. Honours the <A href="/docs/inference/reasoning">reasoning ladder</A>: <C>none</C>, <C>minimal</C> and <C>low</C> answer without thinking, the default thinks briefly, <C>max</C> thinks most. Prompt-cache hits, when the backend reports them, bill at the cached rate.</>,
-          ],
-          [
-            "Qwen / Qwen3.8 Flash Next Uncensored",
-            <C key="q">qwen/qwen3.8-flash-next-uncensored</C>,
-            "262,144",
-            <>Three-level reasoning ladder. Reports prompt-cache hits, billed at the cached rate.</>,
           ],
         ]}
       />
@@ -193,11 +181,9 @@ export default function ModelsPage() {
           with <C>Retry-After: 10</C>. Retry, and the request goes through.
         </Li>
         <Li>
-          <C>zhipu/glm-5.3-flash-derisked</C> runs on AhuraSense infrastructure end to end; no
-          partner receives the prompt. <C>zhipu/glm-5.3-derisked</C> is served partly on AhuraSense
-          GPU capacity and partly through a dedicated derisked backend under contract to us, so
-          that backend may receive the prompt; the same{" "}
-          <A href="/docs/inference/privacy">retention terms</A> apply.
+          <C>zhipu/glm-5.3-derisked</C> is served partly on AhuraSense GPU capacity and partly
+          through a dedicated derisked backend under contract to us, so that backend may receive
+          the prompt; the same <A href="/docs/inference/privacy">retention terms</A> apply.
         </Li>
       </Ul>
 

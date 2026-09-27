@@ -22,11 +22,10 @@ export default function ReasoningPage() {
       <H2>Which models</H2>
       <P>
         These controls apply to the hosted models in the catalog, the ones marked{" "}
-        <C>hosted</C> on the <A href="/docs/inference/models">Models</A> page, such as{" "}
-        <C>zhipu/glm-5.3-flash-derisked</C>. Their default is unbounded thinking, so a request that
-        says nothing gets the fullest answer and the largest bill. Partner-served models keep
-        whatever reasoning behaviour their vendor defines; the fields below are passed through
-        to them unchanged and take effect only where the vendor supports them.
+        <C>hosted</C> on the <A href="/docs/inference/models">Models</A> page, today{" "}
+        <C>zhipu/glm-5.3-derisked</C>. Partner-served models keep whatever reasoning behaviour
+        their vendor defines; the fields below are passed through to them unchanged and take
+        effect only where the vendor supports them.
       </P>
 
       <H2>The ladder</H2>
@@ -59,7 +58,7 @@ export default function ReasoningPage() {
   -H "Authorization: Bearer $AHURA_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "model": "zhipu/glm-5.3-flash-derisked",
+    "model": "zhipu/glm-5.3-derisked",
     "reasoning_effort": "medium",
     "messages": [{"role": "user", "content": "Plan a three-day trip to Kyoto on a budget."}]
   }'`,
@@ -68,7 +67,7 @@ export default function ReasoningPage() {
             label: "Python",
             lang: "python",
             code: `completion = client.chat.completions.create(
-    model="zhipu/glm-5.3-flash-derisked",
+    model="zhipu/glm-5.3-derisked",
     reasoning_effort="medium",
     messages=[{"role": "user", "content": "Plan a three-day trip to Kyoto on a budget."}],
 )`,
@@ -77,7 +76,7 @@ export default function ReasoningPage() {
             label: "TypeScript",
             lang: "typescript",
             code: `const completion = await client.chat.completions.create({
-  model: "zhipu/glm-5.3-flash-derisked",
+  model: "zhipu/glm-5.3-derisked",
   reasoning_effort: "medium",
   messages: [{ role: "user", content: "Plan a three-day trip to Kyoto on a budget." }],
 });`,
@@ -87,16 +86,9 @@ export default function ReasoningPage() {
       <P>
         This is the field OpenCode, Hermes and most SDKs already send when you set a reasoning
         level in them, so in those tools there is nothing extra to configure. The template
-        spelling, <C>{`"chat_template_kwargs": {"reasoning_effort": "high"}`}</C>, is accepted on
-        the flash model; <C>zhipu/glm-5.3-derisked</C> refuses it with a 400, so use{" "}
-        <C>reasoning_effort</C> there.
-      </P>
-      <P>
-        Not every hosted model has five distinct levels. <C>qwen/qwen3.8-flash-next-uncensored</C> folds the
-        ladder into three: <C>high</C>, <C>max</C> and <C>xhigh</C> all mean its deepest mode,
-        which is also its default; <C>low</C> and <C>minimal</C> both mean low; <C>medium</C> and{" "}
-        <C>none</C> are as above. Sending any value is always safe; a model without a matching
-        level uses its nearest.
+        spelling, <C>{`"chat_template_kwargs": {"reasoning_effort": "high"}`}</C>, is refused by{" "}
+        <C>zhipu/glm-5.3-derisked</C> with a 400, so use <C>reasoning_effort</C>. Sending any
+        level is always safe; a model without a matching level uses its nearest.
       </P>
       <P>
         On <C>zhipu/glm-5.3-derisked</C> the ladder is coarser than the table: <C>none</C>,{" "}
@@ -112,7 +104,7 @@ export default function ReasoningPage() {
         On <C>zhipu/glm-5.3-derisked</C> the budget is ignored; use the ladder there.
       </P>
       <Code lang="json" title="request body">{`{
-  "model": "zhipu/glm-5.3-flash-derisked",
+  "model": "zhipu/glm-5.3-derisked",
   "custom_params": { "thinking_budget": 300 },
   "messages": [{ "role": "user", "content": "Summarise this changelog in three bullets: …" }]
 }`}</Code>
@@ -140,7 +132,7 @@ export default function ReasoningPage() {
         ]}
       />
       <Code lang="python" title="Anthropic SDK">{`message = client.messages.create(
-    model="zhipu/glm-5.3-flash-derisked",
+    model="zhipu/glm-5.3-derisked",
     max_tokens=1024,
     thinking={"type": "enabled", "budget_tokens": 300},
     messages=[{"role": "user", "content": "Summarise this changelog in three bullets: …"}],
