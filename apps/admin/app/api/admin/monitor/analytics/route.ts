@@ -130,7 +130,18 @@ export async function GET() {
         .order("created_at", { ascending: true })
         .limit(1),
       // Inference settles hourly into the ledger, not into service_charges,
-      // so it was absent from revenue entirely. Only COMPLETED rows count:
+      // so it was absent from revenue entirely.
+      //
+      // DO NOT widen this to other service types. The standing rule is that
+      // ledger rows never fold into revenue, because revenue is already
+      // counted at its source table and the ledger would count it again.
+      // Inference is the one exception: its charge exists ONLY here. Deploy
+      // is the trap - platform_apps writes ~4,000 usage rows a month to
+      // this same table AND is already in revenue via paas.project_charges,
+      // so dropping the service_type filter double-counts every deploy
+      // dollar, silently and plausibly.
+      //
+      // Only COMPLETED rows count:
       // a failed row is a shortfall the sweep could not collect - a debt,
       // already counted in arrears below - and has the same positive amount
       // and the same type 'usage', so omitting the status filter would book
