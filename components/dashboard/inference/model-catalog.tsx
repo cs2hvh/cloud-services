@@ -18,6 +18,7 @@ import {
   StatsStrip,
 } from "@/components/dashboard/inference/chrome";
 import { copyToClipboard } from "@/lib/utils/safe-clipboard";
+import { ProviderLogo } from "@/components/services/provider-logos";
 
 export interface CatalogModel {
   model_id: string;
@@ -321,7 +322,8 @@ function ModelCard({ model }: { model: CatalogModel }) {
                 </span>
               )}
             </div>
-            <p className={`${MONO} mt-0.5 text-[10.5px] uppercase tracking-[0.08em] text-white/45`}>
+            <p className={`${MONO} mt-0.5 flex items-center gap-1.5 text-[10.5px] uppercase tracking-[0.08em] text-white/45`}>
+              <ProviderLogo provider={model.provider} size={12} className="shrink-0 text-white/60" />
               {providerLabel(model.provider)}
             </p>
           </div>

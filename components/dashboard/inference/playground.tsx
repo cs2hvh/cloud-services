@@ -58,6 +58,7 @@ import {
   PlaygroundCompare,
   type PlaygroundCompareHandle,
 } from "@/components/dashboard/inference/playground-compare";
+import { ProviderLogo, providerName } from "@/components/services/provider-logos";
 
 export interface PlaygroundModel {
   model_id: string;
@@ -724,8 +725,9 @@ ${streamOn
                     <ChevronDown className="h-3.5 w-3.5 shrink-0 text-white/40 transition-colors group-hover:text-white/80" />
                   </div>
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                    <span className={`${MONO} rounded-[4px] bg-white/[0.05] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.1em] text-white/55`}>
-                      {selectedModel.provider}
+                    <span className={`${MONO} inline-flex items-center gap-1 rounded-[4px] bg-white/[0.05] px-1.5 py-0.5 text-[9px] uppercase tracking-[0.1em] text-white/55`}>
+                      <ProviderLogo provider={selectedModel.provider} size={10} className="shrink-0 text-white/70" />
+                      {providerName(selectedModel.provider)}
                     </span>
                     {selectedModel.supports_vision && (
                       <span className={`${MONO} text-[9.5px] uppercase tracking-[0.1em] text-amber-300/70`}>Vision</span>
@@ -1106,6 +1108,7 @@ ${streamOn
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
+                    <ProviderLogo provider={m.provider} size={13} className="shrink-0 text-white/60" />
                     <span className="text-[13px] text-white truncate">{m.display_name}</span>
                     {m.is_featured && (
                       <span

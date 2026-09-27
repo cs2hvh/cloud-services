@@ -71,20 +71,20 @@ const CARDS: ModelCard[] = [
   { provider: "xAI",       model: "grok-4.6",              meta: "Reasoning · Tools · 500k",      accent: "#a3a3a3" },
   { provider: "Moonshot",  model: "kimi-k3",               meta: "Open weights · Tools · 1M",     accent: "#6366f1" },
   { provider: "Zhipu",     model: "glm-5.3",               meta: "Open weights · Tools · 1M",     accent: "#14b8a6" },
-  { provider: "DeepSeek",  model: "deepseek-v4-pro",       meta: "Reasoning · Tools · 1M",        accent: "#7c3aed" },
+  { provider: "Anthropic", model: "claude-opus-5.5",       meta: "Frontier · Tools · 1M context", accent: "#d97706" },
 
   { provider: "Anthropic", model: "claude-sonnet-5",       meta: "Balanced · Tools · 1M context", accent: "#d97706" },
   { provider: "OpenAI",    model: "gpt-5.6-terra",         meta: "Balanced · Tools · 1M context", accent: "#10a37f" },
   { provider: "xAI",       model: "grok-4.5",              meta: "Reasoning · Tools · 500k",      accent: "#a3a3a3" },
   { provider: "Moonshot",  model: "kimi-k2.7-code",        meta: "Code · Open weights · 256k",    accent: "#6366f1" },
-  { provider: "MiniMax",   model: "minimax-m3",            meta: "Open weights · Tools · 1M",     accent: "#f43f5e" },
-  { provider: "Zhipu",     model: "glm-5.3-flash-derisked", meta: "Derisked · Hosted · 1M",     accent: "#14b8a6" },
+  { provider: "OpenAI",    model: "gpt-6-sol",             meta: "Balanced · Tools · 1M context", accent: "#10a37f" },
+  { provider: "Zhipu",     model: "glm-5.3-derisked",      meta: "Derisked · Tools · 1M",         accent: "#14b8a6" },
 
-  { provider: "Anthropic", model: "claude-haiku-4.5",      meta: "Fast · Tools · 200k",           accent: "#d97706" },
-  { provider: "OpenAI",    model: "gpt-5.4-mini",          meta: "Fast · Tools · 400k",           accent: "#10a37f" },
-  { provider: "OpenAI",    model: "gpt-5.3-codex",         meta: "Code · Tools · 400k",           accent: "#10a37f" },
-  { provider: "DeepSeek",  model: "deepseek-v4-flash",     meta: "Fast · Open weights · 1M",      accent: "#7c3aed" },
-  { provider: "ByteDance", model: "doubao-seed-2.1-turbo", meta: "Fast · Tools · 256k",           accent: "#06b6d4" },
+  { provider: "OpenAI",    model: "gpt-5.6-luna",          meta: "Fast · Tools · 1M context",     accent: "#10a37f" },
+  { provider: "OpenAI",    model: "gpt-6-luna",            meta: "Fast · Tools · 1M context",     accent: "#10a37f" },
+  { provider: "OpenAI",    model: "gpt-5.6-sol",           meta: "Balanced · Tools · 1M context", accent: "#10a37f" },
+  { provider: "xAI",       model: "grok-4.7",              meta: "Reasoning · Tools · 500k",      accent: "#a3a3a3" },
+  { provider: "Anthropic", model: "claude-opus-4.8",       meta: "Frontier · Tools · 1M context", accent: "#d97706" },
   { provider: "Anthropic", model: "claude-fable-5.1",      meta: "Frontier · Tools · 1M context", accent: "#d97706" },
 ];
 
@@ -134,8 +134,10 @@ const COLUMNS: Array<{ from: number; cards: ModelCard[]; durationS: number; reve
  * wrong: it undersells the platform and it means this file has stopped
  * tracking reality, which is the same defect as overselling it.
  */
-export const CATALOG_MODEL_COUNT = 53;
-export const CATALOG_PROVIDER_COUNT = 8;
+// 2026-09-27: 20 public chat models across 5 vendors after Harshit pruned
+// the catalog on 09-20 (53 → 28 active, of which 8 are image/video).
+export const CATALOG_MODEL_COUNT = 20;
+export const CATALOG_PROVIDER_COUNT = 5;
 
 /**
  * THE MARKUP STAT IS GONE, and deliberately.
