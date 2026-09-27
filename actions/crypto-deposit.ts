@@ -4,7 +4,12 @@ import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { zxgateway } from '@/lib/zxgateway';
 import { findCurrency } from '@/config/currencies';
 import { FormState, paymentSchema } from './create-payment-schema';
-import { BILLING_TOPUP_ENABLED, TOPUP_DISABLED_MESSAGE } from '@/lib/billing/topup-flag';
+import {
+    BILLING_TOPUP_ENABLED,
+    BILLING_CRYPTO_ENABLED,
+    TOPUP_DISABLED_MESSAGE,
+    CRYPTO_DISABLED_MESSAGE,
+} from '@/lib/billing/topup-flag';
 
 // Gateway-hosted checkout page the buyer is redirected to after a payment is
 // created. Override with ZXGATEWAY_PAYMENT_URL.

@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Billing } from "@/lib/supabase/queries/billing";
 import { Promocodes } from "@/lib/supabase/queries/promocodes";
 import { getCurrencies } from "@/actions/currencies";
+import { BILLING_CRYPTO_ENABLED } from "@/lib/billing/topup-flag";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +26,9 @@ async function BillingSuspense({
       Billing.get_user_credits(userId),
       Promocodes.get_available_for_user(userId, userEmail),
       Billing.get_recurring_topup(userId),
-      getCurrencies(),
+      // Only ask the crypto gateway for its currency list when the crypto
+      // method is offered; otherwise the billing page makes no external call.
+      BILLING_CRYPTO_ENABLED ? getCurrencies() : Promise.resolve({ success: true, data: [] }),
     ]);
 
   return (

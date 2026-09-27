@@ -25,7 +25,11 @@ import {
 
 import api from "@/lib/axios/axios";
 import { CreatePaymentDialog } from "@/components/dashboard/wallet/create-payment-dialog";
-import { BILLING_TOPUP_ENABLED, TOPUP_DISABLED_MESSAGE } from "@/lib/billing/topup-flag";
+import {
+    BILLING_TOPUP_ENABLED,
+    BILLING_CRYPTO_ENABLED,
+    TOPUP_DISABLED_MESSAGE,
+} from "@/lib/billing/topup-flag";
 
 // ─── Design tokens ─────────────────────────────────────────────────
 const SERIF_STYLE: React.CSSProperties = {
@@ -544,7 +548,9 @@ function BalanceTab({
 
                     <div>
                         <FieldLabel>Payment method</FieldLabel>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div
+                            className={`grid gap-2 ${BILLING_CRYPTO_ENABLED ? "grid-cols-2" : "grid-cols-1"}`}
+                        >
                             <PaymentMethodCard
                                 active={paymentMethod === "stripe"}
                                 onClick={() => setPaymentMethod("stripe")}
@@ -564,32 +570,35 @@ function BalanceTab({
                                 label="Stripe"
                                 desc="Card, Apple Pay, Google Pay"
                             />
-                            <PaymentMethodCard
-                                active={paymentMethod === "crypto"}
-                                onClick={() => setPaymentMethod("crypto")}
-                                icon={
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img
-                                        src={currencyIconUrl("BTC")}
-                                        alt="BTC"
-                                        className="h-5 w-5"
-                                        onError={(e) => {
-                                            // Never leave a broken glyph on a payment
-                                            // control — it reads as a broken payment
-                                            // method. Falls back to a generic coin.
-                                            const img = e.currentTarget;
-                                            if (img.src.endsWith(CURRENCY_ICON_FALLBACK)) return;
-                                            img.src = CURRENCY_ICON_FALLBACK;
-                                        }}
-                                    />
-                                }
-                                label="Crypto"
-                                desc="BTC, ETH, USDT & more"
-                            />
+                            {/* The crypto method is offered only while its switch is on. */}
+                            {BILLING_CRYPTO_ENABLED && (
+                                <PaymentMethodCard
+                                    active={paymentMethod === "crypto"}
+                                    onClick={() => setPaymentMethod("crypto")}
+                                    icon={
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img
+                                            src={currencyIconUrl("BTC")}
+                                            alt="BTC"
+                                            className="h-5 w-5"
+                                            onError={(e) => {
+                                                // Never leave a broken glyph on a payment
+                                                // control — it reads as a broken payment
+                                                // method. Falls back to a generic coin.
+                                                const img = e.currentTarget;
+                                                if (img.src.endsWith(CURRENCY_ICON_FALLBACK)) return;
+                                                img.src = CURRENCY_ICON_FALLBACK;
+                                            }}
+                                        />
+                                    }
+                                    label="Crypto"
+                                    desc="BTC, ETH, USDT & more"
+                                />
+                            )}
                         </div>
                     </div>
 
-                    {paymentMethod === "crypto" ? (
+                    {BILLING_CRYPTO_ENABLED && paymentMethod === "crypto" ? (
                         <CreatePaymentDialog
                             initialAmount={Number(amount) || 20}
                             currencies={currencies}
@@ -823,8 +832,9 @@ function BalanceTab({
                     className={`${MONO} text-[10.5px] text-white/40 leading-relaxed sm:max-w-[640px]`}
                 >
                     Card details never touch our servers. All payment processing
-                    is handled by Stripe (PCI Level 1 certified). Crypto
-                    deposits are settled by our payment provider.
+                    is handled by Stripe (PCI Level 1 certified).
+                    {BILLING_CRYPTO_ENABLED &&
+                        " Crypto deposits are settled by our payment provider."}
                 </p>
             </div>
         </div>

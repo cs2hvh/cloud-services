@@ -18,3 +18,18 @@ export const BILLING_TOPUP_ENABLED =
 
 export const TOPUP_DISABLED_MESSAGE =
   "Adding balance is temporarily unavailable while we upgrade our billing system.";
+
+// Second switch, for the crypto deposit path only (ZX Gateway). OFF by
+// default since 2026-09-27: Stripe is the one payment method at launch, so
+// the billing page offers only Stripe, the page does not ask the gateway for
+// its currency list, and the deposit server action refuses to create a
+// payment. Turn it on with NEXT_PUBLIC_BILLING_CRYPTO=on and a rebuild.
+//
+// The gateway callback (/api/billing/crypto-callback) is NOT gated: a deposit
+// created while crypto was on must still credit the wallet when it settles.
+export const BILLING_CRYPTO_ENABLED =
+  BILLING_TOPUP_ENABLED &&
+  (process.env.NEXT_PUBLIC_BILLING_CRYPTO ?? "").trim().toLowerCase() === "on";
+
+export const CRYPTO_DISABLED_MESSAGE =
+  "Crypto deposits are not available right now. Please add balance with a card.";
