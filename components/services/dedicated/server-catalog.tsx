@@ -297,28 +297,9 @@ export function DedicatedServerCatalog({
     return (
         <div className={s['pc-catalog']}>
             <div className={s['pf-panel']}>
-                <div className={s['pf-panel-top']}>
-                    <DsIcon name="sliders" />
-                    <div>
-                        <h3>Choose Your Server</h3>
-                        <p>Filter the complete list without dividing plans into categories.</p>
-                    </div>
-                    <button
-                        ref={resetRef}
-                        className={s['pc-reset']}
-                        type="button"
-                        disabled={activeCount === 0}
-                        onClick={() => {
-                            // Clearing disables this button, so focus has to move or it
-                            // falls to <body>. Same place the empty state sends it.
-                            clearFilters();
-                            countrySummaryRef.current?.focus();
-                        }}
-                    >
-                        Clear all filters
-                    </button>
-                </div>
-
+                {/* No heading row: the four controls are the panel. The comps put a
+                    title, a subtitle and the reset above them, which made the
+                    panel taller than the first three rows of results. */}
                 <div className={s['pf-fields']}>
                     <div className={s['pf-field']}>
                         <span className={s['pf-label']} id={`${uid}-country-label`}>
@@ -516,6 +497,20 @@ export function DedicatedServerCatalog({
                             </div>
                         </div>
                     </details>
+                    <button
+                        ref={resetRef}
+                        className={s['pc-reset']}
+                        type="button"
+                        disabled={activeCount === 0}
+                        onClick={() => {
+                            // Clearing disables this button, so focus has to move or it
+                            // falls to <body>. Same place the empty state sends it.
+                            clearFilters();
+                            countrySummaryRef.current?.focus();
+                        }}
+                    >
+                        Clear all filters
+                    </button>
                 </div>
 
                 <div className={s['pf-selection']} hidden={activeCount === 0}>
@@ -542,11 +537,6 @@ export function DedicatedServerCatalog({
                         ))}
                     </div>
                 </div>
-
-                <p className={s['pf-location-note']}>
-                    Locations, configurations, and prices come from the published bare-metal lineup.
-                    Confirm current availability and final charges before ordering.
-                </p>
             </div>
 
             <div className={s['pc-results']}>
@@ -703,7 +693,6 @@ export function DedicatedServerCatalog({
                                             {money.format(row.priceMonthly)}
                                         </strong>
                                         <small>per month</small>
-                                        <small className={s['pc-currency-note']}>Excludes tax</small>
                                     </td>
                                     <td className={s['pc-actions']}>
                                         <Link

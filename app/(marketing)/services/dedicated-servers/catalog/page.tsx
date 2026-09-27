@@ -3,11 +3,7 @@ import Link from 'next/link';
 
 import { DedicatedServerCatalog } from '@/components/services/dedicated/server-catalog';
 import { DedicatedIconSprite } from '@/components/services/dedicated/icons';
-import {
-    DEDICATED_COUNTRIES,
-    DEDICATED_ROWS,
-    DEDICATED_VENDOR_COUNT,
-} from '@/lib/catalog/dedicated-servers';
+import { DEDICATED_ROWS } from '@/lib/catalog/dedicated-servers';
 import s from '@/components/services/dedicated/dedicated-servers.module.css';
 
 export const metadata: Metadata = {
@@ -45,34 +41,16 @@ export default function DedicatedServerCatalogPage() {
                                     storage, network, and monthly price.
                                 </p>
                             </div>
-                            <div className={s['catalog-page-summary']}>
-                                <div>
-                                    <strong>{DEDICATED_ROWS.length}</strong>
-                                    <span>Configurations</span>
-                                </div>
-                                <div>
-                                    <strong>{DEDICATED_COUNTRIES.length}</strong>
-                                    <span>Countries</span>
-                                </div>
-                                <div>
-                                    <strong>{DEDICATED_VENDOR_COUNT}</strong>
-                                    <span>CPU brands</span>
-                                </div>
-                            </div>
                         </div>
 
                         <DedicatedServerCatalog rows={DEDICATED_ROWS} />
 
                         <p className={s['pricing-note']}>
-                            Configurations and list prices are the published bare-metal lineup — the same
-                            one the dashboard shows once you sign in. Prices exclude tax and may change.
+                            List prices in USD per month, excluding tax. Configurations and prices may
+                            change.
                         </p>
                     </div>
                 </section>
-                <p className={`${s['catalog-page-note']} ${s.container}`}>
-                    Confirm current availability, taxes, setup fees, and final specifications before
-                    ordering.
-                </p>
                 {/* The comp's page footer, without the copyright the site footer
                     directly below already prints. A <div>, not a <footer>: inside
                     <main> it is not the page's contentinfo, the site footer is. */}

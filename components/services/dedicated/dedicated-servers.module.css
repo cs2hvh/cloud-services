@@ -220,7 +220,7 @@
 .ds .pc-table thead th:first-child {border-radius:6px 0 0 6px;padding-left:20px}
 .ds .pc-table thead th:last-child {border-radius:0 6px 6px 0}
 .ds .pc-row {background:#fff}
-.ds .pc-row>th, .ds .pc-row>td {padding:24px 12px;border-bottom:1px solid #e2e8ef;vertical-align:middle}
+.ds .pc-row>th, .ds .pc-row>td {padding:20px 12px;border-bottom:1px solid #e2e8ef;vertical-align:middle}
 .ds .pc-row>.pc-processor {padding-left:20px;font-weight:400;position:relative}
 .ds .pc-processor:before {content:'';position:absolute;left:0;top:24px;bottom:24px;width:3px;border-radius:3px;background:var(--family)}
 .ds .pc-processor>strong {display:block;font-size:16px;line-height:1.5;letter-spacing:-.025em;color:#1a304b;font-weight:600}
@@ -353,16 +353,15 @@
   .ds .pc-included {font-size:10px}
   .ds .pc-heading h2 span {color:#555}
 }
-.ds .pf-panel {padding:25px;background:#f5f7fa;border-bottom:1px solid #dce4ee}
-.ds .pf-panel-top {display:flex;align-items:center;gap:12px;margin-bottom:22px}
-.ds .pf-panel-top>svg {width:20px;height:20px;color:#54728f}
-.ds .pf-panel-top h3 {font-size:16px;font-weight:600;color:#223a55}
-.ds .pf-panel-top p {font-size:12px;margin-top:3px}
-.ds .pf-panel-top .pc-reset {margin-left:auto;font-size:12px}
-.ds .pf-fields {display:grid;grid-template-columns:1.35fr 1fr 1.05fr 1fr 1fr;gap:13px}
+/* The filter panel is one row of controls, a "More filters" line under it, and
+   the applied-filter chips when there are any. The comps' heading row ("Choose
+   Your Server" + subtitle + reset) and their footnote are gone: they made the
+   panel taller than the first rows of results it was meant to sit above. */
+.ds .pf-panel {padding:16px 20px 14px;background:#f5f7fa;border-bottom:1px solid #dce4ee}
+.ds .pf-fields {display:grid;grid-template-columns:1.35fr 1fr 1.05fr 1fr 1fr;gap:12px}
 .ds .pf-field {min-width:0}
-.ds .pf-label, .ds .pf-field>label {display:block;font-size:11px;font-weight:600;letter-spacing:.035em;color:#5e728a;margin-bottom:7px}
-.ds .pf-field select, .ds .pf-country summary {display:block;width:100%;height:45px;background:#fff;color:#243c57;border:1px solid #ced9e5;border-radius:7px;font:13px var(--font);padding:11px 30px 11px 12px}
+.ds .pf-label, .ds .pf-field>label {display:block;font-size:11px;font-weight:600;letter-spacing:.035em;color:#5e728a;margin-bottom:5px}
+.ds .pf-field select, .ds .pf-country summary {display:block;width:100%;height:40px;background:#fff;color:#243c57;border:1px solid #ced9e5;border-radius:7px;font:13px var(--font);padding:9px 30px 9px 12px}
 .ds .pf-field select:focus-visible, .ds .pf-country summary:focus-visible {outline:2px solid #138dcb;outline-offset:2px}
 .ds .pf-country {position:relative}
 .ds .pf-country summary {list-style:none;display:flex;align-items:center;gap:9px;padding-right:12px}
@@ -382,20 +381,20 @@
 .ds .pf-country-bottom button {border:0;background:none;color:#1679b1;font-size:12px;padding:4px}
 .ds .pf-country-bottom .pf-done {background:#0095FF;color:#fff;padding:7px 14px;border-radius:0}
 .ds .pf-country-no-match {font-size:12px;padding:15px 7px;color:#6d7d92}
-.ds .pf-secondary {display:flex;align-items:flex-start;gap:20px;margin-top:17px}
-.ds .pf-more {width:100%}
+.ds .pf-secondary {display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-top:12px}
+.ds .pf-more {flex:1;min-width:0}
+.ds .pf-secondary .pc-reset {padding:4px 0;flex-shrink:0}
 .ds .pf-more>summary {display:inline-flex;align-items:center;gap:8px;color:#35628a;font-size:12px;list-style:none;padding:4px 0}
 .ds .pf-more>summary::-webkit-details-marker {display:none}
 .ds .pf-more>summary>svg {width:14px;height:14px}
 .ds .pf-more[open]>summary>svg {transform:rotate(45deg)}
 .ds .pf-more-count {font-size:10px;min-width:18px;height:18px;line-height:18px;text-align:center;border-radius:10px;color:#fff;background:#197cb4}
-.ds .pf-advanced {display:grid;grid-template-columns:repeat(3,1fr);gap:15px;padding:20px 0 0;max-width:770px}
-.ds .pf-selection {display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:19px;border-top:1px solid #dce5ee;padding-top:16px}
+.ds .pf-advanced {display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:12px 0 2px;max-width:770px}
+.ds .pf-selection {display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:12px;border-top:1px solid #dce5ee;padding-top:12px}
 .ds .pf-selection-label {font-size:11px;color:#61778f;margin-right:3px}
 .ds .pf-chip {border:1px solid #c8dff0;background:#eaf4fc;color:#2c6188;border-radius:5px;padding:5px 9px;font-size:11px;display:inline-flex;align-items:center;gap:9px}
 .ds .pf-chip:hover {background:#dceefb;border-color:#76b5de}
 .ds .pf-chip span {font-size:15px;line-height:1;color:#527b9a}
-.ds .pf-location-note {font-size:11px!important;color:#6f7e90!important;line-height:1.7;margin:13px 0 0}
 .ds .pf-result-tools {display:flex;align-items:center;gap:13px}
 .ds .pf-sort-description {font-size:11px;color:#64809b}
 .ds .pf-sort-reset {font-size:11px;color:#226b9d;border:0;background:none;padding:5px;text-decoration:underline;text-underline-offset:3px}
@@ -420,7 +419,6 @@
 }
 @media(max-width:950px) {
   .ds .pf-fields {grid-template-columns:repeat(3,1fr)}
-  .ds .pf-panel-top {margin-bottom:19px}
   .ds .pf-advanced {grid-template-columns:repeat(3,1fr)}
   .ds .pf-mobile-sort {display:flex;align-items:center;gap:5px;padding:0 17px 15px;background:#fff;overflow-x:auto}
   .ds .pf-mobile-sort>span {font-size:10px;color:#66819a;flex-shrink:0;margin-right:5px}
@@ -433,28 +431,21 @@
   .ds .pf-panel {border-radius:11px 11px 0 0}
 }
 @media(max-width:600px) {
-  .ds .pf-panel {padding:17px 14px}
-  .ds .pf-fields {grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 10px}
+  .ds .pf-panel {padding:14px 12px 12px}
+  .ds .pf-fields {grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 10px}
   .ds .pf-field:first-child {grid-column:1 / -1}
   .ds .pf-country-popover {width:100%;max-width:none}
-  .ds .pf-panel-top {gap:9px;align-items:flex-start}
-  .ds .pf-panel-top h3 {font-size:14px}
-  .ds .pf-panel-top p {font-size:11px;max-width:205px}
-  .ds .pf-panel-top>svg {width:18px;height:18px;margin-top:2px}
-  /* One line; it drops below the heading only when there is no room beside it. */
-  .ds .pf-panel-top {flex-wrap:wrap}
-  .ds .pf-panel-top .pc-reset {font-size:11px;line-height:1.5;padding:0;white-space:nowrap;margin-left:auto}
+  .ds .pf-secondary .pc-reset {font-size:11px;line-height:1.5;padding:4px 0;white-space:nowrap}
   .ds .pf-label, .ds .pf-field>label {font-size:10px}
-  .ds .pf-field select, .ds .pf-country summary {font-size:12px;height:43px}
-  .ds .pf-advanced {grid-template-columns:1fr;gap:14px}
-  .ds .pf-selection {gap:6px;margin-top:14px;padding-top:14px}
+  .ds .pf-field select, .ds .pf-country summary {font-size:12px;height:40px}
+  .ds .pf-advanced {grid-template-columns:1fr;gap:12px}
+  .ds .pf-selection {gap:6px;margin-top:12px;padding-top:12px}
   .ds .pf-chip {font-size:10px;padding:5px 8px}
   .ds .pf-selection-label {width:100%;margin-bottom:2px}
   .ds .pf-result-tools {display:flex;flex-direction:column;align-items:flex-end;gap:0}
   .ds .pf-sort-description {font-size:10px}
   .ds .pf-sort-reset {font-size:10px;padding:3px}
   .ds .pc-results {align-items:center;min-height:64px}
-  .ds .pf-location-note {font-size:10px!important}
   .ds .pf-mobile-sort {padding-left:14px;padding-right:14px}
   .ds .pf-panel {border-radius:9px 9px 0 0}
 }
@@ -495,12 +486,10 @@
 .ds .pc-location {display:flex;align-items:center;gap:6px;color:#60758c;font-size:11px;margin-top:8px}
 .ds .pc-location svg {width:12px;height:12px}
 .ds .pc-location-code {font:10px var(--font-geist-mono),ui-monospace,monospace;padding:2px 6px;border:1px solid #d2dce6;background:#eef2f6;color:#4e647a;border-radius:3px}
-.ds .pc-currency-note {font-size:10px!important}
 .ds .pc-row .pc-price>strong {font-size:26px}
 .ds .pc-row .pc-price>strong .pc-symbol {font-size:15px}
 .ds .pc-row .pc-price>strong .pc-code {font-size:11px;vertical-align:baseline;letter-spacing:.02em;margin-right:5px;color:#587087}
 .ds .pricing .pf-fields {grid-template-columns:1.35fr 1fr 1fr 1fr}
-.ds .pricing .pf-location-note {color:#6c7d90!important}
 .ds .pricing .pc-detail-content h3 {font-size:15px}
 .ds .pricing .pc-detail-content strong {color:#2c435d;font-weight:600}
 .ds .pricing .pc-detail-content p {color:#5b6d82}
@@ -535,15 +524,11 @@
 .ds .pricing .pc-preview-fade+.pc-included {border-top:1px solid #e0e7ef}
 .ds .catalog-page {background:#fff;color:#18283e}
 .ds .catalog-page-main {min-height:calc(100vh - 72px);background:#fff}
-.ds .catalog-page-section {padding:66px 0 80px;background:#fff}
-.ds .catalog-page .pc-heading {margin:0 0 35px}
-.ds .catalog-page .pc-heading h1 {font-size:clamp(38px,4vw,56px);line-height:1.08;letter-spacing:-.045em;color:#142a43;font-weight:400}
+.ds .catalog-page-section {padding:52px 0 72px;background:#fff}
+.ds .catalog-page .pc-heading {margin:0 0 26px}
+.ds .catalog-page .pc-heading h1 {font-size:clamp(36px,3.6vw,50px);line-height:1.08;letter-spacing:-.045em;color:#142a43;font-weight:400}
 .ds .catalog-page .pc-heading h1 span {color:#1682bd}
-.ds .catalog-page .pc-heading p {font-size:15px;max-width:660px;margin-top:17px;color:#5c6f85}
-.ds .catalog-page-summary {display:flex;gap:26px;align-items:center;border-left:1px solid #d2dce6;padding-left:28px;white-space:nowrap}
-.ds .catalog-page-summary div {display:grid;gap:2px}
-.ds .catalog-page-summary strong {font-size:22px;color:#17334f;font-weight:500}
-.ds .catalog-page-summary span {font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:#6c7f93}
+.ds .catalog-page .pc-heading p {font-size:15px;max-width:660px;margin-top:14px;color:#5c6f85}
 .ds .catalog-search-wrap {display:flex;align-items:center;gap:10px;flex:1;max-width:390px}
 .ds .catalog-search-wrap svg {width:16px;height:16px;color:#607790}
 .ds .catalog-search-wrap input {width:100%;height:42px;border:1px solid #cdd9e4;border-radius:6px;background:#fff;color:#213a55;padding:9px 12px;font:13px var(--font)}
@@ -552,16 +537,10 @@
 .ds .catalog-page .pf-result-tools {margin-left:auto}
 .ds .catalog-page .pc-table-wrap {padding-bottom:18px}
 .ds .catalog-page .pc-included {border-radius:0 0 14px 14px}
-/* This element is also .container; the comps' `margin:17px 2px 0` overrode its
-   auto side margins and pinned the note to the left edge of the window. */
-.ds .catalog-page-note {font-size:11px;line-height:1.8;color:#66788d;margin:17px auto 0}
-.ds .catalog-page .pf-panel-top h3, .ds .catalog-page .pc-table strong {color:#1c344f}
-.ds .catalog-page .pf-panel-top p {color:#66778b}
+.ds .catalog-page .pc-table strong {color:#1c344f}
 @media(max-width:950px) {
-  .ds .catalog-page-section {padding-top:48px}
+  .ds .catalog-page-section {padding-top:40px}
   .ds .catalog-page .pc-heading {align-items:flex-start}
-  .ds .catalog-page-summary {gap:18px;padding-left:20px}
-  .ds .catalog-page-summary strong {font-size:18px}
   .ds .catalog-search-wrap {max-width:none}
   .ds .catalog-page .pc-results {flex-wrap:wrap}
   .ds .catalog-page .pf-result-tools {margin-left:0}
@@ -569,10 +548,9 @@
 @media(max-width:600px) {
   .ds .pc-preview-fade {height:105px;margin-top:-105px;padding-bottom:18px}
   .ds .pc-show-more {width:100%;min-width:0}
-  .ds .catalog-page-section {padding:38px 0 55px}
+  .ds .catalog-page-section {padding:32px 0 50px}
   .ds .catalog-page .pc-heading {display:block}
-  .ds .catalog-page .pc-heading h1 {font-size:39px}
-  .ds .catalog-page-summary {border-left:0;padding:0;margin-top:24px;justify-content:space-between}
+  .ds .catalog-page .pc-heading h1 {font-size:36px}
   .ds .catalog-page .pc-results {align-items:stretch}
   .ds .catalog-search-wrap {width:100%;flex-basis:100%}
   .ds .catalog-page .pf-result-tools {align-items:flex-start}
