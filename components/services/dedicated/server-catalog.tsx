@@ -749,8 +749,8 @@ export function DedicatedServerCatalog({
                                                     {row.bandwidth.toLowerCase() === 'unmetered'
                                                         ? 'unmetered traffic'
                                                         : `${row.bandwidth} of traffic`}{' '}
-                                                    at {row.uplinkGbps} Gbps. Confirm current stock, taxes,
-                                                    setup fees, and final specifications with sales.
+                                                    at {row.uplinkGbps} Gbps. Confirm stock and final
+                                                    specifications with sales.
                                                 </p>
                                             </div>
                                         </div>
