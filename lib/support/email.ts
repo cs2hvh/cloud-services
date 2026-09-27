@@ -23,15 +23,20 @@ function getMessageIdentity(message: SupportTicketMessage): {
   name: string;
   email: string;
 } {
+  // Staff are checked FIRST, before any attached author. The old order
+  // returned the attached profile whenever there was one - and the admin
+  // query always attached one - so every reply email to a customer printed
+  // each staff member's name and personal address for every message in the
+  // thread. The generic branch below it was unreachable in practice.
+  if (message.actor_type === "admin") {
+    return { name: "AhuraSense Support", email: "support@ahurasense.com" };
+  }
+
   if (message.author) {
     return {
       name: message.author.display_name || message.author.username || message.author.email || "User",
       email: message.author.email || "No email",
     };
-  }
-
-  if (message.actor_type === "admin") {
-    return { name: "Support Team", email: "support@ahurasense.com" };
   }
   if (message.actor_type === "system") {
     return { name: "System", email: "-" };

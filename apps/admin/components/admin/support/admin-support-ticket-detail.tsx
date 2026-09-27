@@ -72,17 +72,24 @@ export default function AdminSupportTicketDetailView({
   const ownerName =
     ticket.owner?.display_name || ticket.owner?.username || ticket.owner?.email || "Unknown user";
 
-  const getMessageIdentity = (actorType: "user" | "admin" | "system", author: typeof ticket.messages[number]["author"]) => {
+  const getMessageIdentity = (
+    actorType: "user" | "admin" | "system",
+    author: typeof ticket.messages[number]["author"],
+  ): { name: string; email: string | null; avatar: string | null } => {
+    // Staff first, and with no address at all - not even the shared one.
+    // The API no longer sends a staff profile, but this does not rely on
+    // that: a staff reply reads "Staff" here whatever arrives. The customer
+    // keeps their own name and email below, which admins do need.
+    if (actorType === "admin") {
+      return { name: "Staff", email: null, avatar: null };
+    }
+
     if (author) {
       return {
         name: author.display_name || author.username || author.email || "User",
         email: author.email || "No email",
         avatar: author.avatar || null,
       };
-    }
-
-    if (actorType === "admin") {
-      return { name: "Support Team", email: "support@ahurasense.com", avatar: null };
     }
     if (actorType === "system") {
       return { name: "System", email: "-", avatar: null };
@@ -211,7 +218,9 @@ export default function AdminSupportTicketDetailView({
                               </Avatar>
                               <div className="min-w-0">
                                 <p className="truncate text-sm text-neutral-100">{identity.name}</p>
-                                <p className="truncate text-xs text-neutral-500">{identity.email}</p>
+                                {identity.email && (
+                                  <p className="truncate text-xs text-neutral-500">{identity.email}</p>
+                                )}
                               </div>
                             </div>
                           );

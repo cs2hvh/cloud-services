@@ -154,6 +154,25 @@ async function getSupportDb() {
   return (supabase as any).schema("support");
 }
 
+/**
+ * Staff are never identified to anyone reading a ticket - not by email, not
+ * by name. A reply is from "support", not from a person, so a customer
+ * cannot collect individual staff addresses from their inbox, and staff are
+ * not singled out by name for a decision the team made.
+ *
+ * Applied where the message leaves this layer, so no caller has to remember
+ * to strip it: the profile is simply never attached to an admin message.
+ * author_id stays - it is an internal UUID, nothing renders it, and the
+ * audit log is where "who actually replied" is answered.
+ */
+function authorFor(
+  message: { actor_type: "user" | "admin" | "system"; author_id: string | null },
+  profiles: Map<string, SupportTicketOwnerSummary>,
+): SupportTicketOwnerSummary | null {
+  if (message.actor_type === "admin") return null;
+  return message.author_id ? profiles.get(message.author_id) || null : null;
+}
+
 async function getOwnerProfiles(ownerIds: string[]): Promise<Map<string, SupportTicketOwnerSummary>> {
   const uniqueOwnerIds = Array.from(new Set(ownerIds)).filter(Boolean);
   if (uniqueOwnerIds.length === 0) {
@@ -276,7 +295,7 @@ export const SupportTickets = {
       ...(ticket as Omit<SupportTicketDetail, "messages" | "attachments">),
       messages: typedMessages.map((message) => ({
         ...message,
-        author: message.author_id ? authorProfiles.get(message.author_id) || null : null,
+        author: authorFor(message, authorProfiles),
       })) as SupportTicketMessage[],
       attachments: (attachments ?? []) as SupportTicketAttachment[],
     };
@@ -434,7 +453,7 @@ export const SupportTickets = {
       owner: ownerProfiles.get(ticket.owner_id) || null,
       messages: typedMessages.map((message) => ({
         ...message,
-        author: message.author_id ? authorProfiles.get(message.author_id) || null : null,
+        author: authorFor(message, authorProfiles),
       })) as SupportTicketMessage[],
       attachments: (attachments ?? []) as SupportTicketAttachment[],
     };
@@ -471,7 +490,7 @@ export const SupportTickets = {
 
     return {
       ...message,
-      author: message.author_id ? authorProfiles.get(message.author_id) || null : null,
+      author: authorFor(message, authorProfiles),
     } as SupportTicketMessage;
   },
 
