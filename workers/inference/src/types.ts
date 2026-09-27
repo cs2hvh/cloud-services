@@ -34,6 +34,9 @@ export interface Env {
   // Second partner upstream for proxy-served models. Which partner serves a
   // model is the model's own upstream_provider; see lib/upstreams.ts.
   STARIMG_BASE_URL?: string;
+  // "on" refuses platform-billed requests with 402 insufficient_balance when
+  // the payer's balance is exhausted. See middleware/spend.ts.
+  BALANCE_ENFORCEMENT?: string;
   /** Deadlines for a non-final provider in a multi-provider chain, per
    *  request kind. Unused while every chain has one provider. */
   UPSTREAM_PRIMARY_TTFB_MS?: string;
@@ -90,6 +93,12 @@ export interface AuthContext {
   // worker's DEFAULT_RPM in rate-limit middleware. Validated in
   // [1, 10000] by the DB CHECK so the middleware can trust the value.
   rateLimitRpm: number | null;
+  // The payer's wallet balance in cents when the key was looked up (at most
+  // KEY_CACHE_TTL_SECONDS stale). null = the payer has no balance row, which
+  // the spend check reads as zero. Only acted on while BALANCE_ENFORCEMENT
+  // is "on"; inference usage is settled against this wallet hourly by the
+  // billing sweep (billing.settle_inference_usage).
+  payerBalanceCents: number | null;
   // Caller's billing election — derived from X-Ahura-Billing header
   // (default: platform). BYOK requires a configured upstream key.
   billing: "platform" | "byok";

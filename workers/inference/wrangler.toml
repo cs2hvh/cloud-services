@@ -136,6 +136,12 @@ ENV = "production"
 # minute to reap idle hosted-serving pods. Change this when the dashboard
 # moves to a different domain.
 CONTROL_PLANE_URL = "https://ahurasense.com"
+# Wallet enforcement (2026-09-27). "on" makes the gateway answer 402
+# insufficient_balance for platform-billed requests whose payer balance is
+# zero or below (or has no balance row). Usage is settled hourly by the
+# billing sweep either way; this only decides whether an exhausted balance
+# stops traffic. Off at launch; flip to "on" and deploy to enforce.
+BALANCE_ENFORCEMENT = "off"
 
 # Secrets (set via `wrangler secret put` — never commit values):
 #   • SUPABASE_SERVICE_ROLE_KEY  — for inference.lookup_api_key RPC

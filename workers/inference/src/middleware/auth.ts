@@ -89,6 +89,7 @@ export const authMiddleware: MiddlewareHandler<{
     semanticCacheEnabled: resolved.semanticCacheEnabled,
     orgSemanticCacheThreshold: resolved.orgSemanticCacheThreshold,
     rateLimitRpm: resolved.rateLimitRpm,
+    payerBalanceCents: resolved.payerBalanceCents ?? null,
     billing,
     byokProvider,
   };
@@ -114,6 +115,8 @@ interface CachedKey {
   orgSemanticCacheThreshold: number | null;
   rateLimitRpm: number | null;
   expiresAt: string | null;
+  // Optional: entries cached by a build before 2026-09-27 lack it.
+  payerBalanceCents?: number | null;
 }
 
 function extractToken(authHeader: string | undefined, xApiKey: string | undefined): string | null {
@@ -152,6 +155,7 @@ async function lookupInPostgres(env: Env, hash: string): Promise<CachedKey | nul
       org_semantic_cache_threshold: number | string | null;
       rate_limit_rpm: number | null;
       expires_at: string | null;
+      payer_balance_cents: number | string | null;
     }>();
 
   if (error || !data) return null;
@@ -182,7 +186,16 @@ async function lookupInPostgres(env: Env, hash: string): Promise<CachedKey | nul
       : null,
     rateLimitRpm: data.rate_limit_rpm ?? null,
     expiresAt: data.expires_at,
+    // The payer's wallet in cents (inference.lookup_api_key, 2026-09-27).
+    // BIGINT arrives as a number, or a string past 2^53.
+    payerBalanceCents: toCents(data.payer_balance_cents),
   };
+}
+
+function toCents(raw: number | string | null | undefined): number | null {
+  if (raw === null || raw === undefined) return null;
+  const n = typeof raw === "number" ? raw : Number.parseInt(String(raw), 10);
+  return Number.isFinite(n) ? n : null;
 }
 
 function ipMatchesAny(ip: string, cidrs: string[]): boolean {

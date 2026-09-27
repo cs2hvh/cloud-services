@@ -1,7 +1,15 @@
 /**
- * Hard-cap spend check.
+ * Wallet and hard-cap spend checks.
  *
- * Reads the current month's accumulated cents from KV and rejects the
+ * Wallet (2026-09-27): inference usage is settled hourly against the payer's
+ * balance by the billing sweep. Once that balance is exhausted, platform-
+ * billed requests are refused here with 402 insufficient_balance, before any
+ * upstream call. BYOK requests run on the customer's own upstream key and
+ * are not held to the wallet. The balance rides on the key lookup, so a
+ * top-up takes effect within the key cache TTL. Behind BALANCE_ENFORCEMENT
+ * ("on" to enforce) so switching it is a wrangler var, not a code change.
+ *
+ * Hard caps: reads the current month's accumulated cents from KV and rejects the
  * request if EITHER cap is reached:
  *
  *   • Per-key cap   (auth.hardCapCents)        — set per-API-key in the
@@ -28,6 +36,37 @@ export const spendCheckMiddleware: MiddlewareHandler<{
   Variables: HonoVariables;
 }> = async (c, next) => {
   const auth = c.get("auth");
+
+  if (c.env.BALANCE_ENFORCEMENT === "on" && auth.billing === "platform") {
+    // null = no balance row at all, which is an empty wallet, not a free one.
+    const balance = auth.payerBalanceCents ?? 0;
+    if (balance <= 0) {
+      console.warn(
+        JSON.stringify({
+          level: "warn",
+          scope: "spend",
+          message: "Balance exhausted",
+          orgId: auth.orgId,
+          keyId: auth.keyId,
+          balanceCents: balance,
+        })
+      );
+      return c.json(
+        {
+          error: {
+            message:
+              "Your AhuraSense balance is exhausted. Add balance under Billing " +
+              "(https://ahurasense.com/dashboard/billing) to keep sending requests.",
+            type: "billing_error",
+            code: "insufficient_balance",
+            balance_cents: Math.max(balance, 0),
+          },
+        },
+        402
+      );
+    }
+  }
+
   const keyCap = auth.hardCapCents;
   const orgCap = auth.orgHardCapCents;
   // hard_cap_cents is a nullable BIGINT with NO default on both

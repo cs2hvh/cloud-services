@@ -17,7 +17,7 @@ export default function PricingPage() {
       href={HREF}
       eyebrow="Account"
       title="Pricing & usage"
-      lede="Per-token prices, per model, listed in the catalog and charged against your AhuraSense balance as requests complete. No subscription and no minimum."
+      lede="Per-token prices, per model, listed in the catalog and settled against your AhuraSense balance every hour. No subscription and no minimum."
     >
       <H2>How a request is priced</H2>
       <P>
@@ -82,8 +82,9 @@ cost = 400 × 1.00/1M + 800 × 0.10/1M + 300 × 5.00/1M
         <C>GET /v1/key</C> gives a service its own month-to-date spend without the dashboard.
       </P>
       <Callout kind="note" title="Balance">
-        Inference is paid from the same AhuraSense balance as the rest of the platform. Top up
-        under <A href="/dashboard/billing">Billing</A>; a spend cap on the organization keeps a
+        Inference is paid from the same AhuraSense balance as the rest of the platform. Usage
+        is settled once an hour and appears under <A href="/dashboard/billing">Billing</A> as
+        one transaction per hour. Top up there; a spend cap on the organization keeps a
         runaway job from draining it. See{" "}
         <A href="/docs/inference/limits">Rate limits & spend caps</A>.
       </Callout>

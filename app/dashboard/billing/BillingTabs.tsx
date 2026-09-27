@@ -1084,6 +1084,7 @@ type ServiceTypeFilter =
     | "gpu_pod"
     | "gpu_pod_storage"
     | "gpu_volume"
+    | "inference"
     | "custom_image"
     | "inference_finetune"
     | "inference_serving"
@@ -1275,6 +1276,7 @@ function TransactionsTab() {
                             { value: "gpu_pod", label: "GPU Compute" },
                             { value: "gpu_pod_storage", label: "GPU Pod Storage" },
                             { value: "gpu_volume", label: "GPU Volume" },
+                            { value: "inference", label: "Inference" },
                             { value: "kubernetes", label: "Kubernetes" },
                             { value: "database", label: "Database" },
                             { value: "objectspace", label: "Object Storage" },

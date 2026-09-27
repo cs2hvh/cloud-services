@@ -428,10 +428,13 @@ async function main(): Promise<number> {
   const meters = await loadOpenMeters(db, args.serviceFilter);
   if (meters.length === 0) {
     console.log("[sweep] no open meters");
-    // Recorded too: "the sweep ran and found nothing" and "the sweep did not
-    // run" must not look the same from outside.
-    await recordRun(db, args, [], startedAt);
-    return 0;
+    // Inference settlement does not depend on a meter being open, so it still
+    // runs. Recorded too: "the sweep ran and found nothing" and "the sweep
+    // did not run" must not look the same from outside.
+    const settlement = await settleInference(db, args);
+    const code = reportSettlement(settlement, args);
+    await recordRun(db, args, [], startedAt, settlement);
+    return code;
   }
 
   // Live price book, for the dry-run price check above. The real run resolves
@@ -631,8 +634,9 @@ async function main(): Promise<number> {
     }
   }
 
-  const code = report(lines, args);
-  await recordRun(db, args, lines, startedAt);
+  const settlement = await settleInference(db, args);
+  const code = Math.max(report(lines, args), reportSettlement(settlement, args));
+  await recordRun(db, args, lines, startedAt, settlement);
   return code;
 }
 
@@ -644,11 +648,20 @@ async function main(): Promise<number> {
  * row as "the sweep did not run", which is the correct alarm for a sweep that
  * ran and could not say so.
  */
-async function recordRun(db: SupabaseClient, args: Args, lines: Line[], startedAt: Date): Promise<void> {
+async function recordRun(
+  db: SupabaseClient,
+  args: Args,
+  lines: Line[],
+  startedAt: Date,
+  settlement: SettleLine[] = [],
+): Promise<void> {
   const tally: Record<string, number> = {};
   for (const l of lines) tally[l.outcome] = (tally[l.outcome] ?? 0) + 1;
+  // Settlement outcomes share the tally under a prefix so one row answers
+  // both "were the meters billed" and "was inference settled".
+  for (const s of settlement) tally[`settle:${s.outcome}`] = (tally[`settle:${s.outcome}`] ?? 0) + 1;
 
-  const problems = lines
+  const problems: Array<Record<string, unknown>> = lines
     .filter((l) => PROBLEM(l.outcome))
     .map((l) => ({
       service_type: l.meter.service_type,
@@ -658,6 +671,17 @@ async function recordRun(db: SupabaseClient, args: Args, lines: Line[], startedA
       outcome: l.outcome,
       detail: l.detail ?? null,
     }));
+  for (const s of settlement) {
+    if (!SETTLE_PROBLEM(s.outcome)) continue;
+    problems.push({
+      service_type: "inference",
+      service_id: s.org_id,
+      user_id: s.payer_user_id,
+      plan_key: null,
+      outcome: `settle:${s.outcome}`,
+      detail: s.detail ?? `due=$${s.due_usd} charged=$${s.charged_usd} unpaid=$${s.unpaid_usd}`,
+    });
+  }
 
   const { error } = await db.schema("billing").from("sweep_runs").insert({
     period_start: args.period.toISOString(),
@@ -679,6 +703,85 @@ async function recordRun(db: SupabaseClient, args: Args, lines: Line[], startedA
       `the dead-man will report the sweep as not having run`
     );
   }
+}
+
+// ── Inference settlement ─────────────────────────────────────────────────
+//
+// The gateway prices every inference request into inference.usage.cost_cents,
+// but until 2026-09-27 nothing ever debited that from a wallet: this sweep
+// settled meters only, and every org's inference spend was free.
+// billing.settle_inference_usage() (migration 20260927120000) sums each
+// org's open rows, debits the payer through move_credit — one ledger row per
+// org per run, which is what the transactions tab shows — records any
+// shortfall as a failed 'usage' row, and stamps the rows settled. It runs
+// here after the meters: the dry run previews (p_apply=false), --apply moves
+// money. INFERENCE_SETTLEMENT=off skips it, as a PROBLEM, because usage that
+// is accruing unsettled is exactly what this file exists to make loud.
+
+interface SettleLine {
+  org_id: string | null;
+  payer_user_id: string | null;
+  requests: number;
+  due_usd: number;
+  charged_usd: number;
+  unpaid_usd: number;
+  balance_after: number | null;
+  outcome: string;
+  detail?: string;
+}
+
+// Served-and-not-paid is a problem here for the same reason 'insufficient'
+// is for a meter; so is an org nobody can be charged for.
+const SETTLE_PROBLEM = (o: string) =>
+  o === "unpaid" || o === "charged-partial" || o === "no-payer" || o.startsWith("PROBLEM");
+
+const NO_SETTLEMENT: Omit<SettleLine, "outcome"> = {
+  org_id: null, payer_user_id: null, requests: 0, due_usd: 0, charged_usd: 0, unpaid_usd: 0, balance_after: null,
+};
+
+async function settleInference(db: SupabaseClient, args: Args): Promise<SettleLine[]> {
+  if ((process.env.INFERENCE_SETTLEMENT ?? "").trim().toLowerCase() === "off") {
+    return [{ ...NO_SETTLEMENT, outcome: "PROBLEM-switched-off", detail: "INFERENCE_SETTLEMENT=off; usage is accruing unsettled" }];
+  }
+  const { data, error } = await db.schema("billing").rpc("settle_inference_usage", { p_apply: args.apply });
+  if (error) {
+    // A host whose database has not had 20260927120000 applied gets this
+    // every hour until it has. Named, so the dead-man says what is missing.
+    const missing = /settle_inference_usage/.test(error.message) && /could not find|does not exist|schema cache/i.test(error.message);
+    return [{ ...NO_SETTLEMENT, outcome: missing ? "PROBLEM-not-installed" : "PROBLEM-error", detail: error.message }];
+  }
+  const rows: Array<Record<string, unknown>> = Array.isArray(data) ? data : [];
+  return rows.map((row) => ({
+    org_id: row.org_id === null || row.org_id === undefined ? null : String(row.org_id),
+    payer_user_id: row.payer_user_id === null || row.payer_user_id === undefined ? null : String(row.payer_user_id),
+    requests: Number(row.requests ?? 0),
+    due_usd: Number(row.due_usd ?? 0),
+    charged_usd: Number(row.charged_usd ?? 0),
+    unpaid_usd: Number(row.unpaid_usd ?? 0),
+    balance_after: row.balance_after === null || row.balance_after === undefined ? null : Number(row.balance_after),
+    outcome: String(row.outcome ?? "PROBLEM-unknown-outcome"),
+  }));
+}
+
+function reportSettlement(settlement: SettleLine[], args: Args): number {
+  console.log(`\n[sweep] inference settlement (${args.apply ? "APPLY" : "dry-run"})`);
+  if (settlement.length === 0) {
+    console.log("  nothing open");
+    return 0;
+  }
+  const money = (n: number) => `$${n.toFixed(2)}`;
+  for (const s of settlement) {
+    console.log(
+      `  ${s.outcome.padEnd(22)} org=${s.org_id ?? "-"} requests=${s.requests} due=${money(s.due_usd)}` +
+      ` charged=${money(s.charged_usd)} unpaid=${money(s.unpaid_usd)}` +
+      ` balance=${s.balance_after === null ? "-" : money(s.balance_after)}${s.detail ? `  ${s.detail}` : ""}`
+    );
+  }
+  const problems = settlement.filter((s) => SETTLE_PROBLEM(s.outcome));
+  if (problems.length > 0) {
+    console.log(`[sweep] ${problems.length} SETTLEMENT PROBLEM(S) — inference served and not paid for, or not settled at all`);
+  }
+  return problems.length > 0 ? 1 : 0;
 }
 
 function describeInputs(q: number | null, u: number | null, units: number): string {
