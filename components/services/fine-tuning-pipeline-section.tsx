@@ -507,7 +507,9 @@ function VizUpload() {
       </div>
 
       <div className="mt-5 flex-1 overflow-hidden rounded-[6px] border border-white/[0.06] bg-black/40 p-4">
-        <pre className="font-mono text-[10.5px] leading-relaxed text-white/75">
+        {/* Phones: the sample lines run to 68 characters in a card with ~200px
+            of room, and the parent clips them, so half of every line was cut. */}
+        <pre className="font-mono text-[10.5px] leading-relaxed text-white/75 max-sm:whitespace-pre-wrap max-sm:[overflow-wrap:anywhere]">
 {`{"messages":[
   {"role":"user","content":"What is the refund policy?"},
   {"role":"assistant","content":"30 days from purchase..."}
@@ -710,7 +712,9 @@ function VizTrain() {
         </svg>
       </div>
 
-      <div className="mt-4 grid grid-cols-3 gap-2">
+      {/* Phones: one stat per row. Three cells left ~48px of text room, too
+          little for "GPU util" or "4m 28s". */}
+      <div className="mt-4 grid grid-cols-3 gap-2 max-sm:grid-cols-1">
         <Stat label="Epoch"   value="2.14" />
         <Stat label="GPU util" value="84%"  accent="#4ade80" />
         <Stat label="Elapsed" value="4m 28s" />
@@ -871,12 +875,12 @@ function Stat({
   accent?: string;
 }) {
   return (
-    <div className="rounded-[5px] border border-white/[0.06] bg-white/[0.015] px-3 py-2">
+    <div className="rounded-[5px] border border-white/[0.06] bg-white/[0.015] px-3 py-2 max-sm:flex max-sm:items-baseline max-sm:justify-between max-sm:gap-3">
       <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-white/40">
         {label}
       </p>
       <p
-        className="mt-1 font-mono text-[13px] font-semibold tabular-nums"
+        className="mt-1 whitespace-nowrap font-mono text-[13px] font-semibold tabular-nums max-sm:mt-0"
         style={{ color: accent ?? "rgba(255,255,255,0.92)" }}
       >
         {value}

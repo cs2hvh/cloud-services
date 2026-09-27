@@ -147,9 +147,13 @@ export default function DomainChoiceSection() {
                     ))}
                 </div>
 
-                {/* Trust strip + CTA */}
+                {/* Trust strip + CTA. Side by side only from xl: the three badges and
+                    two buttons need ~950px on one line, so between sm and xl the row
+                    squeezed one or the other — button labels overflowing their 44px
+                    height, or the badges wrapping a word per line. Stacked and
+                    centred below that. */}
                <div
-                    className="mt-14 flex flex-col items-center gap-6 rounded-[12px] border px-6 py-7 sm:flex-row sm:justify-between"
+                    className="mt-14 flex flex-col items-center gap-6 rounded-[12px] border px-6 py-7 xl:flex-row xl:justify-between"
                     style={{
                         background:
                             "linear-gradient(135deg, rgba(0,149,255,0.08) 0%, rgba(5,14,26,0.75) 55%, rgba(0,149,255,0.05) 100%)",
@@ -157,7 +161,7 @@ export default function DomainChoiceSection() {
                         boxShadow: "inset 0 1px 0 rgba(0,149,255,0.08)",
                     }}
                 >
-                    <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 sm:justify-start">
+                    <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 xl:justify-start">
                         <span
                             className={`${MONO} text-[11px] font-medium uppercase tracking-[0.18em] text-white/65`}
                         >
@@ -177,17 +181,20 @@ export default function DomainChoiceSection() {
                         </span>
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    {/* Phones stack the two actions full width. Side by side they had
+                        ~214px between them, so "Search a domain" wrapped onto three
+                        lines inside a fixed 44px-tall button and spilled out of it. */}
+                    <div className="flex items-center gap-3 max-sm:w-full max-sm:flex-col max-sm:items-stretch">
                         <Link
                             href="/services/domain#search"
-                            className={`${MONO} inline-flex h-11 items-center justify-center border border-white/20 bg-transparent px-5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white transition-colors hover:border-white/40 hover:bg-white/[0.05]`}
+                            className={`${MONO} inline-flex h-11 items-center justify-center whitespace-nowrap border border-white/20 bg-transparent px-5 text-[11px] font-semibold uppercase tracking-[0.16em] text-white transition-colors hover:border-white/40 hover:bg-white/[0.05]`}
                         >
                             Search a domain
                         </Link>
                         <AuthAwareServiceCta
                             service="domain"
                             intent="main"
-                            className={`${MONO} inline-flex h-11 items-center justify-center gap-1.5 border border-white bg-white px-5 text-[11px] font-semibold uppercase tracking-[0.16em] text-black transition-colors hover:bg-[#0095FF] hover:border-[#0095FF] hover:text-white`}
+                            className={`${MONO} inline-flex h-11 items-center justify-center gap-1.5 whitespace-nowrap border border-white bg-white px-5 text-[11px] font-semibold uppercase tracking-[0.16em] text-black transition-colors hover:bg-[#0095FF] hover:border-[#0095FF] hover:text-white`}
                         >
                             Open dashboard
                             <ArrowRight className="h-3.5 w-3.5" />

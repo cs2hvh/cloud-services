@@ -110,7 +110,11 @@ export default function ModelHostingGpuSection() {
         </motion.div>
 
         {/* ─── GPU selector + detail ─── */}
-        <div className="mt-16 grid gap-6 lg:mt-20 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] lg:gap-10">
+        {/* grid-cols-[minmax(0,1fr)] below lg: without an explicit column the
+            grid sizes its one implicit column to content, and the truncated
+            GPU descriptions (white-space: nowrap) are one long line — so the
+            column, the list and the detail panel all ran off a phone screen. */}
+        <div className="mt-16 grid grid-cols-[minmax(0,1fr)] gap-6 lg:mt-20 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)] lg:gap-10">
           {/* Left: GPU cards */}
           <div className="space-y-3">
             {GPUS.map((g, i) => {
@@ -147,10 +151,13 @@ export default function ModelHostingGpuSection() {
                     }}
                   />
 
-                  <div className="flex items-center justify-between gap-3">
+                  {/* Phones: name and tier on one line, price on its own line under
+                      them. Side by side, "A100 80GB" wrapped and the tier badge ran
+                      into the price. */}
+                  <div className="flex items-center justify-between gap-3 max-sm:flex-col max-sm:items-start max-sm:gap-1">
                     <div className="flex min-w-0 items-center gap-2.5">
                       <span
-                        className="font-mono text-[15px] font-semibold tracking-tight transition-colors duration-300"
+                        className="whitespace-nowrap font-mono text-[15px] font-semibold tracking-tight transition-colors duration-300"
                         style={{ color: isSelected ? "#fff" : "rgba(255,255,255,0.78)" }}
                       >
                         {g.sku}
@@ -175,7 +182,7 @@ export default function ModelHostingGpuSection() {
                   </div>
 
                   <div className="mt-1.5 flex items-center justify-between gap-3">
-                    <p className="min-w-0 truncate pr-2 text-[12px] leading-relaxed text-white/45">
+                    <p className="min-w-0 truncate pr-2 text-[12px] leading-relaxed text-white/45 max-sm:whitespace-normal">
                       {g.bestFor}
                     </p>
                     <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.14em] text-white/30">
@@ -236,7 +243,11 @@ export default function ModelHostingGpuSection() {
             />
 
             {/* Header */}
-            <div className="flex items-center justify-between border-b border-white/[0.06] px-6 py-4 sm:px-8">
+            {/* Phones stack everything in this panel: at 320 the header, the three
+                metrics and the footer each needed more width than a row had, so
+                "$1.20 /hr" broke, "$0.00033" ran into the next metric and
+                "Throughput" was cut off. */}
+            <div className="flex items-center justify-between border-b border-white/[0.06] px-6 py-4 max-sm:flex-col max-sm:items-start max-sm:gap-3 sm:px-8">
               <div className="flex items-center gap-3">
                 <Image
                   src="https://ahurasense.cs2hvh.com/images/2026-06/cenN-AJ8OsnN.png"
@@ -254,9 +265,9 @@ export default function ModelHostingGpuSection() {
                   </p>
                 </div>
               </div>
-              <div className="text-right">
+              <div className="text-right max-sm:text-left">
                 <p
-                  className="font-mono text-[20px] font-semibold tabular-nums"
+                  className="whitespace-nowrap font-mono text-[20px] font-semibold tabular-nums"
                   style={{ color: ACCENT }}
                 >
                   {selected.rate}
@@ -268,7 +279,7 @@ export default function ModelHostingGpuSection() {
             </div>
 
             {/* Metrics row */}
-            <div className="grid grid-cols-3 border-b border-white/[0.06]">
+            <div className="grid grid-cols-3 border-b border-white/[0.06] max-sm:grid-cols-1">
               {[
                 {
                   icon: Timer,
@@ -290,13 +301,13 @@ export default function ModelHostingGpuSection() {
                 return (
                   <div
                     key={m.label}
-                    className="border-r border-white/[0.04] px-5 py-4 last:border-r-0 sm:px-6"
+                    className="border-r border-white/[0.04] px-5 py-4 last:border-r-0 max-sm:flex max-sm:items-center max-sm:justify-between max-sm:border-r-0 max-sm:border-b max-sm:py-3 max-sm:last:border-b-0 sm:px-6"
                   >
                     <div className="flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.16em] text-white/35">
                       <MIcon className="h-3 w-3" strokeWidth={1.75} />
                       {m.label}
                     </div>
-                    <p className="mt-1.5 font-mono text-[15px] font-semibold tabular-nums text-white">
+                    <p className="mt-1.5 font-mono text-[15px] font-semibold tabular-nums text-white max-sm:mt-0">
                       {m.value}
                     </p>
                   </div>
@@ -334,13 +345,13 @@ export default function ModelHostingGpuSection() {
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-between border-t border-white/[0.06] px-6 py-3.5 sm:px-8">
+            <div className="flex items-center justify-between border-t border-white/[0.06] px-6 py-3.5 max-sm:flex-col max-sm:items-start max-sm:gap-2.5 sm:px-8">
               <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/30">
                 pricing is gpu-only · platform fee per-request
               </span>
               <a
                 href="/signup"
-                className="group inline-flex items-center gap-1.5 font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-[#33adff] transition-colors hover:text-white"
+                className="group inline-flex items-center gap-1.5 whitespace-nowrap font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-[#33adff] transition-colors hover:text-white"
               >
                 Deploy now
                 <ArrowUpRight className="h-3.5 w-3.5 transition-transform duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />

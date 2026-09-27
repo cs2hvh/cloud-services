@@ -358,12 +358,15 @@ export default function ModelHostingFormatsSection() {
                 }}
               />
 
-              <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-3">
-                <div className="flex items-center gap-2 font-mono text-[10.5px] uppercase tracking-[0.18em] text-white/55">
+              {/* gap-3 and a tighter phone gutter: these two sat in a
+                  justify-between row with no gap, so at 320 the filename and the
+                  hint met in the middle. */}
+              <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] px-5 py-3 max-sm:px-4">
+                <div className="flex min-w-0 items-center gap-2 font-mono text-[10.5px] uppercase tracking-[0.18em] text-white/55">
                   <FileCode2 className="h-3.5 w-3.5" style={{ color: activeFormat.accent }} />
                   {activeFormat.snippet.label}
                 </div>
-                <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-white/30">
+                <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.16em] text-white/30">
                   paste and deploy
                 </span>
               </div>
@@ -387,11 +390,11 @@ export default function ModelHostingFormatsSection() {
                 />
               </div>
 
-              <div className="flex items-center justify-between border-t border-white/[0.06] px-5 py-3 font-mono text-[9.5px] uppercase tracking-[0.16em] text-white/35">
-                <span>
+              <div className="flex items-center justify-between gap-3 border-t border-white/[0.06] px-5 py-3 font-mono text-[9.5px] uppercase tracking-[0.16em] text-white/35 max-sm:px-4">
+                <span className="shrink-0">
                   {activeFormat.snippet.code.split("\n").length} lines
                 </span>
-                <span style={{ color: `${activeFormat.accent}aa` }}>
+                <span className="shrink-0 text-right" style={{ color: `${activeFormat.accent}aa` }}>
                   {activeFormat.id === "docker"
                     ? "any OCI registry"
                     : activeFormat.id === "hf"

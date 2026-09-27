@@ -162,7 +162,10 @@ export default function DatabaseEnginesSection() {
                     </>
                   ) : null}
 
-                  <div className="relative flex items-start gap-4 px-4 py-4">
+                  {/* On phones the carousel card is ~230px wide: a logo beside the text
+                      broke "Application core" mid-phrase and left the MySQL wordmark
+                      so little room that its own name was clipped. Logo on top there. */}
+                  <div className="relative flex flex-col items-start gap-3 px-4 py-4 sm:flex-row sm:gap-4">
                     <div
                       className={`flex shrink-0 items-center justify-center ${
                         engine.logoStyle === "wordmark" ? "h-12 w-24" : "h-12 w-12"
@@ -181,10 +184,10 @@ export default function DatabaseEnginesSection() {
 
                     <div className="min-w-0 flex-1">
                       <div className="text-[18px] font-medium tracking-tight text-white transition-colors group-hover:text-[#0095FF]">{engine.name}</div>
-                      <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/38">
+                      <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/38 max-sm:whitespace-nowrap">
                         {engine.fit}
                       </div>
-                      <div className="mt-3 text-[11px] uppercase tracking-[0.18em] text-white/32">
+                      <div className="mt-3 text-[11px] uppercase tracking-[0.18em] text-white/32 max-sm:whitespace-nowrap">
                         {engine.family} {" • "}v{engine.version}
                       </div>
                     </div>

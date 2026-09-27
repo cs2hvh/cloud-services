@@ -611,7 +611,7 @@ function Scenarios() {
                         Recommended
                     </div>
 
-                    <div className="relative grid gap-10 p-8 sm:p-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:items-center lg:gap-14 lg:p-12">
+                    <div className="relative grid gap-10 p-8 max-sm:px-5 max-sm:pt-14 sm:p-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:items-center lg:gap-14 lg:p-12">
                         <div>
                             <p className={`${MONO} mb-3 inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/55`}>
                                 <span className="h-1 w-1 rounded-full bg-[#0095FF]" />
@@ -645,7 +645,7 @@ function Scenarios() {
                                 <p className={`${MONO} mb-3 text-[9.5px] font-semibold uppercase tracking-[0.18em] text-white/45`}>
                                     Composed of
                                 </p>
-                                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                                <div className="grid grid-cols-2 gap-2 max-sm:grid-cols-1 sm:grid-cols-3">
                                     {featured.services.map((svc) => (
                                         <div
                                             key={svc.label}
@@ -654,7 +654,7 @@ function Scenarios() {
                                             <div className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[4px] text-white/85">
                                                 <div className="h-[16px] w-[16px]">{svc.glyph}</div>
                                             </div>
-                                            <span className="truncate text-[11px] text-white/80">{svc.label}</span>
+                                            <span className="truncate text-[11px] text-white/80 max-sm:whitespace-normal">{svc.label}</span>
                                         </div>
                                     ))}
                                 </div>
@@ -662,11 +662,11 @@ function Scenarios() {
 
                             <div className="grid grid-cols-1 gap-px overflow-hidden rounded-[6px] border border-white/[0.08] bg-white/[0.08]">
                                 {featured.specs.map((sp) => (
-                                    <div key={sp.label} className="flex items-baseline justify-between gap-4 bg-[#1A1814] px-4 py-3">
+                                    <div key={sp.label} className="flex items-baseline justify-between gap-4 bg-[#1A1814] px-4 py-3 max-sm:flex-col max-sm:gap-1">
                                         <span className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/45`}>
                                             {sp.label}
                                         </span>
-                                        <span className="text-right text-[12.5px] text-white/85">{sp.value}</span>
+                                        <span className="text-right text-[12.5px] text-white/85 max-sm:text-left">{sp.value}</span>
                                     </div>
                                 ))}
                             </div>
@@ -763,7 +763,7 @@ function BoundaryColumn({
     const isLeft = side === "left";
     return (
         <div
-            className={`relative flex flex-col p-7 sm:p-9 lg:p-10 ${
+            className={`relative flex flex-col p-7 max-sm:px-5 sm:p-9 lg:p-10 ${
                 isLeft ? "lg:border-r lg:border-white/[0.06]" : ""
             }`}
         >
@@ -796,11 +796,13 @@ function BoundaryColumn({
                 {description}
             </p>
 
+            {/* On phones the tag moves under each row's copy. As its own grid column it
+                left the description ~100px wide at 320, one or two words a line. */}
             <ul className="mt-8 flex flex-col">
                 {items.map((it, i) => (
                     <li
                         key={it.title}
-                        className={`group/row relative grid grid-cols-[28px_1fr_auto] items-start gap-4 py-4 ${
+                        className={`group/row relative grid grid-cols-[28px_1fr_auto] items-start gap-4 py-4 max-sm:grid-cols-[28px_minmax(0,1fr)] max-sm:gap-y-2.5 ${
                             i > 0 ? "border-t border-white/[0.05]" : ""
                         }`}
                     >
@@ -816,7 +818,7 @@ function BoundaryColumn({
                             </p>
                         </div>
                         <span
-                            className={`${MONO} mt-1 inline-flex items-center rounded-[3px] border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] ${
+                            className={`${MONO} mt-1 inline-flex items-center rounded-[3px] border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] max-sm:col-start-2 max-sm:mt-0 max-sm:justify-self-start ${
                                 isLeft
                                     ? "border-[#0095FF]/30 bg-[#0095FF]/[0.10] text-[#0095FF]"
                                     : "border-white/[0.12] bg-white/[0.04] text-white/65"

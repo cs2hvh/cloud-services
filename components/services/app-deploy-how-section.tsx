@@ -71,7 +71,12 @@ export default function AppDeployHowSection() {
                 </div>
 
                 {/* Two-column: visual + steps */}
-                <div className="mt-14 grid gap-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-14">
+                {/* grid-cols-[minmax(0,1fr)] below lg: with no explicit column the grid
+                    sized its one column to the longest command line (a <pre>, so it
+                    never wraps). On a phone that pushed the illustration, the stats
+                    strip and every step past the screen edge, where the section's
+                    overflow-hidden clipped them mid-word. */}
+                <div className="mt-14 grid grid-cols-[minmax(0,1fr)] gap-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-14">
                     {/* Visual */}
                     <div className="relative">
                         <div className="relative overflow-hidden rounded-[10px] border border-white/[0.08] bg-[#0A0B0D]">
@@ -157,7 +162,7 @@ export default function AppDeployHowSection() {
                                             {step.description}
                                         </p>
                                         <pre
-                                            className={`${MONO} mt-3 overflow-hidden rounded-[5px] border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-[11.5px] text-white/55`}
+                                            className={`${MONO} mt-3 overflow-hidden rounded-[5px] border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-[11.5px] text-white/55 max-sm:whitespace-pre-wrap`}
                                         >
                                             {step.line}
                                         </pre>

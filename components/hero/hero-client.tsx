@@ -259,16 +259,17 @@ export default function HeroClient({
                                         style={{
                                             background: "transparent",
                                             color: "var(--ah-ink)",
-                                            borderRight: "1px solid var(--ah-line)",
                                         }}
                                     >
                                         <span aria-hidden="true" className="ah-gpu-line" />
 
-                                        <div className="mb-3 flex items-center gap-2.5">
+                                        {/* Wraps on phones rather than truncating: "Blackwell · 288 GB" and the
+                                            stock badge do not share a 320px line, and the label lost its unit. */}
+                                        <div className="mb-3 flex items-center gap-2.5 max-sm:flex-wrap max-sm:gap-y-1">
                                             <span className="ah-lbl" style={{ fontSize: "9.5px", color: "#55555f" }}>
                                                 {String(i + 1).padStart(2, "0")}
                                             </span>
-                                            <span className="ah-lbl truncate" style={{ fontSize: "9.5px", letterSpacing: "0.12em", color: meta }}>
+                                            <span className="ah-lbl truncate max-sm:overflow-visible max-sm:[text-overflow:clip]" style={{ fontSize: "9.5px", letterSpacing: "0.12em", color: meta }}>
                                                 {gpu.tier} · {gpu.memory} GB
                                             </span>
                                             {s && (

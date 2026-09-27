@@ -74,9 +74,15 @@ const PRODUCTS: SolutionItem[] = [
   },
   {
     label: "Dedicated Servers",
-    desc: "Single-tenant bare metal, the whole machine yours",
-    href: "/services/compute/bare-metal",
-    tags: ["Bare Metal", "AMD EPYC", "Intel Xeon", "Monthly"],
+    desc: "Single-tenant bare metal with full root access",
+    href: "/services/dedicated-servers",
+    tags: ["Bare metal", "Xeon", "EPYC", "Ryzen", "IPMI"],
+  },
+  {
+    label: "Server Catalog",
+    desc: "Compare every dedicated server by country, CPU, memory, and price",
+    href: "/services/dedicated-servers/catalog",
+    tags: ["Compare", "Filter", "Search"],
   },
   {
     label: "GPU Instances",

@@ -112,7 +112,11 @@ export default function EmbeddingsHeroSection({
       </div>
 
       <Container className="relative z-10">
-        <div className="grid items-center gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-16">
+        {/* grid-cols-[minmax(0,1fr)] below lg: with no explicit column the grid
+            sized its one column to the demo panel's truncated (nowrap) result
+            lines, so on a phone the copy ran to the screen edge and the stats
+            strip ran past it. */}
+        <div className="grid grid-cols-[minmax(0,1fr)] items-center gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-16">
           {/* ── LEFT: copy ── */}
           <div>
             <motion.h1
@@ -197,14 +201,14 @@ export default function EmbeddingsHeroSection({
             />
             <div className="relative overflow-hidden rounded-[14px] border border-white/[0.10] bg-[#0b0d12] shadow-[0_24px_64px_rgba(0,0,0,0.55)]">
               {/* Title bar */}
-              <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-3">
-                <div className="flex items-center gap-2 font-mono text-[10.5px] uppercase tracking-[0.16em] text-white/55">
+              <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] px-5 py-3 max-sm:px-4">
+                <div className="flex shrink-0 items-center gap-2 font-mono text-[10.5px] uppercase tracking-[0.16em] text-white/55">
                   <Sparkles className="h-3.5 w-3.5 text-[#33adff]" />
                   vector.query
                 </div>
-                <div className="flex items-center gap-1.5 font-mono text-[9.5px] uppercase tracking-[0.14em] text-white/35">
-                  <Database className="h-3 w-3" />
-                  product-docs
+                <div className="flex min-w-0 items-center gap-1.5 font-mono text-[9.5px] uppercase tracking-[0.14em] text-white/35">
+                  <Database className="h-3 w-3 shrink-0" />
+                  <span className="truncate">product-docs</span>
                 </div>
               </div>
 
@@ -220,16 +224,21 @@ export default function EmbeddingsHeroSection({
               </div>
 
               {/* Embed step indicator */}
-              <div className="flex items-center justify-between border-b border-white/[0.04] px-5 py-2.5">
-                <div className="flex items-center gap-2 font-mono text-[9.5px] uppercase tracking-[0.14em] text-white/40">
-                  <Zap className="h-3 w-3 text-emerald-400/85" />
-                  embed · 3072d · text-embedding-3-large
+              {/* Phones: the model name drops to its own line instead of breaking
+                  mid-word ("TEXT-EMBEDDING-3- / LARGE") beside the timing. */}
+              <div className="flex items-center justify-between gap-3 border-b border-white/[0.04] px-5 py-2.5 max-sm:px-4">
+                <div className="flex min-w-0 items-start gap-2 font-mono text-[9.5px] uppercase tracking-[0.14em] text-white/40">
+                  <Zap className="mt-px h-3 w-3 shrink-0 text-emerald-400/85" />
+                  <span>
+                    embed · 3072d<span className="max-sm:hidden"> · </span>
+                    <span className="max-sm:block">text-embedding-3-large</span>
+                  </span>
                 </div>
                 {queryChars >= fullQueryLen && (
                   <motion.span
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
-                    className="font-mono text-[9.5px] text-emerald-400/85 tabular-nums"
+                    className="shrink-0 font-mono text-[9.5px] text-emerald-400/85 tabular-nums"
                   >
                     {queryChars * 4 + 18}ms
                   </motion.span>
@@ -283,11 +292,11 @@ export default function EmbeddingsHeroSection({
               </div>
 
               {/* Footer */}
-              <div className="flex items-center justify-between border-t border-white/[0.06] bg-[#0b0d12]/95 px-5 py-2.5 font-mono text-[9.5px] uppercase tracking-[0.14em]">
+              <div className="flex items-center justify-between gap-3 border-t border-white/[0.06] bg-[#0b0d12]/95 px-5 py-2.5 font-mono text-[9.5px] uppercase tracking-[0.14em] max-sm:px-4">
                 <span className="text-white/45">
                   cosine · 412,890 vectors scanned
                 </span>
-                <span className="text-emerald-400/85 tabular-nums">
+                <span className="shrink-0 text-emerald-400/85 tabular-nums">
                   62ms total
                 </span>
               </div>

@@ -45,10 +45,16 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.85,
     },
     {
-      url: `${BASE}/services/compute/bare-metal`,
+      url: `${BASE}/services/dedicated-servers`,
       lastModified: now,
       changeFrequency: "monthly",
-      priority: 0.8,
+      priority: 0.85,
+    },
+    {
+      url: `${BASE}/services/dedicated-servers/catalog`,
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.75,
     },
     {
       url: `${BASE}/services/gpu`,

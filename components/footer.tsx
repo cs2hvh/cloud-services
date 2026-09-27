@@ -36,7 +36,7 @@ const FOOTER_LINKS = [
     heading: "Solutions",
     links: [
       { label: "Compute", href: "/services/compute" },
-      { label: "Dedicated Servers", href: "/services/compute/bare-metal" },
+      { label: "Dedicated Servers", href: "/services/dedicated-servers" },
       { label: "Managed Database", href: "/services/database" },
       { label: "GPU Instances", href: "/services/gpu" },
       { label: "Kubernetes", href: "/services/kubernetes" },

@@ -244,10 +244,32 @@ function easeInOut(t: number) {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
 
+/**
+ * A downward arrow from the bottom of `a` to the top of `b`, for when the two
+ * sit one above the other. Cards and the decision nodes are laid out side by
+ * side on desktop, but stack on a phone (and wrap to a second row on a
+ * tablet); routed as if they were still side by side, a card-to-card edge ran
+ * backwards across the gap between them as a full-width, left-pointing line.
+ */
+function stackedPath(a: Rect, b: Rect): string {
+  const sx = a.cx;
+  const sy = a.bot + 1;
+  const ex = b.cx;
+  const ey = b.top - 8;
+  if (Math.abs(sx - ex) < 1) return `M ${sx} ${sy} L ${ex} ${ey}`;
+  const midY = (sy + ey) / 2;
+  return `M ${sx} ${sy} L ${sx} ${midY} L ${ex} ${midY} L ${ex} ${ey}`;
+}
+
 function buildPath(spec: Edge, R: Record<string, Rect>): string {
   const a = R[spec.from];
   const b = R[spec.to];
   if (!a || !b) return "";
+
+  const stacked = b.top >= a.bot - 2;
+  if ((spec.kind === "h" || spec.kind === "d-to-r") && stacked) {
+    return stackedPath(a, b);
+  }
 
   if (spec.kind === "h") {
     const y = (a.cy + b.cy) / 2;
@@ -1027,6 +1049,67 @@ export function ModelTrainingPipelineSection() {
           .mt-phase + .mt-phase {
             margin-top: 80px;
           }
+          /* Phase header, stacked. Its three desktop columns (number, copy, tag)
+             left the copy ~3 words wide at 320 and pushed the tag pill past the
+             screen edge. Phase 02 mirrors the order on desktop; on a phone both
+             read the same way — number, copy, tag — left-aligned. */
+          .mt-phase__head,
+          .mt-phase__head--right {
+            grid-template-columns: minmax(0, 1fr);
+            align-items: start;
+            gap: 12px;
+            text-align: left;
+          }
+          /* The flow SVG (z-index 3) routes the phase 1 → phase 2 connector
+             down the middle of the stage. On desktop that is the gap between
+             the split header's halves; stacked, it ran straight through the
+             heading text. Lift the header above the SVG on the section's own
+             black, so the line passes under the heading and reappears below. */
+          .mt-phase__head {
+            z-index: 4;
+            background: #000;
+          }
+          /* .mt-phase isolates, so the header's z-index only counts inside it;
+             the phase itself has to sit above the SVG for the header to. The
+             phase is transparent, so lines between the cards still show. */
+          .mt-phase {
+            z-index: 4;
+          }
+          /* The decision tail stacks too. Its DOM order is ready, YES, diamond
+             (right to left on desktop, where the flow runs diamond → ready);
+             stacked in that order the arrows would double back. Flow order
+             instead, with the YES label set beside the line rather than on it. */
+          .mt-tail > .mt-diamond {
+            order: -1;
+          }
+          .mt-tail > .mt-ready {
+            order: 1;
+          }
+          .mt-yes-arrow {
+            height: 44px;
+            transform: translateX(34px);
+          }
+          .mt-phase__head--right .mt-phase__num-block {
+            order: -1;
+          }
+          .mt-phase__head--right .mt-phase__tag {
+            order: 1;
+          }
+          .mt-phase__head--right .mt-phase__sub {
+            margin-left: 0;
+          }
+          .mt-phase__tag {
+            justify-self: start;
+          }
+          .mt-phase__head--right::after {
+            background: linear-gradient(
+              to right,
+              rgba(255, 255, 255, 0.45) 0%,
+              rgba(255, 255, 255, 0.45) 76px,
+              rgba(255, 255, 255, 0.05) 76px,
+              rgba(255, 255, 255, 0.05) 100%
+            );
+          }
         }
         .mt-tail {
           margin-top: 56px;
@@ -1538,7 +1621,10 @@ function Card({
           border-top: 1px solid rgba(255, 255, 255, 0.05);
           width: 100%;
           display: grid;
-          grid-template-columns: 1fr 1fr;
+          /* minmax(0, 1fr), not 1fr: a 1fr column will not shrink below its
+             nowrap label, so "Streaming ingest" pushed the second feature past
+             the card's edge, where the card clipped it to "Streaming inge". */
+          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
           gap: 1px;
           background: rgba(255, 255, 255, 0.04);
         }
@@ -1592,6 +1678,14 @@ function Card({
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
+        }
+        /* Phones: the labels are two or three words; wrap them rather than
+           ending in an ellipsis. */
+        @media (max-width: 640px) {
+          .mt-ftxt :global(b),
+          .mt-ftxt :global(span) {
+            white-space: normal;
+          }
         }
       `}</style>
     </div>

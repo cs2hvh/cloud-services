@@ -581,8 +581,27 @@ text-align: center;
 }
 
 /* ── GPU rail: subtle hover, nothing that moves layout ───────────── */
+/* Dividers follow the layout. They used to be a borderRight set inline on
+   every card, which only separates cards standing side by side: stacked on a
+   phone the four GPUs ran together with nothing between them, and on a tablet
+   the two rows had no line between them either. */
 .ah-gpu {
   transition: background 0.22s ease-out;
+  border-bottom: 1px solid var(--ah-line);
+}
+@media (min-width: 640px) and (max-width: 1023px) {
+  .ah-gpu:nth-child(odd) {
+    border-right: 1px solid var(--ah-line);
+  }
+  .ah-gpu-all {
+    grid-column: 1 / -1;
+  }
+}
+@media (min-width: 1024px) {
+  .ah-gpu {
+    border-bottom: 0;
+    border-right: 1px solid var(--ah-line);
+  }
 }
 .ah-gpu-line {
   position: absolute;
@@ -1132,6 +1151,21 @@ text-align: center;
   background: var(--ah-blue);
   color: #fff;
   transform: translateY(-2px);
+}
+
+/* Phones. The pair is shrink-0 and each action is nowrap with 1.6rem of
+   padding a side, so together they needed ~330px of a 272px column at 320 and
+   "View pricing" ran off the screen. Full width, two equal halves. */
+@media (max-width: 480px) {
+  .ah-hero-actions {
+    display: flex;
+    width: 100%;
+  }
+  .ah-hero-act {
+    flex: 1 1 0;
+    justify-content: center;
+    padding: 1rem 0.9rem;
+  }
 }
 
 /* ── hero entrance ────────────────────────────────────────────────

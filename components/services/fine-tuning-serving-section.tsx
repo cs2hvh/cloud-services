@@ -128,7 +128,11 @@ export default function FineTuningServingSection() {
           </p>
         </div>
 
-        <div className="mt-16 grid gap-4 lg:grid-cols-2">
+        {/* grid-cols-[minmax(0,1fr)] below lg, and each card's header wraps: the
+            curl snippet is a <pre>, so without an explicit column it widened the
+            card past a phone screen (the card clipped it), and the header label
+            wrapped into its own icon with no gap. */}
+        <div className="mt-16 grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-2">
           {/* ─── LEFT — Self-serve docker ──────────────────────── */}
           <motion.div
             initial={{ opacity: 0, y: 16 }}
@@ -147,11 +151,11 @@ export default function FineTuningServingSection() {
               }}
             />
 
-            <div className="flex items-start justify-between">
+            <div className="flex items-start justify-between gap-4">
               <div className="flex h-10 w-10 items-center justify-center rounded-[6px] border border-emerald-400/30 bg-emerald-400/[0.08] text-emerald-300">
                 <ContainerIcon className="h-4 w-4" strokeWidth={1.75} />
               </div>
-              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-emerald-300/85">
+              <span className="text-right font-mono text-[10px] uppercase tracking-[0.16em] text-emerald-300/85">
                 Free · BYO GPU
               </span>
             </div>
@@ -174,7 +178,7 @@ export default function FineTuningServingSection() {
               <TypeCode
                 code={DOCKER_CMD}
                 start={inView}
-                className="min-h-[6rem] px-4 py-3 font-mono text-[11px] leading-relaxed text-white/80"
+                className="min-h-[6rem] overflow-x-auto px-4 py-3 font-mono text-[11px] leading-relaxed text-white/80 max-sm:whitespace-pre-wrap max-sm:[overflow-wrap:anywhere]"
               />
             </div>
 
@@ -211,11 +215,11 @@ export default function FineTuningServingSection() {
               }}
             />
 
-            <div className="flex items-start justify-between">
+            <div className="flex items-start justify-between gap-4">
               <div className="flex h-10 w-10 items-center justify-center rounded-[6px] border border-[#33adff]/40 bg-[#0095FF]/[0.12] text-[#33adff]">
                 <Cloud className="h-4 w-4" strokeWidth={1.75} />
               </div>
-              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[#33adff]">
+              <span className="text-right font-mono text-[10px] uppercase tracking-[0.16em] text-[#33adff]">
                 Per-hour · Managed
               </span>
             </div>
@@ -238,7 +242,7 @@ export default function FineTuningServingSection() {
               <TypeCode
                 code={CURL_CMD}
                 start={inView}
-                className="min-h-[6rem] px-4 py-3 font-mono text-[11px] leading-relaxed text-white/80"
+                className="min-h-[6rem] overflow-x-auto px-4 py-3 font-mono text-[11px] leading-relaxed text-white/80 max-sm:whitespace-pre-wrap max-sm:[overflow-wrap:anywhere]"
               />
             </div>
 
@@ -257,7 +261,9 @@ export default function FineTuningServingSection() {
             </ul>
 
             {/* Sub-rail metrics */}
-            <div className="mt-6 grid grid-cols-3 gap-3 border-t border-white/[0.06] pt-5">
+            {/* Phones: one metric per row, label left and value right. Three columns
+                at 320 ran the values together ("$0.40/hr~60s"). */}
+            <div className="mt-6 grid grid-cols-3 gap-3 border-t border-white/[0.06] pt-5 max-sm:grid-cols-1 max-sm:gap-2 [&>div]:max-sm:flex [&>div]:max-sm:items-baseline [&>div]:max-sm:justify-between [&>div>p+p]:max-sm:mt-0">
               <div>
                 <p className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-white/40">
                   Starts at

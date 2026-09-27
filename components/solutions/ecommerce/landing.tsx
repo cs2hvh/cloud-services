@@ -611,7 +611,7 @@ function Scenarios() {
                         Recommended
                     </div>
 
-                    <div className="relative grid gap-10 p-8 sm:p-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:items-center lg:gap-14 lg:p-12">
+                    <div className="relative grid gap-10 p-8 max-sm:px-5 max-sm:pt-14 sm:p-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:items-center lg:gap-14 lg:p-12">
                         <div>
                             <p className={`${MONO} mb-3 inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/55`}>
                                 <span className="h-1 w-1 rounded-full bg-[#0095FF]" />
@@ -645,7 +645,7 @@ function Scenarios() {
                                 <p className={`${MONO} mb-3 text-[9.5px] font-semibold uppercase tracking-[0.18em] text-white/45`}>
                                     Composed of
                                 </p>
-                                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                                <div className="grid grid-cols-2 gap-2 max-sm:grid-cols-1 sm:grid-cols-3">
                                     {featured.services.map((svc) => (
                                         <div
                                             key={svc.label}
@@ -654,7 +654,7 @@ function Scenarios() {
                                             <div className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[4px] text-white/85">
                                                 <div className="h-[16px] w-[16px]">{svc.glyph}</div>
                                             </div>
-                                            <span className="truncate text-[11px] text-white/80">{svc.label}</span>
+                                            <span className="truncate text-[11px] text-white/80 max-sm:whitespace-normal">{svc.label}</span>
                                         </div>
                                     ))}
                                 </div>
@@ -662,11 +662,11 @@ function Scenarios() {
 
                             <div className="grid grid-cols-1 gap-px overflow-hidden rounded-[6px] border border-white/[0.08] bg-white/[0.08]">
                                 {featured.specs.map((sp) => (
-                                    <div key={sp.label} className="flex items-baseline justify-between gap-4 bg-[#1A1814] px-4 py-3">
+                                    <div key={sp.label} className="flex items-baseline justify-between gap-4 bg-[#1A1814] px-4 py-3 max-sm:flex-col max-sm:gap-1">
                                         <span className={`${MONO} text-[10px] uppercase tracking-[0.14em] text-white/45`}>
                                             {sp.label}
                                         </span>
-                                        <span className="text-right text-[12.5px] text-white/85">{sp.value}</span>
+                                        <span className="text-right text-[12.5px] text-white/85 max-sm:text-left">{sp.value}</span>
                                     </div>
                                 ))}
                             </div>
@@ -881,7 +881,7 @@ function FinalCta() {
             <div aria-hidden className="absolute top-0 left-1/2 h-px w-[60%] -translate-x-1/2 bg-gradient-to-r from-transparent via-white/12 to-transparent" />
 
             <Container className="relative z-10">
-                <div className="mx-auto max-w-[920px] overflow-hidden rounded-[12px] border border-white/[0.10] bg-[#111316] p-10 sm:p-12 lg:p-14">
+                <div className="mx-auto max-w-[920px] overflow-hidden rounded-[12px] border border-white/[0.10] bg-[#111316] p-10 max-sm:px-5 max-sm:py-8 sm:p-12 lg:p-14">
                     <div aria-hidden className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-[#0095FF]/[0.06] blur-3xl" />
 
                     <div className="relative grid gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:items-center lg:gap-14">
@@ -897,14 +897,14 @@ function FinalCta() {
                         <div className="flex flex-col gap-3">
                             <Link
                                 href="/contact"
-                                className={`${MONO} inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-[5px] border border-white bg-white text-[11px] font-semibold uppercase tracking-[0.14em] text-black transition-colors hover:border-[#0095FF] hover:bg-[#0095FF] hover:text-white`}
+                                className={`${MONO} inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-[5px] border border-white bg-white px-4 text-[11px] max-sm:h-auto max-sm:min-h-11 max-sm:py-3 max-sm:text-center font-semibold uppercase tracking-[0.14em] text-black transition-colors hover:border-[#0095FF] hover:bg-[#0095FF] hover:text-white`}
                             >
                                 Talk to a solutions engineer
                                 <ArrowRight className="h-3.5 w-3.5" />
                             </Link>
                             <Link
                                 href="/services/compute"
-                                className={`${MONO} inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-[5px] border border-white/[0.14] bg-transparent text-[11px] font-semibold uppercase tracking-[0.14em] text-white/75 transition-colors hover:border-white/35 hover:bg-white/[0.04] hover:text-white`}
+                                className={`${MONO} inline-flex h-11 w-full items-center justify-center gap-1.5 rounded-[5px] border border-white/[0.14] bg-transparent px-4 text-[11px] max-sm:h-auto max-sm:min-h-11 max-sm:py-3 max-sm:text-center font-semibold uppercase tracking-[0.14em] text-white/75 transition-colors hover:border-white/35 hover:bg-white/[0.04] hover:text-white`}
                             >
                                 Explore compute options
                                 <ArrowRight className="h-3.5 w-3.5" />

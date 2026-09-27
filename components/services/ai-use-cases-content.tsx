@@ -1578,6 +1578,10 @@ export default function AiUseCasesContent() {
           color: var(--dim);
           letter-spacing: 0.05em;
           margin-bottom: 10px;
+          /* Clear of the file icon drawn in the top-right corner: where the
+             column is narrow (phones, small tablets) the name ran under it. */
+          padding-right: 26px;
+          overflow-wrap: anywhere;
         }
         .aiuc .doc-input .ln {
           height: 4px;
@@ -2023,6 +2027,113 @@ export default function AiUseCasesContent() {
           .aiuc .cta-card {
             grid-template-columns: 1fr;
             padding: 32px;
+          }
+        }
+
+        /* Phones. Two matrix tiles side by side left each ~120px wide at 320,
+           and .mtile clips its overflow, so "consolidated" and "COMPATIBILITY"
+           were cut off mid-word. */
+        @media (max-width: 560px) {
+          .aiuc .matrix {
+            grid-template-columns: 1fr;
+          }
+          /* Closing CTA: 32px of card padding left the heading ~210px to wrap
+             in, and the two buttons sized to their own labels, so they stacked
+             at two different widths. Tighter padding, one full-width column. */
+          .aiuc .cta-card {
+            padding: 28px 22px;
+          }
+          .aiuc .cta-actions {
+            flex-direction: column;
+          }
+          .aiuc .cta-actions .btn {
+            justify-content: center;
+            width: 100%;
+          }
+
+          /* Code-completion demo. The frame's 5/4.2 aspect left the absolutely
+             placed editor ~130px tall at 320: the code shrank to one
+             half-visible line, the third tab was cut off and the status bar
+             broke word by word. On phones the editor sits in the frame's flow
+             and the frame takes its height, with the body tall enough for the
+             longest file (cart.ts, 9 lines) so switching tabs doesn't jump the
+             page. Only this demo's frame changes; the chat demo keeps its
+             proportions. */
+          .aiuc .frame:has(.code-stage) {
+            aspect-ratio: auto;
+          }
+          .aiuc .code-stage {
+            position: relative;
+            inset: auto;
+            margin: 52px 12px 12px;
+          }
+          .aiuc .code-tab {
+            flex-shrink: 0;
+            padding: 9px 10px;
+            white-space: nowrap;
+          }
+          .aiuc .code-body {
+            grid-template-columns: 30px minmax(0, 1fr);
+            font-size: 11px;
+            min-height: calc(9 * 1.65em + 24px);
+          }
+          .aiuc .gutter {
+            padding: 12px 6px 0;
+          }
+          /* Lines stay unwrapped, as in an editor; the longest is 55 characters,
+             which no readable size fits at 320. They scroll, and the right edge
+             fades so a cut line reads as more-to-swipe rather than broken. */
+          .aiuc .code {
+            padding: 12px 12px;
+            overflow-x: auto;
+            scrollbar-width: none;
+            -webkit-mask-image: linear-gradient(to right, #000 82%, transparent);
+            mask-image: linear-gradient(to right, #000 82%, transparent);
+          }
+          .aiuc .code::-webkit-scrollbar {
+            display: none;
+          }
+          /* The last status item is a keyboard hint ("tab to accept") or the
+             file name the tab already shows; without it the bar is one line. */
+          .aiuc .code-status {
+            flex-wrap: wrap;
+            gap: 4px 10px;
+            padding: 8px 12px;
+            font-size: 10px;
+            white-space: nowrap;
+          }
+          .aiuc .code-status > span:last-child,
+          .aiuc .code-status > .sep {
+            display: none;
+          }
+
+          /* Document-extraction demo. Three columns (0.8fr auto 1.3fr) in a
+             262px frame squeezed the JSON output to a 20px sliver showing only
+             "{", and ran the filename under the file icon. Stacked instead —
+             document, arrow pointing down, output — and the frame grows to fit
+             rather than holding its desktop aspect ratio. */
+          .aiuc .frame:has(.doc-stage) {
+            aspect-ratio: auto;
+          }
+          .aiuc .doc-stage {
+            position: relative;
+            inset: auto;
+            grid-template-columns: 1fr;
+            gap: 10px;
+            padding: 52px 16px 18px;
+          }
+          .aiuc .doc-input,
+          .aiuc .doc-output {
+            height: auto;
+          }
+          .aiuc .doc-input {
+            min-height: 120px;
+          }
+          .aiuc .doc-stage .arrow .line::after {
+            transform: rotate(45deg);
+          }
+          .aiuc .doc-output {
+            overflow-x: auto;
           }
         }
 

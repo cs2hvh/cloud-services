@@ -254,9 +254,13 @@ const ComputeReleaseSection = () => {
                       fourteen had nowhere to be, so "Browse all server SKUs"
                       scrolled the reader down the same page and showed them
                       nothing more.
+
+                      That page did not exist until now, so this link 404'd. It
+                      is /services/dedicated-servers/catalog, which lists every
+                      SKU; next.config.ts still redirects the old path.
                     */}
                     <Link
-                        href="/services/compute/bare-metal"
+                        href="/services/dedicated-servers/catalog"
                         className={`${MONO} group inline-flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[0.18em] text-white transition-colors hover:text-[#0095FF]`}
                     >
                         Browse all {BARE_METAL_SKUS.length} servers
