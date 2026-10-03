@@ -4,6 +4,7 @@
  */
 import { OpenAPIRegistry, OpenApiGeneratorV3 } from '@asteasolutions/zod-to-openapi';
 
+import { registerAppPlatformPaths } from '@/lib/openapi/paths/app-platform';
 import { registerAppPaths } from '@/lib/openapi/paths/apps';
 import { registerBillingPaths } from '@/lib/openapi/paths/billing';
 import { registerComputePaths } from '@/lib/openapi/paths/compute';
@@ -24,6 +25,7 @@ registry.registerComponent('securitySchemes', 'bearerAuth', {
   description: 'API key authentication. Format: `Bearer sk_live_xxx` or `Bearer sk_test_xxx`',
 });
 
+registerAppPlatformPaths(registry);
 registerAppPaths(registry);
 registerBillingPaths(registry);
 registerProjectPaths(registry);
@@ -49,7 +51,7 @@ export function generateOpenAPIDocument() {
       description: `
 # AhuraSense Cloud REST API
 
-A comprehensive REST API for managing cloud infrastructure, including platform apps, databases, Kubernetes clusters, and object storage.
+A REST API for managing cloud infrastructure — compute, databases, Kubernetes clusters, object storage and domains — and for deploying apps on the App Platform.
 
 ## Authentication
 
@@ -60,6 +62,8 @@ Authorization: Bearer sk_live_YOUR_API_KEY
 \`\`\`
 
 You can generate API keys from your [dashboard settings](https://ahurasense.com/dashboard/settings/api-keys).
+
+**Deploy hooks are the exception.** An App Platform deploy hook's secret URL is its own credential, so it is called with no API key. See the App Platform section below, and the [deploy hooks guide](https://ahurasense.com/docs/apps/deploy-hooks).
 
 ## Rate Limits
 
@@ -97,6 +101,17 @@ Error responses include details:
 }
 \`\`\`
 
+App Platform endpoints nest the error instead:
+
+\`\`\`json
+{
+  "error": {
+    "code": "not_found",
+    "message": "Deploy hook not found."
+  }
+}
+\`\`\`
+
 ## Getting Started
 
 1. [Generate an API key](https://ahurasense.com/dashboard/settings/api-keys)
@@ -104,7 +119,7 @@ Error responses include details:
 
 \`\`\`bash
 curl -H "Authorization: Bearer sk_live_xxx" \\
-  https://ahurasense.com/api/v1/apps
+  https://ahurasense.com/api/v1/projects
 \`\`\`
 
 For more examples, see the API reference below.
@@ -127,8 +142,9 @@ For more examples, see the API reference below.
     ],
     tags: [
       {
-        name: 'Platform Apps',
-        description: 'Manage application deployments, containers, and infrastructure.',
+        name: 'App Platform',
+        description:
+          'Deploy apps from GitHub, GitLab or Bitbucket. Connect a repository in the dashboard and every push deploys it; a deploy hook lets your CI decide when production deploys instead. Guides: [App Platform documentation](https://ahurasense.com/docs/apps).',
       },
       {
         name: 'Projects',
@@ -165,6 +181,11 @@ For more examples, see the API reference below.
       {
         name: 'Domain Marketplace',
         description: 'Search, purchase, and track domain marketplace purchase requests.',
+      },
+      {
+        name: 'Platform Apps (legacy)',
+        description:
+          'The previous generation of app hosting. These endpoints still work for apps on that platform, but those apps are not App Platform apps and do not appear on the dashboard\'s Apps page. For new integrations, use the [App Platform](https://ahurasense.com/docs/apps).',
       },
     ],
   });

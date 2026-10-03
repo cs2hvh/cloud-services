@@ -19,11 +19,19 @@ import {
 } from '@/lib/openapi/schemas/env-vars';
 import { ErrorResponseSchema, ValidationErrorResponseSchema } from '@/lib/openapi/schemas/common';
 
+/**
+ * The v1 platform-apps API. The routes still serve, so they stay documented,
+ * but every operation is marked deprecated and the tag says legacy: apps made
+ * here are not App Platform apps and do not appear on the dashboard's Apps
+ * page, so a new integration started from this section would be built on the
+ * wrong platform. The current platform's endpoints are in ./app-platform.ts.
+ */
 export function registerAppPaths(registry: OpenAPIRegistry) {
 registry.registerPath({
   method: 'get',
   path: '/api/v1/apps',
-  tags: ['Platform Apps'],
+  tags: ['Platform Apps (legacy)'],
+  deprecated: true,
   summary: 'List all apps',
   description: 'Returns a list of all apps owned by the authenticated user.',
   security: [{ bearerAuth: [] }],
@@ -80,7 +88,8 @@ registry.registerPath({
 registry.registerPath({
   method: 'get',
   path: '/api/v1/apps/{id}',
-  tags: ['Platform Apps'],
+  tags: ['Platform Apps (legacy)'],
+  deprecated: true,
   summary: 'Get app by ID',
   description: 'Returns detailed information about a specific app.',
   security: [{ bearerAuth: [] }],
@@ -182,7 +191,8 @@ registry.registerPath({
 registry.registerPath({
   method: 'patch',
   path: '/api/v1/apps/{id}',
-  tags: ['Platform Apps'],
+  tags: ['Platform Apps (legacy)'],
+  deprecated: true,
   summary: 'Update app metadata',
   description: 'Updates safe metadata fields only (name, auto_deploy). **Build configuration changes (branch, framework, build command) are NOT allowed** - use the redeploy endpoint to change build settings and trigger a new deployment.',
   security: [{ bearerAuth: [] }],
@@ -302,7 +312,8 @@ registry.registerPath({
 registry.registerPath({
   method: 'delete',
   path: '/api/v1/apps/{id}',
-  tags: ['Platform Apps'],
+  tags: ['Platform Apps (legacy)'],
+  deprecated: true,
   summary: 'Delete app',
   description: '**DESTRUCTIVE OPERATION:** Permanently deletes the app and all associated infrastructure (Jenkins job, Kubernetes resources, DNS records). This action cannot be undone.',
   security: [{ bearerAuth: [] }],
@@ -407,7 +418,8 @@ registry.registerPath({
 registry.registerPath({
   method: 'get',
   path: '/api/v1/apps/{id}/env-vars',
-  tags: ['Platform Apps'],
+  tags: ['Platform Apps (legacy)'],
+  deprecated: true,
   summary: 'List environment variables',
   description: 'Returns all environment variables for the specified app.',
   security: [{ bearerAuth: [] }],
@@ -448,7 +460,8 @@ registry.registerPath({
 registry.registerPath({
   method: 'put',
   path: '/api/v1/apps/{id}/env-vars',
-  tags: ['Platform Apps'],
+  tags: ['Platform Apps (legacy)'],
+  deprecated: true,
   summary: 'Replace environment variables',
   description: 'Replaces all environment variables for the app. If the app is running, changes are applied live via Kubernetes secret update and optional pod restart.',
   security: [{ bearerAuth: [] }],
@@ -497,7 +510,8 @@ registry.registerPath({
 registry.registerPath({
   method: 'delete',
   path: '/api/v1/apps/{id}/env-vars/{key}',
-  tags: ['Platform Apps'],
+  tags: ['Platform Apps (legacy)'],
+  deprecated: true,
   summary: 'Delete environment variable',
   description: 'Deletes a single environment variable by key. If the app is running, changes are applied live.',
   security: [{ bearerAuth: [] }],
@@ -543,7 +557,8 @@ registry.registerPath({
 registry.registerPath({
   method: 'get',
   path: '/api/v1/apps/{id}/env-vars/{key}',
-  tags: ['Platform Apps'],
+  tags: ['Platform Apps (legacy)'],
+  deprecated: true,
   summary: 'Get environment variable by key',
   description: 'Returns the value of a single environment variable. The full plaintext value is returned — use with care.',
   security: [{ bearerAuth: [] }],
@@ -589,7 +604,8 @@ registry.registerPath({
 registry.registerPath({
   method: 'get',
   path: '/api/v1/apps/{id}/deployments',
-  tags: ['Platform Apps'],
+  tags: ['Platform Apps (legacy)'],
+  deprecated: true,
   summary: 'List deployment history',
   description: 'Returns up to 10 recent deployments for an app, merging Jenkins build data with DB records. Includes releases, operations (resize), and rollbacks.',
   security: [{ bearerAuth: [] }],
@@ -630,7 +646,8 @@ registry.registerPath({
 registry.registerPath({
   method: 'post',
   path: '/api/v1/apps/{id}/redeploy',
-  tags: ['Platform Apps'],
+  tags: ['Platform Apps (legacy)'],
+  deprecated: true,
   summary: 'Trigger redeploy',
   description: 'Triggers a new deployment for the app using the current git branch and configuration. Rebuilds the container and rolls out via Kubernetes. Returns 202 if a build is already in progress.',
   security: [{ bearerAuth: [] }],

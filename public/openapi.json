@@ -3,7 +3,7 @@
   "info": {
     "title": "AhuraSense Cloud — API v1",
     "version": "1.0.0",
-    "description": "# AhuraSense Cloud REST API\n\nA comprehensive REST API for managing cloud infrastructure, including platform apps, databases, Kubernetes clusters, and object storage.\n\n## Authentication\n\nAll API requests require authentication using an API key. Include your API key in the `Authorization` header:\n\n```\nAuthorization: Bearer sk_live_YOUR_API_KEY\n```\n\nYou can generate API keys from your [dashboard settings](https://ahurasense.com/dashboard/settings/api-keys).\n\n## Rate Limits\n\n- **Free Plan:** 30 requests per minute per operation\n- **Paid Plans:** Higher limits available\n\nRate limiting is enforced by v1 middleware on all authenticated endpoints.\nRuntime responses include rate-limit headers:\n- `X-RateLimit-Limit`: Maximum requests per window\n- `X-RateLimit-Remaining`: Remaining requests in current window\n- `Retry-After`: Seconds until rate limit resets (on 429 responses)\n\n## Errors\n\nThe API uses standard HTTP status codes:\n\n- `200`: Success\n- `400`: Bad Request (validation error)\n- `401`: Unauthorized (missing or invalid API key)\n- `403`: Forbidden (insufficient permissions)\n- `404`: Not Found\n- `429`: Too Many Requests (rate limit exceeded)\n- `500`: Internal Server Error\n\nError responses include details:\n\n```json\n{\n  \"error\": \"Validation failed\",\n  \"message\": \"Invalid request body\",\n  \"details\": {\n    \"field\": \"name\",\n    \"issue\": \"Must be at least 3 characters\"\n  }\n}\n```\n\n## Getting Started\n\n1. [Generate an API key](https://ahurasense.com/dashboard/settings/api-keys)\n2. Make your first request:\n\n```bash\ncurl -H \"Authorization: Bearer sk_live_xxx\" \\\n  https://ahurasense.com/api/v1/apps\n```\n\nFor more examples, see the API reference below.",
+    "description": "# AhuraSense Cloud REST API\n\nA REST API for managing cloud infrastructure — compute, databases, Kubernetes clusters, object storage and domains — and for deploying apps on the App Platform.\n\n## Authentication\n\nAll API requests require authentication using an API key. Include your API key in the `Authorization` header:\n\n```\nAuthorization: Bearer sk_live_YOUR_API_KEY\n```\n\nYou can generate API keys from your [dashboard settings](https://ahurasense.com/dashboard/settings/api-keys).\n\n**Deploy hooks are the exception.** An App Platform deploy hook's secret URL is its own credential, so it is called with no API key. See the App Platform section below, and the [deploy hooks guide](https://ahurasense.com/docs/apps/deploy-hooks).\n\n## Rate Limits\n\n- **Free Plan:** 30 requests per minute per operation\n- **Paid Plans:** Higher limits available\n\nRate limiting is enforced by v1 middleware on all authenticated endpoints.\nRuntime responses include rate-limit headers:\n- `X-RateLimit-Limit`: Maximum requests per window\n- `X-RateLimit-Remaining`: Remaining requests in current window\n- `Retry-After`: Seconds until rate limit resets (on 429 responses)\n\n## Errors\n\nThe API uses standard HTTP status codes:\n\n- `200`: Success\n- `400`: Bad Request (validation error)\n- `401`: Unauthorized (missing or invalid API key)\n- `403`: Forbidden (insufficient permissions)\n- `404`: Not Found\n- `429`: Too Many Requests (rate limit exceeded)\n- `500`: Internal Server Error\n\nError responses include details:\n\n```json\n{\n  \"error\": \"Validation failed\",\n  \"message\": \"Invalid request body\",\n  \"details\": {\n    \"field\": \"name\",\n    \"issue\": \"Must be at least 3 characters\"\n  }\n}\n```\n\nApp Platform endpoints nest the error instead:\n\n```json\n{\n  \"error\": {\n    \"code\": \"not_found\",\n    \"message\": \"Deploy hook not found.\"\n  }\n}\n```\n\n## Getting Started\n\n1. [Generate an API key](https://ahurasense.com/dashboard/settings/api-keys)\n2. Make your first request:\n\n```bash\ncurl -H \"Authorization: Bearer sk_live_xxx\" \\\n  https://ahurasense.com/api/v1/projects\n```\n\nFor more examples, see the API reference below.",
     "contact": {
       "name": "AhuraSense Cloud Support",
       "email": "support@ahurasense.com",
@@ -22,8 +22,8 @@
   ],
   "tags": [
     {
-      "name": "Platform Apps",
-      "description": "Manage application deployments, containers, and infrastructure."
+      "name": "App Platform",
+      "description": "Deploy apps from GitHub, GitLab or Bitbucket. Connect a repository in the dashboard and every push deploys it; a deploy hook lets your CI decide when production deploys instead. Guides: [App Platform documentation](https://ahurasense.com/docs/apps)."
     },
     {
       "name": "Projects",
@@ -60,6 +60,10 @@
     {
       "name": "Domain Marketplace",
       "description": "Search, purchase, and track domain marketplace purchase requests."
+    },
+    {
+      "name": "Platform Apps (legacy)",
+      "description": "The previous generation of app hosting. These endpoints still work for apps on that platform, but those apps are not App Platform apps and do not appear on the dashboard's Apps page. For new integrations, use the [App Platform](https://ahurasense.com/docs/apps)."
     }
   ],
   "components": {
@@ -72,6 +76,69 @@
       }
     },
     "schemas": {
+      "DeployHookAccepted": {
+        "type": "object",
+        "properties": {
+          "deployment": {
+            "type": "object",
+            "properties": {
+              "ref": {
+                "type": "string",
+                "description": "The deployment this call created or joined. Follow it in the dashboard.",
+                "example": "dpl-8e76876577a2"
+              }
+            },
+            "required": [
+              "ref"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "already_queued"
+            ],
+            "description": "`queued`: a new deployment was created. `already_queued`: a deployment of the production branch was already waiting to build, so this call joined it instead of creating a second one.",
+            "example": "queued"
+          }
+        },
+        "required": [
+          "deployment",
+          "status"
+        ]
+      },
+      "AppPlatformError": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "description": "Error code.",
+                "example": "not_found"
+              },
+              "message": {
+                "type": "string",
+                "description": "What went wrong.",
+                "example": "Deploy hook not found."
+              },
+              "retry_after": {
+                "type": "integer",
+                "description": "Seconds to wait before calling again. Sent with 429 only.",
+                "example": 1680
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ]
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
       "App": {
         "type": "object",
         "properties": {
@@ -4203,7 +4270,7 @@
           },
           "record_name": {
             "type": "string",
-            "example": "ahuracloud-verify.api.example.com"
+            "example": "ahurasense-verify.api.example.com"
           },
           "record_value": {
             "type": "string",
@@ -4222,7 +4289,7 @@
         ],
         "example": {
           "record_type": "TXT",
-          "record_name": "ahuracloud-verify.api.example.com",
+          "record_name": "ahurasense-verify.api.example.com",
           "record_value": "verify_7f23cbb6500c31f7",
           "ttl": 300
         }
@@ -4446,9 +4513,9 @@
           "channel": {
             "type": "string",
             "enum": [
-              "ahuracloud"
+              "ahurasense"
             ],
-            "example": "ahuracloud"
+            "example": "ahurasense"
           },
           "configured": {
             "type": "boolean",
@@ -4555,9 +4622,9 @@
           "fulfillment": {
             "type": "string",
             "enum": [
-              "ahuracloud"
+              "ahurasense"
             ],
-            "example": "ahuracloud"
+            "example": "ahurasense"
           }
         },
         "required": [
@@ -4578,9 +4645,9 @@
           "channel": {
             "type": "string",
             "enum": [
-              "ahuracloud"
+              "ahurasense"
             ],
-            "example": "ahuracloud"
+            "example": "ahurasense"
           },
           "query": {
             "type": "string",
@@ -4694,7 +4761,7 @@
           },
           "provider": {
             "type": "string",
-            "example": "ahuracloud"
+            "example": "ahurasense"
           },
           "last_error": {
             "type": "string",
@@ -4935,11 +5002,143 @@
     "parameters": {}
   },
   "paths": {
+    "/api/v2/hooks/deploy/{token}": {
+      "post": {
+        "tags": [
+          "App Platform"
+        ],
+        "summary": "Trigger a deploy hook",
+        "description": "Deploys the app's production branch. Call it from CI once your tests pass, so production deploys only when your pipeline says so.\n\nThe URL is the credential: send no API key and no body. Anyone holding the URL can deploy the configured branch and do nothing else, so store it as a CI secret.\n\nCreate hooks in the dashboard: open the app and go to **Settings → Deploy hooks**. Only team owners and admins can create or revoke them.\n\nThe call returns `202` as soon as a deployment is queued, without waiting for the build. Either way, the build behind `deployment.ref` starts after your call and checks out the production branch as it is at that moment, so it includes every commit pushed before you called.\n\n`GET` is refused with `405`, so a link preview or a crawler fetching the URL can never start a deploy.\n\n**Limits:** 30 calls per hook per hour, including ones that return `already_queued`, and 60 calls per minute from one IP address to any hook.\n\nGuide, with GitHub Actions, GitLab CI and Bitbucket examples: [Deploy hooks](https://ahurasense.com/docs/apps/deploy-hooks).",
+        "security": [],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^dh_[A-Za-z0-9_-]{43}$",
+              "description": "The secret at the end of the hook URL. It starts with `dh_` and is shown once, when the hook is created.",
+              "example": "dh_0123456789abcdefghijklmnopqrstuvwxyzABCDEFG"
+            },
+            "required": true,
+            "name": "token",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted. A deployment of the production branch is queued.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeployHookAccepted"
+                },
+                "example": {
+                  "deployment": {
+                    "ref": "dpl-8e76876577a2"
+                  },
+                  "status": "queued"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found. The URL is wrong, the hook was revoked, or its app was deleted. These look the same on purpose, so the endpoint never confirms which hooks exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "Deploy hook not found."
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict. The app has no production environment to deploy to. Contact support with the app name.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "conflict",
+                    "message": "This app has no production environment, so there is nowhere to deploy."
+                  }
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Gone. The person who created the hook has left the team, so the hook was revoked. Later calls return 404. Have a current owner or admin create a new hook.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "gone",
+                    "message": "This deploy hook was created by someone who is no longer on the team, so it has been revoked. Create a new one in the app's settings."
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many calls. Wait for the number of seconds given, then retry, and check your pipeline for a loop.",
+            "headers": {
+              "Retry-After": {
+                "description": "Seconds to wait before calling again.",
+                "schema": {
+                  "type": "integer",
+                  "example": 1680
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "rate_limited",
+                    "message": "This deploy hook has been called too often. Try again later.",
+                    "retry_after": 1680
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Something failed on our side, and no deployment was created. Retry; if it keeps happening, contact support.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "internal",
+                    "message": "Could not start the deployment. Try again shortly."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/apps": {
       "get": {
         "tags": [
-          "Platform Apps"
+          "Platform Apps (legacy)"
         ],
+        "deprecated": true,
         "summary": "List all apps",
         "description": "Returns a list of all apps owned by the authenticated user.",
         "security": [
@@ -5009,8 +5208,9 @@
     "/api/v1/apps/{id}": {
       "get": {
         "tags": [
-          "Platform Apps"
+          "Platform Apps (legacy)"
         ],
+        "deprecated": true,
         "summary": "Get app by ID",
         "description": "Returns detailed information about a specific app.",
         "security": [
@@ -5136,8 +5336,9 @@
       },
       "patch": {
         "tags": [
-          "Platform Apps"
+          "Platform Apps (legacy)"
         ],
+        "deprecated": true,
         "summary": "Update app metadata",
         "description": "Updates safe metadata fields only (name, auto_deploy). **Build configuration changes (branch, framework, build command) are NOT allowed** - use the redeploy endpoint to change build settings and trigger a new deployment.",
         "security": [
@@ -5295,8 +5496,9 @@
       },
       "delete": {
         "tags": [
-          "Platform Apps"
+          "Platform Apps (legacy)"
         ],
+        "deprecated": true,
         "summary": "Delete app",
         "description": "**DESTRUCTIVE OPERATION:** Permanently deletes the app and all associated infrastructure (Jenkins job, Kubernetes resources, DNS records). This action cannot be undone.",
         "security": [
@@ -5427,8 +5629,9 @@
     "/api/v1/apps/{id}/env-vars": {
       "get": {
         "tags": [
-          "Platform Apps"
+          "Platform Apps (legacy)"
         ],
+        "deprecated": true,
         "summary": "List environment variables",
         "description": "Returns all environment variables for the specified app.",
         "security": [
@@ -5533,8 +5736,9 @@
       },
       "put": {
         "tags": [
-          "Platform Apps"
+          "Platform Apps (legacy)"
         ],
+        "deprecated": true,
         "summary": "Replace environment variables",
         "description": "Replaces all environment variables for the app. If the app is running, changes are applied live via Kubernetes secret update and optional pod restart.",
         "security": [
@@ -5665,8 +5869,9 @@
     "/api/v1/apps/{id}/env-vars/{key}": {
       "delete": {
         "tags": [
-          "Platform Apps"
+          "Platform Apps (legacy)"
         ],
+        "deprecated": true,
         "summary": "Delete environment variable",
         "description": "Deletes a single environment variable by key. If the app is running, changes are applied live.",
         "security": [
@@ -5802,8 +6007,9 @@
       },
       "get": {
         "tags": [
-          "Platform Apps"
+          "Platform Apps (legacy)"
         ],
+        "deprecated": true,
         "summary": "Get environment variable by key",
         "description": "Returns the value of a single environment variable. The full plaintext value is returned — use with care.",
         "security": [
@@ -5937,8 +6143,9 @@
     "/api/v1/apps/{id}/deployments": {
       "get": {
         "tags": [
-          "Platform Apps"
+          "Platform Apps (legacy)"
         ],
+        "deprecated": true,
         "summary": "List deployment history",
         "description": "Returns up to 10 recent deployments for an app, merging Jenkins build data with DB records. Includes releases, operations (resize), and rollbacks.",
         "security": [
@@ -6049,8 +6256,9 @@
     "/api/v1/apps/{id}/redeploy": {
       "post": {
         "tags": [
-          "Platform Apps"
+          "Platform Apps (legacy)"
         ],
+        "deprecated": true,
         "summary": "Trigger redeploy",
         "description": "Triggers a new deployment for the app using the current git branch and configuration. Rebuilds the container and rolls out via Kubernetes. Returns 202 if a build is already in progress.",
         "security": [
