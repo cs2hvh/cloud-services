@@ -53,6 +53,7 @@ import { DeleteProject } from "@/components/v2/delete-project";
 import { SourceSettings } from "@/components/v2/source-settings";
 import { PromoteControl } from "@/components/v2/promote-control";
 import { DomainManager } from "@/components/v2/domain-manager";
+import { DeployHooks } from "@/components/v2/deploy-hooks";
 import { Notice } from "@/components/v2/notice";
 // Same modules the deployment detail page uses, so the log is scrubbed by one
 // set of rules rather than two that can drift.
@@ -874,6 +875,10 @@ export default async function ProjectPage({
           rootDirectory={project.root_directory}
           contextRepoRoot={project.build_context_repo_root === true}
         />
+      </Card>
+
+      <Card title="Deploy hooks" subtitle="Let your CI decide when to deploy">
+        <DeployHooks projectRef={project.ref} />
       </Card>
 
       {/*

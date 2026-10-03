@@ -29,6 +29,9 @@ export type PaasTable =
   | "aliases"
   | "domains"
   | "env_vars"
+  // The token hash is not selectable by `authenticated`; an update may set
+  // only revoked_at, and the policy refuses to clear it.
+  | "deploy_hooks"
   // SELECT only for `authenticated`. Writes go through
   // lib/paas/installations/link.ts (service role, after the callback route
   // proved ownership with the provider); nothing a client can call inserts one.

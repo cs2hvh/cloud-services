@@ -57,6 +57,19 @@ const SERVICE_ROLE_ALLOWED: Array<{ path: string; why: string }> = [
       "treated as equivalent. Same prohibition: never a filter from the body.",
   },
   {
+    path: "app/api/v2/hooks/deploy/[token]/route.ts",
+    why:
+      "A deploy hook is called by the customer's CI, which cannot present a " +
+      "session — the same position as the git webhooks. The token in the URL " +
+      "IS the authentication: 256 random bits, stored only as a hash, looked " +
+      "up by that hash. The token alone identifies the project; the request " +
+      "body is never read, so nothing from the caller can steer what is " +
+      "deployed. The authorization decision — may this hook deploy this app — " +
+      "was made by RLS when an admin created it, and is re-checked here only " +
+      "in the narrowing direction (revoked, project deleted, creator left the " +
+      "team). Same prohibition as the webhooks: never a filter from the body.",
+  },
+  {
     path: "app/api/v2/webhooks/bitbucket/route.ts",
     why:
       "Same as the GitHub receiver. Bitbucket signs with HMAC-SHA256 as GitHub " +

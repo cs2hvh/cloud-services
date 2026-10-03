@@ -14,6 +14,7 @@ export type ApiErrorCode =
   | "conflict"
   | "not_enabled"
   | "upstream_error"
+  | "rate_limited"
   | "internal";
 
 export function json<T>(body: T, status = 200): Response {

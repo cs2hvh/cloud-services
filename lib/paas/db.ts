@@ -307,7 +307,8 @@ export interface EnvironmentRow { id: string; ref: string; project_id: string; k
  * typechecking and into production; this makes the compiler the thing that
  * catches it, and the test below pins it against the live database.
  */
-export type DeploymentTrigger = "git_push" | "pull_request" | "manual" | "redeploy" | "rollback";
+export type DeploymentTrigger =
+  | "git_push" | "pull_request" | "manual" | "redeploy" | "rollback" | "deploy_hook";
 
 export interface DeploymentRow {
   id: string; ref: string; project_id: string; environment_id: string;
@@ -341,6 +342,44 @@ export const teams = {
     (await db.insert<TeamRow>("teams", {
       slug: input.slug, name: input.name, created_by: input.createdBy,
     }))[0],
+};
+
+export const teamMembers = {
+  /**
+   * Whether a user still belongs to a team, at any role.
+   *
+   * For credentials that outlive the moment they were made. A deploy hook keeps
+   * working after its creator leaves the team unless something checks — and
+   * "the person who set up CI left, and their URL still deploys" is exactly the
+   * standing access a team removing someone expects to have ended.
+   */
+  isMember: async (teamId: string, userId: string): Promise<boolean> =>
+    (await db.select<{ user_id: string }>(
+      "team_members", `select=user_id&team_id=eq.${teamId}&user_id=eq.${userId}&limit=1`,
+    )).length > 0,
+};
+
+export interface DeployHookRow {
+  id: string; ref: string; project_id: string; name: string;
+  token_hash: string; token_hint: string; created_by: string;
+  created_at: string; last_used_at: string | null; revoked_at: string | null;
+}
+
+export const deployHooks = {
+  /**
+   * The live hook a token hashes to, or null. Revoked hooks are excluded HERE
+   * rather than by the caller, so no caller can forget to.
+   */
+  byTokenHash: async (hash: string): Promise<DeployHookRow | null> =>
+    (await db.select<DeployHookRow>(
+      "deploy_hooks", `select=*&token_hash=eq.${hash}&revoked_at=is.null&limit=1`,
+    ))[0] ?? null,
+
+  /** Best-effort; a failed stamp must not fail a deploy that was accepted. */
+  touch: async (id: string): Promise<void> => {
+    await db.update("deploy_hooks", `id=eq.${id}`, { last_used_at: new Date().toISOString() })
+      .catch(() => {});
+  },
 };
 
 export const projects = {
@@ -544,6 +583,12 @@ export const deployments = {
     projectId: string; environmentId: string; trigger: DeploymentTrigger;
     gitSha: string | null; gitRef: string; gitMessage?: string | null;
     containerPort?: number; runAsUser?: number;
+    /**
+     * Who this deployment is on behalf of. A deploy hook passes its creator, so
+     * a hook-triggered build is attributable to a person and not to "the
+     * platform" — the same provenance a button press records.
+     */
+    createdBy?: string | null;
   }) =>
     (await db.insert<DeploymentRow>("deployments", {
       project_id: input.projectId, environment_id: input.environmentId,
@@ -551,7 +596,22 @@ export const deployments = {
       git_message: input.gitMessage ?? null, state: "queued",
       container_port: input.containerPort ?? null,
       run_as_user: input.runAsUser ?? null,
+      ...(input.createdBy ? { created_by: input.createdBy } : {}),
     }))[0],
+
+  /**
+   * A deployment already waiting in this environment, if any.
+   *
+   * Used to COALESCE repeated triggers. A deploy hook can be called in a loop —
+   * by a CI retry, a misconfigured workflow, or someone holding a leaked URL —
+   * and every queued deployment leases a build machine. While one is already
+   * waiting, another adds nothing: it would build the same branch head.
+   */
+  queuedForEnvironment: async (environmentId: string) =>
+    (await db.select<DeploymentRow>(
+      "deployments",
+      `select=*&environment_id=eq.${environmentId}&state=eq.queued&order=queued_at.desc&limit=1`,
+    ))[0] ?? null,
   /**
    * Advance state. The DB trigger refuses to move a terminal deployment or to
    * rewrite an image_digest, so an out-of-order or duplicate finalization is

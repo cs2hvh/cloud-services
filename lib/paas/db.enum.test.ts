@@ -29,7 +29,7 @@ test("DeploymentTrigger mirrors paas.deployment_trigger exactly", async (t) => {
   const live = await enumValues("paas.deployment_trigger");
   if (live === null) return t.skip("database unreachable — mirror NOT verified");
 
-  const mirrored: DeploymentTrigger[] = ["git_push", "pull_request", "manual", "redeploy", "rollback"];
+  const mirrored: DeploymentTrigger[] = ["git_push", "pull_request", "manual", "redeploy", "rollback", "deploy_hook"];
   assert.deepEqual(
     [...live].sort(),
     [...mirrored].sort(),
