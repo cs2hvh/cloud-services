@@ -1,14 +1,18 @@
 /**
- * A small tokenizer for the four languages the docs show: bash, json, python
- * and typescript. It colours strings, comments, numbers, keywords and shell
- * variables, and nothing else, which is enough for API examples and keeps a
- * syntax highlighter and its runtime out of the bundle.
+ * A small tokenizer for the languages the docs show: bash, json, python,
+ * typescript, and — for the app platform's CI and Dockerfile examples — yaml
+ * and docker. It colours strings, comments, numbers, keywords, keys and shell
+ * variables, and nothing else, which is enough for examples and keeps a syntax
+ * highlighter and its runtime out of the bundle.
  *
  * Pure: a string in, a list of {text, kind} out. Both the server-rendered
  * code block and the client-side tabs use it.
+ *
+ * yaml and docker were added after the original four; every pattern for those
+ * four is unchanged, so no existing page can render differently.
  */
 
-export type Lang = "bash" | "json" | "python" | "typescript" | "text";
+export type Lang = "bash" | "json" | "python" | "typescript" | "yaml" | "docker" | "text";
 
 export type TokenKind = "plain" | "string" | "key" | "comment" | "number" | "keyword" | "var";
 
@@ -27,22 +31,41 @@ const KEYWORDS: Record<Exclude<Lang, "text" | "json">, string[]> = {
     "import", "from", "const", "let", "var", "await", "async", "function", "return",
     "new", "export", "for", "of", "if", "else", "type", "interface", "true", "false", "null",
   ],
+  // Dockerfile instructions are upper case by convention, and matched that way
+  // so prose in a comment is never coloured as one.
+  docker: [
+    "FROM", "AS", "RUN", "COPY", "ADD", "ARG", "ENV", "WORKDIR", "EXPOSE", "CMD",
+    "ENTRYPOINT", "USER", "LABEL", "VOLUME", "HEALTHCHECK",
+  ],
+  // Unquoted YAML has no keywords worth colouring; its keys are matched below.
+  yaml: [],
 };
 
 function pattern(lang: Lang): RegExp {
   const string = `"(?:[^"\\\\\\n]|\\\\.)*"|'(?:[^'\\\\\\n]|\\\\.)*'|\`(?:[^\`\\\\]|\\\\.)*\``;
   const number = `\\b\\d+(?:\\.\\d+)?\\b`;
   const parts: string[] = [];
-  if (lang === "bash" || lang === "python") parts.push(`(?<comment>#[^\\n]*)`);
+  if (lang === "bash" || lang === "python" || lang === "yaml" || lang === "docker") {
+    parts.push(`(?<comment>#[^\\n]*)`);
+  }
   if (lang === "typescript") parts.push(`(?<comment>//[^\\n]*)`);
   parts.push(`(?<string>${string})`);
+  // A YAML key: a bare word followed by a colon and whitespace or end of line,
+  // so `image: node:22` colours `image` and leaves `node:22` alone.
+  if (lang === "yaml") parts.push(`(?<key>[A-Za-z_][\\w.-]*(?=:(?:[ \\t]|$)))`);
   if (lang === "json") parts.push(`(?<number>${number}|\\b(?:true|false|null)\\b)`);
   else parts.push(`(?<number>${number})`);
   if (lang === "bash") parts.push(`(?<var>\\$[A-Za-z_][A-Za-z0-9_]*|\\$\\{[^}]*\\})`);
-  if (lang === "bash" || lang === "python" || lang === "typescript") {
+  // GitHub Actions expressions first, so `\${{ secrets.X }}` is one token.
+  if (lang === "yaml" || lang === "docker") {
+    parts.push(`(?<var>\\$\\{\\{[^}]*\\}\\}|\\$[A-Za-z_][A-Za-z0-9_]*|\\$\\{[^}]*\\})`);
+  }
+  if (lang === "bash" || lang === "python" || lang === "typescript" || lang === "docker") {
+    // An empty list would compile to a pattern that matches the empty string
+    // at every word boundary, so only languages that have keywords get one.
     parts.push(`(?<keyword>\\b(?:${KEYWORDS[lang].join("|")})\\b)`);
   }
-  return new RegExp(parts.join("|"), "g");
+  return new RegExp(parts.join("|"), lang === "yaml" ? "gm" : "g");
 }
 
 export function tokenize(code: string, lang: Lang): Token[] {
@@ -61,7 +84,8 @@ export function tokenize(code: string, lang: Lang): Token[] {
       // than in the value colour.
       const after = code.slice(idx + m[0].length).match(/^\s*:/);
       kind = lang === "json" && after ? "key" : "string";
-    } else if (groups.number !== undefined) kind = "number";
+    } else if (groups.key !== undefined) kind = "key";
+    else if (groups.number !== undefined) kind = "number";
     else if (groups.var !== undefined) kind = "var";
     else if (groups.keyword !== undefined) kind = "keyword";
     out.push({ text: m[0], kind });

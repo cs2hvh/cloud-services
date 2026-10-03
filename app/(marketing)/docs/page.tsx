@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { docsMetadata } from "@/components/docs/metadata";
 import { Cards } from "@/components/docs/primitives";
-import { INFERENCE_DOCS } from "@/components/docs/nav";
+import { APP_DOCS, INFERENCE_DOCS } from "@/components/docs/nav";
 
 export const metadata = docsMetadata({
   title: "Documentation — Developer docs — AhuraSense Cloud",
   description:
-    "Developer documentation for the AhuraSense inference API and the cloud platform API.",
+    "Developer documentation for the AhuraSense inference API, the app platform, and the cloud platform API.",
   path: "/docs",
 });
 
@@ -20,9 +20,9 @@ export default function DocsHome() {
           Build on AhuraSense
         </h1>
         <p className="mt-4 max-w-[640px] text-[16px] leading-[1.65] text-[var(--ah-body)]">
-          Two APIs. The inference API serves frontier and open-source models behind one
-          OpenAI-compatible endpoint. The cloud API manages compute, storage, databases,
-          Kubernetes and the rest of the platform.
+          The inference API serves frontier and open-source models behind one OpenAI-compatible
+          endpoint. The app platform builds and hosts your code from a git repository. The cloud
+          API manages compute, storage, databases, Kubernetes and the rest of the platform.
         </p>
       </header>
 
@@ -45,12 +45,29 @@ export default function DocsHome() {
           </span>
         </Link>
         <Link
+          href="/docs/apps"
+          className="ah-notch group block border border-[var(--ah-line)] bg-[#121216] p-5 transition-colors hover:border-[var(--ah-blue)]"
+        >
+          <p className="ah-lbl mb-2 text-[var(--ah-blue-lt)]">App Platform</p>
+          <p className="text-[18px] font-semibold text-[var(--ah-ink)]">Deploy from a git repository</p>
+          <p className="mt-2 text-[14px] leading-[1.65] text-[var(--ah-body)]">
+            Connect GitHub, GitLab or Bitbucket and every push builds and deploys. Preview
+            deployments for branches, custom domains, and deploy hooks for your CI.
+          </p>
+          <code className="mt-4 block font-[family-name:var(--font-geist-mono)] text-[12.5px] text-[var(--ah-ink)]">
+            git push origin main
+          </code>
+          <span className="mt-4 inline-block text-[13px] text-[var(--ah-blue-lt)] group-hover:underline">
+            Read the docs
+          </span>
+        </Link>
+        <Link
           href="/api-docs"
-          className="ah-notch group block border border-[var(--ah-line)] bg-[#121216] p-5 transition-colors hover:border-[var(--ah-line-hi)]"
+          className="ah-notch group block border border-[var(--ah-line)] bg-[#121216] p-5 transition-colors hover:border-[var(--ah-line-hi)] sm:col-span-2"
         >
           <p className="ah-lbl mb-2">Cloud API</p>
           <p className="text-[18px] font-semibold text-[var(--ah-ink)]">Manage the platform</p>
-          <p className="mt-2 text-[14px] leading-[1.65] text-[var(--ah-body)]">
+          <p className="mt-2 max-w-[640px] text-[14px] leading-[1.65] text-[var(--ah-body)]">
             Servers, GPU instances, Kubernetes, object storage, databases, domains and billing,
             as an OpenAPI reference with a request builder.
           </p>
@@ -66,6 +83,16 @@ export default function DocsHome() {
       <section className="mt-12">
         <p className="ah-lbl mb-1">Inference API, by topic</p>
         {INFERENCE_DOCS.map((g) => (
+          <div key={g.label} className="mt-6">
+            <p className="ah-lbl mb-1 text-[var(--ah-body)]">{g.label}</p>
+            <Cards items={g.items} />
+          </div>
+        ))}
+      </section>
+
+      <section className="mt-12">
+        <p className="ah-lbl mb-1">App Platform, by topic</p>
+        {APP_DOCS.map((g) => (
           <div key={g.label} className="mt-6">
             <p className="ah-lbl mb-1 text-[var(--ah-body)]">{g.label}</p>
             <Cards items={g.items} />

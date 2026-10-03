@@ -9,7 +9,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { INFERENCE_DOCS, flattenDocs } from "./nav";
+import { flattenDocs, productFor } from "./nav";
 
 export function DocPage({
   href,
@@ -25,7 +25,8 @@ export function DocPage({
   lede: ReactNode;
   children: ReactNode;
 }) {
-  const group = INFERENCE_DOCS.find((g) => g.items.some((i) => i.href === href));
+  const product = productFor(href);
+  const group = product?.groups.find((g) => g.items.some((i) => i.href === href));
   return (
     <article className="min-w-0">
       <header className="mb-10 border-b border-[var(--ah-line)] pb-8">
@@ -34,7 +35,7 @@ export function DocPage({
             Docs
           </Link>
           <span aria-hidden>/</span>
-          <Link href="/docs/inference" className="hover:text-[var(--ah-ink)]">
+          <Link href={product?.base ?? "/docs"} className="hover:text-[var(--ah-ink)]">
             {eyebrow}
           </Link>
           {group ? (
@@ -257,7 +258,9 @@ export function Cards({ items }: { items: { title: string; description: string; 
 }
 
 function NextPrev({ href }: { href: string }) {
-  const all = flattenDocs();
+  // Within this page's product only. Across products the "next" page would be
+  // a different manual.
+  const all = flattenDocs(productFor(href)?.groups ?? []);
   const i = all.findIndex((d) => d.href === href);
   if (i < 0) return null;
   const prev = all[i - 1];
