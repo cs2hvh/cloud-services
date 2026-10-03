@@ -258,6 +258,12 @@ export interface ProjectRow {
    */
   deleted_at?: string | null;
   /**
+   * Whether a push to the production branch deploys. Defaults to true; false
+   * routes production through a deploy hook or the dashboard instead. Read
+   * through lib/paas/push-policy.ts, which treats absent as true.
+   */
+  deploy_on_push?: boolean | null;
+  /**
    * Scale-to-zero settings. These columns were added by the scale-to-zero
    * migration and this type was not updated with them, so `idle-sweep.ts` read
    * both fields off a type that did not declare either — the reads worked at

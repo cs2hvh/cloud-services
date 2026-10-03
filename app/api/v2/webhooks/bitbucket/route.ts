@@ -22,6 +22,7 @@ import { providerConfig } from "@/lib/paas/providers/config";
 import { decidePush } from "@/lib/paas/providers/policy";
 import { resolveRepoTarget } from "@/lib/paas/repo-target";
 import { projects, environments, deployments, db } from "@/lib/paas/db";
+import { pushDeploys, PUSH_DEPLOY_OFF_REASON } from "@/lib/paas/push-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -96,6 +97,8 @@ export async function POST(req: Request) {
 
   const decision = decidePush(push, project.production_branch);
   if (!decision.deploy) return json(202, { ok: true, ignored: decision.reason });
+  // Production may be routed through a deploy hook instead; see push-policy.ts.
+  if (!pushDeploys(decision.kind, project)) return json(202, { ok: true, ignored: PUSH_DEPLOY_OFF_REASON });
 
   const env =
     decision.kind === "production"

@@ -30,6 +30,7 @@ interface Hook {
 
 interface HooksResponse {
   branch: string;
+  deployOnPush: boolean;
   canManage: boolean;
   hooks: Hook[];
 }
@@ -106,6 +107,23 @@ export function DeployHooks({ projectRef }: { projectRef: string }) {
     void load();
   }
 
+  async function setDeployOnPush(next: boolean) {
+    setBusy(true);
+    setError(null);
+    const res = await fetch(`/api/v2/projects/${projectRef}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deployOnPush: next }),
+    });
+    const body = await res.json().catch(() => null);
+    setBusy(false);
+    if (!res.ok) {
+      setError(body?.error?.message ?? "Could not change the setting.");
+      return;
+    }
+    void load();
+  }
+
   async function revoke(ref: string) {
     setBusy(true);
     setError(null);
@@ -135,9 +153,39 @@ export function DeployHooks({ projectRef }: { projectRef: string }) {
       <p className="m-0 mb-3 max-w-[68ch] text-[12.5px] leading-relaxed text-white/55">
         A secret URL that deploys{" "}
         <span className={`${V2_MONO} text-white/80`}>{data.branch}</span> when your CI calls it with
-        POST. Use it to deploy only after your tests pass. Anyone with the URL can trigger a deploy,
-        so store it as a CI secret.
+        POST. Anyone with the URL can trigger a deploy, so store it as a CI secret.
       </p>
+
+      {/*
+        THE SETTING THAT MAKES A HOOK MEAN SOMETHING. With deploy-on-push on, a
+        push to the production branch deploys straight away and the hook then
+        deploys a second time after the tests — it gates nothing. It lives here,
+        beside the hooks, because this is the only place the reason to turn it
+        off makes sense.
+      */}
+      <label
+        className={`mb-4 flex items-start gap-3 rounded-[8px] border border-white/[0.08] bg-black/20 px-3 py-2.5 ${
+          data.canManage ? "cursor-pointer" : "cursor-default opacity-70"
+        }`}
+      >
+        <input
+          type="checkbox"
+          checked={data.deployOnPush}
+          disabled={!data.canManage || busy}
+          onChange={(e) => void setDeployOnPush(e.target.checked)}
+          className="mt-[3px] h-3.5 w-3.5 accent-[#0095FF]"
+        />
+        <span>
+          <span className="block text-[13px] text-white">
+            Deploy on every push to <span className={V2_MONO}>{data.branch}</span>
+          </span>
+          <span className="mt-0.5 block text-[12px] leading-relaxed text-white/45">
+            {data.deployOnPush
+              ? "Turn this off to deploy production only from a hook or the Deploy button — for example, after your CI's tests pass. Branch previews keep deploying on push."
+              : `Pushes to ${data.branch} no longer deploy. Production deploys come from a hook or the Deploy button. Branch previews still deploy on push.`}
+          </span>
+        </span>
+      </label>
 
       {created ? (
         <div className="mb-4 rounded-[8px] border border-[#0095FF]/40 bg-[#0095FF]/[0.07] p-3.5">

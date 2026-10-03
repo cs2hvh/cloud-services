@@ -25,7 +25,6 @@
  * endpoint confirms nothing about which hooks exist.
  */
 
-import { acceptQueuedDeployment } from "@/lib/paas/deploy.ts";
 import { deployHooks, deployments, environments, projects, teamMembers, db } from "@/lib/paas/db";
 import { hashHookToken, isWellFormedHookToken } from "@/lib/paas/deploy-hooks";
 import { limitByUser } from "@/lib/cooldown/userbased";
@@ -118,7 +117,7 @@ export async function POST(req: Request, { params }: Params) {
         .update("deploy_hooks", `id=eq.${hook.id}`, { revoked_at: new Date().toISOString() })
         .catch(() => {});
       return apiError(
-        "conflict",
+        "gone",
         "This deploy hook was created by someone who is no longer on the team, so it has been revoked. Create a new one in the app's settings.",
         410,
       );
@@ -148,20 +147,13 @@ export async function POST(req: Request, { params }: Params) {
     await deployHooks.touch(hook.id);
     console.log(`[v2/hooks] ${hook.ref} queued ${created.ref} for ${project.ref}`);
 
-    let accepted: Awaited<ReturnType<typeof acceptQueuedDeployment>>;
-    try {
-      accepted = await acceptQueuedDeployment(created.ref);
-    } catch (err) {
-      // The row is durable, so this is a queued deployment nobody has picked up
-      // yet — visible and not lost.
-      console.error("[v2/hooks] handoff failed:", err);
-      return json({ deployment: { ref: created.ref }, status: "queued" }, 202);
-    }
-
-    return json(
-      { deployment: { ref: created.ref }, status: accepted.accepted ? "queued" : "queued_not_accepted" },
-      202,
-    );
+    // No acceptQueuedDeployment() here, unlike the dashboard's trigger route. It
+    // is a state check, not a handoff — the worker polls the queue regardless —
+    // so on a row created a moment ago "not accepted" only ever means the
+    // builder already took it. Exposing that as a third status would make every
+    // integrator handle a case that tells them nothing. The public contract is
+    // two statuses: queued, and already_queued.
+    return json({ deployment: { ref: created.ref }, status: "queued" }, 202);
   } catch (err) {
     console.error("[v2/hooks] trigger failed:", err);
     return apiError("internal", "Could not start the deployment. Try again shortly.", 500);

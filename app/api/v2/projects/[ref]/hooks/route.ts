@@ -42,7 +42,7 @@ const adminsOnly = () =>
 async function readProject(caller: Caller, ref: string) {
   return caller.db
     .from("projects")
-    .select("id, ref, team_id, production_branch, deleted_at")
+    .select("id, ref, team_id, production_branch, deploy_on_push, deleted_at")
     .eq("ref", ref)
     .maybeSingle();
 }
@@ -78,6 +78,8 @@ export async function GET(_req: Request, { params }: Params) {
 
   return json({
     branch: p.data.production_branch,
+    // Absent reads as ON, the same rule the webhooks apply (push-policy.ts).
+    deployOnPush: p.data.deploy_on_push !== false,
     canManage: await isAdmin(caller, p.data.team_id),
     hooks: (data ?? []).map((h: {
       ref: string; name: string; token_hint: string; created_by: string;

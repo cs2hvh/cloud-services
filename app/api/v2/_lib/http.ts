@@ -15,6 +15,7 @@ export type ApiErrorCode =
   | "not_enabled"
   | "upstream_error"
   | "rate_limited"
+  | "gone"
   | "internal";
 
 export function json<T>(body: T, status = 200): Response {

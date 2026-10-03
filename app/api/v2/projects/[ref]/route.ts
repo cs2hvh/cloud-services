@@ -71,6 +71,7 @@ interface PatchBody {
   buildContextRepoRoot?: unknown;
   framework?: unknown;
   scaleToZero?: unknown;
+  deployOnPush?: unknown;
   idleSeconds?: unknown;
   tier?: unknown;
   instanceCount?: unknown;
@@ -153,6 +154,12 @@ export async function PATCH(request: Request, { params }: Params) {
 
   if (typeof body.scaleToZero === "boolean") {
     patch.scale_to_zero = body.scaleToZero;
+  }
+
+  // Off routes production through a deploy hook or the Deploy button only.
+  // Previews keep deploying on push either way; see lib/paas/push-policy.ts.
+  if (typeof body.deployOnPush === "boolean") {
+    patch.deploy_on_push = body.deployOnPush;
   }
 
   // ── sizing ───────────────────────────────────────────────────────

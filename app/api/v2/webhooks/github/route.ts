@@ -24,6 +24,7 @@
 
 import { verifyWebhookSignature, parsePushEvent, shouldDeploy } from "@/lib/paas/github/webhook";
 import { projects, environments, deployments, db } from "@/lib/paas/db";
+import { pushDeploys, PUSH_DEPLOY_OFF_REASON } from "@/lib/paas/push-policy";
 import { resolveRepoTarget } from "@/lib/paas/repo-target";
 
 export const dynamic = "force-dynamic";
@@ -98,6 +99,11 @@ export async function POST(req: Request) {
   const decision = shouldDeploy(push, project.production_branch);
   if (!decision.deploy) {
     return json(202, { ok: true, ignored: decision.reason });
+  }
+  // The app may route production through a deploy hook instead. 202 rather
+  // than an error: the delivery was fine, and GitHub must not retry it.
+  if (!pushDeploys(decision.kind, project)) {
+    return json(202, { ok: true, ignored: PUSH_DEPLOY_OFF_REASON });
   }
 
   // The environment is resolved BEFORE the idempotency check, because it is part
