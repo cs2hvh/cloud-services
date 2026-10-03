@@ -606,17 +606,26 @@ export const deployments = {
     }))[0],
 
   /**
-   * A deployment already waiting in this environment, if any.
+   * A deployment waiting to build this branch's HEAD in this environment, if any.
    *
    * Used to COALESCE repeated triggers. A deploy hook can be called in a loop —
    * by a CI retry, a misconfigured workflow, or someone holding a leaked URL —
-   * and every queued deployment leases a build machine. While one is already
-   * waiting, another adds nothing: it would build the same branch head.
+   * and every queued deployment leases a build machine. While a head build is
+   * already waiting, another adds nothing: both would build the branch as it is
+   * when the build starts.
+   *
+   * ONLY an unpinned build of the same branch counts. A push records its sha,
+   * and so does Deploy in the dashboard — the branch head at the moment it was
+   * pressed — and the build checks out exactly that commit however far the
+   * branch has moved since (see gitSha in deploy.ts). Folding a hook call into
+   * one of those would answer "already queued" and then deploy an older commit
+   * than the one the caller's CI just tested.
    */
-  queuedForEnvironment: async (environmentId: string) =>
+  waitingHeadBuild: async (environmentId: string, branch: string) =>
     (await db.select<DeploymentRow>(
       "deployments",
-      `select=*&environment_id=eq.${environmentId}&state=eq.queued&order=queued_at.desc&limit=1`,
+      `select=*&environment_id=eq.${environmentId}&state=eq.queued&git_sha=is.null` +
+        `&git_ref=eq.${encodeURIComponent(branch)}&order=queued_at.desc&limit=1`,
     ))[0] ?? null,
   /**
    * Advance state. The DB trigger refuses to move a terminal deployment or to

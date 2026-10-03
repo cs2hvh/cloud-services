@@ -17,8 +17,10 @@
  *
  * WHAT A LEAKED URL CAN DO, bounded deliberately:
  *   - deploy the production branch that is already configured, and nothing else
- *   - at most one waiting build per app — repeat calls coalesce onto it
- *   - at most HOOK_LIMIT accepted triggers per hook per hour
+ *   - one waiting build at a time — repeat calls coalesce onto it. This is a
+ *     check in this route, not a database constraint: calls arriving in the
+ *     same instant can each queue one. The rate limits are the hard bound.
+ *   - at most HOOK_LIMIT calls per hook per hour
  * It cannot read anything, change settings, or choose a branch.
  *
  * Unknown, malformed and revoked tokens all receive the same 404, so the
@@ -62,9 +64,11 @@ function rateLimited(retryAfterSec: number) {
  *
  * The limiter is Redis. If Redis is unreachable, refusing every hook call would
  * stop every customer's CI from deploying because of an outage in a component
- * that exists only to bound abuse. Failing open is safe HERE because the real
- * cost bound does not depend on Redis: repeated calls coalesce onto one waiting
- * build per app, enforced by the database.
+ * that exists only to bound abuse. While it is down, coalescing still holds a
+ * loop of calls to one waiting build at a time. It is a check, not a database
+ * constraint, so a burst of simultaneous calls could queue several; that needs
+ * the secret URL and a Redis outage at once, and is the accepted cost of
+ * keeping deploys working through one.
  */
 async function limit(key: string, opts: { prefix: string; limit: number; windowMs: number }) {
   try {
@@ -128,8 +132,10 @@ export async function POST(req: Request, { params }: Params) {
       return apiError("conflict", "This app has no production environment, so there is nowhere to deploy.", 409);
     }
 
-    // Coalesce. A build already waiting will pick up the branch head anyway.
-    const waiting = await deployments.queuedForEnvironment(env.id);
+    // Coalesce onto a build already waiting for the branch head; it will build
+    // everything pushed before this call. A waiting build pinned to a commit does
+    // not count — it would deploy that commit, not the one CI just tested.
+    const waiting = await deployments.waitingHeadBuild(env.id, project.production_branch);
     if (waiting) {
       await deployHooks.touch(hook.id);
       return json({ deployment: { ref: waiting.ref }, status: "already_queued" }, 202);

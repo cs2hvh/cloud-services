@@ -4,7 +4,7 @@ import { Cards } from "@/components/docs/primitives";
 import { APP_DOCS, INFERENCE_DOCS } from "@/components/docs/nav";
 
 export const metadata = docsMetadata({
-  title: "Documentation — Developer docs — AhuraSense Cloud",
+  title: "Documentation — Developer docs — AhuraSense Docs",
   description:
     "Developer documentation for the AhuraSense inference API, the app platform, and the cloud platform API.",
   path: "/docs",

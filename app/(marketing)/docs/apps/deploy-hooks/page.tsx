@@ -178,10 +178,17 @@ pipelines:
           [<C key="q">queued</C>, "A new deployment was created and will build when the builder reaches it."],
           [
             <C key="a">already_queued</C>,
-            <>A deployment for this app was already waiting to build, so no second one was created. <C>ref</C> is that waiting deployment. It will build the latest commit, so nothing is lost.</>,
+            <>A deployment of your production branch was already waiting to build, so your call joined it instead of creating a second one. <C>ref</C> is that deployment.</>,
           ],
         ]}
       />
+      <P>
+        Either way, the build behind <C>ref</C> starts after your call and checks out your
+        production branch as it is at that moment, so it includes every commit pushed before you
+        called. A deployment that records one particular commit is never joined, and your call
+        queues its own. Pushes record the commit pushed, and <Strong>Deploy</Strong> in the
+        dashboard records the branch&rsquo;s latest commit at the moment it was pressed.
+      </P>
       <P>
         The deployment then moves through the states described in{" "}
         <A href="/docs/apps/deployments">Deployments</A>. Follow it in the dashboard; it is listed
@@ -243,10 +250,9 @@ pipelines:
       <Table
         head={["Limit", "Value"]}
         rows={[
-          ["Accepted calls per hook", "30 per hour"],
+          [<>Calls per hook, including ones that return <C key="aq">already_queued</C></>, "30 per hour"],
           ["Calls from one IP address, to any hook", "60 per minute"],
           ["Active hooks per app", "10"],
-          ["Deployments waiting per app", <>1 — further calls return <C key="aq">already_queued</C></>],
         ]}
       />
 
