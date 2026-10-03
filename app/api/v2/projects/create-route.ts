@@ -3,18 +3,17 @@
  * so each is readable on its own; `route.ts` re-exports this as its POST.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { getCaller } from "../_lib/auth";
 import { json, unauthenticated, invalid, conflict, apiError, fromPostgrestError } from "../_lib/http";
 import { validateCreateProject } from "./create";
 import { notifyAppEvent } from "@/lib/paas/notifications";
 
 export async function createProject(req: Request): Promise<Response> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) return unauthenticated();
+  // Cookie or `sk_` API key — getCaller resolves both to a client whose queries
+  // run as this user under RLS, so creating an app from a script and from the
+  // dashboard are the same operation with the same permission checks.
+  const caller = await getCaller();
+  if (!caller) return unauthenticated();
 
   let body: unknown;
   try {
@@ -27,12 +26,13 @@ export async function createProject(req: Request): Promise<Response> {
   if (!check.ok) return invalid(check.message, check.fields);
   const plan = check.plan;
 
-  const db = supabase.schema("paas");
+  const db = caller.db;
 
   // The account. Idempotent, and the same call every dashboard page makes.
-  const { data: team, error: teamError } = await db
+  const { data: teamRow, error: teamError } = await db
     .rpc("bootstrap_personal_team")
-    .single<{ id: string; ref: string }>();
+    .single();
+  const team = teamRow as { id: string; ref: string } | null;
   if (teamError || !team) {
     console.error("[v2/projects POST] bootstrap failed:", JSON.stringify(teamError));
     return apiError("internal", "Could not load your account. Nothing has been created.", 500);

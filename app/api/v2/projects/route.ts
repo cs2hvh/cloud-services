@@ -18,7 +18,7 @@
  * is only noticed when it lets something through.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { getCaller } from "../_lib/auth";
 import { json, unauthenticated, apiError } from "../_lib/http";
 import { createProject } from "./create-route";
 
@@ -41,15 +41,10 @@ interface ProjectView {
 }
 
 export async function GET() {
-  const supabase = await createClient();
+  const caller = await getCaller();
+  if (!caller) return unauthenticated();
 
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) return unauthenticated();
-
-  const db = supabase.schema("paas");
+  const db = caller.db;
 
   // Three reads, joined in memory. A join per project would be N+1 against
   // PostgREST, and this list is the first thing a dashboard loads.
@@ -107,7 +102,16 @@ export async function GET() {
     }
   }
 
-  const view: ProjectView[] = (projects.data ?? []).map((p) => {
+  const view: ProjectView[] = ((projects.data ?? []) as Array<{
+    id: string;
+    ref: string;
+    name: string;
+    slug: string;
+    repo_full_name: string | null;
+    production_branch: string | null;
+    tier: string | null;
+    instance_count: number | null;
+  }>).map((p) => {
     const newest = newestByProject.get(p.id);
     return {
       ref: p.ref,

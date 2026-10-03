@@ -22,7 +22,7 @@
  * list rendered as the whole one is the same lie and harder to notice.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { getCaller } from "../_lib/auth";
 import { listReposForTeam, type ConnectionRow } from "@/lib/paas/providers/adapter";
 import { mergeListings } from "@/lib/paas/providers/types";
 import { json, unauthenticated, apiError } from "../_lib/http";
@@ -50,16 +50,11 @@ interface RepoView {
 }
 
 export async function GET() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) return unauthenticated();
+  const caller = await getCaller();
+  if (!caller) return unauthenticated();
 
   // RLS scopes this to the caller's teams. No .eq() here on purpose.
-  const { data: installs, error } = await supabase
-    .schema("paas")
+  const { data: installs, error } = await caller.db
     .from("installations")
     .select(
       "provider,external_id,account_login,account_type,access_token_ct,token_dek_id,token_expires_at,provider_metadata,deleted_at",
@@ -70,7 +65,19 @@ export async function GET() {
     return apiError("internal", "Could not read your git connections.", 500);
   }
 
-  const live = (installs ?? []).filter((i) => !i.deleted_at);
+  // Shaped here because caller.db is deliberately untyped for `paas` (see
+  // _lib/auth.ts); these are exactly the columns the select above asks for.
+  const live = ((installs ?? []) as Array<{
+    provider: string;
+    external_id: string;
+    account_login: string | null;
+    account_type: string | null;
+    access_token_ct: string | null;
+    token_dek_id: string | null;
+    token_expires_at: string | null;
+    provider_metadata: unknown;
+    deleted_at: string | null;
+  }>).filter((i) => !i.deleted_at);
 
   // Distinguished from "no repos". A caller with no connection has not
   // connected a provider yet, and the UI must offer to connect rather than show

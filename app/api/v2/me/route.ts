@@ -23,24 +23,19 @@
  * default and nothing in the product asks the user to think about it.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { getCaller } from "../_lib/auth";
 import { json, unauthenticated, apiError } from "../_lib/http";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export async function GET() {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) return unauthenticated();
+  const caller = await getCaller();
+  if (!caller) return unauthenticated();
 
   // Returns the existing team when there is one, so this is a no-op for
   // everyone except a genuinely new account.
-  const { data: team, error } = await supabase.schema("paas").rpc("bootstrap_personal_team").single();
+  const { data: team, error } = await caller.db.rpc("bootstrap_personal_team").single();
 
   if (error) {
     // Logged, not swallowed. A 500 with no server-side trace is a bug report
@@ -60,7 +55,9 @@ export async function GET() {
   }
 
   return json({
-    user: { id: user.id, email: user.email ?? null },
+    // email is null for an API key: the key resolves to an account, not to a
+    // signed-in session carrying its address.
+    user: { id: caller.userId, email: caller.email },
     team: { ref: t.ref, slug: t.slug, name: t.name },
   });
 }

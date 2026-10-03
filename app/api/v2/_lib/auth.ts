@@ -11,13 +11,25 @@
  * hand-written per-route checks. One route forgot, and that was a confirmed
  * IDOR. Nothing in app/api/v2 may import createServiceClient; the service role
  * is for reconcilers, which live outside this directory.
+ *
+ * TWO CREDENTIALS, ONE MODEL. A browser sends a session cookie; a script sends
+ * an `sk_` API key. Both end at the same place — a client whose queries run as
+ * the caller under RLS — because an API key is exchanged for a session
+ * belonging to the key's own owner (lib/paas/api-key-session.ts). The API path
+ * therefore adds no new authorization code and cannot outrank the policies;
+ * whatever the browser would refuse, the key is refused too.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { headers } from "next/headers";
+import { createClient, createServerSupabase } from "@/lib/supabase/server";
 import { isSuspended, sessionSecondFactorMissing } from "@/lib/auth/assurance";
+import { ApiKeys } from "@/lib/supabase/queries/api_keys";
+import { sessionForUser } from "@/lib/paas/api-key-session";
 
-/** The eight tenant tables reachable through PostgREST under `paas`. */
+/** The tenant tables reachable through PostgREST under `paas`. */
 export type PaasTable =
+  // Read-only to the owning team: what the hourly meter has charged a project.
+  | "project_charges"
   | "teams"
   | "team_members"
   | "projects"
@@ -39,9 +51,18 @@ export type PaasTable =
 
 export interface Caller {
   userId: string;
+  /** The account's email when the credential carried one; null for an API key. */
+  email: string | null;
+  /** Which credential proved who this is. */
+  via: "cookie" | "api_key";
   /** RLS-scoped client, already pointed at the `paas` schema. */
   db: ReturnType<typeof paasSchema>;
 }
+
+/** Either client carries a caller's own token, so either can back a Caller. */
+type SupabaseClientLike =
+  | Awaited<ReturnType<typeof createClient>>
+  | ReturnType<typeof createServerSupabase>;
 
 /**
  * `Database` in lib/supabase/types.ts is generated for `public` only, so the
@@ -53,7 +74,7 @@ export interface Caller {
    Hand-writing that signature would be less accurate than any and would drift
    from the library; the generated Database type cannot describe paas at all.
    The cast is confined to this one function so no route repeats it. */
-function paasSchema(client: Awaited<ReturnType<typeof createClient>>) {
+function paasSchema(client: SupabaseClientLike) {
   return (client as unknown as {
     schema: (name: string) => {
       from: (table: PaasTable) => any;
@@ -63,13 +84,19 @@ function paasSchema(client: Awaited<ReturnType<typeof createClient>>) {
 }
 
 /**
- * Resolve the signed-in caller, or null when there is no valid session.
+ * Resolve the caller, or null when the request carries no usable credential.
  *
  * Uses getUser() rather than getSession(): getSession() trusts whatever is in
  * the cookie, while getUser() verifies it against the auth server. For an
  * authorization decision the difference matters.
  */
 export async function getCaller(): Promise<Caller | null> {
+  // AN API KEY WINS OVER A COOKIE on the same request. A script that sends a
+  // key has named the identity it means to act as; silently preferring a stale
+  // browser cookie would run the call as somebody else.
+  const apiKey = await bearerApiKey();
+  if (apiKey) return callerFromApiKey(apiKey);
+
   const client = await createClient();
   const { data, error } = await client.auth.getUser();
   if (error || !data?.user) return null;
@@ -78,7 +105,57 @@ export async function getCaller(): Promise<Caller | null> {
   // this file keeps its rule of never touching the service role.
   if (await sessionSecondFactorMissing(client, "v2/getCaller")) return null;
   if (await isSuspended(data.user.id, client)) return null;
-  return { userId: data.user.id, db: paasSchema(client) };
+  return {
+    userId: data.user.id,
+    email: data.user.email ?? null,
+    via: "cookie",
+    db: paasSchema(client),
+  };
+}
+
+/**
+ * The `sk_` API key on this request, if there is one.
+ *
+ * Read from the header rather than taken as a parameter so every route that
+ * already calls getCaller() gains API-key support without changing shape.
+ */
+async function bearerApiKey(): Promise<string | null> {
+  const header = (await headers()).get("authorization");
+  if (!header) return null;
+  const [scheme, token] = header.split(" ");
+  if (scheme !== "Bearer" || !token) return null;
+  // Only our own key format. A Supabase JWT arriving in this header belongs to
+  // a different flow and must not be mistaken for an API key.
+  return token.startsWith("sk_") ? token : null;
+}
+
+/**
+ * Resolve an API key to a caller whose queries run under RLS as the key's owner.
+ *
+ * The key proves WHO; sessionForUser turns that into the access token PostgREST
+ * needs, so the `paas` policies still decide WHAT — the same rows the browser
+ * would return, from the same policies. Nothing here reaches past RLS.
+ *
+ * NO INTERACTIVE SECOND FACTOR, deliberately and in step with v1: the key was
+ * minted by an already-authenticated session and is revocable from the
+ * dashboard. Demanding a TOTP step here would mean no account with MFA enabled
+ * could ever use the API at all.
+ */
+async function callerFromApiKey(key: string): Promise<Caller | null> {
+  const result = await ApiKeys.validate(key);
+  if (!result.valid) return null;
+  // A key carries its account's suspension exactly as a session does.
+  if (await isSuspended(result.userId)) return null;
+
+  const accessToken = await sessionForUser(result.userId);
+  if (!accessToken) return null;
+
+  return {
+    userId: result.userId,
+    email: null,
+    via: "api_key",
+    db: paasSchema(createServerSupabase(accessToken)),
+  };
 }
 
 export interface TeamRef {

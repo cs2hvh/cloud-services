@@ -21,7 +21,7 @@
  * than the wish.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { getCaller, type Caller } from "../../../_lib/auth";
 import { encryptEnvValue, bytesToPgHex } from "@/lib/paas/secrets";
 import { json, unauthenticated, notFound, invalid, apiError } from "../../../_lib/http";
 
@@ -34,9 +34,8 @@ const PROJECT_REF = /^prj-[0-9a-f]{12}$/;
 /** POSIX-ish env name. Rejected rather than sanitised: a silently renamed variable is not set. */
 const ENV_KEY = /^[A-Za-z_][A-Za-z0-9_]{0,127}$/;
 
-async function project(supabase: Awaited<ReturnType<typeof createClient>>, ref: string) {
-  return supabase
-    .schema("paas")
+async function project(db: Caller["db"], ref: string) {
+  return db
     .from("projects")
     .select("id,ref,deleted_at")
     .eq("ref", ref)
@@ -44,21 +43,17 @@ async function project(supabase: Awaited<ReturnType<typeof createClient>>, ref: 
 }
 
 async function requireProject(ref: string) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) return { error: unauthenticated() as Response };
+  const caller = await getCaller();
+  if (!caller) return { error: unauthenticated() as Response };
   if (!PROJECT_REF.test(ref)) return { error: notFound("Project") as Response };
 
-  const p = await project(supabase, ref);
+  const p = await project(caller.db, ref);
   if (p.error) {
     console.error("[v2/env] project read failed:", JSON.stringify(p.error));
     return { error: apiError("internal", "Could not read the project.", 500) as Response };
   }
   if (!p.data || p.data.deleted_at) return { error: notFound("Project") as Response };
-  return { supabase, project: p.data };
+  return { db: caller.db, project: p.data };
 }
 
 export async function GET(_req: Request, ctx: Ctx) {
@@ -66,8 +61,7 @@ export async function GET(_req: Request, ctx: Ctx) {
   const r = await requireProject(ref);
   if ("error" in r) return r.error;
 
-  const { data, error } = await r.supabase
-    .schema("paas")
+  const { data, error } = await r.db
     .from("env_vars")
     .select("key,is_public,environment_id,updated_at")
     .eq("project_id", r.project.id)
@@ -80,7 +74,12 @@ export async function GET(_req: Request, ctx: Ctx) {
 
   return json({
     // No values. See the header.
-    vars: (data ?? []).map((v) => ({
+    vars: ((data ?? []) as Array<{
+      key: string;
+      is_public: boolean;
+      environment_id: string | null;
+      updated_at: string;
+    }>).map((v) => ({
       key: v.key,
       isPublic: v.is_public,
       scope: v.environment_id ? "environment" : "all",
@@ -144,8 +143,7 @@ export async function PUT(req: Request, ctx: Ctx) {
     });
   }
 
-  const { error } = await r.supabase
-    .schema("paas")
+  const { error } = await r.db
     .from("env_vars")
     .upsert(rows, { onConflict: "project_id,environment_id,key" });
 
@@ -170,8 +168,7 @@ export async function DELETE(req: Request, ctx: Ctx) {
   const key = new URL(req.url).searchParams.get("key");
   if (!key || !ENV_KEY.test(key)) return invalid("Give a valid ?key= to delete.");
 
-  const { error } = await r.supabase
-    .schema("paas")
+  const { error } = await r.db
     .from("env_vars")
     .delete()
     .eq("project_id", r.project.id)

@@ -16,7 +16,7 @@
  * all of which fail loudly. A summing mistake would not.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import { getCaller } from "../../../_lib/auth";
 import { requireTier, hourlyRateUsd, BILLING_HOURS_PER_MONTH, clampInstances } from "@/lib/paas/tiers";
 import { assessArrears } from "@/lib/paas/arrears";
 import { summariseCharges } from "@/lib/paas/usage";
@@ -32,17 +32,13 @@ const PROJECT_REF = /^prj-[0-9a-f]{12}$/;
 const WINDOW_DAYS = 31;
 
 export async function GET(_req: Request, ctx: Ctx) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) return unauthenticated();
+  const caller = await getCaller();
+  if (!caller) return unauthenticated();
 
   const { ref } = await ctx.params;
   if (!PROJECT_REF.test(ref)) return notFound("Project");
 
-  const db = supabase.schema("paas");
+  const db = caller.db;
 
   const { data: project, error: projectError } = await db
     .from("projects")
