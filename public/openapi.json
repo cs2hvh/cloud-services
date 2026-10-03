@@ -3,7 +3,7 @@
   "info": {
     "title": "AhuraSense Cloud — API v1",
     "version": "1.0.0",
-    "description": "# AhuraSense Cloud REST API\n\nA REST API for managing cloud infrastructure — compute, databases, Kubernetes clusters, object storage and domains — and for deploying apps on the App Platform.\n\n## Authentication\n\nAll API requests require authentication using an API key. Include your API key in the `Authorization` header:\n\n```\nAuthorization: Bearer sk_live_YOUR_API_KEY\n```\n\nYou can generate API keys from your [dashboard settings](https://ahurasense.com/dashboard/settings/api-keys).\n\n**Deploy hooks are the exception.** An App Platform deploy hook's secret URL is its own credential, so it is called with no API key. See the App Platform section below, and the [deploy hooks guide](https://ahurasense.com/docs/apps/deploy-hooks).\n\n## Rate Limits\n\n- **Free Plan:** 30 requests per minute per operation\n- **Paid Plans:** Higher limits available\n\nRate limiting is enforced by v1 middleware on all authenticated endpoints.\nRuntime responses include rate-limit headers:\n- `X-RateLimit-Limit`: Maximum requests per window\n- `X-RateLimit-Remaining`: Remaining requests in current window\n- `Retry-After`: Seconds until rate limit resets (on 429 responses)\n\n## Errors\n\nThe API uses standard HTTP status codes:\n\n- `200`: Success\n- `400`: Bad Request (validation error)\n- `401`: Unauthorized (missing or invalid API key)\n- `403`: Forbidden (insufficient permissions)\n- `404`: Not Found\n- `429`: Too Many Requests (rate limit exceeded)\n- `500`: Internal Server Error\n\nError responses include details:\n\n```json\n{\n  \"error\": \"Validation failed\",\n  \"message\": \"Invalid request body\",\n  \"details\": {\n    \"field\": \"name\",\n    \"issue\": \"Must be at least 3 characters\"\n  }\n}\n```\n\nApp Platform endpoints nest the error instead:\n\n```json\n{\n  \"error\": {\n    \"code\": \"not_found\",\n    \"message\": \"Deploy hook not found.\"\n  }\n}\n```\n\n## Getting Started\n\n1. [Generate an API key](https://ahurasense.com/dashboard/settings/api-keys)\n2. Make your first request:\n\n```bash\ncurl -H \"Authorization: Bearer sk_live_xxx\" \\\n  https://ahurasense.com/api/v1/projects\n```\n\nFor more examples, see the API reference below.",
+    "description": "# AhuraSense Cloud REST API\n\nA REST API for managing cloud infrastructure — compute, databases, Kubernetes clusters, object storage and domains — and for deploying apps on the App Platform.\n\n## Authentication\n\nAll API requests require authentication using an API key. Include your API key in the `Authorization` header:\n\n```\nAuthorization: Bearer sk_live_YOUR_API_KEY\n```\n\nYou can generate API keys from your [dashboard settings](https://ahurasense.com/dashboard/settings/api-keys).\n\nThe same key drives the **App Platform**: create an app from a git repository, set its environment variables, deploy, read build and runtime logs, roll back, and attach a domain — all from your own code. A key acts as the person who created it and can do exactly what they can do in the dashboard, no more.\n\n**Deploy hooks are the one exception.** A deploy hook's secret URL is its own credential, so it is called with no API key at all. See the [deploy hooks guide](https://ahurasense.com/docs/apps/deploy-hooks).\n\n## Rate Limits\n\n- **Free Plan:** 30 requests per minute per operation\n- **Paid Plans:** Higher limits available\n\nRate limiting is enforced by v1 middleware on all authenticated endpoints.\nRuntime responses include rate-limit headers:\n- `X-RateLimit-Limit`: Maximum requests per window\n- `X-RateLimit-Remaining`: Remaining requests in current window\n- `Retry-After`: Seconds until rate limit resets (on 429 responses)\n\n## Errors\n\nThe API uses standard HTTP status codes:\n\n- `200`: Success\n- `400`: Bad Request (validation error)\n- `401`: Unauthorized (missing or invalid API key)\n- `403`: Forbidden (insufficient permissions)\n- `404`: Not Found\n- `429`: Too Many Requests (rate limit exceeded)\n- `500`: Internal Server Error\n\nError responses include details:\n\n```json\n{\n  \"error\": \"Validation failed\",\n  \"message\": \"Invalid request body\",\n  \"details\": {\n    \"field\": \"name\",\n    \"issue\": \"Must be at least 3 characters\"\n  }\n}\n```\n\nApp Platform endpoints nest the error instead:\n\n```json\n{\n  \"error\": {\n    \"code\": \"not_found\",\n    \"message\": \"Deploy hook not found.\"\n  }\n}\n```\n\n## Getting Started\n\n1. [Generate an API key](https://ahurasense.com/dashboard/settings/api-keys)\n2. Make your first request:\n\n```bash\ncurl -H \"Authorization: Bearer sk_live_xxx\" \\\n  https://ahurasense.com/api/v1/projects\n```\n\nFor more examples, see the API reference below.",
     "contact": {
       "name": "AhuraSense Cloud Support",
       "email": "support@ahurasense.com",
@@ -23,7 +23,7 @@
   "tags": [
     {
       "name": "App Platform",
-      "description": "Deploy apps from GitHub, GitLab or Bitbucket. Connect a repository in the dashboard and every push deploys it; a deploy hook lets your CI decide when production deploys instead. Guides: [App Platform documentation](https://ahurasense.com/docs/apps)."
+      "description": "Deploy apps from GitHub, GitLab or Bitbucket, from the dashboard or entirely from code. Create an app, set its configuration, deploy, follow the build, roll back and attach a domain with the endpoints below. Two steps stay outside the API on every platform: connecting a git account (the provider's own consent screen) and pointing DNS at us (records at your own provider). Guides: [App Platform documentation](https://ahurasense.com/docs/apps)."
     },
     {
       "name": "Projects",
@@ -76,35 +76,53 @@
       }
     },
     "schemas": {
-      "DeployHookAccepted": {
+      "AppPlatformMe": {
         "type": "object",
         "properties": {
-          "deployment": {
+          "user": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "example": "fa9e8802-f59b-45d1-b9ee-2d83ce40d955"
+              },
+              "email": {
+                "type": "string",
+                "nullable": true,
+                "description": "Always null for an API key: a key resolves to an account, not to a signed-in session."
+              }
+            },
+            "required": [
+              "id",
+              "email"
+            ]
+          },
+          "team": {
             "type": "object",
             "properties": {
               "ref": {
                 "type": "string",
-                "description": "The deployment this call created or joined. Follow it in the dashboard.",
-                "example": "dpl-8e76876577a2"
+                "example": "team-092103f179a4"
+              },
+              "slug": {
+                "type": "string",
+                "example": "harshit-hv"
+              },
+              "name": {
+                "type": "string",
+                "example": "harshit-hv"
               }
             },
             "required": [
-              "ref"
+              "ref",
+              "slug",
+              "name"
             ]
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "queued",
-              "already_queued"
-            ],
-            "description": "`queued`: a new deployment was created. `already_queued`: a deployment of the production branch was already waiting to build, so this call joined it instead of creating a second one.",
-            "example": "queued"
           }
         },
         "required": [
-          "deployment",
-          "status"
+          "user",
+          "team"
         ]
       },
       "AppPlatformError": {
@@ -137,6 +155,907 @@
         },
         "required": [
           "error"
+        ]
+      },
+      "GitConnections": {
+        "type": "object",
+        "properties": {
+          "installations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "Pass this as `connectionId` when creating an app.",
+                  "example": "156779383"
+                },
+                "provider": {
+                  "type": "string",
+                  "enum": [
+                    "github",
+                    "gitlab",
+                    "bitbucket"
+                  ],
+                  "example": "github"
+                },
+                "account": {
+                  "type": "string",
+                  "nullable": true,
+                  "example": "acme"
+                },
+                "accountType": {
+                  "type": "string",
+                  "nullable": true,
+                  "example": "User"
+                }
+              },
+              "required": [
+                "id",
+                "provider",
+                "account",
+                "accountType"
+              ]
+            }
+          },
+          "canConnectNew": {
+            "type": "boolean",
+            "example": true
+          },
+          "connectUrl": {
+            "type": "string",
+            "description": "Open in a browser to connect another account.",
+            "example": "/api/v2/git/connect"
+          }
+        },
+        "required": [
+          "installations",
+          "canConnectNew",
+          "connectUrl"
+        ]
+      },
+      "DeployableRepos": {
+        "type": "object",
+        "properties": {
+          "connected": {
+            "type": "boolean",
+            "example": true
+          },
+          "repos": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "fullName": {
+                  "type": "string",
+                  "example": "acme/web"
+                },
+                "private": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "defaultBranch": {
+                  "type": "string",
+                  "nullable": true,
+                  "example": "main"
+                },
+                "provider": {
+                  "type": "string",
+                  "example": "github"
+                }
+              },
+              "required": [
+                "fullName",
+                "private",
+                "defaultBranch",
+                "provider"
+              ]
+            }
+          }
+        },
+        "required": [
+          "connected",
+          "repos"
+        ]
+      },
+      "AppList": {
+        "type": "object",
+        "properties": {
+          "projects": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "ref": {
+                  "type": "string",
+                  "example": "prj-d0ec7956eadf"
+                },
+                "name": {
+                  "type": "string",
+                  "example": "api-e2e-test"
+                },
+                "slug": {
+                  "type": "string",
+                  "example": "api-e2e-test"
+                },
+                "repo": {
+                  "type": "string",
+                  "nullable": true,
+                  "example": "acme/web"
+                },
+                "productionBranch": {
+                  "type": "string",
+                  "nullable": true,
+                  "example": "main"
+                },
+                "tier": {
+                  "type": "string",
+                  "example": "starter"
+                },
+                "instances": {
+                  "type": "integer",
+                  "example": 1
+                },
+                "hostname": {
+                  "type": "string",
+                  "nullable": true,
+                  "example": "v2-api-e2e-test.ahurasense.com"
+                },
+                "state": {
+                  "type": "string",
+                  "nullable": true,
+                  "description": "State of the newest deployment.",
+                  "example": "ready"
+                },
+                "lastDeployedAt": {
+                  "type": "string",
+                  "nullable": true,
+                  "example": "2026-10-03T17:46:55.087Z"
+                },
+                "previews": {
+                  "type": "integer",
+                  "example": 0
+                }
+              },
+              "required": [
+                "ref",
+                "name",
+                "slug",
+                "repo",
+                "productionBranch",
+                "tier",
+                "instances",
+                "hostname",
+                "state",
+                "lastDeployedAt",
+                "previews"
+              ]
+            }
+          },
+          "count": {
+            "type": "integer",
+            "example": 3
+          }
+        },
+        "required": [
+          "projects",
+          "count"
+        ]
+      },
+      "AppPlatformApp": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "object",
+            "properties": {
+              "ref": {
+                "type": "string",
+                "example": "prj-d0ec7956eadf"
+              },
+              "name": {
+                "type": "string",
+                "example": "api-e2e-test"
+              },
+              "slug": {
+                "type": "string",
+                "example": "api-e2e-test"
+              },
+              "repo": {
+                "type": "object",
+                "properties": {
+                  "provider": {
+                    "type": "string",
+                    "example": "github"
+                  },
+                  "fullName": {
+                    "type": "string",
+                    "example": "acme/web"
+                  },
+                  "productionBranch": {
+                    "type": "string",
+                    "example": "main"
+                  },
+                  "rootDirectory": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "installed": {
+                    "type": "boolean",
+                    "description": "Whether the git connection can still read it.",
+                    "example": true
+                  }
+                },
+                "required": [
+                  "provider",
+                  "fullName",
+                  "productionBranch",
+                  "rootDirectory",
+                  "installed"
+                ]
+              },
+              "sizing": {
+                "type": "object",
+                "properties": {
+                  "tier": {
+                    "type": "string",
+                    "example": "starter"
+                  },
+                  "label": {
+                    "type": "string",
+                    "example": "Starter"
+                  },
+                  "memoryMib": {
+                    "type": "integer",
+                    "example": 512
+                  },
+                  "vcpu": {
+                    "type": "number",
+                    "example": 1
+                  },
+                  "instanceCount": {
+                    "type": "integer",
+                    "example": 1
+                  },
+                  "priceUsd": {
+                    "type": "number",
+                    "example": 7
+                  }
+                },
+                "required": [
+                  "tier",
+                  "label",
+                  "memoryMib",
+                  "vcpu",
+                  "instanceCount",
+                  "priceUsd"
+                ]
+              },
+              "team": {
+                "type": "object",
+                "properties": {
+                  "ref": {
+                    "type": "string"
+                  },
+                  "slug": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "ref",
+                  "slug",
+                  "name"
+                ]
+              },
+              "createdAt": {
+                "type": "string",
+                "example": "2026-10-03T17:36:16.877Z"
+              }
+            },
+            "required": [
+              "ref",
+              "name",
+              "slug",
+              "repo",
+              "sizing",
+              "team",
+              "createdAt"
+            ]
+          }
+        },
+        "required": [
+          "project"
+        ]
+      },
+      "CreateAppRequest": {
+        "type": "object",
+        "properties": {
+          "repo": {
+            "type": "string",
+            "description": "`owner/repo`. On GitLab this may include subgroups.",
+            "example": "acme/web"
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "github",
+              "gitlab",
+              "bitbucket"
+            ],
+            "example": "github"
+          },
+          "connectionId": {
+            "type": "string",
+            "description": "From GET /api/v2/git/installations. Must belong to your team; the repository is read through it.",
+            "example": "156779383"
+          },
+          "branch": {
+            "type": "string",
+            "description": "Production branch. Defaults to `main`.",
+            "example": "main"
+          },
+          "name": {
+            "type": "string",
+            "description": "Sets the app's address. Defaults to the repository name. Must be unique within your team.",
+            "example": "web"
+          },
+          "rootDirectory": {
+            "type": "string",
+            "description": "For a monorepo.",
+            "example": "apps/web"
+          },
+          "tier": {
+            "type": "string",
+            "description": "Defaults to `starter`.",
+            "example": "starter"
+          },
+          "instances": {
+            "type": "integer",
+            "description": "Defaults to 1.",
+            "example": 1
+          }
+        },
+        "required": [
+          "repo",
+          "provider",
+          "connectionId"
+        ]
+      },
+      "AppPlatformUpdateAppRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "productionBranch": {
+            "type": "string"
+          },
+          "rootDirectory": {
+            "type": "string",
+            "nullable": true
+          },
+          "deployOnPush": {
+            "type": "boolean",
+            "example": false
+          },
+          "tier": {
+            "type": "string"
+          },
+          "instances": {
+            "type": "integer"
+          }
+        }
+      },
+      "DeleteAppResult": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ]
+      },
+      "EnvVarList": {
+        "type": "object",
+        "properties": {
+          "vars": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "example": "DATABASE_URL"
+                },
+                "isPublic": {
+                  "type": "boolean",
+                  "description": "True for NEXT_PUBLIC_ / PUBLIC_ names, which reach the browser.",
+                  "example": false
+                },
+                "scope": {
+                  "type": "string",
+                  "example": "all"
+                },
+                "updatedAt": {
+                  "type": "string",
+                  "example": "2026-10-03T17:36:33.567Z"
+                }
+              },
+              "required": [
+                "key",
+                "isPublic",
+                "scope",
+                "updatedAt"
+              ]
+            }
+          }
+        },
+        "required": [
+          "vars"
+        ]
+      },
+      "SetEnvVarsResult": {
+        "type": "object",
+        "properties": {
+          "saved": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "saved",
+          "note"
+        ]
+      },
+      "SetEnvVarsRequest": {
+        "type": "object",
+        "properties": {
+          "vars": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "example": {
+              "DATABASE_URL": "postgres://…"
+            }
+          }
+        },
+        "required": [
+          "vars"
+        ]
+      },
+      "DeleteEnvVarResult": {
+        "type": "object",
+        "properties": {
+          "deleted": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "deleted"
+        ]
+      },
+      "TriggeredDeployment": {
+        "type": "object",
+        "properties": {
+          "deployment": {
+            "type": "object",
+            "properties": {
+              "ref": {
+                "type": "string"
+              },
+              "gitRef": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": [
+              "ref",
+              "gitRef"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "example": "building"
+          }
+        },
+        "required": [
+          "deployment",
+          "status"
+        ]
+      },
+      "AppPlatformDeployment": {
+        "type": "object",
+        "properties": {
+          "deployment": {
+            "type": "object",
+            "properties": {
+              "ref": {
+                "type": "string",
+                "example": "dpl-6a2df67a6cf0"
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "queued",
+                  "building",
+                  "publishing",
+                  "ready",
+                  "error"
+                ],
+                "description": "Terminal states are `ready` and `error`.",
+                "example": "ready"
+              },
+              "isTerminal": {
+                "type": "boolean",
+                "example": true
+              },
+              "trigger": {
+                "type": "string",
+                "example": "redeploy"
+              },
+              "commit": {
+                "type": "object",
+                "properties": {
+                  "sha": {
+                    "type": "string",
+                    "nullable": true,
+                    "example": "e3c659e6ae9f0849f15e9308b904eb3e39087e38"
+                  },
+                  "shortSha": {
+                    "type": "string",
+                    "nullable": true,
+                    "example": "e3c659e"
+                  },
+                  "ref": {
+                    "type": "string",
+                    "nullable": true,
+                    "example": "main"
+                  }
+                },
+                "required": [
+                  "sha",
+                  "shortSha",
+                  "ref"
+                ]
+              },
+              "error": {
+                "type": "string",
+                "nullable": true,
+                "description": "Why it failed, when state is `error`."
+              },
+              "timing": {
+                "type": "object",
+                "properties": {
+                  "queuedAt": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "readyAt": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "durationMs": {
+                    "type": "number",
+                    "nullable": true,
+                    "example": 591247
+                  }
+                },
+                "required": [
+                  "queuedAt",
+                  "readyAt",
+                  "durationMs"
+                ]
+              }
+            },
+            "required": [
+              "ref",
+              "state",
+              "isTerminal",
+              "trigger",
+              "commit",
+              "error",
+              "timing"
+            ]
+          },
+          "servedBy": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "hostname": {
+                  "type": "string",
+                  "example": "v2-api-e2e-test.ahurasense.com"
+                },
+                "url": {
+                  "type": "string",
+                  "example": "https://v2-api-e2e-test.ahurasense.com"
+                },
+                "kind": {
+                  "type": "string",
+                  "example": "production"
+                }
+              },
+              "required": [
+                "hostname",
+                "url",
+                "kind"
+              ]
+            }
+          },
+          "isLive": {
+            "type": "boolean",
+            "description": "Whether this deployment is the one currently serving.",
+            "example": true
+          }
+        },
+        "required": [
+          "deployment",
+          "servedBy",
+          "isLive"
+        ]
+      },
+      "BuildLog": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string",
+            "example": "dpl-6a2df67a6cf0"
+          },
+          "state": {
+            "type": "string",
+            "example": "ready"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Build output, oldest first."
+          },
+          "offset": {
+            "type": "integer",
+            "example": 0
+          },
+          "total": {
+            "type": "integer",
+            "example": 358
+          },
+          "hasMore": {
+            "type": "boolean",
+            "example": false
+          },
+          "alterationNotice": {
+            "type": "string",
+            "example": "Only build output is shown."
+          }
+        },
+        "required": [
+          "ref",
+          "state",
+          "lines",
+          "offset",
+          "total",
+          "hasMore",
+          "alterationNotice"
+        ]
+      },
+      "RuntimeLogs": {
+        "type": "object",
+        "properties": {
+          "ref": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "pods": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "pod": {
+                  "type": "string"
+                },
+                "previous": {
+                  "type": "boolean"
+                },
+                "lines": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "pod",
+                "previous",
+                "lines"
+              ]
+            }
+          }
+        },
+        "required": [
+          "ref",
+          "state",
+          "pods"
+        ]
+      },
+      "RollbackResult": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "changed": {
+            "type": "boolean"
+          },
+          "deployment": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "changed",
+          "deployment"
+        ]
+      },
+      "RollbackRequest": {
+        "type": "object",
+        "properties": {
+          "deployment": {
+            "type": "string",
+            "example": "dpl-6a2df67a6cf0"
+          }
+        },
+        "required": [
+          "deployment"
+        ]
+      },
+      "DomainList": {
+        "type": "object",
+        "properties": {
+          "domains": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "ref": {
+                  "type": "string",
+                  "example": "dom-2f1c9a7b4e55"
+                },
+                "domain": {
+                  "type": "string",
+                  "example": "app.example.com"
+                },
+                "status": {
+                  "type": "string",
+                  "example": "active"
+                }
+              },
+              "required": [
+                "ref",
+                "domain",
+                "status"
+              ]
+            }
+          }
+        },
+        "required": [
+          "domains"
+        ]
+      },
+      "AddDomainResult": {
+        "type": "object",
+        "properties": {
+          "domain": {
+            "type": "object",
+            "properties": {
+              "ref": {
+                "type": "string"
+              },
+              "domain": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "ref",
+              "domain",
+              "status"
+            ]
+          },
+          "records": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "name",
+                "value"
+              ]
+            }
+          }
+        },
+        "required": [
+          "domain",
+          "records"
+        ]
+      },
+      "AppPlatformAddDomainRequest": {
+        "type": "object",
+        "properties": {
+          "domain": {
+            "type": "string",
+            "example": "app.example.com"
+          }
+        },
+        "required": [
+          "domain"
+        ]
+      },
+      "RemoveDomainResult": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ]
+      },
+      "DeployHookAccepted": {
+        "type": "object",
+        "properties": {
+          "deployment": {
+            "type": "object",
+            "properties": {
+              "ref": {
+                "type": "string",
+                "description": "The deployment this call created or joined. Follow it in the dashboard.",
+                "example": "dpl-8e76876577a2"
+              }
+            },
+            "required": [
+              "ref"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "already_queued"
+            ],
+            "description": "`queued`: a new deployment was created. `already_queued`: a deployment of the production branch was already waiting to build, so this call joined it instead of creating a second one.",
+            "example": "queued"
+          }
+        },
+        "required": [
+          "deployment",
+          "status"
         ]
       },
       "App": {
@@ -5002,6 +5921,1619 @@
     "parameters": {}
   },
   "paths": {
+    "/api/v2/me": {
+      "get": {
+        "tags": [
+          "App Platform"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Who this key belongs to",
+        "description": "The account the key acts as, and the team that owns its apps. A good first call to check a key works.",
+        "responses": {
+          "200": {
+            "description": "The key's owner and team.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformMe"
+                },
+                "example": {
+                  "user": {
+                    "id": "fa9e8802-f59b-45d1-b9ee-2d83ce40d955",
+                    "email": null
+                  },
+                  "team": {
+                    "ref": "team-092103f179a4",
+                    "slug": "acme",
+                    "name": "acme"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The API key is missing, invalid, revoked, or the account is suspended.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "unauthenticated",
+                    "message": "Sign in to continue."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/git/installations": {
+      "get": {
+        "tags": [
+          "App Platform"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List connected git accounts",
+        "description": "Each entry's `id` is the `connectionId` you pass when creating an app, so a script never has to hard-code it.\n\nConnecting an account is the one step that cannot be an API call: it is the provider's own consent screen (installing the GitHub App, or authorizing GitLab or Bitbucket), so it happens once in a browser. Everything after that is here.",
+        "responses": {
+          "200": {
+            "description": "Connected accounts.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GitConnections"
+                },
+                "example": {
+                  "installations": [
+                    {
+                      "id": "156779383",
+                      "provider": "github",
+                      "account": "acme",
+                      "accountType": "User"
+                    }
+                  ],
+                  "canConnectNew": true,
+                  "connectUrl": "/api/v2/git/connect"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The API key is missing, invalid, revoked, or the account is suspended.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "unauthenticated",
+                    "message": "Sign in to continue."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/repos": {
+      "get": {
+        "tags": [
+          "App Platform"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List repositories you can deploy",
+        "description": "Every repository the connected accounts can read, across all providers.",
+        "responses": {
+          "200": {
+            "description": "Deployable repositories.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeployableRepos"
+                },
+                "example": {
+                  "connected": true,
+                  "repos": [
+                    {
+                      "fullName": "acme/web",
+                      "private": false,
+                      "defaultBranch": "main",
+                      "provider": "github"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The API key is missing, invalid, revoked, or the account is suspended.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "unauthenticated",
+                    "message": "Sign in to continue."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/projects": {
+      "get": {
+        "tags": [
+          "App Platform"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List your apps",
+        "responses": {
+          "200": {
+            "description": "Your team's apps, with the state of each one's newest deployment.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppList"
+                },
+                "example": {
+                  "projects": [
+                    {
+                      "ref": "prj-d0ec7956eadf",
+                      "name": "web",
+                      "slug": "web",
+                      "repo": "acme/web",
+                      "productionBranch": "main",
+                      "tier": "starter",
+                      "instances": 1,
+                      "hostname": "v2-web.ahurasense.com",
+                      "state": "ready",
+                      "lastDeployedAt": "2026-10-03T17:46:55.087Z",
+                      "previews": 0
+                    }
+                  ],
+                  "count": 1
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The API key is missing, invalid, revoked, or the account is suspended.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "unauthenticated",
+                    "message": "Sign in to continue."
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "App Platform"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create an app",
+        "description": "Creates the app and its production environment. It does NOT deploy — call `/deployments/trigger` next, or push to the production branch.\n\nThe app gets an `https://v2-<name>.ahurasense.com` address immediately, with a certificate; `name` is what sets it.\n\n`connectionId` must be a git connection belonging to your team (see GET /api/v2/git/installations). This is checked before anything is created, because it selects the credential the build reads the repository with.\n\nGuide: [App Platform documentation](https://ahurasense.com/docs/apps).",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAppRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The app was created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformApp"
+                },
+                "example": {
+                  "project": {
+                    "ref": "prj-d0ec7956eadf",
+                    "name": "web",
+                    "slug": "web",
+                    "repo_full_name": "acme/web",
+                    "production_branch": "main",
+                    "tier": "starter",
+                    "instance_count": 1
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A field is missing or malformed — for example a `connectionId` your team does not hold.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "invalid_request",
+                    "message": "That github connection is not available to your account."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The API key is missing, invalid, revoked, or the account is suspended.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "unauthenticated",
+                    "message": "Sign in to continue."
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "You already have an app with that name. The name sets the address, so two apps cannot share one.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "conflict",
+                    "message": "You already have an app called \"web\". Give this one a different name."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/projects/{ref}": {
+      "get": {
+        "tags": [
+          "App Platform"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get an app",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^prj-[0-9a-f]{12}$",
+              "description": "The app's ref, as returned when it was created.",
+              "example": "prj-d0ec7956eadf"
+            },
+            "required": true,
+            "name": "ref",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The app, its repository, sizing and team.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformApp"
+                },
+                "example": {
+                  "project": {
+                    "ref": "prj-d0ec7956eadf",
+                    "name": "web",
+                    "slug": "web",
+                    "repo": {
+                      "provider": "github",
+                      "fullName": "acme/web",
+                      "productionBranch": "main",
+                      "rootDirectory": null,
+                      "installed": true
+                    },
+                    "sizing": {
+                      "tier": "starter",
+                      "label": "Starter",
+                      "memoryMib": 512,
+                      "vcpu": 1,
+                      "instanceCount": 1,
+                      "priceUsd": 7
+                    },
+                    "team": {
+                      "ref": "team-092103f179a4",
+                      "slug": "acme",
+                      "name": "acme"
+                    },
+                    "createdAt": "2026-10-03T17:36:16.877Z"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The API key is missing, invalid, revoked, or the account is suspended.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "unauthenticated",
+                    "message": "Sign in to continue."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such App, or it belongs to a team this key cannot see.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "App not found."
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "App Platform"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Change an app's settings",
+        "description": "Send only the fields you want to change. Renaming changes the app's address. Set `deployOnPush` to false to make a deploy hook the only way production deploys.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^prj-[0-9a-f]{12}$",
+              "description": "The app's ref, as returned when it was created.",
+              "example": "prj-d0ec7956eadf"
+            },
+            "required": true,
+            "name": "ref",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppPlatformUpdateAppRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The updated app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformApp"
+                },
+                "example": {
+                  "project": {
+                    "ref": "prj-d0ec7956eadf",
+                    "name": "web"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A field is malformed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "invalid_request",
+                    "message": "That is not a valid name."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The API key is missing, invalid, revoked, or the account is suspended.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "unauthenticated",
+                    "message": "Sign in to continue."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such App, or it belongs to a team this key cannot see.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "App not found."
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "App Platform"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete an app",
+        "description": "Stops serving it, removes its deployments and domains, and releases its resources. This cannot be undone.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^prj-[0-9a-f]{12}$",
+              "description": "The app's ref, as returned when it was created.",
+              "example": "prj-d0ec7956eadf"
+            },
+            "required": true,
+            "name": "ref",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The app was deleted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteAppResult"
+                },
+                "example": {
+                  "ok": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The API key is missing, invalid, revoked, or the account is suspended.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "unauthenticated",
+                    "message": "Sign in to continue."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such App, or it belongs to a team this key cannot see.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "App not found."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/projects/{ref}/env": {
+      "get": {
+        "tags": [
+          "App Platform"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List environment variable names",
+        "description": "Names only. Values are encrypted and are never returned by any endpoint — if you lose one, set it again.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^prj-[0-9a-f]{12}$",
+              "description": "The app's ref, as returned when it was created.",
+              "example": "prj-d0ec7956eadf"
+            },
+            "required": true,
+            "name": "ref",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The variables set on this app, without their values.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvVarList"
+                },
+                "example": {
+                  "vars": [
+                    {
+                      "key": "DATABASE_URL",
+                      "isPublic": false,
+                      "scope": "all",
+                      "updatedAt": "2026-10-03T17:36:33.567Z"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The API key is missing, invalid, revoked, or the account is suspended.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "unauthenticated",
+                    "message": "Sign in to continue."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such App, or it belongs to a team this key cannot see.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "App not found."
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "App Platform"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Set environment variables",
+        "description": "Adds or replaces the variables you send and leaves the rest alone. Up to 100 per call; values up to 32,768 characters.\n\nA name beginning `NEXT_PUBLIC_` or `PUBLIC_` is built into your client code and is readable by anyone visiting the site. Never put a secret in one.\n\nSaving does not restart anything — the change takes effect on the next deployment.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^prj-[0-9a-f]{12}$",
+              "description": "The app's ref, as returned when it was created.",
+              "example": "prj-d0ec7956eadf"
+            },
+            "required": true,
+            "name": "ref",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetEnvVarsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The variables were saved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetEnvVarsResult"
+                },
+                "example": {
+                  "saved": [
+                    "DATABASE_URL"
+                  ],
+                  "note": "Saved. Redeploy for these to take effect."
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A name or value is not acceptable.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "invalid_request",
+                    "message": "\"1BAD\" is not a valid variable name."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The API key is missing, invalid, revoked, or the account is suspended.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "unauthenticated",
+                    "message": "Sign in to continue."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such App, or it belongs to a team this key cannot see.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "App not found."
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "App Platform"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete an environment variable",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^prj-[0-9a-f]{12}$",
+              "description": "The app's ref, as returned when it was created.",
+              "example": "prj-d0ec7956eadf"
+            },
+            "required": true,
+            "name": "ref",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "example": "DATABASE_URL"
+            },
+            "required": true,
+            "name": "key",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The variable was removed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteEnvVarResult"
+                },
+                "example": {
+                  "deleted": "DATABASE_URL"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No usable `key` was given.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "invalid_request",
+                    "message": "Give a valid ?key= to delete."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The API key is missing, invalid, revoked, or the account is suspended.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "unauthenticated",
+                    "message": "Sign in to continue."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such App, or it belongs to a team this key cannot see.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "App not found."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/projects/{ref}/deployments/trigger": {
+      "post": {
+        "tags": [
+          "App Platform"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Deploy",
+        "description": "Builds and deploys the production branch at its current head. Returns as soon as the deployment is queued; poll `/api/v2/deployments/{ref}` for the outcome.\n\nA healthy deploy usually takes four to ten minutes.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^prj-[0-9a-f]{12}$",
+              "description": "The app's ref, as returned when it was created.",
+              "example": "prj-d0ec7956eadf"
+            },
+            "required": true,
+            "name": "ref",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "A deployment was queued.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TriggeredDeployment"
+                },
+                "example": {
+                  "deployment": {
+                    "ref": "dpl-6a2df67a6cf0",
+                    "gitRef": "main"
+                  },
+                  "status": "building"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The API key is missing, invalid, revoked, or the account is suspended.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "unauthenticated",
+                    "message": "Sign in to continue."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such App, or it belongs to a team this key cannot see.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "App not found."
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "There is nowhere to deploy — the app has no production environment.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "conflict",
+                    "message": "This project has no production environment, so there is nowhere to deploy."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/deployments/{ref}": {
+      "get": {
+        "tags": [
+          "App Platform"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get a deployment",
+        "description": "Poll this after deploying. `state` reaches `ready` or `error`; `isTerminal` tells you when to stop. `servedBy` carries the addresses it answers on.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^dpl-[0-9a-f]{12}$",
+              "description": "The deployment's ref.",
+              "example": "dpl-6a2df67a6cf0"
+            },
+            "required": true,
+            "name": "ref",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The deployment, with its commit, timing and addresses.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformDeployment"
+                },
+                "example": {
+                  "deployment": {
+                    "ref": "dpl-6a2df67a6cf0",
+                    "state": "ready",
+                    "isTerminal": true,
+                    "trigger": "redeploy",
+                    "commit": {
+                      "sha": "e3c659e6ae9f0849f15e9308b904eb3e39087e38",
+                      "shortSha": "e3c659e",
+                      "ref": "main"
+                    },
+                    "error": null,
+                    "timing": {
+                      "queuedAt": "2026-10-03T17:36:34.025Z",
+                      "readyAt": "2026-10-03T17:46:55.087Z",
+                      "durationMs": 591247
+                    }
+                  },
+                  "servedBy": [
+                    {
+                      "hostname": "v2-web.ahurasense.com",
+                      "url": "https://v2-web.ahurasense.com",
+                      "kind": "production"
+                    }
+                  ],
+                  "isLive": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The API key is missing, invalid, revoked, or the account is suspended.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "unauthenticated",
+                    "message": "Sign in to continue."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such Deployment, or it belongs to a team this key cannot see.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "Deployment not found."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/deployments/{ref}/logs": {
+      "get": {
+        "tags": [
+          "App Platform"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Build log",
+        "description": "What the build printed. When a deployment fails because your build command failed, its own output is here.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^dpl-[0-9a-f]{12}$",
+              "description": "The deployment's ref.",
+              "example": "dpl-6a2df67a6cf0"
+            },
+            "required": true,
+            "name": "ref",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The build output.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildLog"
+                },
+                "example": {
+                  "ref": "dpl-6a2df67a6cf0",
+                  "state": "ready",
+                  "lines": [
+                    "build complete",
+                    "=== finishing: status=success ==="
+                  ],
+                  "offset": 0,
+                  "total": 358,
+                  "hasMore": false,
+                  "alterationNotice": "Only build output is shown."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The API key is missing, invalid, revoked, or the account is suspended.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "unauthenticated",
+                    "message": "Sign in to continue."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such Deployment, or it belongs to a team this key cannot see.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "Deployment not found."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/deployments/{ref}/runtime-logs": {
+      "get": {
+        "tags": [
+          "App Platform"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Runtime logs",
+        "description": "What your running app has printed. This is where to look when a deployment reports `ready` but the app answers 500.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^dpl-[0-9a-f]{12}$",
+              "description": "The deployment's ref.",
+              "example": "dpl-6a2df67a6cf0"
+            },
+            "required": true,
+            "name": "ref",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recent output, per running instance.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RuntimeLogs"
+                },
+                "example": {
+                  "ref": "dpl-6a2df67a6cf0",
+                  "state": "ready",
+                  "pods": [
+                    {
+                      "pod": "dpl-6a2df67a6cf0-54c6557dc7-b9q6l",
+                      "previous": false,
+                      "lines": [
+                        "✓ Ready in 4.1s"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The API key is missing, invalid, revoked, or the account is suspended.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "unauthenticated",
+                    "message": "Sign in to continue."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such Deployment, or it belongs to a team this key cannot see.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "Deployment not found."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/projects/{ref}/rollback": {
+      "post": {
+        "tags": [
+          "App Platform"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Roll back to an earlier deployment",
+        "description": "Points the app's address at a deployment that already built, so there is nothing to rebuild and it takes effect in seconds.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^prj-[0-9a-f]{12}$",
+              "description": "The app's ref, as returned when it was created.",
+              "example": "prj-d0ec7956eadf"
+            },
+            "required": true,
+            "name": "ref",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RollbackRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The app now serves that deployment. `changed` is false when it already did.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RollbackResult"
+                },
+                "example": {
+                  "ok": true,
+                  "changed": true,
+                  "deployment": "dpl-6a2df67a6cf0"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No usable deployment ref was given.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "invalid_request",
+                    "message": "`deployment` is required and must be a deployment ref."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The API key is missing, invalid, revoked, or the account is suspended.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "unauthenticated",
+                    "message": "Sign in to continue."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such App, or it belongs to a team this key cannot see.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "App not found."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/projects/{ref}/domains": {
+      "get": {
+        "tags": [
+          "App Platform"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List custom domains",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^prj-[0-9a-f]{12}$",
+              "description": "The app's ref, as returned when it was created.",
+              "example": "prj-d0ec7956eadf"
+            },
+            "required": true,
+            "name": "ref",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The domains attached to this app and their verification state.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainList"
+                },
+                "example": {
+                  "domains": []
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The API key is missing, invalid, revoked, or the account is suspended.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "unauthenticated",
+                    "message": "Sign in to continue."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such App, or it belongs to a team this key cannot see.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "App not found."
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "App Platform"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Add a custom domain",
+        "description": "Claims the domain for this app and returns the DNS records to create.\n\nCreating those records is the second step that cannot be an API call here — they live at your DNS provider, not with us. If your DNS is on a provider with its own API, you can script that step there. The certificate issues once the records resolve.\n\nGuide: [Custom domains](https://ahurasense.com/docs/apps/domains).",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^prj-[0-9a-f]{12}$",
+              "description": "The app's ref, as returned when it was created.",
+              "example": "prj-d0ec7956eadf"
+            },
+            "required": true,
+            "name": "ref",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppPlatformAddDomainRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The domain was claimed. Create the records it returns.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddDomainResult"
+                },
+                "example": {
+                  "domain": {
+                    "ref": "dom-2f1c9a7b4e55",
+                    "domain": "app.example.com",
+                    "status": "pending"
+                  },
+                  "records": [
+                    {
+                      "type": "CNAME",
+                      "name": "app.example.com",
+                      "value": "fallback.ahurasense.com"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a valid domain, or one that belongs to the platform.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "invalid_request",
+                    "message": "That is not a valid domain name."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The API key is missing, invalid, revoked, or the account is suspended.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "unauthenticated",
+                    "message": "Sign in to continue."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such App, or it belongs to a team this key cannot see.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "App not found."
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "That domain is already attached to an app.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "conflict",
+                    "message": "That domain is already claimed."
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "App Platform"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Remove a custom domain",
+        "description": "It stops serving your app and its certificate is withdrawn. Delete the DNS records afterwards.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^prj-[0-9a-f]{12}$",
+              "description": "The app's ref, as returned when it was created.",
+              "example": "prj-d0ec7956eadf"
+            },
+            "required": true,
+            "name": "ref",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "The domain's ref.",
+              "example": "dom-2f1c9a7b4e55"
+            },
+            "required": true,
+            "name": "domain",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The domain was removed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoveDomainResult"
+                },
+                "example": {
+                  "ok": true
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No domain ref was given.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "invalid_request",
+                    "message": "A `domain` ref is required."
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The API key is missing, invalid, revoked, or the account is suspended.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "unauthenticated",
+                    "message": "Sign in to continue."
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such Domain, or it belongs to a team this key cannot see.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AppPlatformError"
+                },
+                "example": {
+                  "error": {
+                    "code": "not_found",
+                    "message": "Domain not found."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v2/hooks/deploy/{token}": {
       "post": {
         "tags": [

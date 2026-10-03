@@ -63,7 +63,9 @@ Authorization: Bearer sk_live_YOUR_API_KEY
 
 You can generate API keys from your [dashboard settings](https://ahurasense.com/dashboard/settings/api-keys).
 
-**Deploy hooks are the exception.** An App Platform deploy hook's secret URL is its own credential, so it is called with no API key. See the App Platform section below, and the [deploy hooks guide](https://ahurasense.com/docs/apps/deploy-hooks).
+The same key drives the **App Platform**: create an app from a git repository, set its environment variables, deploy, read build and runtime logs, roll back, and attach a domain — all from your own code. A key acts as the person who created it and can do exactly what they can do in the dashboard, no more.
+
+**Deploy hooks are the one exception.** A deploy hook's secret URL is its own credential, so it is called with no API key at all. See the [deploy hooks guide](https://ahurasense.com/docs/apps/deploy-hooks).
 
 ## Rate Limits
 
@@ -144,7 +146,7 @@ For more examples, see the API reference below.
       {
         name: 'App Platform',
         description:
-          'Deploy apps from GitHub, GitLab or Bitbucket. Connect a repository in the dashboard and every push deploys it; a deploy hook lets your CI decide when production deploys instead. Guides: [App Platform documentation](https://ahurasense.com/docs/apps).',
+          'Deploy apps from GitHub, GitLab or Bitbucket, from the dashboard or entirely from code. Create an app, set its configuration, deploy, follow the build, roll back and attach a domain with the endpoints below. Two steps stay outside the API on every platform: connecting a git account (the provider\'s own consent screen) and pointing DNS at us (records at your own provider). Guides: [App Platform documentation](https://ahurasense.com/docs/apps).',
       },
       {
         name: 'Projects',
