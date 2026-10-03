@@ -28,6 +28,18 @@
  * app/api/v2/webhooks/** has no user session by nature — GitHub is the caller.
  * The tenant checks would flag correct code, so the guarantee that DOES apply
  * is asserted instead: the signature is verified before anything is written.
+ *
+ * app/api/v2/hooks/** is the public deploy-hook endpoint and is the same shape:
+ * the secret URL is the credential, so there is no caller to resolve and the
+ * service role is legitimate (it is allowlisted in lib/paas/boundary.test.ts
+ * with its reason). Its replacement guarantees are asserted below — the token
+ * is checked before any deploy is queued, and the request body is never read,
+ * which is what keeps a leaked URL from choosing WHAT gets deployed.
+ *
+ * app/api/v2/internal/** is called by the build worker with a shared token, so
+ * it has no caller to resolve either. Its replacement guarantee is below: the
+ * token is compared before the body is parsed or any mail is sent.
+ *
  * Excluding a file without replacing its guarantee is how an exclusion list
  * becomes a way to pass.
  */
@@ -35,7 +47,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync, mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { tmpdir } from "node:os";
 
 const ROOT = "app/api/v2";
@@ -49,11 +61,23 @@ export function code(source: string): string {
     .replace(/(^|[^:])\/\/[^\n]*/g, "$1 ");
 }
 
-function walk(dir: string, out: string[] = []): string[] {
+/**
+ * Subtrees the tenant checks do not apply to, named by their path RELATIVE to
+ * the root being walked.
+ *
+ * Relative, not by bare name, because `hooks` is ambiguous: app/api/v2/hooks is
+ * the public deploy-hook endpoint and has no session, while
+ * app/api/v2/projects/[ref]/hooks manages those hooks through RLS and is a
+ * tenant route like any other. Matching on the name alone would silently stop
+ * checking the second one.
+ */
+const EXCLUDED_SUBTREES = new Set(["admin", "webhooks", "hooks", "internal"]);
+
+function walk(dir: string, out: string[] = [], base: string = dir): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (entry.name !== "admin" && entry.name !== "webhooks") walk(path, out);
+      if (!EXCLUDED_SUBTREES.has(relative(base, path))) walk(path, out, base);
     } else if (entry.name.endsWith(".ts") && !entry.name.endsWith(".test.ts")) {
       out.push(path);
     }
@@ -288,8 +312,51 @@ test("every handler resolves a caller before it can return", () => {
   assert.deepEqual(bad, []);
 });
 
+/**
+ * Routes that answer 403, each with the reason it leaks nothing.
+ *
+ * The rule exists because a 403 confirms a ref exists, which is how a caller
+ * enumerates other teams' projects. It does NOT apply once the caller has
+ * already read the project through RLS: at that point its existence is
+ * something they knew before asking, and refusing on ROLE tells them only
+ * about their own permissions. An allowlist with a reason per entry, not a
+ * disabled check — the predicate still runs everywhere else.
+ */
+const ANSWERS_403_ALLOWED = [
+  {
+    path: "app/api/v2/projects/[ref]/hooks/route.ts",
+    reason:
+      "a member who may read the app but not manage its hooks; the project is read through RLS first, so the status confirms nothing new",
+  },
+  {
+    path: "app/api/v2/projects/[ref]/rollback/route.ts",
+    reason:
+      "the rollback RPC's own permission check (42501) disagreeing after the route's checks already passed — a 404 there would hide a real inconsistency",
+  },
+];
+
+/** Windows walks produce backslashes; the allowlist is written with slashes. */
+const slashed = (f: string) => f.split(/[\\/]/).join("/");
+
 test("nothing answers 403 — invisible is indistinguishable from absent", () => {
-  assert.deepEqual(REAL.filter((f) => answers403(read(f))), []);
+  const allowed = new Set(ANSWERS_403_ALLOWED.map((a) => a.path));
+  const offenders = REAL.filter((f) => answers403(read(f))).filter((f) => !allowed.has(slashed(f)));
+  assert.deepEqual(
+    offenders,
+    [],
+    "a 403 confirms the ref exists; return 404, or allowlist it here with the reason it leaks nothing"
+  );
+});
+
+test("the 403 allowlist has not gone stale", () => {
+  // An allowlist nobody prunes is how a rule quietly stops applying. Every
+  // entry must still exist and still answer 403; when one stops, it should
+  // leave the list rather than sit there granting permission to nothing.
+  for (const { path } of ANSWERS_403_ALLOWED) {
+    const match = REAL.find((f) => slashed(f) === path);
+    assert.ok(match, `${path} is allowlisted for 403 but no longer exists`);
+    assert.ok(answers403(read(match)), `${path} no longer answers 403 — remove it from the allowlist`);
+  }
 });
 
 test("no read path selects ciphertext", () => {
@@ -323,8 +390,18 @@ test("every webhook verifies its signature before it writes anything", () => {
     const at = src.indexOf("export async function POST(");
     assert.ok(at >= 0, `${file} has no POST handler`);
     const body = src.slice(at);
-    const verify = body.indexOf("verifyWebhookSignature");
-    assert.ok(verify >= 0, `${file} never verifies a signature`);
+    // Matches verifyWebhookSignature (GitHub) and verifySignature (GitLab,
+    // Bitbucket). Pinning the GitHub spelling reported Bitbucket as unverified
+    // while it was verifying correctly — a false alarm in a security suite
+    // teaches people to ignore it.
+    // Three providers, three spellings of the same guarantee:
+    // verifyWebhookSignature (GitHub HMAC), verifySignature (Bitbucket HMAC)
+    // and verifyToken (GitLab, which sends a shared secret rather than a
+    // digest). Pinning the GitHub spelling reported the other two as
+    // unverified while both were verifying correctly — and a security suite
+    // that cries wolf is one people learn to skip.
+    const verify = body.search(/\bverify(?:Webhook)?(?:Signature|Token)\s*\(/);
+    assert.ok(verify >= 0, `${file} never verifies its credential`);
     const write = Math.min(
       ...[".insert(", ".update(", ".upsert(", ".delete(", "create("]
         .map((m) => body.indexOf(m))
@@ -333,6 +410,62 @@ test("every webhook verifies its signature before it writes anything", () => {
     );
     assert.ok(verify < write, `${file} writes before verifying its signature`);
   }
+});
+
+test("the deploy hook checks its token before queueing, and never reads the body", () => {
+  // What replaces the tenant checks for app/api/v2/hooks/**. A leaked hook URL
+  // must be able to deploy the branch already configured and NOTHING else, so
+  // two things have to hold: the token is checked before a build is queued, and
+  // nothing taken from the request chooses what gets built.
+  const file = join(ROOT, "hooks", "deploy", "[token]", "route.ts");
+  const src = code(readFileSync(file, "utf8"));
+
+  const post = src.indexOf("export async function POST(");
+  assert.ok(post >= 0, `${file} has no POST handler`);
+  const body = src.slice(post);
+
+  const checked = body.search(/isWellFormedHookToken\s*\(|hashHookToken\s*\(/);
+  assert.ok(checked >= 0, "the deploy hook never checks its token");
+
+  const queued = body.search(/deployments\.create\s*\(/);
+  assert.ok(queued >= 0, "the deploy hook never queues a deployment — has it moved?");
+  assert.ok(checked < queued, "the deploy hook queues a build before checking its token");
+
+  assert.doesNotMatch(
+    body,
+    /\breq(?:uest)?\.(?:json|text|formData)\s*\(/,
+    "the deploy hook reads the request body; a leaked URL could then choose what to deploy"
+  );
+
+  // A GET that deployed would fire on every link preview and crawler.
+  assert.match(src, /export async function GET\(/, "the deploy hook does not handle GET");
+  assert.match(src, /\b405\b/, "a GET to the deploy hook is not refused with 405");
+});
+
+test("the internal endpoint checks its shared token before it reads or sends anything", () => {
+  // What replaces the tenant checks for app/api/v2/internal/**. The build
+  // worker is the caller and there is no session, so the shared token is the
+  // whole authentication — it has to be compared BEFORE the body is parsed or
+  // a notification goes out, or an unauthenticated POST has already had an
+  // effect (here, mail sent to a customer).
+  const file = join(ROOT, "internal", "notify", "route.ts");
+  const src = code(readFileSync(file, "utf8"));
+
+  const post = src.indexOf("export async function POST(");
+  assert.ok(post >= 0, `${file} has no POST handler`);
+  const body = src.slice(post);
+
+  const refused = body.indexOf("401");
+  assert.ok(refused >= 0, "the internal endpoint never refuses an unauthenticated call");
+
+  const acts = Math.min(
+    ...[".json()", "notifyAppEvent(", ".insert(", ".update("]
+      .map((m) => body.indexOf(m))
+      .filter((i) => i >= 0)
+      .concat([Number.MAX_SAFE_INTEGER])
+  );
+  assert.ok(acts !== Number.MAX_SAFE_INTEGER, "the internal endpoint appears to do nothing — has it moved?");
+  assert.ok(refused < acts, "the internal endpoint acts before refusing an unauthenticated call");
 });
 
 test("auth.ts still states the rules these tests enforce", () => {
@@ -358,8 +491,12 @@ const callsReplicaStates = (src: string) => src.includes("replicaStates(");
 const passesSleepFact = (src: string) => src.includes("scaled_to_zero_at");
 
 test("every replicaStates call passes the sleep fact", () => {
-  // Scans the dashboard too — the call lives there, not in a route.
-  const surfaces = [...walk(ROOT), ...walkAll("app/dashboard/v2")];
+  // Scans the dashboard and the v2 components too — the call lives there, not
+  // in a route. Scoped to app/dashboard/v2 until the apps UI moved to
+  // app/dashboard/services/apps and components/v2, which left this scanning a
+  // directory the callers had left; the "has it moved?" guard below is what
+  // caught it, so widen the search rather than pin another exact path.
+  const surfaces = [...walk(ROOT), ...walkAll("app/dashboard"), ...walkAll("components/v2")];
   const callers = surfaces.filter((f) => callsReplicaStates(read(f)));
   assert.ok(callers.length > 0, "nothing calls replicaStates — has it moved?");
 
