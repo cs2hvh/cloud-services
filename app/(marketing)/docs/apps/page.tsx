@@ -57,7 +57,7 @@ export default function AppsOverviewPage() {
 
       <H2>Ways to integrate</H2>
       <P>
-        There are three ways to start a deployment. All three produce the same kind of deployment,
+        There are four ways to start a deployment. All of them produce the same kind of deployment,
         with the same build, logs and rollback.
       </P>
       <Table
@@ -78,8 +78,18 @@ export default function AppsOverviewPage() {
             "Your production branch",
             "Redeploying by hand from the dashboard.",
           ],
+          [
+            <A key="api" href="/api-docs">The API</A>,
+            "Your production branch",
+            <>Driving the platform from your own code with an API key: create an app, set variables, deploy, read logs, roll back. See the <A key="apiref" href="/api-docs">API reference</A>.</>,
+          ],
         ]}
       />
+      <P>
+        Creating an app is an API call too, so a whole environment can be stood up from a script.
+        An API key acts as the person who created it and can do exactly what they can do in the
+        dashboard — no more.
+      </P>
       <P>
         Two steps always happen outside any API, here and on every similar platform: connecting
         your git account, which runs through the provider&rsquo;s own consent screen, and adding
