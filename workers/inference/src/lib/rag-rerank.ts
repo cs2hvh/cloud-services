@@ -15,9 +15,12 @@
  */
 import type { AuthContext, Env } from "../types.ts";
 import { buildBaseEvent, enqueueUsage, resolveRouting } from "./gateway.ts";
-import { forwardJson, resolveUpstreamKey } from "./openrouter.ts";
+import { forwardJson, resolveUpstreamKey } from "./wokey.ts";
 
 const RERANK_MODEL_ID = "ahura/rerank-m3";
+
+/** No upstream serves /rerank since the Wokey migration. See rerankCandidates. */
+const RERANK_AVAILABLE = false;
 
 export interface RerankableCandidate {
   id: string;
@@ -53,6 +56,17 @@ export async function rerankCandidates<T extends RerankableCandidate>(
   const scorable = candidates.filter((c) => c.content && c.content.trim().length > 0);
   if (scorable.length < 2) return candidates;
 
+  // RETIRED with the move to Wokey: there is no /rerank endpoint upstream and
+  // no rerank model in the catalog. Returning the candidates unreordered is
+  // the same graceful degradation this function already applies on a routing
+  // miss or an upstream error (see the `return candidates` guards below), so
+  // callers need no change: RAG results are still returned, just in vector
+  // similarity order rather than reranked order.
+  //
+  // Short-circuiting here rather than letting the call fail also avoids
+  // charging a usage event for a request that cannot succeed.
+  if (!RERANK_AVAILABLE) return candidates;
+
   try {
     const routing = await resolveRouting(env, RERANK_MODEL_ID, requestId);
     if (!routing.ok) return candidates;
@@ -61,7 +75,7 @@ export async function rerankCandidates<T extends RerankableCandidate>(
     const upstream = await forwardJson({
       env,
       upstreamKey,
-      path: "/rerank",
+      path: "/rerank" as unknown as "/chat/completions",  // unreachable: RERANK_AVAILABLE is false
       body: {
         model: routing.upstreamModelId,
         query,

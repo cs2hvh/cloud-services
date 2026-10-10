@@ -26,7 +26,7 @@ import type { Handler } from "hono";
 import { z } from "zod";
 import type { Env, HonoVariables } from "../types.ts";
 import { buildBaseEvent, checkModelScope, enqueueUsage, gatewayError, resolveRouting } from "../lib/gateway.ts";
-import { forwardJson, resolveUpstreamKey } from "../lib/openrouter.ts";
+import { forwardJson, resolveUpstreamKey } from "../lib/wokey.ts";
 import { isValidUuid } from "../lib/on-behalf-of.ts";
 import { makeSupabase, readJson } from "../lib/route-helpers.ts";
 import { rerankCandidates } from "../lib/rag-rerank.ts";

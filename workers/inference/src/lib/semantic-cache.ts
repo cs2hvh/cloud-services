@@ -26,6 +26,8 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Env } from "../types.ts";
 
+export const SEMANTIC_CACHE_AVAILABLE = false;
+
 export const SIMILARITY_THRESHOLD = 0.95;
 export const TTL_SECONDS = 3600; // 1 hour
 const EMBED_MODEL = "openai/text-embedding-3-small";
@@ -123,7 +125,7 @@ async function embedPrompt(env: Env, text: string, upstreamKey: string): Promise
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), EMBED_TIMEOUT_MS);
   try {
-    const r = await fetch(`${env.OPENROUTER_BASE_URL}/embeddings`, {
+    const r = await fetch(`${env.EMBEDDINGS_BASE_URL ?? ""}/embeddings`, {
       method: "POST",
       signal: ctrl.signal,
       headers: {
@@ -160,6 +162,7 @@ async function embedPrompt(env: Env, text: string, upstreamKey: string): Promise
 export async function lookupSemanticCache(
   input: SemanticCacheLookupInput
 ): Promise<SemanticCacheHit | null> {
+  if (!SEMANTIC_CACHE_AVAILABLE) return null;
   try {
     const embedding = await embedPrompt(input.env, input.promptText, input.upstreamKey);
     const supabase = createClient(
@@ -236,6 +239,7 @@ export async function lookupSemanticCache(
  * since the actual response has already been served to the user.
  */
 export async function writeSemanticCache(input: SemanticCacheWriteInput): Promise<void> {
+  if (!SEMANTIC_CACHE_AVAILABLE) return;
   try {
     const embedding = await embedPrompt(input.env, input.promptText, input.upstreamKey);
     const supabase = createClient(

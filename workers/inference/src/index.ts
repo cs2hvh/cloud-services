@@ -28,18 +28,10 @@ import { spendCheckMiddleware } from "./middleware/spend.ts";
 import { rateLimitMiddleware } from "./middleware/rate-limit.ts";
 import { featureGateMiddleware } from "./middleware/feature-gate.ts";
 import { chatCompletions } from "./routes/chat-completions.ts";
-import { embeddings } from "./routes/embeddings.ts";
+import { retiredEndpoint } from "./lib/retired.ts";
 import { listModels } from "./routes/models.ts";
 import { keyInfo } from "./routes/key.ts";
 import { messagesShim } from "./routes/messages.ts";
-import { rerank } from "./routes/rerank.ts";
-import { moderations } from "./routes/moderations.ts";
-import { imageGenerations } from "./routes/images.ts";
-import { createVideoJob, getVideoJob, getVideoContent, retryVideoJob } from "./routes/video-generations.ts";
-import { createMusicJob } from "./routes/music-generations.ts";
-import { audioSpeech } from "./routes/audio-speech.ts";
-import { audioTranscriptions } from "./routes/audio-transcriptions.ts";
-import { ocr } from "./routes/ocr.ts";
 import { responses, createAgentRun } from "./routes/responses.ts";
 import { getAgentRun, streamAgentRun, cancelAgentRun } from "./routes/agent-runs.ts";
 import { agentToolUsage } from "./routes/agent-tool-usage.ts";
@@ -144,7 +136,7 @@ v1.use("*", featureGateMiddleware);
 
 // Core inference surface — OpenAI compatible
 v1.post("/chat/completions", chatCompletions);
-v1.post("/embeddings", embeddings);
+v1.post("/embeddings", retiredEndpoint("embeddings"));
 
 // Agents v2 (agentcore) — durable Responses API. POST enqueues a run (202 +
 // run_id); the agent-runner executes it. GET/stream/cancel read the durable run.
@@ -156,26 +148,26 @@ v1.post("/agents/runs/:id/cancel", cancelAgentRun);
 v1.post("/agents/:id/runs", createAgentRun);
 
 // Phase 1 — Rerank + Moderation (OpenRouter proxy: Cohere + Llama Guard)
-v1.post("/rerank", rerank);
-v1.post("/moderations", moderations);
+v1.post("/rerank", retiredEndpoint("rerank"));
+v1.post("/moderations", retiredEndpoint("moderations"));
 
 // Phase 1 — Image generation
-v1.post("/images/generations", imageGenerations);
+v1.post("/images/generations", retiredEndpoint("image generation"));
 // Slice 4 — Async video generation (POST creates job, GET polls status)
-v1.post("/videos", createVideoJob);
-v1.get("/videos/:id/content", getVideoContent);  // proxy before :id catch-all
-v1.get("/videos/:id", getVideoJob);
-v1.post("/videos/:id/retry", retryVideoJob);
+v1.post("/videos", retiredEndpoint("video generation"));
+v1.get("/videos/:id/content", retiredEndpoint("video generation"));
+v1.get("/videos/:id", retiredEndpoint("video generation"));
+v1.post("/videos/:id/retry", retiredEndpoint("video generation"));
 
 // Music generation (synchronous via Lyria streaming, like TTS)
-v1.post("/audio/music", createMusicJob);
+v1.post("/audio/music", retiredEndpoint("music generation"));
 
 // Slice 3 — TTS + STT (OpenRouter gpt-audio-mini / voxtral proxy)
-v1.post("/audio/speech", audioSpeech);
-v1.post("/audio/transcriptions", audioTranscriptions);
+v1.post("/audio/speech", retiredEndpoint("text-to-speech"));
+v1.post("/audio/transcriptions", retiredEndpoint("audio transcription"));
 
 // Slice 5 — OCR / Document AI (Gemini via OpenRouter)
-v1.post("/ocr", ocr);
+v1.post("/ocr", retiredEndpoint("OCR"));
 
 // Catalog + introspection
 v1.get("/models", listModels);

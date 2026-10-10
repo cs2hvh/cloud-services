@@ -57,34 +57,46 @@ describe("rerankCandidates", () => {
     expect(r).toEqual(candidates);
   });
 
-  it("reorders candidates by real relevance score, and bills a rerank usage event", async () => {
+  // ── Reranking is RETIRED (Wokey migration) ──────────────────────────────
+  //
+  // Wokey serves no /rerank endpoint and no rerank model, so rerankCandidates
+  // short-circuits on RERANK_AVAILABLE. The two tests below replace the
+  // previous "reorders by relevance" and "pushes empty rows to the end" cases,
+  // which asserted the live-rerank behaviour.
+  //
+  // They are written as the INVERSE of those originals on purpose: when a
+  // rerank provider returns and RERANK_AVAILABLE flips to true, these two go
+  // red immediately, which is the signal to restore the originals from git
+  // (they are in this file's history at the commit before the migration).
+
+  it("returns candidates in their original order while rerank is retired", async () => {
     mockModelRouting();
-    const send = vi.fn();
-    const rerankEnv = { ...env, USAGE_EVENTS: { send } } as unknown as Env;
-    // Query is about data centers — candidate "c" should win, despite being last in input order.
+    // A live rerank would put "c" first for this query. Retired, order stands.
     globalThis.fetch = vi.fn(async () => ({
       ok: true,
       status: 200,
       json: async () => ({ results: [{ index: 2, relevance_score: 0.95 }, { index: 0, relevance_score: 0.2 }, { index: 1, relevance_score: 0.05 }] }),
     })) as unknown as typeof fetch;
 
-    const r = await rerankCandidates(rerankEnv, auth, "req_1", "where are your data centers", candidates);
-    expect(r.map((c) => c.id)).toEqual(["c", "a", "b"]);
-    expect(send).toHaveBeenCalledTimes(1);
-    const billed = send.mock.calls[0]?.[0];
-    expect(billed).toMatchObject({ modality: "rerank", unitLabel: "rerank_unit", numUnits: 3 });
+    const r = await rerankCandidates(env, auth, "req_1", "where are your data centers", candidates);
+    expect(r.map((c) => c.id)).toEqual(["a", "b", "c"]);
   });
 
-  it("pushes rows with no content to the end, unscored, without breaking the reorder", async () => {
+  it("bills nothing and calls no upstream while rerank is retired", async () => {
+    // The important half. Short-circuiting BEFORE resolveRouting and
+    // forwardJson means a retired capability cannot quietly emit a
+    // rerank_unit usage event for work that never happened, and cannot spend
+    // a round trip discovering that upstream has no such endpoint.
     mockModelRouting();
-    globalThis.fetch = vi.fn(async () => ({
-      ok: true,
-      status: 200,
-      json: async () => ({ results: [{ index: 1, relevance_score: 0.9 }, { index: 0, relevance_score: 0.1 }] }),
-    })) as unknown as typeof fetch;
+    const send = vi.fn();
+    const fetchSpy = vi.fn();
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+    const rerankEnv = { ...env, USAGE_EVENTS: { send } } as unknown as Env;
 
-    const withEmpty = [candidateA, candidateB, { id: "empty", content: null }];
-    const r = await rerankCandidates(env, auth, "req_1", "shipping", withEmpty);
-    expect(r.map((c) => c.id)).toEqual(["b", "a", "empty"]);
+    const r = await rerankCandidates(rerankEnv, auth, "req_1", "shipping", candidates);
+
+    expect(send).not.toHaveBeenCalled();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(r).toEqual(candidates);
   });
 });

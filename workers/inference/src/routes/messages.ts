@@ -2,7 +2,7 @@
  * POST /v1/messages — Anthropic Messages API compatibility shim.
  *
  * Accepts an Anthropic-shaped request, translates to OpenAI Chat Completions,
- * forwards to OpenRouter, and translates the response back to Anthropic shape.
+ * forwards to Wokey, and translates the response back to Anthropic shape.
  *
  * Phase 1 scope:
  *   • text content (string or array of {type:"text"} blocks)
@@ -21,11 +21,14 @@ import type { Handler } from "hono";
 import { z } from "zod";
 import type { AuthContext, Env, HonoVariables, UsageEvent } from "../types.ts";
 import {
+  clampCachedTokens,
   forwardJson,
+  readCachedTokens,
   resolveUpstreamKey,
   streamPassthrough,
-} from "../lib/openrouter.ts";
+} from "../lib/wokey.ts";
 import { lookupCache, shouldCacheMessages, writeCache } from "../lib/cache.ts";
+import { lookupModelRouting } from "../lib/model-routing.ts";
 import {
   extractEmbeddableText,
   lookupSemanticCache,
@@ -322,10 +325,23 @@ export const messagesShim: Handler<{
     }
   }
 
-  // 6. Forward to OpenRouter
+  // 6. Forward to Wokey.
+  //
+  //    Same translation as chat/completions. This route normalises bare ids
+  //    UP to namespaced ones earlier (so the catalog lookup matches), which is
+  //    exactly the form Wokey rejects — without this lookup every
+  //    Anthropic-protocol call would 404 upstream. normalizedModel stays the
+  //    id used for telemetry and cache keys.
+  const messagesRouting = await lookupModelRouting(c.env, normalizedModel);
+  const upstreamBody =
+    messagesRouting?.upstream_model_id &&
+    messagesRouting.upstream_model_id !== normalizedModel
+      ? { ...openaiBody, model: messagesRouting.upstream_model_id }
+      : openaiBody;
+
   const upstream = await forwardJson({
     env: c.env,
-    body: openaiBody,
+    body: upstreamBody,
     upstreamKey,
     path: "/chat/completions",
     signal: c.req.raw.signal,
@@ -379,7 +395,7 @@ export const messagesShim: Handler<{
       ...baseUsageEvent(auth, normalizedModel, requestId, startedAt),
       inputTokens: oaiResp.usage?.prompt_tokens ?? null,
       outputTokens: oaiResp.usage?.completion_tokens ?? null,
-      cachedTokens: oaiResp.usage?.prompt_tokens_details?.cached_tokens ?? null,
+      cachedTokens: clampCachedTokens(readCachedTokens(oaiResp.usage), oaiResp.usage?.prompt_tokens ?? null),
       status: "success",
     })
   );

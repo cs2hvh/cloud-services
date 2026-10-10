@@ -8,7 +8,7 @@
  */
 import type { AuthContext, Env, UsageEvent } from "../types.ts";
 import { lookupModelRouting } from "./model-routing.ts";
-import { resolveUpstreamKey } from "./openrouter.ts";
+import { resolveUpstreamKey } from "./wokey.ts";
 import { sendTrace, type SpanName, type SpanStatus, type TraceSpan } from "./trace.ts";
 
 // ── Error body ───────────────────────────────────────────────────────────────

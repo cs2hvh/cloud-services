@@ -50,17 +50,34 @@ import { rerankCandidates } from "../lib/rag-rerank.ts";
  *  `orgs.vector_quota`; this is only the fallback. */
 const DEFAULT_VECTOR_QUOTA = 1_000_000;
 
-/** Server-side auto-embed via OpenRouter (platform key) — Workers-native
- *  port of lib/inference/embeddings.ts's embedText: same upstream, same
- *  request shape, just fetch() instead of Node's global fetch shim. */
+/** Server-side auto-embed.
+ *
+ *  RETIRED with the move to Wokey, which serves no embeddings endpoint and no
+ *  embedding model. This used to POST to OpenRouter's /embeddings with the
+ *  platform key.
+ *
+ *  Only the two embedding-dependent handlers call this — queryCollection and
+ *  upsertRows — so collection CRUD (list, get, rows, delete) is unaffected and
+ *  existing vectors stay readable. Callers that pass a pre-computed embedding
+ *  array instead of raw text also keep working; it is only the "send text,
+ *  we'll embed it" convenience that is gone.
+ *
+ *  Restore by pointing this at a provider that serves embeddings
+ *  (EMBEDDINGS_BASE_URL / EMBEDDINGS_API_KEY are reserved in Env for exactly
+ *  that) and re-enabling SEMANTIC_CACHE_AVAILABLE in lib/semantic-cache.ts. */
 export async function embedText(env: Env, text: string, modelId: string): Promise<{ embedding: number[]; inputTokens: number | null }> {
-  const r = await fetch("https://openrouter.ai/api/v1/embeddings", {
+  if (!env.EMBEDDINGS_BASE_URL) {
+    throw new Error(
+      "Auto-embed is unavailable: this platform's inference provider does not " +
+        "serve embedding models. Pass a pre-computed `embedding` array instead " +
+        "of `text`."
+    );
+  }
+  const r = await fetch(`${env.EMBEDDINGS_BASE_URL}/embeddings`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${env.OPENROUTER_PLATFORM_KEY}`,
+      Authorization: `Bearer ${env.EMBEDDINGS_API_KEY ?? ""}`,
       "Content-Type": "application/json",
-      "HTTP-Referer": "https://ahurasense.com",
-      "X-Title": "AhuraCloud Inference (vector autoembed)",
     },
     body: JSON.stringify({ model: modelId, input: text }),
   });

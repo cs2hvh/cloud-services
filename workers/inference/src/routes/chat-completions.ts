@@ -1,21 +1,23 @@
 /**
  * POST /v1/chat/completions — OpenAI Chat Completions–compatible.
  *
- * Forwards to OpenRouter with streaming-safe passthrough and cancel
+ * Forwards to Wokey with streaming-safe passthrough and cancel
  * propagation. Usage is captured from the response (non-streaming) or
  * from the final SSE chunk (streaming) and enqueued to USAGE_EVENTS
  * for the k8s consumer to flush into inference.usage.
  *
- * Phase 1: shipped. BYOK key decryption is stubbed in openrouter.ts
+ * Phase 1: shipped. BYOK key decryption lives in wokey.ts
  * and lands later in Phase 1.
  */
 import type { Handler } from "hono";
 import { z } from "zod";
 import type { AuthContext, Env, HonoVariables, UsageEvent } from "../types.ts";
 import {
+  clampCachedTokens,
   forwardJson,
+  readCachedTokens,
   resolveUpstreamKey,
-} from "../lib/openrouter.ts";
+} from "../lib/wokey.ts";
 import { scrubJson, scrubSsePassthrough } from "../lib/brand-scrub.ts";
 import { applyPreset, resolvePreset } from "../lib/presets.ts";
 import { isAutoModel, requirementsFromRequest, resolveAutoModel } from "../lib/router.ts";
@@ -573,6 +575,13 @@ export const chatCompletions: Handler<{
   }
 
   // 5. L1 cache check — only non-streaming deterministic requests, scoped per org
+  //
+  //    Note the ordering below: the cache key is derived from outgoingBody
+  //    while it still carries the PUBLIC model id, and the upstream id is
+  //    substituted afterwards. That order is deliberate. Keying on the
+  //    upstream id would invalidate every existing cache entry the moment an
+  //    upstream renames a model, and would split one logical model across two
+  //    key spaces during any future provider change.
   const cacheDecision = await shouldCache(c.req.raw, outgoingBody, auth.orgId);
   if (cacheDecision.cacheable && cacheDecision.key) {
     const cached = await lookupCache(c.env, cacheDecision.key);
@@ -692,16 +701,36 @@ export const chatCompletions: Handler<{
     }
   }
 
-  // 6. Forward to OpenRouter
+  // 5c. Translate the model id for the wire.
+  //
+  //     Our catalog ids are namespaced (anthropic/claude-opus-5) because they
+  //     were minted when OpenRouter was the upstream and its ids were ours.
+  //     Wokey uses bare ids (claude-opus-5) and returns a hard 404
+  //     model_not_found for anything else, so this is load-bearing: without
+  //     it every proxied request fails.
+  //
+  //     outgoingBody is mutated in place rather than copied because the
+  //     structured-output retry and tool-repair paths below both rebuild from
+  //     it. A local copy here would leave those two forwarding the public id
+  //     and 404ing only on the retry — the kind of bug that shows up as
+  //     "sometimes fails" in production.
+  //
+  //     effectiveModel is deliberately NOT changed: telemetry, headers, spend
+  //     accounting and the cache key all stay keyed on the public id.
+  if (
+    routing?.upstream_model_id &&
+    routing.upstream_model_id !== effectiveModel
+  ) {
+    outgoingBody = { ...outgoingBody, model: routing.upstream_model_id };
+  }
+
+  // 6. Forward to Wokey
   const upstream = await forwardJson({
     env: c.env,
     body: outgoingBody,
     upstreamKey,
     path: "/chat/completions",
     signal: c.req.raw.signal,
-    extraHeaders: {
-      "X-Title": "AhuraCloud Inference",
-    },
   });
 
   // 5. Error responses — scrub brand info, forward Retry-After, pass status through
@@ -771,7 +800,7 @@ export const chatCompletions: Handler<{
             ...baseUsageEvent(auth, effectiveModel, requestId, startedAt),
             inputTokens: usage?.prompt_tokens ?? null,
             outputTokens: usage?.completion_tokens ?? null,
-            cachedTokens: usage?.prompt_tokens_details?.cached_tokens ?? null,
+            cachedTokens: clampCachedTokens(readCachedTokens(usage), usage?.prompt_tokens ?? null),
             status: "success",
           })
         );
@@ -820,7 +849,7 @@ export const chatCompletions: Handler<{
       ...baseUsageEvent(auth, effectiveModel, requestId, startedAt),
       inputTokens: parsedUsage?.prompt_tokens ?? null,
       outputTokens: parsedUsage?.completion_tokens ?? null,
-      cachedTokens: parsedUsage?.prompt_tokens_details?.cached_tokens ?? null,
+      cachedTokens: clampCachedTokens(readCachedTokens(parsedUsage), parsedUsage?.prompt_tokens ?? null),
       status: "success",
     })
   );
@@ -856,7 +885,6 @@ export const chatCompletions: Handler<{
           const retryUp = await forwardJson({
             env: c.env, body: retryBody, upstreamKey,
             path: "/chat/completions", signal: c.req.raw.signal,
-            extraHeaders: { "X-Title": "AhuraCloud Inference" },
           });
           if (retryUp.ok) {
             const retryText = await retryUp.text();
@@ -910,7 +938,6 @@ export const chatCompletions: Handler<{
             const repairUp = await forwardJson({
               env: c.env, body: repairBody, upstreamKey,
               path: "/chat/completions", signal: c.req.raw.signal,
-              extraHeaders: { "X-Title": "AhuraCloud Inference" },
             });
             if (repairUp.ok) {
               const repairText = await repairUp.text();

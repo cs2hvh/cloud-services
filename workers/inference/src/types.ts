@@ -29,7 +29,10 @@ export interface Env {
   TRACE_EVENTS: Queue<TraceSpan>;
 
   // Public vars
-  OPENROUTER_BASE_URL: string;
+  WOKEY_BASE_URL: string;
+  // Optional embeddings upstream. Unset: Wokey serves no embeddings endpoint,
+  // so /v1/embeddings, rerank, vector-* and the semantic cache are retired.
+  EMBEDDINGS_BASE_URL?: string;
   SUPABASE_URL: string;
   GATEWAY_VERSION: string;
   ENV: "production" | "preview" | "development";
@@ -40,7 +43,13 @@ export interface Env {
 
   // Secrets (populated via `wrangler secret put`)
   SUPABASE_SERVICE_ROLE_KEY: string;
-  OPENROUTER_PLATFORM_KEY: string;
+  WOKEY_PLATFORM_KEY: string;
+  /** Optional embeddings provider. Unset: Wokey serves no embeddings, so
+   *  /v1/embeddings, rerank, vector auto-embed and the semantic cache are
+   *  retired. Setting both re-enables them. */
+  EMBEDDINGS_API_KEY?: string;
+  /** Credential for EMBEDDINGS_BASE_URL when that provider is not the main
+   *  upstream. Optional — see EMBEDDINGS_BASE_URL above. */
   BYOK_DEK: string;
   // For routing fine-tune + BYO models to their per-deployment serving
   // endpoints on the compute provider's serverless layer.
